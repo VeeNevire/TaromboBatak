@@ -1,5 +1,5 @@
-import { ArrowRight, CirclePlay } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { ArrowRight, CirclePlay } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { ProfileCard } from '@/components/landing/profile-card';
 import { TaromboDiagram } from '@/components/landing/tarombo-diagram';
