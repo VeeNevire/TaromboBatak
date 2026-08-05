@@ -1,0 +1,189 @@
+@import 'tailwindcss';
+
+@import 'tw-animate-css';
+
+@source '../views';
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+
+@custom-variant dark (&:is(.dark *));
+
+
+
+@theme {
+    --font-sans:
+        'Instrument Sans', ui-sans-serif, system-ui, sans-serif,
+        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+        'Noto Color Emoji';
+
+    --font-display: 'Libre Caslon Text', 'Instrument Sans', ui-serif, Georgia, serif;
+    --font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+    --color-tb-primary: #b34b1e;
+    --color-tb-primary-light: #d46536;
+    --color-tb-surface-bright: #fdfcf7;
+    --color-tb-surface: #f9f6ef;
+    --color-tb-surface-container: #f0ebd8;
+    --color-tb-surface-container-high: #e3dac1;
+    --color-tb-on-surface: #2c2518;
+    --color-tb-on-surface-variant: #5e523f;
+    --color-tb-outline: #8f836f;
+    --color-tb-outline-variant: #e0d5be;
+
+    --radius-lg: var(--radius);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-sm: calc(var(--radius) - 4px);
+
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+
+    --color-chart-1: var(--chart-1);
+    --color-chart-2: var(--chart-2);
+    --color-chart-3: var(--chart-3);
+    --color-chart-4: var(--chart-4);
+    --color-chart-5: var(--chart-5);
+
+    --color-sidebar: var(--sidebar);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+    --background: #f9f6ef;
+    --foreground: #2c2518;
+    --card: #fdfcf7;
+    --card-foreground: #2c2518;
+    --popover: #fdfcf7;
+    --popover-foreground: #2c2518;
+    --primary: #b34b1e;
+    --primary-foreground: #ffffff;
+    --secondary: #f0ebd8;
+    --secondary-foreground: #2c2518;
+    --muted: #f0ebd8;
+    --muted-foreground: #5e523f;
+    --accent: #f0ebd8;
+    --accent-foreground: #2c2518;
+    --destructive: oklch(0.577 0.245 27.325);
+    --destructive-foreground: oklch(0.577 0.245 27.325);
+    --border: #e0d5be;
+    --input: #e0d5be;
+    --ring: #b34b1e;
+    --chart-1: #b34b1e;
+    --chart-2: #2a527c;
+    --chart-3: #3e6b48;
+    --chart-4: #f59e0b;
+    --chart-5: #4f46e5;
+    --radius: 0.625rem;
+    --sidebar: #fdfcf7;
+    --sidebar-foreground: #2c2518;
+    --sidebar-primary: #b34b1e;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #f0ebd8;
+    --sidebar-accent-foreground: #2c2518;
+    --sidebar-border: #e0d5be;
+    --sidebar-ring: #b34b1e;
+}
+
+.dark {
+    --background: #1f1a12;
+    --foreground: #f9f6ef;
+    --card: #2c2518;
+    --card-foreground: #f9f6ef;
+    --popover: #2c2518;
+    --popover-foreground: #f9f6ef;
+    --primary: #d46536;
+    --primary-foreground: #ffffff;
+    --secondary: #3a3224;
+    --secondary-foreground: #f9f6ef;
+    --muted: #3a3224;
+    --muted-foreground: #a79a80;
+    --accent: #3a3224;
+    --accent-foreground: #f9f6ef;
+    --destructive: oklch(0.396 0.141 25.723);
+    --destructive-foreground: oklch(0.637 0.237 25.331);
+    --border: #3a3224;
+    --input: #3a3224;
+    --ring: #d46536;
+    --chart-1: #b34b1e;
+    --chart-2: #4f6f9e;
+    --chart-3: #5c8a66;
+    --chart-4: #f59e0b;
+    --chart-5: #7c8cf5;
+    --sidebar: #2c2518;
+    --sidebar-foreground: #f9f6ef;
+    --sidebar-primary: #b34b1e;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #3a3224;
+    --sidebar-accent-foreground: #f9f6ef;
+    --sidebar-border: #3a3224;
+    --sidebar-ring: #d46536;
+
+    --color-tb-primary: #d46536;
+    --color-tb-primary-light: #e5865a;
+    --color-tb-surface-bright: #2c2518;
+    --color-tb-surface: #1f1a12;
+    --color-tb-surface-container: #3a3224;
+    --color-tb-surface-container-high: #4a4030;
+    --color-tb-on-surface: #f9f6ef;
+    --color-tb-on-surface-variant: #c9bda3;
+    --color-tb-outline: #a79a80;
+    --color-tb-outline-variant: #3a3224;
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+
+    body {
+        @apply bg-background text-foreground;
+    }
+}
+
+@layer components {
+    .tarombo-flow {
+        background: transparent;
+    }
+
+    .tarombo-flow .react-flow__node {
+        cursor: pointer;
+    }
+
+    .tarombo-flow .react-flow__handle {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .tarombo-flow .react-flow__edge {
+        cursor: pointer;
+    }
+}

@@ -1,0 +1,157 @@
+[
+    {
+        "id": "raja-batak",
+        "parentId": null,
+        "name": "Si Raja Batak",
+        "marga": "Batak",
+        "bio": "Eponim dan nenek moyang pertama orang-orang Batak. Berasal dari Sianjur Mulamula, Samosir, diperkirakan hidup sekitar abad ke-13."
+    },
+    {
+        "id": "guru-tatea-bulan",
+        "parentId": "raja-batak",
+        "name": "Guru Tatea Bulan",
+        "marga": "Tatea Bulan"
+    },
+    {
+        "id": "raja-isumbaon",
+        "parentId": "raja-batak",
+        "name": "Raja Isumbaon",
+        "marga": "Isumbaon"
+    },
+    {
+        "id": "raja-uti",
+        "parentId": "guru-tatea-bulan",
+        "name": "Raja Biakbiak",
+        "alias": "Raja Uti",
+        "marga": "Uti"
+    },
+    {
+        "id": "tuan-saribu-raja",
+        "parentId": "guru-tatea-bulan",
+        "name": "Tuan Saribu Raja",
+        "marga": "Saribu Raja"
+    },
+    {
+        "id": "limbong-mulana",
+        "parentId": "guru-tatea-bulan",
+        "name": "Limbong Mulana",
+        "marga": "Limbong"
+    },
+    {
+        "id": "sagala-raja",
+        "parentId": "guru-tatea-bulan",
+        "name": "Sagala Raja",
+        "marga": "Sagala"
+    },
+    {
+        "id": "silau-raja",
+        "parentId": "guru-tatea-bulan",
+        "name": "Silau Raja",
+        "marga": "Silau"
+    },
+    {
+        "id": "tuan-sorimangaraja",
+        "parentId": "guru-tatea-bulan",
+        "name": "Tuan Sorimangaraja",
+        "marga": "Sorimangaraja"
+    },
+    {
+        "id": "raja-asiasi",
+        "parentId": "tuan-sorimangaraja",
+        "name": "Raja Asiasi",
+        "marga": "Asiasi"
+    },
+    {
+        "id": "sangkar-somalindang",
+        "parentId": "tuan-sorimangaraja",
+        "name": "Sangkar Somalindang",
+        "marga": "Somalindang"
+    },
+    {
+        "id": "siraja-lontung",
+        "parentId": "tuan-sorimangaraja",
+        "name": "Siraja Lontung",
+        "marga": "Lontung"
+    },
+    {
+        "id": "siraja-borbor",
+        "parentId": "tuan-sorimangaraja",
+        "name": "Siraja Borbor",
+        "marga": "Borbor"
+    },
+    {
+        "id": "raja-galeman",
+        "parentId": "tuan-sorimangaraja",
+        "name": "Raja Galeman",
+        "marga": "Galeman"
+    },
+    {
+        "id": "tuan-sorbadijulu",
+        "parentId": "siraja-lontung",
+        "name": "Tuan Sorbadijulu",
+        "alias": "Nai Ambaton / Datu Sindar",
+        "marga": "Nai Ambaton"
+    },
+    {
+        "id": "tuan-sorbadijae",
+        "parentId": "siraja-lontung",
+        "name": "Tuan Sorbadijae",
+        "alias": "Nai Rasaon / Datu Pejel",
+        "marga": "Nai Rasaon"
+    },
+    {
+        "id": "tuan-sorbadibanua",
+        "parentId": "siraja-lontung",
+        "name": "Tuan Sorbadibanua",
+        "alias": "Nai Suanon / Datu Tungkaon",
+        "marga": "Nai Suanon"
+    },
+    {
+        "id": "raja-sibagot-ni-pohan",
+        "parentId": "tuan-sorbadibanua",
+        "name": "Raja Sibagot ni Pohan",
+        "marga": "Pohan"
+    },
+    {
+        "id": "raja-sipaettua",
+        "parentId": "tuan-sorbadibanua",
+        "name": "Raja Sipaettua",
+        "marga": "Sipaettua"
+    },
+    {
+        "id": "raja-silahisabungan",
+        "parentId": "tuan-sorbadibanua",
+        "name": "Raja Silahisabungan",
+        "marga": "Silahisabungan"
+    },
+    {
+        "id": "siraja-oloan",
+        "parentId": "raja-silahisabungan",
+        "name": "Siraja Oloan",
+        "marga": "Oloan"
+    },
+    {
+        "id": "raja-hutalima",
+        "parentId": "raja-silahisabungan",
+        "name": "Raja Hutalima",
+        "marga": "Hutalima"
+    },
+    {
+        "id": "raja-sumba",
+        "parentId": "raja-silahisabungan",
+        "name": "Raja Sumba",
+        "marga": "Sumba"
+    },
+    {
+        "id": "raja-sobu",
+        "parentId": "raja-silahisabungan",
+        "name": "Raja Sobu",
+        "marga": "Sobu"
+    },
+    {
+        "id": "raja-naipospos",
+        "parentId": "raja-silahisabungan",
+        "name": "Raja Naipospos",
+        "marga": "Naipospos"
+    }
+]
