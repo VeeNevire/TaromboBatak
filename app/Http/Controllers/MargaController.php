@@ -67,9 +67,9 @@ class MargaController extends Controller
     protected function maxGenerationDepth(): int
     {
         $parents = Person::query()
-            ->select('id', 'parent_id')
+            ->select('id', 'father_id')
             ->get()
-            ->mapWithKeys(fn (Person $person) => [$person->id => $person->parent_id]);
+            ->mapWithKeys(fn (Person $person) => [$person->id => $person->father_id]);
 
         $depth = 0;
 

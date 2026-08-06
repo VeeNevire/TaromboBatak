@@ -34,7 +34,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 Route::middleware(['auth', 'verified', 'role.admin'])->group(function () {
     Route::resource('people', PersonController::class)
-        ->only(['create', 'store', 'edit', 'update', 'destroy']);
+        ->only(['create', 'store', 'edit', 'update', 'destroy', 'show']);
+
+    Route::get('people/{person}/preview', [PersonController::class, 'preview'])->name('people.preview');
+    Route::get('people/{person}/silsilah', [PersonController::class, 'silsilah'])->name('people.silsilah');
 
     Route::get('dashboard/marga', [MargaController::class, 'index'])->name('marga.index');
     Route::post('dashboard/marga', [MargaController::class, 'store'])->name('marga.store');

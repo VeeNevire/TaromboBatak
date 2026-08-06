@@ -1,5 +1,5 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { Pencil, Plus, Search, Trash } from 'lucide-react';
+import { Route, NotebookPen, Pencil, Plus, Search, Trash } from 'lucide-react';
 import { useState } from 'react';
 import { AppAvatar } from '@/components/app-avatar';
 import { Button } from '@/components/ui/button';
@@ -183,6 +183,7 @@ export default function PeopleIndex({ people: page, filters, margas, canManage }
                                             <td className="px-3 py-3">
                                                 <div className="flex justify-end gap-1">
                                                     <Button
+                                                    title='Edit'
                                                         asChild
                                                         variant="ghost"
                                                         size="icon"
@@ -193,12 +194,34 @@ export default function PeopleIndex({ people: page, filters, margas, canManage }
                                                         </Link>
                                                     </Button>
                                                     <Button
+                                                    title='Hapus'
                                                         variant="ghost"
                                                         size="icon"
                                                         className="size-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
                                                         onClick={() => setToDelete(person)}
                                                     >
                                                         <Trash className="size-4" />
+                                                    </Button>
+                                                    <Button
+                                                   title='detail silsilah keluarga'
+                                                        asChild
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="size-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950"
+                                                    >
+                                                        <Link href={people.show(person.id)}>
+                                                            <NotebookPen className="size-4" />
+                                                        </Link>
+                                                    </Button>
+                                                    <Button
+                                                        asChild
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="size-8 text-green-600 hover:bg-green-50 dark:hover:bg-green-950"
+                                                    >
+                                                        <Link href={people.silsilah(person.id)} target="_blank" rel="noopener">
+                                                            <Route className="size-4" />
+                                                        </Link>
                                                     </Button>
                                                 </div>
                                             </td>

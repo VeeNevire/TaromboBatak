@@ -22,7 +22,7 @@ class PersonFactory extends Factory
             'name' => fake()->name(),
             'alias' => fake()->optional()->word(),
             'marga_id' => Marga::factory(),
-            'parent_id' => null,
+            'father_id' => null,
             'birth_year' => (string) fake()->numberBetween(1900, 2020),
             'death_year' => null,
             'image' => null,

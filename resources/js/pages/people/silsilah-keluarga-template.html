@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Silsilah Keluarga</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #F6F7F1;
+    --ink: #24322B;
+    --ink-soft: #5B6A61;
+    --forest: #2F4538;
+    --gold: #B8934A;
+    --line: #A79E8C;
+    --card-bg: #FFFFFF;
+    --card-border: #E3DFD2;
+    --avatar-1: #DCE7DE;
+    --avatar-2: #EFE2C9;
+    --avatar-3: #E6D6E3;
+    --avatar-4: #D6E1EC;
+    --avatar-5: #F0DAD0;
+  }
+
+  *{ box-sizing:border-box; }
+
+  body{
+    margin:0;
+    background: var(--bg);
+    background-image:
+      radial-gradient(circle at 12% 8%, rgba(47,69,56,0.05), transparent 40%),
+      radial-gradient(circle at 88% 92%, rgba(184,147,74,0.06), transparent 40%);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    padding: 48px 24px 80px;
+  }
+
+  /* ---------- Header ---------- */
+  .header{
+    text-align:center;
+    margin-bottom: 56px;
+  }
+  .eyebrow{
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-bottom: 10px;
+    font-weight: 600;
+  }
+  .title{
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: clamp(28px, 5vw, 44px);
+    letter-spacing: 0.02em;
+    margin: 0 0 14px;
+    color: var(--forest);
+  }
+  .subtitle-row{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap: 14px;
+  }
+  .subtitle-row .rule{
+    width: 28px; height:1px; background: var(--line);
+  }
+  .subtitle{
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-weight: 500;
+    font-size: 17px;
+    color: var(--ink);
+  }
+  .meta{
+    margin-top: 6px;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+  }
+
+  /* ---------- Tree ---------- */
+  .tree{
+    position: relative;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  .lines-overlay{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    pointer-events:none;
+    z-index:0;
+  }
+  .lines-overlay path{
+    fill:none;
+    stroke: var(--line);
+    stroke-width: 1.5;
+  }
+  .lines-overlay path.marriage{
+    stroke: var(--gold);
+    stroke-width: 1.5;
+  }
+
+  .branches-row{
+    display:flex;
+    justify-content: space-between;
+    gap: 24px;
+    position:relative;
+    z-index:1;
+  }
+  .branch{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap: 46px;
+    flex: 1;
+  }
+  .branch.left{ align-items:flex-start; }
+  .branch.right{ align-items:flex-end; }
+
+  .row{
+    display:flex;
+    gap: 28px;
+    position:relative;
+    z-index:1;
+  }
+  .row.grandparents{ gap: 18px; }
+
+  .children-row{
+    display:flex;
+    justify-content:center;
+    gap: 40px;
+    margin-top: 64px;
+    position:relative;
+    z-index:1;
+  }
+
+  /* ---------- Node ---------- */
+  .node{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    width: 92px;
+  }
+  .avatar{
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: var(--avatar-1);
+    border: 1px solid var(--card-border);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    box-shadow: 0 2px 6px rgba(36,50,43,0.06);
+  }
+  .avatar svg{ width: 30px; height:30px; color: var(--forest); opacity:0.75; }
+
+  .node.highlight .avatar{
+    border-radius: 12px;
+    border: 2px solid var(--gold);
+    box-shadow: 0 3px 10px rgba(184,147,74,0.25);
+  }
+
+  .label{
+    margin-top: 8px;
+    font-size: 11.5px;
+    font-weight: 600;
+    text-align:center;
+    line-height:1.3;
+    padding: 3px 6px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 6px;
+    color: var(--ink);
+  }
+  .node.highlight .label{
+    border-color: var(--gold);
+    color: var(--forest);
+  }
+
+  .marriage-icon{
+    position:absolute;
+    width: 18px; height: 18px;
+    display:flex; align-items:center; justify-content:center;
+    background: var(--card-bg);
+    border: 1px solid var(--gold);
+    border-radius: 50%;
+    color: var(--gold);
+    font-size: 10px;
+    z-index:2;
+    transform: translate(-50%, -50%);
+  }
+
+  footer{
+    text-align:center;
+    margin-top: 56px;
+    font-size: 11px;
+    color: var(--ink-soft);
+    letter-spacing: 0.05em;
+  }
+
+  @media (max-width: 640px){
+    .branches-row{ flex-direction: column; align-items:center; gap: 56px; }
+    .branch.left, .branch.right{ align-items:center; }
+    .row{ flex-wrap: wrap; justify-content:center; }
+    .children-row{ flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="eyebrow" id="eyebrow">Tugas Ilmu Pengetahuan Sosial</div>
+    <h1 class="title" id="mainTitle">Silsilah Keluarga</h1>
+    <div class="subtitle-row">
+      <div class="rule"></div>
+      <div class="subtitle" id="subjectName">Nama Anak</div>
+      <div class="rule"></div>
+    </div>
+    <div class="meta" id="classLabel">Kelas</div>
+  </div>
+
+  <div class="tree" id="tree">
+    <svg class="lines-overlay" id="lines"></svg>
+
+    <div class="branches-row" id="branchesRow"></div>
+    <div class="children-row" id="childrenRow"></div>
+  </div>
+
+  <footer>Ganti isi data pada objek <code>treeData</code> di dalam kode untuk menyesuaikan nama.</footer>
+
+<script>
+/* =========================================================
+   EDIT DATA DI SINI SAJA — struktur mengikuti layout gambar:
+   dua cabang kakek/nenek (kiri & kanan), masing-masing punya
+   baris anak (saudara), satu anak di tiap cabang ditandai
+   sebagai "highlight" (yaitu orang tua dari anak-anak di
+   bawah). Baris paling bawah adalah anak-anak dari pasangan
+   yang di-highlight.
+   ========================================================= */
+const treeData = {
+  eyebrow: "Tugas Ilmu Pengetahuan Sosial",
+  title: "Silsilah Keluarga",
+  subjectName: "Daisy Aulia Dinata",
+  classLabel: "Kelas 2B / 06",
+
+  left: {
+    grandparents: ["Bapak Sukarno", "Ibu Basirah"],
+    siblings: [
+      { name: "Sukartin" },
+      { name: "Suyanto" },
+      { name: "Jumarno" },
+      { name: "Sukarti" },
+      { name: "Sumarto", highlight: true }
+    ]
+  },
+  right: {
+    grandparents: ["Bapak Ghozali", "Ibu Yuriyah"],
+    siblings: [
+      { name: "Indarno" },
+      { name: "Shobikah", highlight: true },
+      { name: "Fathur Rohman" },
+      { name: "Norbayati" }
+    ]
+  },
+  children: [
+    "Nartika Dinior Purwaningrum",
+    "Sham Maulana Ardhinata",
+    "Daisy Aulia Dinata"
+  ]
+};
+/* ========================================================= */
+
+const personIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c0-4.2 3.4-6.6 7.5-6.6s7.5 2.4 7.5 6.6"/></svg>`;
+
+function makeNode(name, opts={}){
+  const el = document.createElement('div');
+  el.className = 'node' + (opts.highlight ? ' highlight' : '');
+  el.innerHTML = `<div class="avatar">${personIcon}</div><div class="label">${name}</div>`;
+  return el;
+}
+
+function build(){
+  document.getElementById('eyebrow').textContent = treeData.eyebrow;
+  document.getElementById('mainTitle').textContent = treeData.title;
+  document.getElementById('subjectName').textContent = treeData.subjectName;
+  document.getElementById('classLabel').textContent = treeData.classLabel;
+
+  const branchesRow = document.getElementById('branchesRow');
+  const childrenRow = document.getElementById('childrenRow');
+  branchesRow.innerHTML = '';
+  childrenRow.innerHTML = '';
+
+  ['left','right'].forEach(side=>{
+    const data = treeData[side];
+    const branch = document.createElement('div');
+    branch.className = 'branch ' + side;
+    branch.id = 'branch-' + side;
+
+    const gpRow = document.createElement('div');
+    gpRow.className = 'row grandparents';
+    gpRow.id = side + '-gp';
+    data.grandparents.forEach(n => gpRow.appendChild(makeNode(n)));
+
+    const sibRow = document.createElement('div');
+    sibRow.className = 'row siblings';
+    sibRow.id = side + '-sib';
+    data.siblings.forEach(s => sibRow.appendChild(makeNode(s.name, s)));
+
+    branch.appendChild(gpRow);
+    branch.appendChild(sibRow);
+    branchesRow.appendChild(branch);
+  });
+
+  treeData.children.forEach(n => childrenRow.appendChild(makeNode(n)));
+}
+
+/* ---------- Connector drawing ---------- */
+function centerOf(el, container){
+  const r = el.getBoundingClientRect();
+  const c = container.getBoundingClientRect();
+  return {
+    x: r.left + r.width/2 - c.left,
+    top: r.top - c.top,
+    bottom: r.bottom - c.top,
+    y: r.top + r.height/2 - c.top
+  };
+}
+
+function drawComb(svg, fromPoint, toEls, container, midY, cls=''){
+  const pts = [...toEls].map(el => centerOf(el, container));
+  const xs = pts.map(p=>p.x);
+  const minX = Math.min(...xs, fromPoint.x);
+  const maxX = Math.max(...xs, fromPoint.x);
+  let d = `M ${fromPoint.x} ${fromPoint.bottom} L ${fromPoint.x} ${midY}`;
+  d += ` M ${minX} ${midY} L ${maxX} ${midY}`;
+  pts.forEach(p=>{
+    d += ` M ${p.x} ${midY} L ${p.x} ${p.top}`;
+  });
+  const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+  path.setAttribute('d', d);
+  if(cls) path.setAttribute('class', cls);
+  svg.appendChild(path);
+}
+
+function drawSpouseLine(svg, elA, elB, container, cls=''){
+  const a = centerOf(elA, container);
+  const b = centerOf(elB, container);
+  const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+  path.setAttribute('d', `M ${a.x} ${a.y} L ${b.x} ${b.y}`);
+  if(cls) path.setAttribute('class', cls);
+  svg.appendChild(path);
+  return { x:(a.x+b.x)/2, y:(a.y+b.y)/2 };
+}
+
+function midpointDown(pA, pB){
+  return { x:(pA.x+pB.x)/2, bottom: Math.max(pA.bottom, pB.bottom) };
+}
+
+function drawTree(){
+  const container = document.getElementById('tree');
+  const svg = document.getElementById('lines');
+  const rect = container.getBoundingClientRect();
+  svg.setAttribute('width', rect.width);
+  svg.setAttribute('height', rect.height);
+  svg.innerHTML = '';
+
+  const highlightEls = [];
+
+  ['left','right'].forEach(side=>{
+    const gpRow = document.getElementById(side + '-gp');
+    const sibRow = document.getElementById(side + '-sib');
+    const gpNodes = gpRow.children;
+    const sibNodes = sibRow.children;
+
+    // spouse line between grandparents
+    const gpMid = drawSpouseLine(svg, gpNodes[0], gpNodes[1], container);
+
+    // comb down from grandparent midpoint to sibling row
+    const gpBottom = Math.max(
+      centerOf(gpNodes[0], container).bottom,
+      centerOf(gpNodes[1], container).bottom
+    );
+    const sibTop = centerOf(sibNodes[0], container).top;
+    const midY1 = gpBottom + (sibTop - gpBottom) * 0.5;
+    drawComb(svg, { x: gpMid.x, bottom: gpBottom }, sibNodes, container, midY1);
+
+    // find highlighted sibling on this side
+    [...sibNodes].forEach((n, i)=>{
+      if(treeData[side].siblings[i].highlight) highlightEls.push(n);
+    });
+  });
+
+  if(highlightEls.length === 2){
+    const [pA, pB] = highlightEls;
+    const mid = drawSpouseLine(svg, pA, pB, container, 'marriage');
+
+    // small ring icon at marriage midpoint
+    const icon = document.createElement('div');
+    icon.className = 'marriage-icon';
+    icon.style.left = mid.x + 'px';
+    icon.style.top = mid.y + 'px';
+    icon.textContent = '♥';
+    container.appendChild(icon);
+
+    const childrenRow = document.getElementById('childrenRow');
+    const pAr = centerOf(pA, container), pBr = centerOf(pB, container);
+    const parentsBottom = Math.max(pAr.bottom, pBr.bottom);
+    const childTop = centerOf(childrenRow.children[0], container).top;
+    const midY2 = parentsBottom + (childTop - parentsBottom) * 0.5;
+    drawComb(svg, { x: mid.x, bottom: parentsBottom }, childrenRow.children, container, midY2, 'marriage');
+  }
+}
+
+function render(){
+  build();
+  requestAnimationFrame(drawTree);
+}
+
+window.addEventListener('resize', () => requestAnimationFrame(drawTree));
+render();
+</script>
+</body>
+</html>

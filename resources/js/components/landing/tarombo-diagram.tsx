@@ -2,10 +2,10 @@ import { ReactFlow } from '@xyflow/react';
 import type { NodeMouseHandler } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Search, SlidersHorizontal } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { edgeTypes, nodeTypes } from '@/components/landing/diagram/diagram-types';
 import {
-    buildRadialLayout,
+    buildRadialLayoutFromPerson,
     getConnectionIds,
     getGenerationLabel,
     generationColors,
@@ -16,26 +16,58 @@ import type { MargaInfo, SectorNodeData, TaromboNodeData, TaromboPerson } from '
 
 export function TaromboDiagram({
     onSelect,
+    onPaneClick,
     selectedId,
+    centerPersonId,
     people = MOCK_TAROMBO,
     margas = MOCK_MARGAS,
 }: {
     onSelect: (person: TaromboPerson) => void;
+    onPaneClick?: () => void;
     selectedId?: string;
+    centerPersonId: string;
     people?: TaromboPerson[];
     margas?: MargaInfo[];
 }) {
-    const layout = useMemo(() => buildRadialLayout(people, margas), [people, margas]);
+    const layout = useMemo(
+        () => buildRadialLayoutFromPerson(people, margas, centerPersonId),
+        [people, margas, centerPersonId],
+    );
+    const layoutPeople = useMemo(() => {
+        const layoutNodeIds = new Set(layout.nodes.filter(n => (n.data as TaromboNodeData).person).map(n => n.id));
+
+        return people.filter(p => layoutNodeIds.has(p.id));
+    }, [layout.nodes, people]);
+    
     const maxGeneration = useMemo(
-        () => Math.max(1, ...people.map((person) => person.generation)),
-        [people],
+        () => Math.max(1, ...layoutPeople.map((person) => person.generation)),
+        [layoutPeople],
     );
     const [hoveredId, setHoveredId] = useState<string | null>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const container = containerRef.current;
+
+        if (!container) {
+return;
+}
+
+        const handleWheel = (event: WheelEvent) => {
+            if (container.contains(event.target as Node)) {
+                event.stopPropagation();
+            }
+        };
+
+        document.addEventListener('wheel', handleWheel, { capture: true, passive: true });
+
+        return () => document.removeEventListener('wheel', handleWheel, { capture: true });
+    }, []);
 
     const focusId = hoveredId ?? selectedId;
     const connection = useMemo(
-        () => (focusId ? getConnectionIds(people, focusId) : new Set<string>()),
-        [focusId, people],
+        () => (focusId ? getConnectionIds(layoutPeople, focusId) : new Set<string>()),
+        [focusId, layoutPeople],
     );
 
     const nodes = useMemo(
@@ -46,14 +78,15 @@ export function TaromboDiagram({
 
                 return {
                     ...node,
+                    zIndex: Boolean(person) && person.id === selectedId ? 60 : (node.zIndex ?? 1),
                     data: {
                         ...base,
-                        selected: Boolean(person) && person.id === focusId,
+                        selected: Boolean(person) && person.id === selectedId,
                         related: Boolean(person) && connection.has(person.id),
                     },
                 };
             }),
-        [layout, focusId, connection],
+        [layout, selectedId, connection],
     );
 
     const edges = useMemo(
@@ -87,7 +120,7 @@ export function TaromboDiagram({
     };
 
     return (
-        <div className="relative w-full max-w-2xl">
+        <div className="relative w-full max-w-2xl" ref={containerRef}>
             <div className="mx-auto mb-6 flex max-w-sm items-center rounded-full border border-tb-outline-variant bg-tb-surface-bright/90 px-4 py-2.5 shadow-lg backdrop-blur-md">
                     <Search className="mr-2 h-4 w-4 shrink-0 text-tb-outline" />
                     <input
@@ -112,10 +145,12 @@ export function TaromboDiagram({
                         onNodeClick={handleNodeClick}
                         onNodeMouseEnter={handleNodeMouseEnter}
                         onNodeMouseLeave={() => setHoveredId(null)}
+                        onPaneClick={() => onPaneClick?.()}
                         nodesDraggable={false}
                         nodesConnectable={false}
                         elementsSelectable={false}
                         panOnDrag={false}
+                        panOnScroll={false}
                         selectionOnDrag={false}
                         zoomOnScroll={false}
                         zoomOnPinch={false}
@@ -132,33 +167,33 @@ export function TaromboDiagram({
                     <p className="text-center text-[10px] font-semibold uppercase tracking-widest text-tb-outline">
                         Legenda
                     </p>
-                    <div className="mt-3 flex flex-wrap justify-center gap-x-3 gap-y-2">
+                    <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-2.5">
                         {Array.from({ length: maxGeneration }, (_, index) => (
                             <span
                                 key={index}
-                                className="flex items-center gap-1.5 rounded-full bg-tb-surface-bright px-2.5 py-1 shadow-sm"
+                                className="flex items-center gap-1.5 rounded-full bg-tb-surface-bright px-3 py-1.5 shadow-sm"
                             >
                                 <span
                                     className="h-2.5 w-2.5 rounded-full"
                                     style={{ backgroundColor: generationColors[index % generationColors.length] }}
                                 />
-                                <span className="text-[10px] font-medium text-tb-on-surface">
+                                <span className="text-[11px] font-medium text-tb-on-surface">
                                     Gen {index + 1} ({getGenerationLabel(index + 1)})
                                 </span>
                             </span>
                         ))}
                     </div>
-                    <div className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-2">
+                    <div className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-2.5">
                         {margas.map((marga) => (
                             <span
                                 key={marga.name}
-                                className="flex items-center gap-1.5 rounded-full bg-tb-surface-bright px-2.5 py-1 shadow-sm"
+                                className="flex items-center gap-1.5 rounded-full bg-tb-surface-bright px-3 py-1.5 shadow-sm"
                             >
                                 <span
                                     className="h-2.5 w-2.5 rounded-sm"
                                     style={{ backgroundColor: marga.color }}
                                 />
-                                <span className="text-[10px] font-medium text-tb-on-surface">{marga.name}</span>
+                                <span className="text-[11px] font-medium text-tb-on-surface">{marga.name}</span>
                             </span>
                         ))}
                     </div>

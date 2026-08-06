@@ -1,9 +1,8 @@
 import { Head } from '@inertiajs/react';
 import { useState } from 'react';
-import { ProfileCard } from '@/components/landing/profile-card';
 import { TaromboDiagram } from '@/components/landing/tarombo-diagram';
 import { Input } from '@/components/ui/input';
-import { buildTaromboPeople, findPerson, findPersonChildren } from '@/data/tarombo-tree';
+import { buildTaromboPeople } from '@/data/tarombo-tree';
 import type { MargaInfo, TaromboPersonRow } from '@/data/tarombo-tree';
 import { dashboard } from '@/routes';
 import tarombo from '@/routes/tarombo';
@@ -18,15 +17,21 @@ export default function TaromboIndex({ people: rows, margas }: Props) {
     const [search, setSearch] = useState('');
 
     const people = buildTaromboPeople(rows);
-    const selected = selectedId ? findPerson(people, selectedId) : null;
-    const childrenList = selected ? findPersonChildren(people, selected.id) : [];
+    const rootPerson = people.find((p) => !p.parentId) ?? people[0];
+    const [centerPersonId, setCenterPersonId] = useState<string>(rootPerson?.id ?? '');
 
     const searchSelect = (value: string) => {
         const person = people.find((p) => p.name.toLowerCase().includes(value.toLowerCase()));
 
         if (person) {
             setSelectedId(person.id);
+            setCenterPersonId(person.id);
         }
+    };
+
+    const handlePersonSelect = (person: any) => {
+        setSelectedId(person.id);
+        setCenterPersonId(person.id);
     };
 
     return (
@@ -57,16 +62,14 @@ export default function TaromboIndex({ people: rows, margas }: Props) {
                     </div>
                     <div className="rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-4">
                         <TaromboDiagram
-                            onSelect={(person) => setSelectedId(person.id)}
+                            onSelect={handlePersonSelect}
+                            onPaneClick={() => setSelectedId(null)}
                             selectedId={selectedId ?? undefined}
+                            centerPersonId={centerPersonId}
                             people={people}
                             margas={margas}
                         />
                     </div>
-                </div>
-
-                <div className="flex justify-center">
-                    <ProfileCard person={selected ?? null} childrenList={childrenList} />
                 </div>
 
                 {people.length === 0 && (

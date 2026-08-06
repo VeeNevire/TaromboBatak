@@ -102,7 +102,7 @@ test('non-admin users can view the dashboard even when their ancestor is outside
     Person::factory()->create([
         'name' => 'Ompu Sitorus',
         'marga_id' => $sitorus->id,
-        'parent_id' => $root->id,
+        'father_id' => $root->id,
     ]);
 
     $user = User::factory()->withMarga($sitorus->id)->create();

@@ -14,20 +14,29 @@ use Illuminate\Support\Carbon;
 /**
  * @property int $id
  * @property string $name
+ * @property string|null $gender
  * @property string|null $alias
  * @property int|null $marga_id
- * @property int|null $parent_id
+ * @property int|null $father_id
+ * @property int|null $mother_id
+ * @property int|null $birth_order
+ * @property int|null $sibling_count
+ * @property string|null $nomor
  * @property string|null $birth_year
  * @property string|null $death_year
  * @property string|null $image
  * @property string|null $bio
+ * @property string|null $spouse
+ * @property string|null $spouse_marga
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Marga|null $marga
- * @property-read Person|null $parent
+ * @property-read Person|null $father
+ * @property-read Person|null $mother
  * @property-read Collection<int, Person> $children
+ * @property-read Collection<int, Person> $siblings
  */
-#[Fillable(['name', 'alias', 'marga_id', 'parent_id', 'birth_year', 'death_year', 'image', 'bio'])]
+#[Fillable(['name', 'gender', 'alias', 'marga_id', 'father_id', 'mother_id', 'birth_order', 'sibling_count', 'nomor', 'birth_year', 'death_year', 'image', 'bio', 'spouse', 'spouse_marga'])]
 class Person extends Model
 {
     /** @use HasFactory<PersonFactory> */
@@ -44,9 +53,17 @@ class Person extends Model
     /**
      * @return BelongsTo<Person, $this>
      */
-    public function parent(): BelongsTo
+    public function father(): BelongsTo
     {
-        return $this->belongsTo(Person::class, 'parent_id');
+        return $this->belongsTo(Person::class, 'father_id');
+    }
+
+    /**
+     * @return BelongsTo<Person, $this>
+     */
+    public function mother(): BelongsTo
+    {
+        return $this->belongsTo(Person::class, 'mother_id');
     }
 
     /**
@@ -54,6 +71,26 @@ class Person extends Model
      */
     public function children(): HasMany
     {
-        return $this->hasMany(Person::class, 'parent_id');
+        return $this->hasMany(Person::class, 'father_id');
+    }
+
+    /**
+     * Siblings sharing the same father (excluding the person itself).
+     *
+     * @return HasMany<Person, $this>
+     */
+    public function siblings(): HasMany
+    {
+        return $this->hasMany(Person::class, 'father_id')
+            ->whereKeyNot($this->getKey())
+            ->orderBy('birth_order');
+    }
+
+    /**
+     * Determine whether this person is not truly known yet (placeholder "N/A").
+     */
+    public function isNa(): bool
+    {
+        return is_null($this->name) || trim($this->name) === '' || mb_strtoupper(trim($this->name)) === 'N/A';
     }
 }

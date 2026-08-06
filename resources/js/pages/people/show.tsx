@@ -7,17 +7,15 @@ import { dashboard } from '@/routes';
 import people from '@/routes/people';
 
 type Props = {
-    person: FamilyData | null;
+    person: FamilyData;
     margas: { id: number; name: string }[];
     nameSuggestions: string[];
 };
 
-export default function PersonForm({ person, margas, nameSuggestions }: Props) {
-    const isEdit = person !== null;
-
+export default function PersonShow({ person, margas, nameSuggestions }: Props) {
     return (
         <>
-            <Head title={isEdit ? 'Ubah Keluarga' : 'Tambah Keluarga'} />
+            <Head title={`Jejak Keluarga ${person.name}`} />
 
             <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
                 <div className="flex flex-col gap-3">
@@ -28,10 +26,10 @@ export default function PersonForm({ person, margas, nameSuggestions }: Props) {
                     </Button>
                     <div>
                         <h1 className="font-display text-2xl font-bold text-tb-on-surface md:text-3xl">
-                            {isEdit ? 'Ubah Keluarga' : 'Tambah Keluarga'}
+                            Jejak Keluarga {person.name}
                         </h1>
                         <p className="mt-1 text-sm text-tb-on-surface-variant">
-                            Isi jejak keluarga: orang tua dan daftar saudara/anak dari ayah yang sama.
+                            Ayah, ibu, dan daftar saudara dari {person.name}. Perubahan disimpan sekaligus.
                         </p>
                     </div>
                 </div>
@@ -42,10 +40,10 @@ export default function PersonForm({ person, margas, nameSuggestions }: Props) {
     );
 }
 
-PersonForm.layout = {
+PersonShow.layout = {
     breadcrumbs: [
         { title: 'Dashboard', href: dashboard() },
         { title: 'Data Anggota', href: people.index() },
-        { title: 'Form Keluarga', href: people.create() },
+        { title: 'Jejak Keluarga', href: people.index() },
     ],
 };

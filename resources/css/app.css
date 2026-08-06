@@ -167,15 +167,49 @@
     body {
         @apply bg-background text-foreground;
     }
+
+    /* ---- Custom scrollbar (Chromium / Blink) ---- */
+    ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: var(--color-tb-primary);
+        border-radius: 999px;
+        border: 2px solid transparent;
+        background-clip: padding-box;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: var(--color-tb-primary-light);
+        background-clip: padding-box;
+    }
+
+    ::-webkit-scrollbar-corner {
+        background: transparent;
+    }
+}
+
+/* ---- Firefox fallback ---- */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-tb-primary) transparent;
 }
 
 @layer components {
     .tarombo-flow {
         background: transparent;
+        touch-action: auto;
     }
 
     .tarombo-flow .react-flow__node {
         cursor: pointer;
+        transition: transform 300ms ease-out, opacity 300ms ease-out;
     }
 
     .tarombo-flow .react-flow__handle {
@@ -185,5 +219,13 @@
 
     .tarombo-flow .react-flow__edge {
         cursor: pointer;
+    }
+
+    .tarombo-flow .react-flow__edge path {
+        transition: stroke 300ms ease-out, stroke-opacity 300ms ease-out, stroke-width 300ms ease-out;
+    }
+
+    .tarombo-flow .react-flow__pane {
+        cursor: default !important;
     }
 }

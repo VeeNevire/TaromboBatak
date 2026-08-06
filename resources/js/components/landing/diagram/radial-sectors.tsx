@@ -36,7 +36,7 @@ export function RadialSectors({ data }: NodeProps) {
                     key={`sector-${sector.marga}`}
                     d={sectorPath(0, 0, INNER_RADIUS, wedgeOuter, sector.start, sector.end)}
                     fill={sector.color}
-                    fillOpacity={0.08}
+                    fillOpacity={0.12}
                 />
             ))}
             {sectors.map((sector) =>

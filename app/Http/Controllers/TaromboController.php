@@ -55,9 +55,9 @@ class TaromboController extends Controller
     protected function maxGenerationDepth(): int
     {
         $parents = Person::query()
-            ->select('id', 'parent_id')
+            ->select('id', 'father_id')
             ->get()
-            ->mapWithKeys(fn (Person $person) => [$person->id => $person->parent_id]);
+            ->mapWithKeys(fn (Person $person) => [$person->id => $person->father_id]);
 
         $depth = 0;
 
@@ -90,8 +90,11 @@ class TaromboController extends Controller
                 'name' => $person->name,
                 'alias' => $person->alias,
                 'marga' => $person->marga->name ?? 'Batak',
-                'parentId' => $person->parent_id !== null ? (string) $person->parent_id : null,
+                'parentId' => $person->father_id !== null ? (string) $person->father_id : null,
                 'birthYear' => $person->birth_year,
+                'birthOrder' => $person->birth_order,
+                'gender' => $person->gender,
+                'spouse' => $person->spouse,
                 'image' => $person->image,
                 'bio' => $person->bio,
                 'childrenNames' => $person->children

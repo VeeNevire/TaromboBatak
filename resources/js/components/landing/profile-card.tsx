@@ -2,7 +2,7 @@ import { ChevronRight, X } from 'lucide-react';
 import { getInitials, getGenerationLabel  } from '@/data/tarombo-tree';
 import type {TaromboPerson} from '@/data/tarombo-tree';
 
-export function ProfileCard({ person, childrenList }: { person: TaromboPerson | null; childrenList: TaromboPerson[] }) {
+export function ProfileCard({ person, childrenList, onClose }: { person: TaromboPerson | null; childrenList: TaromboPerson[]; onClose?: () => void }) {
     if (!person) {
         return (
             <div className="flex w-full max-w-sm flex-col items-center justify-center rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-6 text-center shadow-xl shadow-tb-surface-container-high/30">
@@ -25,6 +25,7 @@ export function ProfileCard({ person, childrenList }: { person: TaromboPerson | 
         <div className="relative w-full max-w-sm rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-6 shadow-xl shadow-tb-surface-container-high/30">
             <button
                 type="button"
+                onClick={onClose}
                 className="absolute right-4 top-4 text-tb-outline hover:text-tb-on-surface"
                 aria-label="Tutup"
             >

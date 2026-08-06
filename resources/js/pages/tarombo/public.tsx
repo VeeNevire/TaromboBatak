@@ -48,6 +48,8 @@ export default function TaromboPublic({ people: rows, margas, stats }: Props) {
     const [search, setSearch] = useState('');
 
     const people = buildTaromboPeople(rows);
+    const rootPerson = people.find((p) => !p.parentId) ?? people[0];
+    const [centerPersonId, setCenterPersonId] = useState<string>(rootPerson?.id ?? '');
     const selected = selectedId ? findPerson(people, selectedId) : null;
     const childrenList = selected ? findPersonChildren(people, selected.id) : [];
 
@@ -56,7 +58,17 @@ export default function TaromboPublic({ people: rows, margas, stats }: Props) {
 
         if (person) {
             setSelectedId(person.id);
+            setCenterPersonId(person.id);
         }
+    };
+
+    const handlePersonSelect = (person: any) => {
+        setSelectedId(person.id);
+        setCenterPersonId(person.id);
+    };
+
+    const handleCloseProfile = () => {
+        setSelectedId(null);
     };
 
     return (
@@ -216,14 +228,15 @@ export default function TaromboPublic({ people: rows, margas, stats }: Props) {
                         <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_320px]">
                             <div className="rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-4">
                                 <TaromboDiagram
-                                    onSelect={(person) => setSelectedId(person.id)}
+                                    onSelect={handlePersonSelect}
                                     selectedId={selectedId ?? undefined}
+                                    centerPersonId={centerPersonId}
                                     people={people}
                                     margas={margas}
                                 />
                             </div>
                             <div className="flex justify-center lg:justify-start">
-                                <ProfileCard person={selected ?? null} childrenList={childrenList} />
+                                <ProfileCard person={selected ?? null} childrenList={childrenList} onClose={handleCloseProfile} />
                             </div>
                         </div>
                     )}

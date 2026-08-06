@@ -21,10 +21,20 @@ const item = {
 
 export function Hero() {
     const [selected, setSelected] = useState<TaromboPerson | null>(() => findPerson(MOCK_TAROMBO, DEFAULT_PERSON_ID) ?? null);
+    const [centerPersonId, setCenterPersonId] = useState<string>(DEFAULT_PERSON_ID);
     const children = useMemo(
         () => (selected ? findPersonChildren(MOCK_TAROMBO, selected.id) : []),
         [selected],
     );
+
+    const handlePersonSelect = (person: TaromboPerson) => {
+        setSelected(person);
+        setCenterPersonId(person.id);
+    };
+
+    const handleCloseProfile = () => {
+        setSelected(null);
+    };
 
     return (
         <section className="mx-auto flex max-w-7xl flex-col items-center gap-12 px-6 py-12 md:py-20 lg:flex-row">
@@ -84,7 +94,7 @@ export function Hero() {
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.6, delay: 0.25 }}
             >
-                <TaromboDiagram onSelect={setSelected} selectedId={selected?.id} />
+                <TaromboDiagram onSelect={handlePersonSelect} selectedId={selected?.id} centerPersonId={centerPersonId} />
             </motion.div>
             <motion.div
                 className="flex justify-end lg:w-[28%]"
@@ -92,7 +102,7 @@ export function Hero() {
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.6, delay: 0.4 }}
             >
-                <ProfileCard person={selected} childrenList={children} />
+                <ProfileCard person={selected} childrenList={children} onClose={handleCloseProfile} />
             </motion.div>
         </section>
     );

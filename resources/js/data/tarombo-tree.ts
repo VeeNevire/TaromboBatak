@@ -8,6 +8,9 @@ export type TaromboPersonRow = {
     marga: string;
     parentId: string | null;
     birthYear?: string;
+    birthOrder?: number | null;
+    gender?: string | null;
+    spouse?: string | null;
     image?: string | null;
     bio?: string;
     childrenNames?: string[];
@@ -21,6 +24,9 @@ export type TaromboPerson = {
     generation: number;
     parentId?: string | null;
     birthYear?: string;
+    birthOrder?: number | null;
+    gender?: string | null;
+    spouse?: string | null;
     image?: string | null;
     bio?: string;
     childrenNames?: string[];
@@ -359,6 +365,157 @@ function recenterParents(
 
         span.angle = normalizeAngleWithin(Math.atan2(sinSum, cosSum), span.start, span.end);
     }
+}
+
+export function getDescendantsUpToDepth(
+    people: TaromboPerson[],
+    rootId: string,
+    maxDepth: number = 3,
+): TaromboPerson[] {
+    const byId = new Map(people.map((person) => [person.id, person]));
+    const childrenOf = new Map<string, string[]>();
+
+    for (const person of people) {
+        if (person.parentId) {
+            const siblings = childrenOf.get(person.parentId) ?? [];
+            siblings.push(person.id);
+            childrenOf.set(person.parentId, siblings);
+        }
+    }
+
+    const root = byId.get(rootId);
+
+    if (!root) {
+        return [];
+    }
+
+    const result: TaromboPerson[] = [root];
+    const queue: Array<{ id: string; depth: number }> = [{ id: rootId, depth: 0 }];
+    const visited = new Set<string>([rootId]);
+
+    while (queue.length > 0) {
+        const current = queue.shift();
+
+        if (!current || current.depth >= maxDepth) {
+            continue;
+        }
+
+        const children = childrenOf.get(current.id) ?? [];
+
+        for (const childId of children) {
+            if (visited.has(childId)) {
+                continue;
+            }
+
+            visited.add(childId);
+            const child = byId.get(childId);
+
+            if (child) {
+                result.push(child);
+                queue.push({ id: childId, depth: current.depth + 1 });
+            }
+        }
+    }
+
+    return result;
+}
+
+export function buildRadialLayoutFromPerson(
+    allPeople: TaromboPerson[],
+    margas: MargaInfo[],
+    centerPersonId: string,
+): TaromboLayout {
+    const byId = new Map(allPeople.map((person) => [person.id, person]));
+    const childrenOf = new Map<string, string[]>();
+
+    for (const person of allPeople) {
+        if (person.parentId) {
+            const siblings = childrenOf.get(person.parentId) ?? [];
+            siblings.push(person.id);
+            childrenOf.set(person.parentId, siblings);
+        }
+    }
+
+    const centerPerson = byId.get(centerPersonId) ?? allPeople.find((p) => p.id === centerPersonId);
+
+    if (!centerPerson) {
+        return buildRadialLayout(allPeople, margas);
+    }
+
+    const selected = new Map<string, TaromboPerson>();
+    const add = (person?: TaromboPerson | null) => {
+        if (person) {
+            selected.set(person.id, person);
+        }
+    };
+
+    // Descendants: children → grandchildren (3 generations deep).
+    for (const person of getDescendantsUpToDepth(allPeople, centerPersonId, 3)) {
+        add(person);
+    }
+
+    // Ancestors: father line up to 2 generations above the center.
+    let current: TaromboPerson | undefined = centerPerson;
+    for (let depth = 0; depth < 2; depth++) {
+        const parentId: string | null | undefined = current?.parentId;
+        const parent: TaromboPerson | undefined = parentId ? byId.get(parentId) : undefined;
+        add(parent);
+        current = parent;
+    }
+
+    // Siblings: other children of the center person's father.
+    const fatherId = centerPerson.parentId;
+    if (fatherId) {
+        for (const siblingId of childrenOf.get(fatherId) ?? []) {
+            if (siblingId !== centerPersonId) {
+                add(byId.get(siblingId));
+            }
+        }
+    }
+
+    if (!selected.has(centerPersonId)) {
+        add(centerPerson);
+    }
+
+    const family = [...selected.values()];
+
+    // Assign generations by BFS distance from the center along father links.
+    const generation = new Map<string, number>();
+    generation.set(centerPersonId, 1);
+    const queue = [centerPersonId];
+
+    while (queue.length > 0) {
+        const id = queue.shift() as string;
+        const currentGeneration = generation.get(id) ?? 1;
+        const ids = [
+            ...(childrenOf.get(id) ?? []),
+            ...(byId.get(id)?.parentId ? [byId.get(id)?.parentId as string] : []),
+        ];
+
+        for (const neighborId of ids) {
+            if (selected.has(neighborId) && !generation.has(neighborId)) {
+                generation.set(neighborId, currentGeneration + 1);
+                queue.push(neighborId);
+            }
+        }
+    }
+
+    const renumberedPeople: TaromboPerson[] = family.map((person) => {
+        if (person.id === centerPersonId) {
+            return { ...person, generation: 1, parentId: null };
+        }
+
+        const parentId =
+            person.parentId && selected.has(person.parentId) ? person.parentId : centerPersonId;
+
+        return {
+            ...person,
+            generation: generation.get(person.id) ?? 2,
+            parentId,
+        };
+    });
+
+    return buildRadialLayout(renumberedPeople, margas);
 }
 
 export function buildRadialLayout(people: TaromboPerson[], margas: MargaInfo[]): TaromboLayout {
