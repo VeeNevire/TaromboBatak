@@ -47,6 +47,16 @@ class UserFactory extends Factory
     }
 
     /**
+     * Indicate that the user is a sub-admin.
+     */
+    public function asSubAdmin(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'subadmin',
+        ]);
+    }
+
+    /**
      * Indicate that the user belongs to a marga.
      */
     public function withMarga(?int $margaId = null): static

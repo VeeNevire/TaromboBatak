@@ -214,6 +214,25 @@ test('the preview returns the close family with fathers mothers branches and ord
         ->assertJsonMissing(['name' => 'Tidak Terkait']);
 });
 
+test('the silsilah page exposes the descendant tree data', function () {
+    $marga = Marga::factory()->create(['name' => 'Sitorus']);
+    $person = Person::factory()->create([
+        'name' => 'Ompu Sitorus',
+        'marga_id' => $marga->id,
+        'birth_order' => 2,
+    ]);
+    Person::factory()->create(['name' => 'Lain', 'marga_id' => $marga->id]);
+
+    $this->actingAs($this->admin)
+        ->get(route('people.silsilah', $person))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('people/silsilah')
+            ->where('centerPersonId', (string) $person->id)
+            ->where('person.name', 'Ompu Sitorus')
+            ->has('people', 2));
+});
+
 test('the preview gracefully falls back when the person has no parents', function () {
     $marga = Marga::factory()->create();
     $person = Person::factory()->create(['name' => 'Yatim', 'marga_id' => $marga->id, 'birth_order' => 1]);

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Marga;
 use App\Models\Person;
+use App\Services\TaromboTreeService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -18,14 +19,15 @@ class TaromboController extends Controller
     {
         $user = $request->user();
         $isAdmin = $user->isAdmin();
+        $service = app(TaromboTreeService::class);
 
-        $rows = $this->buildRows(
+        $rows = $service->rows(
             Person::query()
                 ->when(! $isAdmin, fn (Builder $query) => $query->where('marga_id', $user->marga_id))
                 ->orderBy('id'),
         );
 
-        $margas = $this->buildMargas($isAdmin ? null : $user->marga_id);
+        $margas = $service->margas($isAdmin ? null : $user->marga_id);
 
         return Inertia::render('tarombo/index', [
             'people' => $rows,
@@ -38,9 +40,11 @@ class TaromboController extends Controller
      */
     public function public(): Response
     {
+        $service = app(TaromboTreeService::class);
+
         return Inertia::render('tarombo/public', [
-            'people' => $this->buildRows(Person::query()->orderBy('id')),
-            'margas' => $this->buildMargas(),
+            'people' => $service->rows(Person::query()->orderBy('id')),
+            'margas' => $service->margas(),
             'stats' => [
                 'totalPeople' => Person::count(),
                 'totalMargas' => Marga::count(),
@@ -74,54 +78,5 @@ class TaromboController extends Controller
         }
 
         return $depth + 1;
-    }
-
-    /**
-     * @param  Builder<Person>  $query
-     * @return array<int, array<string, mixed>>
-     */
-    protected function buildRows(Builder $query): array
-    {
-        return $query
-            ->with(['marga', 'children'])
-            ->get()
-            ->map(fn (Person $person) => [
-                'id' => (string) $person->id,
-                'name' => $person->name,
-                'alias' => $person->alias,
-                'marga' => $person->marga->name ?? 'Batak',
-                'parentId' => $person->father_id !== null ? (string) $person->father_id : null,
-                'birthYear' => $person->birth_year,
-                'birthOrder' => $person->birth_order,
-                'gender' => $person->gender,
-                'spouse' => $person->spouse,
-                'image' => $person->image,
-                'bio' => $person->bio,
-                'childrenNames' => $person->children
-                    ->sortBy('birth_year')
-                    ->map(fn (Person $child) => $child->birth_year
-                        ? $child->name.' ('.$child->birth_year.')'
-                        : $child->name)
-                    ->values()
-                    ->all(),
-            ])
-            ->values()
-            ->all();
-    }
-
-    /**
-     * @return array<int, array{name: string, color: string}>
-     */
-    protected function buildMargas(?int $margaId = null): array
-    {
-        return Marga::query()
-            ->when($margaId !== null, fn (Builder $query) => $query->where('id', $margaId))
-            ->orderBy('name')
-            ->get()
-            ->map(fn (Marga $marga) => [
-                'name' => $marga->name,
-                'color' => $marga->color ?? '#b34b1e',
-            ])
-            ->all();
     }
 }

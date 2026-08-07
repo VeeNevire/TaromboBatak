@@ -7,8 +7,9 @@ use App\Http\Requests\UpdatePersonRequest;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Services\FamilyEntryService;
-use Illuminate\Http\RedirectResponse;
+use App\Services\TaromboTreeService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -21,11 +22,11 @@ class PersonController extends Controller
     public function index(Request $request): Response
     {
         $user = $request->user();
-        $isAdmin = $user->isAdmin();
+        $isStaff = $user->isStaff();
 
         $people = Person::query()
             ->with(['marga', 'father'])
-            ->when(! $isAdmin, fn ($query) => $query->where('marga_id', $user->marga_id))
+            ->when(! $isStaff, fn ($query) => $query->where('marga_id', $user->marga_id))
             ->when($request->filled('search'), function ($query) use ($request) {
                 $query->where(function ($query) use ($request) {
                     $query->where('name', 'like', '%'.$request->string('search').'%')
@@ -46,11 +47,12 @@ class PersonController extends Controller
                 'marga_color' => $person->marga?->color,
                 'parent' => $person->father?->name,
                 'birth_year' => $person->birth_year,
+                'nomor' => $person->nomor,
                 'created_at' => $person->created_at?->format('d M Y'),
             ]);
 
         $margas = Marga::query()
-            ->when(! $isAdmin, fn ($query) => $query->where('id', $user->marga_id))
+            ->when(! $isStaff, fn ($query) => $query->where('id', $user->marga_id))
             ->orderBy('name')
             ->get()
             ->map(fn (Marga $marga) => [
@@ -65,7 +67,7 @@ class PersonController extends Controller
                 'marga_id' => $request->input('marga_id'),
             ],
             'margas' => $margas,
-            'canManage' => $isAdmin,
+            'canManage' => $isStaff,
         ]);
     }
 
@@ -78,6 +80,7 @@ class PersonController extends Controller
             'person' => null,
             'margas' => $this->margaOptions(),
             'nameSuggestions' => $this->nameSuggestions(),
+            'nomorUsed' => $this->nomorUsed(),
         ]);
     }
 
@@ -102,6 +105,7 @@ class PersonController extends Controller
             'person' => $this->familyPayload($person),
             'margas' => $this->margaOptions(),
             'nameSuggestions' => $this->nameSuggestions(),
+            'nomorUsed' => $this->nomorUsed($person->id),
         ]);
     }
 
@@ -114,6 +118,7 @@ class PersonController extends Controller
             'person' => $this->familyPayload($person),
             'margas' => $this->margaOptions(),
             'nameSuggestions' => $this->nameSuggestions(),
+            'nomorUsed' => $this->nomorUsed($person->id),
         ]);
     }
 
@@ -128,11 +133,24 @@ class PersonController extends Controller
     }
 
     /**
-     * Show the close family ("silsilah keluarga") as a full page.
+     * Show the silsilah of a person as an interactive descendant tree that
+     * can be re-rooted by clicking any person in the tree.
      */
     public function silsilah(Person $person): Response
     {
-        return Inertia::render('people/silsilah', $this->familyPreviewPayload($person));
+        $service = app(TaromboTreeService::class);
+
+        return Inertia::render('people/silsilah', [
+            'people' => $service->rows(Person::query()->orderBy('id')),
+            'centerPersonId' => (string) $person->id,
+            'person' => [
+                'id' => (string) $person->id,
+                'name' => $person->name,
+                'alias' => $person->alias,
+                'marga' => $person->marga?->name ?? 'Batak',
+                'birthOrder' => $person->birth_order,
+            ],
+        ]);
     }
 
     /**
@@ -310,6 +328,7 @@ class PersonController extends Controller
             'birth_order' => $person->birth_order,
             'sibling_count' => $person->sibling_count,
             'nomor' => $person->nomor,
+            'nomor_manual' => $person->nomor_manual,
             'birth_year' => $person->birth_year,
             'death_year' => $person->death_year,
             'image' => $person->image,
@@ -320,6 +339,9 @@ class PersonController extends Controller
                 ? [
                     'id' => $person->father->id,
                     'name' => $person->father->name,
+                    'marga_id' => $person->father->marga_id,
+                    'marga' => $person->father->marga?->name,
+                    'nomor' => $person->father->nomor,
                     'birth_year' => $person->father->birth_year,
                     'death_year' => $person->father->death_year,
                 ]
@@ -328,6 +350,8 @@ class PersonController extends Controller
                 ? [
                     'id' => $person->mother->id,
                     'name' => $person->mother->name,
+                    'marga_id' => $person->mother->marga_id,
+                    'marga' => $person->mother->marga?->name,
                     'birth_year' => $person->mother->birth_year,
                     'death_year' => $person->mother->death_year,
                 ]
@@ -339,6 +363,8 @@ class PersonController extends Controller
                     'gender' => $sibling->gender,
                     'spouse' => $sibling->spouse,
                     'spouse_marga' => $sibling->spouse_marga,
+                    'marga_id' => $sibling->marga_id,
+                    'marga' => $sibling->marga?->name,
                     'birth_order' => $sibling->birth_order,
                     'nomor' => $sibling->nomor,
                 ])
@@ -379,6 +405,27 @@ class PersonController extends Controller
                 'id' => $marga->id,
                 'name' => $marga->name,
             ])
+            ->all();
+    }
+
+    /**
+     * People whose silsilah number (nomor) is already taken, so the form can
+     * warn when a manual number collides.
+     *
+     * @return array<int, array{nomor: string, name: string}>
+     */
+    protected function nomorUsed(?int $excludeId = null): array
+    {
+        return Person::query()
+            ->whereNotNull('nomor')
+            ->when($excludeId !== null, fn ($query) => $query->where('id', '!=', $excludeId))
+            ->orderBy('nomor')
+            ->get(['nomor', 'name'])
+            ->map(fn (Person $person) => [
+                'nomor' => $person->nomor,
+                'name' => $person->name,
+            ])
+            ->values()
             ->all();
     }
 }

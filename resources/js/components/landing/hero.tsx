@@ -20,16 +20,38 @@ const item = {
 };
 
 export function Hero() {
-    const [selected, setSelected] = useState<TaromboPerson | null>(() => findPerson(MOCK_TAROMBO, DEFAULT_PERSON_ID) ?? null);
+    const [selected, setSelected] = useState<TaromboPerson | null>(null);
     const [centerPersonId, setCenterPersonId] = useState<string>(DEFAULT_PERSON_ID);
+    const [interacted, setInteracted] = useState(false);
+    const [history, setHistory] = useState<string[]>([]);
     const children = useMemo(
         () => (selected ? findPersonChildren(MOCK_TAROMBO, selected.id) : []),
         [selected],
     );
 
     const handlePersonSelect = (person: TaromboPerson) => {
+        setHistory((prev) => [...prev, centerPersonId]);
         setSelected(person);
         setCenterPersonId(person.id);
+        setInteracted(true);
+    };
+
+    const handleBack = () => {
+        if (history.length === 0) {
+            return;
+        }
+
+        const prev = history[history.length - 1];
+        setHistory((prevHistory) => prevHistory.slice(0, -1));
+
+        if (prev === DEFAULT_PERSON_ID) {
+            setSelected(null);
+            setInteracted(false);
+            setCenterPersonId(DEFAULT_PERSON_ID);
+        } else {
+            setSelected(findPerson(MOCK_TAROMBO, prev) ?? null);
+            setCenterPersonId(prev);
+        }
     };
 
     const handleCloseProfile = () => {
@@ -94,7 +116,15 @@ export function Hero() {
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.6, delay: 0.25 }}
             >
-                <TaromboDiagram onSelect={handlePersonSelect} selectedId={selected?.id} centerPersonId={centerPersonId} />
+                <TaromboDiagram
+                    onSelect={handlePersonSelect}
+                    onPaneClick={() => setSelected(null)}
+                    onBack={handleBack}
+                    canGoBack={history.length > 0}
+                    selectedId={selected?.id}
+                    centerPersonId={centerPersonId}
+                    context={interacted ? 'descendants' : 'extended'}
+                />
             </motion.div>
             <motion.div
                 className="flex justify-end lg:w-[28%]"

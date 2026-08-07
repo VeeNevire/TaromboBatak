@@ -15,6 +15,7 @@ type Props = {
 export default function TaromboIndex({ people: rows, margas }: Props) {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [search, setSearch] = useState('');
+    const [history, setHistory] = useState<string[]>([]);
 
     const people = buildTaromboPeople(rows);
     const rootPerson = people.find((p) => !p.parentId) ?? people[0];
@@ -23,15 +24,33 @@ export default function TaromboIndex({ people: rows, margas }: Props) {
     const searchSelect = (value: string) => {
         const person = people.find((p) => p.name.toLowerCase().includes(value.toLowerCase()));
 
-        if (person) {
+        if (person && person.id !== centerPersonId) {
+            setHistory((prev) => [...prev, centerPersonId]);
             setSelectedId(person.id);
             setCenterPersonId(person.id);
         }
     };
 
     const handlePersonSelect = (person: any) => {
+        if (person.id === centerPersonId) {
+            return;
+        }
+
+        setHistory((prev) => [...prev, centerPersonId]);
         setSelectedId(person.id);
         setCenterPersonId(person.id);
+    };
+
+    const handleBack = () => {
+        if (history.length === 0) {
+            return;
+        }
+
+        const prev = history[history.length - 1];
+        setHistory((prevHistory) => prevHistory.slice(0, -1));
+        setSelectedId(prev === rootPerson?.id ? null : prev);
+        setCenterPersonId(prev);
+        setSearch('');
     };
 
     return (
@@ -64,10 +83,13 @@ export default function TaromboIndex({ people: rows, margas }: Props) {
                         <TaromboDiagram
                             onSelect={handlePersonSelect}
                             onPaneClick={() => setSelectedId(null)}
+                            onBack={handleBack}
+                            canGoBack={history.length > 0}
                             selectedId={selectedId ?? undefined}
                             centerPersonId={centerPersonId}
                             people={people}
                             margas={margas}
+                            context="descendants"
                         />
                     </div>
                 </div>

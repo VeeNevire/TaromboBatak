@@ -3,6 +3,7 @@ import { INNER_RADIUS, sectorPath } from '@/data/tarombo-tree';
 import type { SectorNodeData } from '@/data/tarombo-tree';
 
 const PAD = 36;
+const ORNAMENT_OFFSET = 14;
 
 export function RadialSectors({ data }: NodeProps) {
     const { sectors, guides, labels, generationTags, extent } = data as SectorNodeData;
@@ -10,16 +11,37 @@ export function RadialSectors({ data }: NodeProps) {
     const labelRadius = extent / 2 - PAD;
     const wedgeOuter = labelRadius;
 
+    const ornamentRadius = labelRadius - ORNAMENT_OFFSET;
+    const ornamentCount = Math.max(14, Math.round((2 * Math.PI * ornamentRadius) / 34));
+    const ornamentStep = (2 * Math.PI) / ornamentCount;
+
     return (
         <svg width={extent} height={extent} viewBox={`${-half} ${-half} ${extent} ${extent}`} className="block">
             <defs>
                 <radialGradient id="tb-bg-grad" cx="50%" cy="50%" r="70%">
-                    <stop offset="0%" stopColor="#ffffff" stopOpacity="0.7" />
-                    <stop offset="55%" stopColor="#fdfcf7" stopOpacity="0.25" />
-                    <stop offset="100%" stopColor="#f9f6ef" stopOpacity="0" />
+                    <stop offset="0%" style={{ stopColor: 'var(--color-tb-surface-bright)' }} stopOpacity={0.95} />
+                    <stop offset="55%" style={{ stopColor: 'var(--color-tb-surface-bright)' }} stopOpacity={0.5} />
+                    <stop offset="100%" style={{ stopColor: 'var(--color-tb-surface-bright)' }} stopOpacity={0} />
                 </radialGradient>
+                <radialGradient id="tb-vignette" cx="50%" cy="50%" r="72%">
+                    <stop offset="68%" style={{ stopColor: 'var(--color-tb-outline)' }} stopOpacity={0} />
+                    <stop offset="100%" style={{ stopColor: 'var(--color-tb-outline)' }} stopOpacity={0.2} />
+                </radialGradient>
+                {sectors.map((sector, index) => (
+                    <radialGradient
+                        key={`sector-grad-${sector.marga}`}
+                        id={`tb-sector-${index}`}
+                        cx="18%"
+                        cy="18%"
+                        r="92%"
+                    >
+                        <stop offset="0%" stopColor={sector.color} stopOpacity={0.05} />
+                        <stop offset="100%" stopColor={sector.color} stopOpacity={0.17} />
+                    </radialGradient>
+                ))}
             </defs>
             <circle cx={0} cy={0} r={half - 6} fill="url(#tb-bg-grad)" />
+            <circle cx={0} cy={0} r={half - 6} fill="url(#tb-vignette)" />
             {guides.map((radius, index) => (
                 <circle
                     key={`guide-${index}`}
@@ -27,31 +49,100 @@ export function RadialSectors({ data }: NodeProps) {
                     cy={0}
                     r={radius}
                     fill="none"
-                    stroke="#ece4d3"
+                    stroke="var(--color-tb-outline-variant)"
                     strokeWidth={0.75}
+                    strokeDasharray="2 5"
                 />
             ))}
-            {sectors.map((sector) => (
+            {sectors.map((sector, index) => (
                 <path
                     key={`sector-${sector.marga}`}
                     d={sectorPath(0, 0, INNER_RADIUS, wedgeOuter, sector.start, sector.end)}
-                    fill={sector.color}
-                    fillOpacity={0.12}
+                    fill={`url(#tb-sector-${index})`}
                 />
             ))}
-            {sectors.map((sector) =>
-                [sector.start, sector.end].map((angle) => (
+            {sectors.map((sector) => {
+                const largeArc = sector.end - sector.start > Math.PI ? 1 : 0;
+                const startX = wedgeOuter * Math.cos(sector.start);
+                const startY = wedgeOuter * Math.sin(sector.start);
+                const endX = wedgeOuter * Math.cos(sector.end);
+                const endY = wedgeOuter * Math.sin(sector.end);
+
+                return (
                     <path
-                        key={`divider-${sector.marga}-${angle.toFixed(3)}`}
-                        d={`M ${INNER_RADIUS * Math.cos(angle)} ${INNER_RADIUS * Math.sin(angle)} L ${
-                            wedgeOuter * Math.cos(angle)
-                        } ${wedgeOuter * Math.sin(angle)}`}
+                        key={`arc-${sector.marga}`}
+                        d={`M ${startX} ${startY} A ${wedgeOuter} ${wedgeOuter} 0 ${largeArc} 1 ${endX} ${endY}`}
+                        fill="none"
                         stroke={sector.color}
-                        strokeOpacity={0.4}
-                        strokeWidth={1}
+                        strokeOpacity={0.28}
+                        strokeWidth={1.5}
                     />
-                )),
+                );
+            })}
+            {sectors.map((sector) =>
+                [sector.start, sector.end].map((angle) => {
+                    const cos = Math.cos(angle);
+                    const sin = Math.sin(angle);
+                    const x1 = INNER_RADIUS * cos;
+                    const y1 = INNER_RADIUS * sin;
+                    const x2 = wedgeOuter * cos;
+                    const y2 = wedgeOuter * sin;
+
+                    return (
+                        <g key={`divider-${sector.marga}-${angle.toFixed(3)}`}>
+                            <path d={`M ${x1} ${y1} L ${x2} ${y2}`} stroke={sector.color} strokeOpacity={0.32} strokeWidth={1} />
+                            <path
+                                d={`M ${x1 - sin * 1.5} ${y1 + cos * 1.5} L ${x2 - sin * 1.5} ${y2 + cos * 1.5}`}
+                                stroke={sector.color}
+                                strokeOpacity={0.18}
+                                strokeWidth={0.75}
+                            />
+                        </g>
+                    );
+                }),
             )}
+            <g>
+                <circle
+                    cx={0}
+                    cy={0}
+                    r={ornamentRadius - 5}
+                    fill="none"
+                    stroke="var(--color-tb-primary)"
+                    strokeOpacity={0.16}
+                    strokeWidth={1}
+                />
+                <circle
+                    cx={0}
+                    cy={0}
+                    r={ornamentRadius + 5}
+                    fill="none"
+                    stroke="var(--color-tb-primary)"
+                    strokeOpacity={0.16}
+                    strokeWidth={1}
+                />
+                {Array.from({ length: ornamentCount }, (_, index) => {
+                    const angle = index * ornamentStep;
+                    const midX = ornamentRadius * Math.cos(angle);
+                    const midY = ornamentRadius * Math.sin(angle);
+
+                    return (
+                        <g key={`ornament-${index}`}>
+                            <rect
+                                x={midX - 2.6}
+                                y={midY - 2.6}
+                                width={5.2}
+                                height={5.2}
+                                fill="none"
+                                stroke="var(--color-tb-primary)"
+                                strokeWidth={0.9}
+                                transform={`rotate(${(angle * 180) / Math.PI - 45} ${midX} ${midY})`}
+                                opacity={0.45}
+                            />
+                            <circle cx={midX} cy={midY} r={0.9} fill="var(--color-tb-primary)" opacity={0.55} />
+                        </g>
+                    );
+                })}
+            </g>
             {generationTags.map((tag) => {
                 const x = tag.radius * Math.cos(tag.angle);
                 const y = tag.radius * Math.sin(tag.angle);
@@ -66,9 +157,9 @@ export function RadialSectors({ data }: NodeProps) {
                             width={width}
                             height={height}
                             rx={height / 2}
-                            fill="#ffffff"
+                            fill="var(--color-tb-surface-bright)"
                             fillOpacity={0.92}
-                            stroke="#e0d5be"
+                            stroke="var(--color-tb-outline-variant)"
                             strokeWidth={1}
                         />
                         <text
@@ -76,7 +167,7 @@ export function RadialSectors({ data }: NodeProps) {
                             y={y}
                             textAnchor="middle"
                             dominantBaseline="middle"
-                            fill="#5e523f"
+                            fill="var(--color-tb-on-surface-variant)"
                             fontSize={9}
                             fontWeight={700}
                             letterSpacing={0.4}
@@ -100,7 +191,7 @@ export function RadialSectors({ data }: NodeProps) {
                             width={width}
                             height={height}
                             rx={height / 2}
-                            fill="#fffdf6"
+                            fill="var(--color-tb-surface-bright)"
                             stroke={label.color}
                             strokeOpacity={0.5}
                             strokeWidth={1}

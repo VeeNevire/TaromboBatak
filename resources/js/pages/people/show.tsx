@@ -10,9 +10,10 @@ type Props = {
     person: FamilyData;
     margas: { id: number; name: string }[];
     nameSuggestions: string[];
+    nomorUsed: { nomor: string; name: string }[];
 };
 
-export default function PersonShow({ person, margas, nameSuggestions }: Props) {
+export default function PersonShow({ person, margas, nameSuggestions, nomorUsed }: Props) {
     return (
         <>
             <Head title={`Jejak Keluarga ${person.name}`} />
@@ -34,7 +35,7 @@ export default function PersonShow({ person, margas, nameSuggestions }: Props) {
                     </div>
                 </div>
 
-                <FamilyForm person={person} margas={margas} nameSuggestions={nameSuggestions} />
+                <FamilyForm person={person} margas={margas} nameSuggestions={nameSuggestions} nomorUsed={nomorUsed} />
             </div>
         </>
     );

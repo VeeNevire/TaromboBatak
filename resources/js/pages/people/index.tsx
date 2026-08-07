@@ -18,6 +18,7 @@ type PersonItem = {
     marga_color: string | null;
     parent: string | null;
     birth_year: string | null;
+    nomor: string | null;
     created_at: string | null;
 };
 
@@ -157,6 +158,11 @@ export default function PeopleIndex({ people: page, filters, margas, canManage }
                                                     <p className="font-medium text-tb-on-surface">{person.name}</p>
                                                     {person.alias && (
                                                         <p className="text-xs text-tb-on-surface-variant">{person.alias}</p>
+                                                    )}
+                                                    {person.nomor && (
+                                                        <p className="mt-0.5 text-[11px] font-medium text-tb-primary">
+                                                            No. {person.nomor}
+                                                        </p>
                                                     )}
                                                 </div>
                                             </div>

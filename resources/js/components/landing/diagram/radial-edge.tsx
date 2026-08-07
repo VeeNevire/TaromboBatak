@@ -38,6 +38,16 @@ export function RadialEdge({ sourceX, sourceY, targetX, targetY, data }: EdgePro
                 style={{ stroke, strokeWidth: mainWidth, strokeOpacity: mainOpacity }}
                 strokeLinecap="round"
             />
+            <path
+                className="tarombo-flow-edge"
+                d={path}
+                fill="none"
+                stroke={stroke}
+                strokeWidth={2.2}
+                strokeDasharray="4 10"
+                strokeLinecap="round"
+                strokeOpacity={dimmed ? 0.12 : active ? 0.55 : 0.4}
+            />
         </g>
     );
 }

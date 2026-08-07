@@ -1,4 +1,4 @@
-import { useStore } from '@xyflow/react';
+import { Handle, Position, useStore } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import { getInitials } from '@/data/tarombo-tree';
 import type { TaromboNodeData } from '@/data/tarombo-tree';
@@ -91,9 +91,10 @@ export function PersonNode({ data }: NodeProps) {
     return (
         <div
             className={cn(
-                'relative flex h-[104px] w-[80px] cursor-pointer flex-col items-center transition-all duration-300 ease-out',
+                'tb-node-enter relative flex h-[104px] w-[80px] cursor-pointer flex-col items-center transition-all duration-300 ease-out',
                 selected ? 'scale-110' : 'hover:scale-105',
             )}
+            style={{ animationDelay: `${(person.generation - 1) * 90}ms` }}
         >
             {selected && (
                 <div
@@ -106,10 +107,21 @@ export function PersonNode({ data }: NodeProps) {
             )}
 
             <div className="relative">
+                {selected && <span className="tb-pulse-ring" style={{ inset: -3, borderColor: ringColor }} />}
+                <Handle
+                    type="source"
+                    position={Position.Top}
+                    className="!left-1/2 !top-1/2 !h-1 !w-1 !-translate-x-1/2 !-translate-y-1/2"
+                />
+                <Handle
+                    type="target"
+                    position={Position.Bottom}
+                    className="!left-1/2 !top-1/2 !h-1 !w-1 !-translate-x-1/2 !-translate-y-1/2"
+                />
                 <div
                     className="flex h-16 w-16 items-center justify-center rounded-full p-[3px]"
                     style={{
-                        background: ringColor,
+                        background: `linear-gradient(135deg, ${ringColor}, color-mix(in srgb, ${ringColor} 55%, white))`,
                         boxShadow: avatarShadow,
                     }}
                 >

@@ -1,5 +1,5 @@
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, CalendarDays, LayoutGrid, Shapes, TreePine, Users } from 'lucide-react';
+import { BookOpen, CalendarDays, LayoutGrid, Shapes, ShieldCheck, TreePine, Users } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
@@ -17,48 +17,85 @@ import events from '@/routes/events';
 import marga from '@/routes/marga';
 import people from '@/routes/people';
 import stories from '@/routes/stories';
+import subAdmins from '@/routes/sub-admins';
 import tarombo from '@/routes/tarombo';
-import type { NavItem } from '@/types';
+import type { NavGroup } from '@/types';
 
 export function AppSidebar() {
     const { auth } = usePage().props;
     const isAdmin = auth.user?.role === 'admin';
+    const isStaff = isAdmin || auth.user?.role === 'subadmin';
 
-    const mainNavItems: NavItem[] = [
+    const navGroups: NavGroup[] = [
         {
-            title: 'Beranda',
-            href: dashboard(),
-            icon: LayoutGrid,
+            label: 'Utama',
+            items: [
+                {
+                    title: 'Beranda',
+                    href: dashboard(),
+                    icon: LayoutGrid,
+                },
+                {
+                    title: 'Pohon Tarombo',
+                    href: tarombo.index(),
+                    icon: TreePine,
+                },
+            ],
         },
-        {
-            title: isAdmin ? 'Data Anggota' : 'Silsilah Saya',
-            href: people.index(),
-            icon: Users,
-        },
+        ...(isStaff
+            ? [
+                  {
+                      label: 'Kelola Data',
+                      items: [
+                          {
+                              title: 'Data Anggota',
+                              href: people.index(),
+                              icon: Users,
+                          },
+                          {
+                              title: 'Daftar Marga',
+                              href: marga.index(),
+                              icon: Shapes,
+                          },
+                          {
+                              title: 'Cerita Leluhur & Budaya',
+                              href: stories.index(),
+                              icon: BookOpen,
+                          },
+                          {
+                              title: 'Event & Kegiatan',
+                              href: events.index(),
+                              icon: CalendarDays,
+                          },
+                      ],
+                  } satisfies NavGroup,
+              ]
+            : [
+                  {
+                      label: 'Keluarga',
+                      items: [
+                          {
+                              title: 'Silsilah Saya',
+                              href: people.index(),
+                              icon: Users,
+                          },
+                      ],
+                  } satisfies NavGroup,
+              ]),
         ...(isAdmin
-            ? ([
+            ? [
                   {
-                      title: 'Daftar Marga',
-                      href: marga.index(),
-                      icon: Shapes,
-                  },
-                  {
-                      title: 'Cerita Leluhur & Budaya',
-                      href: stories.index(),
-                      icon: BookOpen,
-                  },
-                  {
-                      title: 'Event & Kegiatan',
-                      href: events.index(),
-                      icon: CalendarDays,
-                  },
-              ] satisfies NavItem[])
+                      label: 'Administrasi',
+                      items: [
+                          {
+                              title: 'Sub Admin',
+                              href: subAdmins.index(),
+                              icon: ShieldCheck,
+                          },
+                      ],
+                  } satisfies NavGroup,
+              ]
             : []),
-        {
-            title: 'Pohon Tarombo',
-            href: tarombo.index(),
-            icon: TreePine,
-        },
     ];
 
     return (
@@ -75,8 +112,8 @@ export function AppSidebar() {
                 </SidebarMenu>
             </SidebarHeader>
 
-            <SidebarContent>
-                <NavMain items={mainNavItems} />
+            <SidebarContent className="bg-tb-gorga">
+                <NavMain groups={navGroups} />
             </SidebarContent>
 
             <SidebarFooter>

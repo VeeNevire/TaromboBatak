@@ -1,53 +1,104 @@
 import { Head, Link } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { SilsilahTree, type SilsilahPayload } from '@/components/people/silsilah-tree';
+import { useState } from 'react';
+import { DescendantsTree } from '@/components/people/descendants-tree';
+import { buildTaromboPeople } from '@/data/tarombo-tree';
+import type { TaromboPersonRow } from '@/data/tarombo-tree';
 import { dashboard } from '@/routes';
 import people from '@/routes/people';
+
+type Props = {
+    people: TaromboPersonRow[];
+    centerPersonId: string;
+    person: {
+        id: string;
+        name: string;
+        alias: string | null;
+        marga: string;
+        birthOrder: number | null;
+    };
+};
 
 const FOREST = '#2F4538';
 const INK_SOFT = '#5B6A61';
 const LINE = '#A79E8C';
 
-export default function PersonSilsilah(props: SilsilahPayload) {
+export default function PersonSilsilah(props: Props) {
+    const tree = buildTaromboPeople(props.people);
+    const [centerPersonId, setCenterPersonId] = useState<string>(props.centerPersonId);
+    const [history, setHistory] = useState<string[]>([]);
+
+    const center = tree.find((person) => person.id === centerPersonId) ?? tree[0];
+
+    const handleSelect = (id: string) => {
+        if (id === centerPersonId) {
+            return;
+        }
+
+        setHistory((prev) => [...prev, centerPersonId]);
+        setCenterPersonId(id);
+    };
+
+    const handleBack = () => {
+        if (history.length === 0) {
+            return;
+        }
+
+        const prev = history[history.length - 1];
+        setHistory((prevHistory) => prevHistory.slice(0, -1));
+        setCenterPersonId(prev);
+    };
+
     return (
         <>
-            <Head title={`Silsilah ${props.person.name}`} />
+            <Head title={`Silsilah ${center?.name ?? props.person.name}`} />
 
-            <div className="min-h-screen">
-                <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
-                    <Button asChild variant="ghost" size="sm" className="w-fit text-tb-on-surface-variant">
-                        <Link href={people.index()}>
+            <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
+                <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                        <Link
+                            href={people.index()}
+                            className="flex w-fit items-center gap-1.5 text-sm text-tb-on-surface-variant transition-colors hover:text-tb-primary"
+                        >
                             <ArrowLeft className="size-4" /> Kembali ke Data Anggota
                         </Link>
-                    </Button>
-
-                    <div className="mt-4 rounded-3xl border border-tb-outline-variant p-4 sm:p-8">
-                        <div style={{ backgroundColor: '#F6F7F1' }} className="rounded-2xl p-6 sm:p-10">
-                            <div style={{ color: FOREST }} className="text-center">
-                                <p
-                                    className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em]"
-                                    style={{ color: INK_SOFT }}
-                                >
-                                    Jejak Silsilah Keluarga
-                                </p>
-                                <h1 className="font-display text-3xl font-semibold sm:text-4xl">
-                                    {props.person.name}
-                                </h1>
-                                <div className="mt-4 flex items-center justify-center gap-3">
-                                    <span className="h-px w-7" style={{ backgroundColor: LINE }} />
-                                    <p className="font-display text-base italic sm:text-lg">
-                                        Anak ke {props.person.birthOrder ?? '?'} · Marga {props.person.marga}
-                                    </p>
-                                    <span className="h-px w-7" style={{ backgroundColor: LINE }} />
-                                </div>
-                            </div>
-
-                            <div className="mt-6">
-                                <SilsilahTree payload={props} />
-                            </div>
+                    </div>
+                    <div style={{ color: FOREST }} className="text-center">
+                        <p
+                            className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em]"
+                            style={{ color: INK_SOFT }}
+                        >
+                            Jejak Silsilah Keluarga
+                        </p>
+                        <h1 className="font-display text-3xl font-semibold text-tb-on-surface sm:text-4xl">
+                            {center?.name ?? props.person.name}
+                        </h1>
+                        <div className="mt-3 flex items-center justify-center gap-3">
+                            <span className="h-px w-7" style={{ backgroundColor: LINE }} />
+                            <p className="font-display text-base italic text-tb-on-surface-variant sm:text-lg">
+                                Anak ke {center?.birthOrder ?? '?'} · Marga {center?.marga ?? props.person.marga}
+                            </p>
+                            <span className="h-px w-7" style={{ backgroundColor: LINE }} />
                         </div>
                     </div>
+                </div>
+
+                <div className="relative rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-4 sm:p-6">
+                    {history.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={handleBack}
+                            className="absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-full border border-tb-outline-variant bg-tb-surface-bright/95 px-3 py-1.5 text-xs font-medium text-tb-on-surface shadow-md backdrop-blur transition-colors hover:bg-tb-surface-container"
+                        >
+                            <ArrowLeft className="size-3.5" /> Kembali
+                        </button>
+                    )}
+                    <DescendantsTree
+                        key={centerPersonId}
+                        people={tree}
+                        centerId={centerPersonId}
+                        onSelect={handleSelect}
+                    />
                 </div>
             </div>
         </>

@@ -44,6 +44,22 @@ class User extends Authenticatable
     }
 
     /**
+     * Determine whether the user is a sub-admin.
+     */
+    public function isSubAdmin(): bool
+    {
+        return $this->role === 'subadmin';
+    }
+
+    /**
+     * Determine whether the user is part of the staff (admin or sub-admin).
+     */
+    public function isStaff(): bool
+    {
+        return $this->isAdmin() || $this->isSubAdmin();
+    }
+
+    /**
      * @return BelongsTo<Marga, $this>
      */
     public function marga(): BelongsTo

@@ -17,19 +17,19 @@ class DashboardController extends Controller
     public function index(Request $request): Response
     {
         $user = $request->user();
-        $isAdmin = $user->isAdmin();
+        $isStaff = $user->isStaff();
 
         $peopleQuery = Person::query()
-            ->when(! $isAdmin, fn (Builder $query) => $query->where('marga_id', $user->marga_id));
+            ->when(! $isStaff, fn (Builder $query) => $query->where('marga_id', $user->marga_id));
 
         $totalPeople = (clone $peopleQuery)->count();
-        $totalMargas = $isAdmin
+        $totalMargas = $isStaff
             ? Marga::count()
             : ($user->marga_id ? 1 : 0);
         $totalGenerations = $this->maxGenerationDepth($peopleQuery);
 
         $margaDistribution = Marga::query()
-            ->when(! $isAdmin, fn (Builder $query) => $query->where('id', $user->marga_id))
+            ->when(! $isStaff, fn (Builder $query) => $query->where('id', $user->marga_id))
             ->withCount('people')
             ->orderByDesc('people_count')
             ->get()

@@ -8,6 +8,7 @@ use App\Http\Controllers\KomunitasController;
 use App\Http\Controllers\MargaController;
 use App\Http\Controllers\PersonController;
 use App\Http\Controllers\StoryController;
+use App\Http\Controllers\SubAdminController;
 use App\Http\Controllers\TaromboController;
 use App\Http\Controllers\TentangController;
 use Illuminate\Support\Facades\Route;
@@ -32,7 +33,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('people', [PersonController::class, 'index'])->name('people.index');
 });
 
-Route::middleware(['auth', 'verified', 'role.admin'])->group(function () {
+Route::middleware(['auth', 'verified', 'role.staff'])->group(function () {
     Route::resource('people', PersonController::class)
         ->only(['create', 'store', 'edit', 'update', 'destroy', 'show']);
 
@@ -47,6 +48,10 @@ Route::middleware(['auth', 'verified', 'role.admin'])->group(function () {
     Route::resource('stories', StoryController::class)->except(['show']);
 
     Route::resource('events', EventController::class)->except(['show']);
+});
+
+Route::middleware(['auth', 'verified', 'role.admin'])->group(function () {
+    Route::resource('sub-admins', SubAdminController::class)->except(['show']);
 });
 
 require __DIR__.'/settings.php';

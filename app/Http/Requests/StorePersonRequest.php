@@ -33,6 +33,8 @@ class StorePersonRequest extends FormRequest
             'spouse_marga' => ['nullable', 'string', 'max:255'],
             'father' => ['nullable', 'array'],
             'father.name' => ['nullable', 'string', 'max:255'],
+            'father.marga_id' => ['nullable', 'exists:margas,id'],
+            'father.new_marga' => ['nullable', 'string', 'max:255'],
             'father.birth_year' => ['nullable', 'digits:4'],
             'father.death_year' => ['nullable', 'digits:4'],
             'mother' => ['nullable', 'array'],
@@ -43,9 +45,11 @@ class StorePersonRequest extends FormRequest
             'children.*.id' => ['nullable', 'exists:people,id'],
             'children.*.name' => ['nullable', 'string', 'max:255'],
             'children.*.gender' => ['nullable', 'string', 'max:1'],
+            'children.*.marga_id' => ['nullable', 'exists:margas,id'],
+            'children.*.new_marga' => ['nullable', 'string', 'max:255'],
             'children.*.spouse' => ['nullable', 'string', 'max:255'],
             'children.*.spouse_marga' => ['nullable', 'string', 'max:255'],
-            'children.*.nomor' => ['nullable', 'string', 'max:50', Rule::unique('people', 'nomor')],
+            'children.*.nomor' => ['nullable', 'string', 'max:255', Rule::unique('people', 'nomor')],
         ];
     }
 }

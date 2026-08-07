@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Marga;
 use App\Models\Person;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -17,13 +18,16 @@ class FamilyEntryService
      */
     public function save(array $data): array
     {
-        return DB::transaction(function () use ($data) {
-            $margaId = $data['marga_id'] ?? null;
+        $result = DB::transaction(function () use ($data) {
+            $fatherMargaId = $this->resolveMargaId(
+                ($data['father'] ?? [])['marga_id'] ?? null,
+                ($data['father'] ?? [])['new_marga'] ?? null,
+            ) ?? $data['marga_id'] ?? null;
 
             $father = $this->resolveParent(
                 $data['father_id'] ?? null,
                 $data['father'] ?? null,
-                $margaId,
+                $fatherMargaId,
             );
 
             $mother = $this->resolveParent(
@@ -34,7 +38,7 @@ class FamilyEntryService
 
             $children = $this->upsertChildren(
                 $data['children'] ?? [],
-                $margaId,
+                $fatherMargaId,
                 $father?->id,
                 $mother?->id,
                 $data['sibling_count'] ?? null,
@@ -48,6 +52,12 @@ class FamilyEntryService
                 'children' => $children,
             ];
         });
+
+        if ($result['father'] !== null) {
+            app(TaromboNumberingService::class)->recomputeFromAncestor($result['father']);
+        }
+
+        return $result;
     }
 
     /**
@@ -103,20 +113,25 @@ class FamilyEntryService
      */
     protected function upsertChildren(
         array $rows,
-        ?int $margaId,
+        ?int $fatherMargaId,
         ?int $fatherId,
         ?int $motherId,
         ?int $siblingCount,
         mixed $focusOrder,
         array $data,
     ): Collection {
-        $children = new Collection();
+        $children = new Collection;
 
         foreach (array_values($rows) as $index => $row) {
             $isFocus = $focusOrder !== null && (int) $focusOrder === $index + 1;
 
+            $rowNomor = $this->normalizeNomor($row['nomor'] ?? null);
+
+            if ($rowNomor === null && $isFocus) {
+                $rowNomor = $this->normalizeNomor($data['nomor'] ?? null);
+            }
+
             $focusedFields = $isFocus ? [
-                'nomor' => $data['nomor'] ?? null,
                 'alias' => $data['alias'] ?? null,
                 'birth_year' => $data['birth_year'] ?? null,
                 'death_year' => $data['death_year'] ?? null,
@@ -129,12 +144,15 @@ class FamilyEntryService
                 'gender' => $row['gender'] ?? null,
                 'spouse' => $row['spouse'] ?? null,
                 'spouse_marga' => $row['spouse_marga'] ?? null,
-                'marga_id' => $margaId,
+                'marga_id' => $this->resolveMargaId(
+                    $row['marga_id'] ?? null,
+                    $row['new_marga'] ?? null,
+                ) ?? $fatherMargaId,
                 'father_id' => $fatherId,
                 'mother_id' => $motherId,
                 'birth_order' => $index + 1,
                 'sibling_count' => $siblingCount,
-                'nomor' => $row['nomor'] ?? null,
+                ...($rowNomor !== null ? ['nomor' => $rowNomor, 'nomor_manual' => true] : []),
                 ...$focusedFields,
             ], fn ($value) => $value !== null);
 
@@ -150,6 +168,41 @@ class FamilyEntryService
         }
 
         return $children;
+    }
+
+    /**
+     * Resolve a marga from an existing id or a new name. When a name is
+     * provided it is reused when it already exists, otherwise a new marga is
+     * created on the fly.
+     */
+    protected function resolveMargaId(mixed $margaId, mixed $newMarga): ?int
+    {
+        $name = $this->normalizeName($newMarga);
+
+        if ($name !== null) {
+            return Marga::firstOrCreate(['name' => $name])->id;
+        }
+
+        if ($margaId) {
+            return (int) $margaId;
+        }
+
+        return null;
+    }
+
+    /**
+     * Normalize a free-text number. Returns null when empty, so an empty
+     * number means "auto" and a filled one means a manual override.
+     */
+    protected function normalizeNomor(mixed $nomor): ?string
+    {
+        if (! is_string($nomor)) {
+            return null;
+        }
+
+        $trimmed = trim($nomor);
+
+        return $trimmed === '' ? null : $trimmed;
     }
 
     /**

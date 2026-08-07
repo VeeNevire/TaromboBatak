@@ -13,6 +13,7 @@ export type TaromboPersonRow = {
     spouse?: string | null;
     image?: string | null;
     bio?: string;
+    nomor?: string | null;
     childrenNames?: string[];
 };
 
@@ -29,6 +30,7 @@ export type TaromboPerson = {
     spouse?: string | null;
     image?: string | null;
     bio?: string;
+    nomor?: string | null;
     childrenNames?: string[];
 };
 
@@ -424,6 +426,7 @@ export function buildRadialLayoutFromPerson(
     allPeople: TaromboPerson[],
     margas: MargaInfo[],
     centerPersonId: string,
+    context: 'extended' | 'descendants' = 'extended',
 ): TaromboLayout {
     const byId = new Map(allPeople.map((person) => [person.id, person]));
     const childrenOf = new Map<string, string[]>();
@@ -449,26 +452,35 @@ export function buildRadialLayoutFromPerson(
         }
     };
 
-    // Descendants: children → grandchildren (3 generations deep).
-    for (const person of getDescendantsUpToDepth(allPeople, centerPersonId, 3)) {
-        add(person);
-    }
+    if (context === 'descendants') {
+        // Center + seluruh keturunan, tanpa leluhur & saudara.
+        for (const person of getDescendantsUpToDepth(allPeople, centerPersonId, Number.POSITIVE_INFINITY)) {
+            add(person);
+        }
+    } else {
+        // Descendants: children → grandchildren (3 generations deep).
+        for (const person of getDescendantsUpToDepth(allPeople, centerPersonId, 3)) {
+            add(person);
+        }
 
-    // Ancestors: father line up to 2 generations above the center.
-    let current: TaromboPerson | undefined = centerPerson;
-    for (let depth = 0; depth < 2; depth++) {
-        const parentId: string | null | undefined = current?.parentId;
-        const parent: TaromboPerson | undefined = parentId ? byId.get(parentId) : undefined;
-        add(parent);
-        current = parent;
-    }
+        // Ancestors: father line up to 2 generations above the center.
+        let current: TaromboPerson | undefined = centerPerson;
 
-    // Siblings: other children of the center person's father.
-    const fatherId = centerPerson.parentId;
-    if (fatherId) {
-        for (const siblingId of childrenOf.get(fatherId) ?? []) {
-            if (siblingId !== centerPersonId) {
-                add(byId.get(siblingId));
+        for (let depth = 0; depth < 2; depth++) {
+            const parentId: string | null | undefined = current?.parentId;
+            const parent: TaromboPerson | undefined = parentId ? byId.get(parentId) : undefined;
+            add(parent);
+            current = parent;
+        }
+
+        // Siblings: other children of the center person's father.
+        const fatherId = centerPerson.parentId;
+
+        if (fatherId) {
+            for (const siblingId of childrenOf.get(fatherId) ?? []) {
+                if (siblingId !== centerPersonId) {
+                    add(byId.get(siblingId));
+                }
             }
         }
     }

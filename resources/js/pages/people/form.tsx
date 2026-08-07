@@ -10,9 +10,10 @@ type Props = {
     person: FamilyData | null;
     margas: { id: number; name: string }[];
     nameSuggestions: string[];
+    nomorUsed: { nomor: string; name: string }[];
 };
 
-export default function PersonForm({ person, margas, nameSuggestions }: Props) {
+export default function PersonForm({ person, margas, nameSuggestions, nomorUsed }: Props) {
     const isEdit = person !== null;
 
     return (
@@ -36,7 +37,7 @@ export default function PersonForm({ person, margas, nameSuggestions }: Props) {
                     </div>
                 </div>
 
-                <FamilyForm person={person} margas={margas} nameSuggestions={nameSuggestions} />
+                <FamilyForm person={person} margas={margas} nameSuggestions={nameSuggestions} nomorUsed={nomorUsed} />
             </div>
         </>
     );

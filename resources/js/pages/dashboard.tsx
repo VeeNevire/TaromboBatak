@@ -37,6 +37,7 @@ export default function Dashboard({
 }: DashboardProps) {
     const { auth } = usePage().props;
     const isAdmin = auth.user?.role === 'admin';
+    const isStaff = isAdmin || auth.user?.role === 'subadmin';
 
     const maxCount = Math.max(1, ...margaDistribution.map((m) => m.count));
 
@@ -55,7 +56,7 @@ export default function Dashboard({
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        {isAdmin && (
+                        {isStaff && (
                             <ButtonLink href={people.create()} variant="secondary">
                                 <Plus className="size-4" /> Tambah Anggota
                             </ButtonLink>
@@ -163,7 +164,7 @@ export default function Dashboard({
                                     </>
                                 );
 
-                                return isAdmin ? (
+                                return isStaff ? (
                                     <Link
                                         key={person.id}
                                         href={people.edit(person.id)}

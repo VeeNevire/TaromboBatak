@@ -1,7 +1,7 @@
-import { ReactFlow } from '@xyflow/react';
+import { ReactFlow, ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import type { NodeMouseHandler } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Search, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, Search, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { edgeTypes, nodeTypes } from '@/components/landing/diagram/diagram-types';
 import {
@@ -17,22 +17,75 @@ import type { MargaInfo, SectorNodeData, TaromboNodeData, TaromboPerson } from '
 export function TaromboDiagram({
     onSelect,
     onPaneClick,
+    onBack,
+    canGoBack = false,
     selectedId,
     centerPersonId,
+    context = 'extended',
     people = MOCK_TAROMBO,
     margas = MOCK_MARGAS,
 }: {
     onSelect: (person: TaromboPerson) => void;
     onPaneClick?: () => void;
+    onBack?: () => void;
+    canGoBack?: boolean;
     selectedId?: string;
     centerPersonId: string;
+    context?: 'extended' | 'descendants';
     people?: TaromboPerson[];
     margas?: MargaInfo[];
 }) {
-    const layout = useMemo(
-        () => buildRadialLayoutFromPerson(people, margas, centerPersonId),
-        [people, margas, centerPersonId],
+    return (
+        <ReactFlowProvider>
+            <TaromboDiagramInner
+                onSelect={onSelect}
+                onPaneClick={onPaneClick}
+                onBack={onBack}
+                canGoBack={canGoBack}
+                selectedId={selectedId}
+                centerPersonId={centerPersonId}
+                context={context}
+                people={people}
+                margas={margas}
+            />
+        </ReactFlowProvider>
     );
+}
+
+function TaromboDiagramInner({
+    onSelect,
+    onPaneClick,
+    onBack,
+    canGoBack,
+    selectedId,
+    centerPersonId,
+    context,
+    people,
+    margas,
+}: {
+    onSelect: (person: TaromboPerson) => void;
+    onPaneClick?: () => void;
+    onBack?: () => void;
+    canGoBack: boolean;
+    selectedId?: string;
+    centerPersonId: string;
+    context: 'extended' | 'descendants';
+    people: TaromboPerson[];
+    margas: MargaInfo[];
+}) {
+    const { fitView } = useReactFlow();
+    const layout = useMemo(
+        () => buildRadialLayoutFromPerson(people, margas, centerPersonId, context),
+        [people, margas, centerPersonId, context],
+    );
+
+    useEffect(() => {
+        const frame = requestAnimationFrame(() => {
+            fitView({ padding: 0.02, duration: 300 });
+        });
+
+        return () => cancelAnimationFrame(frame);
+    }, [fitView, centerPersonId, context]);
     const layoutPeople = useMemo(() => {
         const layoutNodeIds = new Set(layout.nodes.filter(n => (n.data as TaromboNodeData).person).map(n => n.id));
 
@@ -106,7 +159,13 @@ return;
     const handleNodeClick: NodeMouseHandler = (_event, node) => {
         const data = node.data as TaromboNodeData;
 
-        if (data?.person) {
+        if (!data?.person) {
+            return;
+        }
+
+        if (data.person.id === selectedId) {
+            onPaneClick?.();
+        } else {
             onSelect(data.person);
         }
     };
@@ -137,6 +196,15 @@ return;
                     </button>
                 </div>
                 <div className="relative aspect-square w-full">
+                    {canGoBack && onBack && (
+                        <button
+                            type="button"
+                            onClick={onBack}
+                            className="absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-full border border-tb-outline-variant bg-tb-surface-bright/95 px-3 py-1.5 text-xs font-medium text-tb-on-surface shadow-md backdrop-blur transition-colors hover:bg-tb-surface-container"
+                        >
+                            <ArrowLeft className="h-3.5 w-3.5" /> Kembali
+                        </button>
+                    )}
                     <ReactFlow
                         nodes={nodes}
                         edges={edges}

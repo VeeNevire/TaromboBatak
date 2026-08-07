@@ -22,6 +22,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $birth_order
  * @property int|null $sibling_count
  * @property string|null $nomor
+ * @property bool $nomor_manual
  * @property string|null $birth_year
  * @property string|null $death_year
  * @property string|null $image
@@ -36,7 +37,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, Person> $children
  * @property-read Collection<int, Person> $siblings
  */
-#[Fillable(['name', 'gender', 'alias', 'marga_id', 'father_id', 'mother_id', 'birth_order', 'sibling_count', 'nomor', 'birth_year', 'death_year', 'image', 'bio', 'spouse', 'spouse_marga'])]
+#[Fillable(['name', 'gender', 'alias', 'marga_id', 'father_id', 'mother_id', 'birth_order', 'sibling_count', 'nomor', 'nomor_manual', 'birth_year', 'death_year', 'image', 'bio', 'spouse', 'spouse_marga'])]
 class Person extends Model
 {
     /** @use HasFactory<PersonFactory> */
@@ -75,8 +76,6 @@ class Person extends Model
     }
 
     /**
-     * Siblings sharing the same father (excluding the person itself).
-     *
      * @return HasMany<Person, $this>
      */
     public function siblings(): HasMany
@@ -84,6 +83,18 @@ class Person extends Model
         return $this->hasMany(Person::class, 'father_id')
             ->whereKeyNot($this->getKey())
             ->orderBy('birth_order');
+    }
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'nomor_manual' => 'boolean',
+        ];
     }
 
     /**
