@@ -8,14 +8,22 @@ import {
     Users,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { home } from '@/routes';
+import budaya from '@/routes/budaya';
+import komunitas from '@/routes/komunitas';
+import marga from '@/routes/marga';
+import tarombo from '@/routes/tarombo';
+import tentang from '@/routes/tentang';
+
+
 
 export const navLinks = [
-    { label: 'Beranda', href: '#' },
-    { label: 'Tarombo', href: '#' },
-    { label: 'Marga', href: '#' },
-    { label: 'Budaya', href: '/budaya' },
-    { label: 'Komunitas', href: '/komunitas' },
-    { label: 'Tentang', href: '/tentang' },
+    { label: 'Beranda', href: home() },
+    { label: 'Tarombo', href: tarombo.view() },
+    { label: 'Marga', href: marga.view() },
+    { label: 'Budaya', href: budaya.view() },
+    { label: 'Komunitas', href: komunitas.view() },
+    { label: 'Tentang', href: tentang.view() },
 ];
 
 export const stats = [
@@ -85,7 +93,14 @@ export const testimonial = {
 };
 
 export const footerNav = {
-    navigasi: ['Beranda', 'Tarombo', 'Marga', 'Budaya', 'Komunitas', 'Tentang'],
+     navigasi: [
+        { label: 'Beranda', href: home() },
+        { label: 'Tarombo', href: tarombo.view() },
+        { label: 'Marga', href: marga.view() },
+        { label: 'Budaya', href: budaya.view() },
+        { label: 'Komunitas', href: komunitas.view() },
+        { label: 'Tentang', href: tentang.view() },
+    ],
     bantuan: [
         'About & Help',
         'Cara Menggunakan',

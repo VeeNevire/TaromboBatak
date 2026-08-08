@@ -11,7 +11,7 @@ type MargaItem = {
 
 export function MargaDirectory({ margas }: { margas: MargaItem[] }) {
     return (
-        <section className="mx-auto max-w-7xl px-6 py-16">
+        <section id="marga" className="mx-auto max-w-7xl px-6 py-16">
             <div className="mb-8 flex items-center justify-between">
                 <h2 className="font-display text-2xl font-bold">Direktori Marga Populer</h2>
                 <Link

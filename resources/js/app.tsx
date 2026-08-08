@@ -4,6 +4,7 @@ import type { ComponentType, ReactNode } from 'react';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
+import AppDashboardLayout from '@/layouts/app/app-dashboard-layout';
 import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
@@ -26,12 +27,16 @@ function baseLayout(name: string): ComponentType<LayoutProps> | ComponentType<La
         case name === 'tentang/index':
         case name === 'auth/login':
             return null;
+        case name.startsWith('Error/'):
+            return null;
         case name === 'auth/forgot-password':
             return null;
         case name.startsWith('auth/'):
             return AuthLayout;
         case name.startsWith('settings/'):
             return [AppLayout, SettingsLayout];
+        case name === 'dashboard':
+            return AppDashboardLayout;
         default:
             return AppLayout;
     }

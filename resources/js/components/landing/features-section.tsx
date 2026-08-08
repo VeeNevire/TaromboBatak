@@ -3,7 +3,7 @@ import { features } from '@/data/landing';
 
 export function FeaturesSection() {
     return (
-        <section className="bg-tb-surface-bright px-6 py-16">
+        <section id="fitur" className="bg-tb-surface-bright px-6 py-16">
             <div className="mx-auto max-w-7xl">
                 <div className="mb-12 flex items-center justify-center gap-4">
                     <div className="h-px w-16 bg-tb-outline-variant" />

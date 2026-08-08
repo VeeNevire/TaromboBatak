@@ -1,6 +1,7 @@
 import { Head, Link } from '@inertiajs/react';
-import { ArrowRight, Heart, TreePine } from 'lucide-react';
 import { MotionConfig } from 'framer-motion';
+import { ArrowRight, Heart, TreePine } from 'lucide-react';
+
 import { Reveal } from '@/components/landing/reveal';
 import { SiteFooter } from '@/components/landing/site-footer';
 import { SiteHeader } from '@/components/landing/site-header';
@@ -171,7 +172,7 @@ export default function TentangIndex() {
                         <Reveal delay={0.3}>
                             <div className="mt-8 flex flex-wrap justify-center gap-4">
                                 <Link
-                                    href="/register"
+                                    href="/login"
                                     className="flex items-center gap-2 rounded-full bg-white px-8 py-3 font-medium text-tb-primary transition-all hover:bg-white/90 hover:shadow-lg"
                                 >
                                     Mulai Buat Tarombo <ArrowRight className="h-4 w-4" />

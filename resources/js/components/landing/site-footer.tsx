@@ -1,6 +1,8 @@
+import { Link } from '@inertiajs/react';
 import { Apple, Facebook, Instagram, Music2, Play, Youtube } from 'lucide-react';
 import { BrandLogo } from '@/components/brand-logo';
 import { footerNav } from '@/data/landing';
+
 
 const socialLinks = [
     { label: 'Facebook', icon: Facebook },
@@ -42,13 +44,13 @@ export function SiteFooter() {
                 <div>
                     <h3 className="mb-4 text-sm font-bold">Navigasi</h3>
                     <ul className="space-y-3 text-sm text-tb-on-surface-variant">
-                        {footerNav.navigasi.map((item) => (
-                            <li key={item}>
-                                <a href="#" className="transition-colors hover:text-tb-primary">
-                                    {item}
-                                </a>
-                            </li>
-                        ))}
+                       {footerNav.navigasi.map((item) => (
+        <li key={item.label}>
+            <Link href={item.href} className="transition-colors hover:text-tb-primary">
+                {item.label}
+            </Link>
+        </li>
+    ))}
                     </ul>
                 </div>
                 <div>

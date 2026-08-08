@@ -3,7 +3,7 @@ import { Reveal } from '@/components/landing/reveal';
 
 export function NewsletterSection() {
     return (
-        <section className="mx-auto max-w-7xl px-6 pb-16">
+        <section id="komunitas" className="mx-auto max-w-7xl px-6 pb-16">
             <Reveal>
                 <div className="flex flex-col items-center justify-between gap-6 rounded-2xl border border-tb-outline-variant bg-tb-surface-container bg-tb-gorga bg-blend-soft-light p-6 md:flex-row md:p-8">
                     <div className="flex-1">

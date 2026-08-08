@@ -1,6 +1,7 @@
 import { Form, Head, Link } from '@inertiajs/react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { User, Mail, Loader2, Shapes } from 'lucide-react';
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { BrandLogo } from '@/components/brand-logo';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
@@ -24,6 +25,16 @@ type FormMode = 'login' | 'register';
 
 export default function Login({ canResetPassword, margas }: Props) {
     const [mode, setMode] = useState<FormMode>('login');
+    const [direction, setDirection] = useState<1 | -1>(1);
+
+    const switchMode = (next: FormMode) => {
+        if (next === mode) {
+            return;
+        }
+
+        setDirection(next === 'register' ? 1 : -1);
+        setMode(next);
+    };
 
     return (
         <>
@@ -46,40 +57,48 @@ export default function Login({ canResetPassword, margas }: Props) {
                     </div>
 
                     <div className="bg-tb-surface-bright rounded-3xl border border-tb-outline-variant shadow-xl p-6 sm:p-8">
-                        <div className="flex mb-6 border-b border-tb-outline-variant" role="tablist">
+                        <div className="relative flex mb-6 border-b border-tb-outline-variant" role="tablist">
                             <button
                                 role="tab"
                                 aria-selected={mode === 'login'}
-                                onClick={() => setMode('login')}
-                                className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+                                onClick={() => switchMode('login')}
+                                className={`relative flex-1 py-3 px-4 text-sm font-medium transition-colors ${
                                     mode === 'login'
-                                        ? 'text-tb-primary border-b-2 border-tb-primary -mb-px'
+                                        ? 'text-tb-primary'
                                         : 'text-tb-on-surface-variant hover:text-tb-on-surface'
                                 }`}
                             >
                                 Masuk
+                                {mode === 'login' && (
+                                    <motion.span
+                                        layoutId="tab-active"
+                                        className="absolute inset-x-0 bottom-0 h-0.5 bg-tb-primary"
+                                        transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                                    />
+                                )}
                             </button>
                             <button
                                 role="tab"
                                 aria-selected={mode === 'register'}
-                                onClick={() => setMode('register')}
-                                className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+                                onClick={() => switchMode('register')}
+                                className={`relative flex-1 py-3 px-4 text-sm font-medium transition-colors ${
                                     mode === 'register'
-                                        ? 'text-tb-primary border-b-2 border-tb-primary -mb-px'
+                                        ? 'text-tb-primary'
                                         : 'text-tb-on-surface-variant hover:text-tb-on-surface'
                                 }`}
                             >
                                 Daftar
+                                {mode === 'register' && (
+                                    <motion.span
+                                        layoutId="tab-active"
+                                        className="absolute inset-x-0 bottom-0 h-0.5 bg-tb-primary"
+                                        transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                                    />
+                                )}
                             </button>
                         </div>
 
-                        {mode === 'login' && (
-                            <LoginForm canResetPassword={canResetPassword} />
-                        )}
-
-                        {mode === 'register' && (
-                            <RegisterForm margas={margas} />
-                        )}
+                        <SlideSwap mode={mode} direction={direction} margas={margas} canResetPassword={canResetPassword} />
                     </div>
 
                     <p className="mt-6 text-center text-sm text-tb-on-surface-variant">
@@ -88,7 +107,7 @@ export default function Login({ canResetPassword, margas }: Props) {
                                 Belum punya akun?{' '}
                                 <button
                                     type="button"
-                                    onClick={() => setMode('register')}
+                                    onClick={() => switchMode('register')}
                                     className="text-tb-primary font-medium hover:underline"
                                 >
                                     Daftar di sini
@@ -99,7 +118,7 @@ export default function Login({ canResetPassword, margas }: Props) {
                                 Sudah punya akun?{' '}
                                 <button
                                     type="button"
-                                    onClick={() => setMode('login')}
+                                    onClick={() => switchMode('login')}
                                     className="text-tb-primary font-medium hover:underline"
                                 >
                                     Masuk di sini
@@ -110,6 +129,54 @@ export default function Login({ canResetPassword, margas }: Props) {
                 </div>
             </div>
         </>
+    );
+}
+
+function SlideSwap({
+    mode,
+    direction,
+    margas,
+    canResetPassword,
+}: {
+    mode: FormMode;
+    direction: 1 | -1;
+    margas: MargaOption[];
+    canResetPassword: boolean;
+}) {
+    const boxRef = useRef<HTMLDivElement>(null);
+    const [height, setHeight] = useState<number>();
+
+    useLayoutEffect(() => {
+        if (boxRef.current) {
+            setHeight(boxRef.current.offsetHeight);
+        }
+    }, [mode]);
+
+    return (
+        <motion.div
+            initial={false}
+            animate={{ height: height ?? 'auto' }}
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
+            className="relative overflow-x-clip"
+        >
+            <AnimatePresence mode="popLayout" initial={false} custom={direction}>
+                <motion.div
+                    key={mode}
+                    ref={boxRef}
+                    custom={direction}
+                    initial={{ x: direction * -56, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    exit={{ x: direction * 56, opacity: 0 }}
+                    transition={{ duration: 0.25, ease: 'easeInOut' }}
+                >
+                    {mode === 'login' ? (
+                        <LoginForm canResetPassword={canResetPassword} />
+                    ) : (
+                        <RegisterForm margas={margas} />
+                    )}
+                </motion.div>
+            </AnimatePresence>
+        </motion.div>
     );
 }
 

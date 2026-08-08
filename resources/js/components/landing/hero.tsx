@@ -59,7 +59,7 @@ export function Hero() {
     };
 
     return (
-        <section className="mx-auto flex max-w-7xl flex-col items-center gap-12 px-6 py-12 md:py-20 lg:flex-row">
+        <section id="beranda" className="mx-auto flex max-w-7xl flex-col items-center gap-12 px-6 py-12 md:py-20 lg:flex-row">
             <motion.div
                 className="space-y-8 lg:w-[28%]"
                 variants={container}
