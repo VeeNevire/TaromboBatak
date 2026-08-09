@@ -18,10 +18,10 @@ export function RadialEdge({ sourceX, sourceY, targetX, targetY, data }: EdgePro
 
     const path = `M ${startX} ${startY} L ${endX} ${endY}`;
 
-    const haloWidth = active ? 5.5 : 3.5;
-    const haloOpacity = dimmed ? 0.04 : active ? 0.24 : 0.1;
-    const mainWidth = active ? 2.4 : 1.6;
-    const mainOpacity = dimmed ? 0.3 : 1;
+    const haloWidth = active ? 4.5 : 2.5;
+    const haloOpacity = dimmed ? 0.03 : active ? 0.18 : 0.08;
+    const mainWidth = active ? 2.0 : 1.2;
+    const mainOpacity = dimmed ? 0.25 : 1;
 
     return (
         <g>
@@ -43,10 +43,10 @@ export function RadialEdge({ sourceX, sourceY, targetX, targetY, data }: EdgePro
                 d={path}
                 fill="none"
                 stroke={stroke}
-                strokeWidth={2.2}
-                strokeDasharray="4 10"
+                strokeWidth={1.8}
+                strokeDasharray="3 8"
                 strokeLinecap="round"
-                strokeOpacity={dimmed ? 0.12 : active ? 0.55 : 0.4}
+                strokeOpacity={dimmed ? 0.1 : active ? 0.45 : 0.3}
             />
         </g>
     );

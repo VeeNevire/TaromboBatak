@@ -22,7 +22,6 @@ const item = {
 export function Hero() {
     const [selected, setSelected] = useState<TaromboPerson | null>(null);
     const [centerPersonId, setCenterPersonId] = useState<string>(DEFAULT_PERSON_ID);
-    const [interacted, setInteracted] = useState(false);
     const [history, setHistory] = useState<string[]>([]);
     const children = useMemo(
         () => (selected ? findPersonChildren(MOCK_TAROMBO, selected.id) : []),
@@ -33,7 +32,6 @@ export function Hero() {
         setHistory((prev) => [...prev, centerPersonId]);
         setSelected(person);
         setCenterPersonId(person.id);
-        setInteracted(true);
     };
 
     const handleBack = () => {
@@ -46,7 +44,6 @@ export function Hero() {
 
         if (prev === DEFAULT_PERSON_ID) {
             setSelected(null);
-            setInteracted(false);
             setCenterPersonId(DEFAULT_PERSON_ID);
         } else {
             setSelected(findPerson(MOCK_TAROMBO, prev) ?? null);
@@ -123,7 +120,8 @@ export function Hero() {
                     canGoBack={history.length > 0}
                     selectedId={selected?.id}
                     centerPersonId={centerPersonId}
-                    context={interacted ? 'descendants' : 'extended'}
+                    context="descendants"
+                    maxDepth={2}
                 />
             </motion.div>
             <motion.div

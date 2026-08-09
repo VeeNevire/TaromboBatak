@@ -135,7 +135,7 @@ export const PERSON_NODE_HEIGHT = 104;
 export const ROOT_NODE_RADIUS = ROOT_NODE_SIZE / 2;
 export const PERSON_AVATAR_RADIUS = 31;
 
-const RING_GAP = 125;
+const RING_GAP = 165;
 const INNER_RADIUS = RING_GAP * 0.3;
 const LABEL_OFFSET = 16;
 const PAD = 36;
@@ -299,11 +299,14 @@ function enforceMinGap(
 
     for (const [generation, ids] of byGeneration) {
         const ringRadius = (generation - 1) * RING_GAP;
-        const minGap = (PERSON_NODE_WIDTH + 6) / ringRadius;
+        // Increased padding from 6px to 24px for better breathing room
+        const minGap = (PERSON_NODE_WIDTH + 24) / ringRadius;
 
-        for (let pass = 0; pass < 2; pass++) {
+        // Increased passes from 2 to 8 for better overlap resolution
+        for (let pass = 0; pass < 8; pass++) {
             const ordered = [...ids].sort((a, b) => (spans.get(a)?.angle ?? 0) - (spans.get(b)?.angle ?? 0));
 
+            // Forward pass: push nodes to the right
             for (let i = 0; i < ordered.length - 1; i++) {
                 const left = spans.get(ordered[i]);
                 const right = spans.get(ordered[i + 1]);
@@ -316,6 +319,38 @@ function enforceMinGap(
 
                 if (gap < minGap) {
                     right.angle = normalizeAngleWithin(left.angle + minGap, right.start, right.end);
+                }
+            }
+
+            // Wrap-around check: last node vs first node
+            if (ordered.length > 1) {
+                const first = spans.get(ordered[0]);
+                const last = spans.get(ordered[ordered.length - 1]);
+
+                if (first && last) {
+                    // Check gap from last to first (crossing 2π boundary)
+                    const wrapGap = shortestAngle(first.angle - last.angle);
+                    
+                    if (wrapGap < minGap && wrapGap > 0) {
+                        // Push first node forward
+                        first.angle = normalizeAngleWithin(last.angle + minGap, first.start, first.end);
+                    }
+                }
+            }
+
+            // Backward pass: pull nodes to the left to balance
+            for (let i = ordered.length - 1; i > 0; i--) {
+                const left = spans.get(ordered[i - 1]);
+                const right = spans.get(ordered[i]);
+
+                if (!left || !right) {
+                    continue;
+                }
+
+                const gap = shortestAngle(right.angle - left.angle);
+
+                if (gap < minGap) {
+                    left.angle = normalizeAngleWithin(right.angle - minGap, left.start, left.end);
                 }
             }
         }
@@ -427,6 +462,7 @@ export function buildRadialLayoutFromPerson(
     margas: MargaInfo[],
     centerPersonId: string,
     context: 'extended' | 'descendants' = 'extended',
+    maxDepth: number = Number.POSITIVE_INFINITY,
 ): TaromboLayout {
     const byId = new Map(allPeople.map((person) => [person.id, person]));
     const childrenOf = new Map<string, string[]>();
@@ -453,8 +489,8 @@ export function buildRadialLayoutFromPerson(
     };
 
     if (context === 'descendants') {
-        // Center + seluruh keturunan, tanpa leluhur & saudara.
-        for (const person of getDescendantsUpToDepth(allPeople, centerPersonId, Number.POSITIVE_INFINITY)) {
+        // Center + keturunan dengan depth limit
+        for (const person of getDescendantsUpToDepth(allPeople, centerPersonId, maxDepth)) {
             add(person);
         }
     } else {
@@ -542,6 +578,14 @@ export function buildRadialLayout(people: TaromboPerson[], margas: MargaInfo[]):
         }
     }
 
+    for (const ids of childrenOf.values()) {
+        ids.sort((a, b) => {
+            const orderA = byId.get(a)?.birthOrder ?? Number.POSITIVE_INFINITY;
+            const orderB = byId.get(b)?.birthOrder ?? Number.POSITIVE_INFINITY;
+            return orderA - orderB;
+        });
+    }
+
     const root = people.find((person) => !person.parentId) ?? people[0];
     const maxGeneration = Math.max(...people.map((person) => person.generation));
 
@@ -549,6 +593,7 @@ export function buildRadialLayout(people: TaromboPerson[], margas: MargaInfo[]):
     assignSpans(root.id, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI, childrenOf, spans);
     enforceMinGap(people, spans);
     recenterParents(root.id, childrenOf, spans);
+    enforceMinGap(people, spans);
 
     const nodes: Node[] = [];
     const edges: Edge<RadialEdgeData>[] = [];

@@ -143,40 +143,7 @@ export function RadialSectors({ data }: NodeProps) {
                     );
                 })}
             </g>
-            {generationTags.map((tag) => {
-                const x = tag.radius * Math.cos(tag.angle);
-                const y = tag.radius * Math.sin(tag.angle);
-                const width = tag.label.length * 5.8 + 16;
-                const height = 16;
-
-                return (
-                    <g key={tag.label}>
-                        <rect
-                            x={x - width / 2}
-                            y={y - height / 2}
-                            width={width}
-                            height={height}
-                            rx={height / 2}
-                            fill="var(--color-tb-surface-bright)"
-                            fillOpacity={0.92}
-                            stroke="var(--color-tb-outline-variant)"
-                            strokeWidth={1}
-                        />
-                        <text
-                            x={x}
-                            y={y}
-                            textAnchor="middle"
-                            dominantBaseline="middle"
-                            fill="var(--color-tb-on-surface-variant)"
-                            fontSize={9}
-                            fontWeight={700}
-                            letterSpacing={0.4}
-                        >
-                            {tag.label}
-                        </text>
-                    </g>
-                );
-            })}
+            {/* Generation tags hidden for cleaner look - info available in legend */}
             {labels.map((label) => {
                 const x = label.radius * Math.cos(label.angle);
                 const y = label.radius * Math.sin(label.angle);

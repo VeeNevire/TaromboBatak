@@ -4,6 +4,24 @@ import { getInitials } from '@/data/tarombo-tree';
 import type { TaromboNodeData } from '@/data/tarombo-tree';
 import { cn } from '@/lib/utils';
 
+const HONORIFICS = new Set(['si', 'raja', 'tuan', 'guru', 'datu', 'tunggal', 'siraja']);
+
+function getShortName(name: string): string {
+    const words = name.split(' ');
+
+    if (words.length <= 1) {
+        return name;
+    }
+
+    const meaningful = words.filter((word) => !HONORIFICS.has(word.toLowerCase()));
+
+    if (meaningful.length === 0) {
+        return words[words.length - 1];
+    }
+
+    return meaningful.length === 1 ? meaningful[0] : meaningful.slice(0, 2).join(' ');
+}
+
 function GenderBadge({ gender }: { gender?: string | null }) {
     if (!gender) {
         return null;
@@ -141,14 +159,14 @@ export function PersonNode({ data }: NodeProps) {
             </div>
             <p
                 className={cn(
-                    'mt-1 line-clamp-2 text-center text-[11px] font-semibold leading-snug transition-colors',
+                    'mt-1 line-clamp-1 text-center text-[10px] font-semibold leading-snug transition-colors',
                     selected ? 'text-tb-primary' : 'text-tb-on-surface',
                 )}
             >
-                {person.name}
+                {getShortName(person.name)}
             </p>
             <span
-                className="mt-0.5 rounded-full px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide"
+                className="mt-0.5 rounded-full px-1.5 py-px text-[8px] font-semibold uppercase tracking-wide"
                 style={{ backgroundColor: `${ringColor}1f`, color: ringColor }}
             >
                 {person.marga}

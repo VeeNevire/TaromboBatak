@@ -22,6 +22,7 @@ export function TaromboDiagram({
     selectedId,
     centerPersonId,
     context = 'extended',
+    maxDepth,
     people = MOCK_TAROMBO,
     margas = MOCK_MARGAS,
 }: {
@@ -32,6 +33,7 @@ export function TaromboDiagram({
     selectedId?: string;
     centerPersonId: string;
     context?: 'extended' | 'descendants';
+    maxDepth?: number;
     people?: TaromboPerson[];
     margas?: MargaInfo[];
 }) {
@@ -45,6 +47,7 @@ export function TaromboDiagram({
                 selectedId={selectedId}
                 centerPersonId={centerPersonId}
                 context={context}
+                maxDepth={maxDepth}
                 people={people}
                 margas={margas}
             />
@@ -60,6 +63,7 @@ function TaromboDiagramInner({
     selectedId,
     centerPersonId,
     context,
+    maxDepth,
     people,
     margas,
 }: {
@@ -70,13 +74,14 @@ function TaromboDiagramInner({
     selectedId?: string;
     centerPersonId: string;
     context: 'extended' | 'descendants';
+    maxDepth?: number;
     people: TaromboPerson[];
     margas: MargaInfo[];
 }) {
     const { fitView } = useReactFlow();
     const layout = useMemo(
-        () => buildRadialLayoutFromPerson(people, margas, centerPersonId, context),
-        [people, margas, centerPersonId, context],
+        () => buildRadialLayoutFromPerson(people, margas, centerPersonId, context, maxDepth),
+        [people, margas, centerPersonId, context, maxDepth],
     );
 
     useEffect(() => {
