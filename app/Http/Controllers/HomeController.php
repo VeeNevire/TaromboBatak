@@ -40,6 +40,7 @@ class HomeController extends Controller
                 'location' => $event->location,
                 'month' => $event->date->format('M'),
                 'day' => $event->date->format('d'),
+                'is_past' => $event->date->isPast(),
             ]);
 
         $margas = Marga::query()

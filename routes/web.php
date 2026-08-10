@@ -25,6 +25,10 @@ Route::get('cerita', [StoryController::class, 'publicIndex'])->name('cerita.inde
 
 Route::get('cerita/{story}', [StoryController::class, 'show'])->name('cerita.show');
 
+Route::get('kegiatan', [EventController::class, 'publicIndex'])->name('kegiatan.index');
+
+Route::get('kegiatan/{event}', [EventController::class, 'show'])->name('kegiatan.show');
+
 Route::get('komunitas', [KomunitasController::class, 'index'])->name('komunitas.view');
 
 Route::get('tentang', [TentangController::class, 'index'])->name('tentang.view');

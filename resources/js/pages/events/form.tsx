@@ -14,6 +14,7 @@ type EventFormValue = {
     title: string;
     description: string;
     location: string | null;
+    registration_url: string | null;
     date: string;
     published: boolean;
 };
@@ -29,6 +30,7 @@ export default function EventForm({ event }: Props) {
         title: event?.title ?? '',
         description: event?.description ?? '',
         location: event?.location ?? '',
+        registration_url: event?.registration_url ?? '',
         date: event?.date ?? '',
         published: event?.published ?? true,
     });
@@ -115,6 +117,24 @@ export default function EventForm({ event }: Props) {
                                     />
                                     <InputError message={errors.location} />
                                 </div>
+                            </div>
+
+                            <div className="grid gap-1.5">
+                                <Label htmlFor="registration_url" className="text-tb-on-surface">
+                                    Link Pendaftaran (Opsional)
+                                </Label>
+                                <Input
+                                    id="registration_url"
+                                    type="url"
+                                    value={data.registration_url}
+                                    onChange={(e) => setData('registration_url', e.target.value)}
+                                    placeholder="https://forms.google.com/... atau https://wa.me/62..."
+                                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                />
+                                <InputError message={errors.registration_url} />
+                                <p className="text-xs text-tb-on-surface-variant">
+                                    Link untuk pendaftaran event (Google Form, WhatsApp, dll)
+                                </p>
                             </div>
 
                             <div className="grid gap-1.5">

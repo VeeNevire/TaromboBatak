@@ -13,12 +13,13 @@ use Illuminate\Support\Carbon;
  * @property string $title
  * @property string $description
  * @property string|null $location
+ * @property string|null $registration_url
  * @property Carbon $date
  * @property bool $published
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['title', 'description', 'location', 'date', 'published'])]
+#[Fillable(['title', 'description', 'location', 'registration_url', 'date', 'published'])]
 class Event extends Model
 {
     /** @use HasFactory<EventFactory> */

@@ -13,7 +13,7 @@ use Inertia\Response;
 class EventController extends Controller
 {
     /**
-     * List all events.
+     * List all events (admin).
      */
     public function index(Request $request): Response
     {
@@ -37,6 +37,59 @@ class EventController extends Controller
         return Inertia::render('events/index', [
             'events' => $events,
             'filters' => ['search' => $request->string('search')->toString()],
+        ]);
+    }
+
+    /**
+     * List all published events (public).
+     */
+    public function publicIndex(Request $request): Response
+    {
+        $events = Event::query()
+            ->where('published', true)
+            ->when($request->filled('search'), function ($query) use ($request) {
+                $query->where('title', 'like', '%'.$request->string('search').'%');
+            })
+            ->orderByRaw('CASE WHEN date >= CURDATE() THEN 0 ELSE 1 END')
+            ->orderBy('date')
+            ->paginate(12)
+            ->withQueryString()
+            ->through(fn (Event $event) => [
+                'id' => $event->id,
+                'title' => $event->title,
+                'description' => $event->description,
+                'location' => $event->location,
+                'date' => $event->date->format('d M Y'),
+                'month' => $event->date->format('M'),
+                'day' => $event->date->format('d'),
+                'is_past' => $event->date->isPast(),
+            ]);
+
+        return Inertia::render('kegiatan/index', [
+            'events' => $events,
+            'filters' => ['search' => $request->string('search')->toString()],
+        ]);
+    }
+
+    /**
+     * Show a single event (public).
+     */
+    public function show(Event $event): Response
+    {
+        abort_if(! $event->published, 404);
+
+        return Inertia::render('kegiatan/show', [
+            'event' => [
+                'id' => $event->id,
+                'title' => $event->title,
+                'description' => $event->description,
+                'location' => $event->location,
+                'registration_url' => $event->registration_url,
+                'date' => $event->date->format('d M Y'),
+                'month' => $event->date->format('M'),
+                'day' => $event->date->format('d'),
+                'is_past' => $event->date->isPast(),
+            ],
         ]);
     }
 
@@ -76,6 +129,7 @@ class EventController extends Controller
                 'title' => $event->title,
                 'description' => $event->description,
                 'location' => $event->location,
+                'registration_url' => $event->registration_url,
                 'date' => $event->date->format('Y-m-d'),
                 'published' => $event->published,
             ],

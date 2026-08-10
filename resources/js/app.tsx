@@ -25,6 +25,8 @@ function baseLayout(name: string): ComponentType<LayoutProps> | ComponentType<La
         case name === 'budaya/index':
         case name === 'cerita/index':
         case name === 'cerita/show':
+        case name === 'kegiatan/index':
+        case name === 'kegiatan/show':
         case name === 'komunitas/index':
         case name === 'tentang/index':
         case name === 'auth/login':
