@@ -20,6 +20,7 @@ type PersonItem = {
     birth_year: string | null;
     nomor: string | null;
     created_at: string | null;
+    editable: boolean;
 };
 
 type Paginated = {
@@ -41,12 +42,14 @@ type Props = {
     filters: { search: string; marga_id: string | null };
     margas: MargaOption[];
     canManage: boolean;
+    hasMarga: boolean;
 };
 
-export default function PeopleIndex({ people: page, filters, margas, canManage }: Props) {
+export default function PeopleIndex({ people: page, filters, margas, canManage, hasMarga }: Props) {
     const [search, setSearch] = useState(filters.search ?? '');
     const [toDelete, setToDelete] = useState<PersonItem | null>(null);
     const deleteForm = useForm({});
+    const showActions = canManage || page.data.some((person) => person.editable);
 
     const applyFilter = (updates: { search?: string; marga_id?: string | null }) => {
         router.get(
@@ -90,6 +93,13 @@ export default function PeopleIndex({ people: page, filters, margas, canManage }
                         <Button asChild className="rounded-full bg-tb-primary hover:bg-tb-primary-light">
                             <Link href={people.create()}>
                                 <Plus className="size-4" /> Tambah Anggota
+                            </Link>
+                        </Button>
+                    )}
+                    {!canManage && hasMarga && (
+                        <Button asChild className="rounded-full bg-tb-primary hover:bg-tb-primary-light">
+                            <Link href={people.create()}>
+                                <Plus className="size-4" /> Tambah Keluarga
                             </Link>
                         </Button>
                     )}
@@ -143,7 +153,7 @@ export default function PeopleIndex({ people: page, filters, margas, canManage }
                                     <th className="px-3 py-3 font-medium">Marga</th>
                                     <th className="px-3 py-3 font-medium">Orang Tua</th>
                                     <th className="px-3 py-3 font-medium">Lahir</th>
-                                    {canManage && (
+                                    {showActions && (
                                         <th className="px-3 py-3 text-right font-medium">Aksi</th>
                                     )}
                                 </tr>
@@ -185,50 +195,68 @@ export default function PeopleIndex({ people: page, filters, margas, canManage }
                                         <td className="px-3 py-3 text-tb-on-surface-variant">
                                             {person.birth_year ?? '-'}
                                         </td>
-                                        {canManage && (
+                                        {showActions && (
                                             <td className="px-3 py-3">
                                                 <div className="flex justify-end gap-1">
-                                                    <Button
-                                                    title='Edit'
-                                                        asChild
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="size-8 text-tb-primary hover:bg-tb-surface-container"
-                                                    >
-                                                        <Link href={people.edit(person.id)}>
-                                                            <Pencil className="size-4" />
-                                                        </Link>
-                                                    </Button>
-                                                    <Button
-                                                    title='Hapus'
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="size-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
-                                                        onClick={() => setToDelete(person)}
-                                                    >
-                                                        <Trash className="size-4" />
-                                                    </Button>
-                                                    <Button
-                                                   title='detail silsilah keluarga'
-                                                        asChild
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="size-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950"
-                                                    >
-                                                        <Link href={people.show(person.id)}>
-                                                            <NotebookPen className="size-4" />
-                                                        </Link>
-                                                    </Button>
-                                                    <Button
-                                                        asChild
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="size-8 text-green-600 hover:bg-green-50 dark:hover:bg-green-950"
-                                                    >
-                                                        <Link href={people.silsilah(person.id)} target="_blank" rel="noopener">
-                                                            <Route className="size-4" />
-                                                        </Link>
-                                                    </Button>
+                                                    {canManage ? (
+                                                        <>
+                                                            <Button
+                                                            title='Edit'
+                                                                asChild
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="size-8 text-tb-primary hover:bg-tb-surface-container"
+                                                            >
+                                                                <Link href={people.edit(person.id)}>
+                                                                    <Pencil className="size-4" />
+                                                                </Link>
+                                                            </Button>
+                                                            <Button
+                                                            title='Hapus'
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="size-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                                                                onClick={() => setToDelete(person)}
+                                                            >
+                                                                <Trash className="size-4" />
+                                                            </Button>
+                                                            <Button
+                                                           title='detail silsilah keluarga'
+                                                                asChild
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="size-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950"
+                                                            >
+                                                                <Link href={people.show(person.id)}>
+                                                                    <NotebookPen className="size-4" />
+                                                                </Link>
+                                                            </Button>
+                                                            <Button
+                                                                asChild
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="size-8 text-green-600 hover:bg-green-50 dark:hover:bg-green-950"
+                                                            >
+                                                                <Link href={people.silsilah(person.id)} target="_blank" rel="noopener">
+                                                                    <Route className="size-4" />
+                                                                </Link>
+                                                            </Button>
+                                                        </>
+                                                    ) : (
+                                                        person.editable && (
+                                                            <Button
+                                                                title="Ubah keluarga yang Anda buat"
+                                                                asChild
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="size-8 text-tb-primary hover:bg-tb-surface-container"
+                                                            >
+                                                                <Link href={people.edit(person.id)}>
+                                                                    <Pencil className="size-4" />
+                                                                </Link>
+                                                            </Button>
+                                                        )
+                                                    )}
                                                 </div>
                                             </td>
                                         )}
@@ -237,7 +265,7 @@ export default function PeopleIndex({ people: page, filters, margas, canManage }
                                 {page.data.length === 0 && (
                                     <tr>
                                         <td
-                                            colSpan={canManage ? 5 : 4}
+                                            colSpan={showActions ? 5 : 4}
                                             className="px-3 py-10 text-center text-tb-on-surface-variant"
                                         >
                                             Tidak ada anggota yang cocok.

@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $gender
  * @property string|null $alias
  * @property int|null $marga_id
+ * @property int|null $created_by
  * @property int|null $father_id
  * @property int|null $mother_id
  * @property int|null $birth_order
@@ -34,10 +35,11 @@ use Illuminate\Support\Carbon;
  * @property-read Marga|null $marga
  * @property-read Person|null $father
  * @property-read Person|null $mother
+ * @property-read User|null $creator
  * @property-read Collection<int, Person> $children
  * @property-read Collection<int, Person> $siblings
  */
-#[Fillable(['name', 'gender', 'alias', 'marga_id', 'father_id', 'mother_id', 'birth_order', 'sibling_count', 'nomor', 'nomor_manual', 'birth_year', 'death_year', 'image', 'bio', 'spouse', 'spouse_marga'])]
+#[Fillable(['name', 'gender', 'alias', 'marga_id', 'created_by', 'father_id', 'mother_id', 'birth_order', 'sibling_count', 'nomor', 'nomor_manual', 'birth_year', 'death_year', 'image', 'bio', 'spouse', 'spouse_marga'])]
 class Person extends Model
 {
     /** @use HasFactory<PersonFactory> */
@@ -49,6 +51,14 @@ class Person extends Model
     public function marga(): BelongsTo
     {
         return $this->belongsTo(Marga::class);
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 
     /**

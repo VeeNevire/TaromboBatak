@@ -39,11 +39,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard/tarombo', [TaromboController::class, 'index'])->name('tarombo.index');
 
     Route::get('people', [PersonController::class, 'index'])->name('people.index');
+
+    Route::get('people/create', [PersonController::class, 'create'])->name('people.create');
+
+    Route::post('people', [PersonController::class, 'store'])->name('people.store');
+
+    Route::get('people/{person}/edit', [PersonController::class, 'edit'])->name('people.edit');
+
+    Route::put('people/{person}', [PersonController::class, 'update'])->name('people.update');
 });
 
 Route::middleware(['auth', 'verified', 'role.staff'])->group(function () {
-    Route::resource('people', PersonController::class)
-        ->only(['create', 'store', 'edit', 'update', 'destroy', 'show']);
+    Route::delete('people/{person}', [PersonController::class, 'destroy'])->name('people.destroy');
+
+    Route::get('people/{person}', [PersonController::class, 'show'])->name('people.show');
 
     Route::get('people/{person}/preview', [PersonController::class, 'preview'])->name('people.preview');
     Route::get('people/{person}/silsilah', [PersonController::class, 'silsilah'])->name('people.silsilah');

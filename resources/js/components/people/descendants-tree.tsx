@@ -8,6 +8,7 @@ type Props = {
     people: TaromboPerson[];
     centerId: string;
     onSelect?: (id: string) => void;
+    highlightId?: string | null;
 };
 
 function toNode(person: TaromboPerson): TreeNode {
@@ -27,6 +28,7 @@ function TreeBranch({
     person,
     childrenOf,
     centerId,
+    highlightId,
     collapsed,
     onToggle,
     onSelect,
@@ -34,24 +36,27 @@ function TreeBranch({
     person: TaromboPerson;
     childrenOf: Map<string, TaromboPerson[]>;
     centerId: string;
+    highlightId?: string | null;
     collapsed: Set<string>;
     onToggle: (id: string) => void;
     onSelect?: (id: string) => void;
 }) {
     const children = childrenOf.get(person.id) ?? [];
     const isCenter = person.id === centerId;
+    const isHighlighted = person.id === highlightId;
     const isCollapsed = collapsed.has(person.id);
 
     return (
         <li>
             <button
+                id={`tree-node-${person.id}`}
                 type="button"
                 onClick={() => onSelect?.(person.id)}
                 className="cursor-pointer rounded-lg transition-transform duration-200 hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B8934A]"
             >
                 <NodeCard
                     node={toNode(person)}
-                    highlighted={isCenter}
+                    highlighted={isCenter || isHighlighted}
                     badge={isCenter ? undefined : `Anak ke ${person.birthOrder ?? '?'}`}
                 />
             </button>
@@ -73,6 +78,7 @@ function TreeBranch({
                             person={child}
                             childrenOf={childrenOf}
                             centerId={centerId}
+                            highlightId={highlightId}
                             collapsed={collapsed}
                             onToggle={onToggle}
                             onSelect={onSelect}
@@ -84,7 +90,7 @@ function TreeBranch({
     );
 }
 
-export function DescendantsTree({ people, centerId, onSelect }: Props) {
+export function DescendantsTree({ people, centerId, onSelect, highlightId }: Props) {
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
     const childrenOf = useMemo(() => {
@@ -132,6 +138,7 @@ export function DescendantsTree({ people, centerId, onSelect }: Props) {
                     person={center}
                     childrenOf={childrenOf}
                     centerId={centerId}
+                    highlightId={highlightId}
                     collapsed={collapsed}
                     onToggle={handleToggle}
                     onSelect={onSelect}

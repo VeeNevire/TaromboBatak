@@ -1,5 +1,5 @@
-import { useForm } from '@inertiajs/react';
-import { Plus } from 'lucide-react';
+import { Link, useForm } from '@inertiajs/react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
@@ -75,6 +75,7 @@ type Props = {
     margas: MargaOption[];
     nameSuggestions: string[];
     nomorUsed: { nomor: string; name: string }[];
+    lockedMarga?: { id: number; name: string } | null;
 };
 
 const VALUE_NONE = 'none';
@@ -84,28 +85,62 @@ function isNameFilled(name: string): boolean {
     return name.trim() !== '' && name.trim().toUpperCase() !== 'N/A';
 }
 
+function parseNomor(nomor?: string | null): number[] | null {
+    const trimmed = (nomor ?? '').trim();
+
+    if (!trimmed) {
+        return null;
+    }
+
+    const parts = trimmed.split('.').map((part) => parseInt(part, 10));
+
+    return parts.every((part) => Number.isFinite(part)) ? parts : null;
+}
+
+function compareByNomor(a: ChildRow, b: ChildRow): number {
+    const pa = parseNomor(a.nomor);
+    const pb = parseNomor(b.nomor);
+
+    if (pa === null && pb === null) {
+        return 0;
+    }
+
+    if (pa === null) {
+        return 1;
+    }
+
+    if (pb === null) {
+        return -1;
+    }
+
+    const length = Math.max(pa.length, pb.length);
+
+    for (let i = 0; i < length; i++) {
+        const da = pa[i] ?? 0;
+        const db = pb[i] ?? 0;
+
+        if (da !== db) {
+            return da - db;
+        }
+    }
+
+    return 0;
+}
+
+function sortChildrenByNomor(children: ChildRow[]): ChildRow[] {
+    return [...children].sort(compareByNomor);
+}
+
 function SiblingListCard({
     children,
     focusIndex,
-    fatherNomor,
-    focusedNomor,
+    focusPersonId,
 }: {
     children: ChildRow[];
     focusIndex: number;
-    fatherNomor?: string | null;
-    focusedNomor?: string;
+    focusPersonId?: number | null;
 }) {
-    const filledCount = children.filter((child) =>
-        isNameFilled(child.name ?? ''),
-    ).length;
-
-    const listNumber = (index: number, isFocus: boolean): string | null => {
-        if (isFocus && focusedNomor?.trim()) {
-            return focusedNomor.trim();
-        }
-
-        return fatherNomor ? `${fatherNomor}.${index + 1}` : null;
-    };
+    const numbered = children.filter((child) => child.nomor?.trim());
 
     return (
         <Card className="border-tb-outline-variant bg-tb-surface-bright">
@@ -114,56 +149,78 @@ function SiblingListCard({
                     List Silsilah
                 </CardTitle>
                 <CardDescription>
-                    {filledCount} dari {children.length} terisi.
+                    {numbered.length} bernomor. Baris tanpa nomor silsilah belum tampil dan akan diisi otomatis saat disimpan.
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                <ul className="grid gap-2">
-                    {children.map((child, index) => {
-                        const filled = isNameFilled(child.name ?? '');
-                        const isFocus = index === focusIndex;
-                        const number = listNumber(index, isFocus);
+                {numbered.length === 0 ? (
+                    <p className="text-sm italic text-tb-on-surface-variant">
+                        Isi nomor silsilah pada daftar saudara di bawah untuk mulai menyusun daftar.
+                    </p>
+                ) : (
+                    <ul className="grid gap-2">
+                        {numbered.map((child, index) => {
+                            const filled = isNameFilled(child.name ?? '');
+                            const isFocus = focusPersonId != null
+                                ? child.id === focusPersonId
+                                : index === focusIndex;
 
-                        return (
-                            <li
-                                key={index}
-                                className={cn(
-                                    'flex items-center gap-3 rounded-lg border px-3 py-2',
-                                    isFocus
-                                        ? 'border-tb-primary/40 bg-tb-primary/5'
-                                        : 'border-tb-outline-variant',
-                                )}
-                            >
+                            const rowContent = (
                                 <span
                                     className={cn(
-                                        'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold',
+                                        'flex items-center gap-3 rounded-lg border px-3 py-2',
                                         isFocus
-                                            ? 'bg-tb-primary text-white'
-                                            : 'bg-tb-surface-container text-tb-on-surface-variant',
+                                            ? 'border-tb-primary/40 bg-tb-primary/5'
+                                            : 'border-tb-outline-variant',
+                                        child.id
+                                            ? 'transition-colors hover:border-tb-primary'
+                                            : '',
                                     )}
                                 >
-                                    {index + 1}
-                                </span>
-                                <span
-                                    className={cn(
-                                        'min-w-0 flex-1 truncate text-sm',
-                                        filled ? 'text-tb-on-surface' : 'italic text-tb-on-surface-variant',
-                                    )}
-                                >
-                                    {filled ? child.name : 'Belum diisi'}
-                                </span>
-                                {number && (
-                                    <span className="shrink-0 rounded-md bg-tb-surface-container px-1.5 py-0.5 text-[10px] font-semibold text-tb-on-surface-variant">
-                                        No. {number}
+                                    <span
+                                        className={cn(
+                                            'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold',
+                                            isFocus
+                                                ? 'bg-tb-primary text-white'
+                                                : 'bg-tb-surface-container text-tb-on-surface-variant',
+                                        )}
+                                    >
+                                        {index + 1}
                                     </span>
-                                )}
-                                {isFocus && (
-                                    <span className="shrink-0 text-[11px] font-medium text-tb-primary">Anda</span>
-                                )}
-                            </li>
-                        );
-                    })}
-                </ul>
+                                    <span
+                                        className={cn(
+                                            'min-w-0 flex-1 truncate text-sm',
+                                            filled ? 'text-tb-on-surface' : 'italic text-tb-on-surface-variant',
+                                        )}
+                                    >
+                                        {filled ? child.name : 'Belum diisi'}
+                                    </span>
+                                    <span className="shrink-0 rounded-md bg-tb-surface-container px-1.5 py-0.5 text-[10px] font-semibold text-tb-on-surface-variant">
+                                        No. {child.nomor?.trim()}
+                                    </span>
+                                    {isFocus && (
+                                        <span className="shrink-0 text-[11px] font-medium text-tb-primary">Anda</span>
+                                    )}
+                                    {child.id && (
+                                        <Pencil className="h-3.5 w-3.5 shrink-0 text-tb-outline" />
+                                    )}
+                                </span>
+                            );
+
+                            return (
+                                <li key={child.id ?? index}>
+                                    {child.id ? (
+                                        <Link href={people.edit(child.id)} className="block">
+                                            {rowContent}
+                                        </Link>
+                                    ) : (
+                                        rowContent
+                                    )}
+                                </li>
+                            );
+                        })}
+                    </ul>
+                )}
             </CardContent>
         </Card>
     );
@@ -177,6 +234,7 @@ const emptyRow = (): ChildRow => ({
     spouse_marga: '',
     marga_id: null,
     new_marga: '',
+    nomor: '',
 });
 
 const emptyParent = (): ParentEntry => ({
@@ -271,14 +329,14 @@ function MargaField({
     );
 }
 
-export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed }: Props) {
+export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed, lockedMarga }: Props) {
     const isEdit = person !== null;
 
-    const { data, setData, post, put, processing, errors } = useForm({
+    const { data, setData, transform, post, put, processing, errors } = useForm({
         name: person?.name ?? '',
         gender: person?.gender ?? '',
         alias: person?.alias ?? '',
-        marga_id: person?.marga_id ?? null,
+        marga_id: person?.marga_id ?? lockedMarga?.id ?? null,
         new_marga: person?.new_marga ?? '',
         birth_order: person?.birth_order ?? 1,
         sibling_count:
@@ -293,7 +351,7 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed 
                   name: person.father.name ?? '',
                   birth_year: person.father.birth_year ?? '',
                   death_year: person.father.death_year ?? '',
-                  marga_id: person.father.marga_id ?? null,
+                  marga_id: person.father.marga_id ?? lockedMarga?.id ?? null,
                   new_marga: '',
                   nomor: person.father.nomor ?? null,
               }
@@ -315,10 +373,41 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed 
                       gender: child.gender ?? '',
                       spouse: child.spouse ?? '',
                       spouse_marga: child.spouse_marga ?? '',
-                      marga_id: child.marga_id ?? null,
+                      marga_id: child.marga_id ?? lockedMarga?.id ?? null,
                       new_marga: '',
+                      nomor: child.nomor ?? '',
                   }))
                 : [emptyRow()],
+    });
+
+    transform((currentData) => {
+        const withMarga = lockedMarga
+            ? {
+                  ...currentData,
+                  marga_id: lockedMarga.id,
+                  new_marga: '',
+                  father: currentData.father
+                      ? { ...currentData.father, marga_id: lockedMarga.id, new_marga: '' }
+                      : null,
+                  children: (currentData.children ?? []).map((child) => ({
+                      ...child,
+                      marga_id: lockedMarga.id,
+                      new_marga: '',
+                  })),
+              }
+            : currentData;
+
+        const sorted = sortChildrenByNomor(withMarga.children ?? []);
+        const focusIndex =
+            person?.id != null
+                ? sorted.findIndex((child) => child.id === person.id)
+                : (Number(withMarga.birth_order) || 1) - 1;
+
+        return {
+            ...withMarga,
+            children: sorted,
+            birth_order: Math.max(1, (focusIndex >= 0 ? focusIndex : 0) + 1),
+        };
     });
 
     const birthOrder = Number(data.birth_order) || 1;
@@ -330,24 +419,17 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed 
         : undefined;
 
     useEffect(() => {
-        const needed = Math.max(siblingCount, birthOrder);
-
-        if (data.children.length < needed) {
-            const toAdd = needed - data.children.length;
-            setData('children', [
-                ...data.children,
-                ...Array.from({ length: toAdd }, emptyRow),
-            ]);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [birthOrder, siblingCount]);
-
-    useEffect(() => {
         if (data.children.length === 0) {
             return;
         }
 
-        const focusIndex = Math.min(birthOrder - 1, data.children.length - 1);
+        const focusIndex = person?.id != null
+            ? data.children.findIndex((child) => child.id === person.id)
+            : Math.min(birthOrder - 1, data.children.length - 1);
+
+        if (focusIndex < 0) {
+            return;
+        }
 
         setData(
             'children',
@@ -386,9 +468,31 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed 
         person?.id,
     ]);
 
+    useEffect(() => {
+        const sorted = sortChildrenByNomor(data.children);
+        const changed = sorted.some((child, index) => child !== data.children[index]);
+
+        if (changed) {
+            setData('children', sorted);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [data.children]);
+
+    useEffect(() => {
+        const needed = Math.max(siblingCount, birthOrder);
+
+        if (data.children.length < needed) {
+            setData('children', [
+                ...data.children,
+                ...Array.from({ length: needed - data.children.length }, emptyRow),
+            ]);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [birthOrder, siblingCount]);
+
     const setChild = (
         index: number,
-        key: 'name' | 'gender' | 'spouse' | 'spouse_marga',
+        key: 'name' | 'gender' | 'spouse' | 'spouse_marga' | 'nomor',
         value: string,
     ) => {
         const next = data.children.map((child, i) =>
@@ -413,6 +517,13 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed 
 
     const addChild = () => {
         setData('children', [...data.children, emptyRow()]);
+    };
+
+    const removeChild = (index: number) => {
+        setData(
+            'children',
+            data.children.filter((_, i) => i !== index),
+        );
     };
 
     const setParentEntry = (
@@ -476,6 +587,7 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed 
                         onNewMarga={(value) => setParentNewMarga(key, value)}
                         margas={margas}
                         placeholder={`Marga ${label.toLowerCase()}`}
+                        disabled={lockedMarga !== null}
                     />
                     <InputError message={errors[`${key}.marga_id`]} />
                 </div>
@@ -602,6 +714,7 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed 
                                         setData('new_marga', value)
                                     }
                                     margas={margas}
+                                    disabled={lockedMarga !== null}
                                 />
                                 <InputError message={errors.marga_id} />
                             </div>
@@ -756,8 +869,7 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed 
                 <SiblingListCard
                     children={data.children}
                     focusIndex={birthOrder - 1}
-                    fatherNomor={data.father.nomor ?? null}
-                    focusedNomor={data.nomor}
+                    focusPersonId={person?.id ?? null}
                 />
             </div>
 
@@ -783,9 +895,8 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed 
                             Daftar Saudara
                         </CardTitle>
                         <CardDescription>
-                            Semua anak dari Ayah di atas ({siblingCount} baris).
-                            Baris "Anak ke {birthOrder}" di-highlight sebagai
-                            orang yang sedang dicatat.
+                            Total bersaudara: {siblingCount} — menambah total otomatis menambah baris di bawah.
+                            Baris tanpa nomor silsilah tidak tampil di "List Silsilah" sampai disimpan (nomor kosong diisi otomatis).
                         </CardDescription>
                     </div>
                     <div className="text-xs text-tb-on-surface-variant">
@@ -794,11 +905,14 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed 
                 </CardHeader>
                 <CardContent className="grid gap-3">
                     {data.children.map((child, index) => {
-                        const focused = index === birthOrder - 1;
+                        const focused =
+                            person?.id != null
+                                ? child.id === person.id
+                                : index === birthOrder - 1;
 
                         return (
                             <div
-                                key={index}
+                                key={child.id ?? `new-${index}`}
                                 className={cn(
                                     'grid gap-3 rounded-lg border p-3',
                                     focused
@@ -806,7 +920,7 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed 
                                         : 'border-tb-outline-variant bg-tb-surface-bright',
                                 )}
                             >
-                                <div className="flex items-center justify-between">
+                                <div className="flex items-center justify-between gap-2">
                                     <span
                                         className={cn(
                                             'inline-flex w-fit items-center rounded-full px-2 py-0.5 text-xs font-semibold',
@@ -818,11 +932,23 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed 
                                         Urut{' '}
                                         {String(index + 1).padStart(2, '0')}
                                     </span>
-                                    {focused && (
-                                        <span className="text-[11px] font-medium text-tb-primary">
-                                            (Anda sedang diedit)
-                                        </span>
-                                    )}
+                                    <span className="flex items-center gap-2">
+                                        {focused && (
+                                            <span className="text-[11px] font-medium text-tb-primary">
+                                                (Anda sedang diedit)
+                                            </span>
+                                        )}
+                                        {!child.id && (
+                                            <button
+                                                type="button"
+                                                onClick={() => removeChild(index)}
+                                                aria-label="Hapus baris"
+                                                className="inline-flex h-6 w-6 items-center justify-center rounded-full text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-950"
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                            </button>
+                                        )}
+                                    </span>
                                 </div>
 
                                 <div className="grid gap-3 sm:grid-cols-2">
@@ -885,7 +1011,31 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed 
                                     </div>
                                 </div>
 
-                                <div className="grid gap-3 sm:grid-cols-3">
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                    <div className="grid gap-1.5">
+                                        <Label>Nomor Silsilah</Label>
+                                        {focused ? (
+                                            <div className="flex min-h-9 items-center rounded-md border border-tb-primary/40 bg-tb-surface-container px-3 text-sm text-tb-on-surface">
+                                                {data.nomor || '—'}
+                                            </div>
+                                        ) : (
+                                            <Input
+                                                value={child.nomor ?? ''}
+                                                onChange={(e) =>
+                                                    setChild(
+                                                        index,
+                                                        'nomor',
+                                                        e.target.value,
+                                                    )
+                                                }
+                                                placeholder="otomatis (mis. 1.2.1)"
+                                                className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                            />
+                                        )}
+                                        <p className="text-xs text-tb-on-surface-variant">
+                                            Kosongkan untuk nomor otomatis.
+                                        </p>
+                                    </div>
                                     <div className="grid gap-1.5">
                                         <Label>Marga</Label>
                                         {focused ? (
@@ -912,6 +1062,7 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed 
                                                 }
                                                 margas={margas}
                                                 placeholder="Marga saudara"
+                                                disabled={lockedMarga !== null}
                                             />
                                         )}
                                     </div>

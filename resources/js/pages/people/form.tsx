@@ -11,9 +11,10 @@ type Props = {
     margas: { id: number; name: string }[];
     nameSuggestions: string[];
     nomorUsed: { nomor: string; name: string }[];
+    lockedMarga?: { id: number; name: string } | null;
 };
 
-export default function PersonForm({ person, margas, nameSuggestions, nomorUsed }: Props) {
+export default function PersonForm({ person, margas, nameSuggestions, nomorUsed, lockedMarga }: Props) {
     const isEdit = person !== null;
 
     return (
@@ -32,12 +33,14 @@ export default function PersonForm({ person, margas, nameSuggestions, nomorUsed 
                             {isEdit ? 'Ubah Keluarga' : 'Tambah Keluarga'}
                         </h1>
                         <p className="mt-1 text-sm text-tb-on-surface-variant">
-                            Isi jejak keluarga: orang tua dan daftar saudara/anak dari ayah yang sama.
+                            {lockedMarga
+                                ? `Isi jejak keluarga pada marga ${lockedMarga.name}: orang tua dan daftar saudara/anak dari ayah yang sama.`
+                                : 'Isi jejak keluarga: orang tua dan daftar saudara/anak dari ayah yang sama.'}
                         </p>
                     </div>
                 </div>
 
-                <FamilyForm person={person} margas={margas} nameSuggestions={nameSuggestions} nomorUsed={nomorUsed} />
+                <FamilyForm person={person} margas={margas} nameSuggestions={nameSuggestions} nomorUsed={nomorUsed} lockedMarga={lockedMarga} />
             </div>
         </>
     );

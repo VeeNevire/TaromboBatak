@@ -6,6 +6,7 @@ use App\Http\Requests\StorePersonRequest;
 use App\Http\Requests\UpdatePersonRequest;
 use App\Models\Marga;
 use App\Models\Person;
+use App\Models\User;
 use App\Services\FamilyEntryService;
 use App\Services\TaromboTreeService;
 use Illuminate\Http\JsonResponse;
@@ -49,6 +50,7 @@ class PersonController extends Controller
                 'birth_year' => $person->birth_year,
                 'nomor' => $person->nomor,
                 'created_at' => $person->created_at?->format('d M Y'),
+                'editable' => $isStaff || ($person->created_by !== null && $person->created_by === $user->id),
             ]);
 
         $margas = Marga::query()
@@ -68,19 +70,24 @@ class PersonController extends Controller
             ],
             'margas' => $margas,
             'canManage' => $isStaff,
+            'hasMarga' => $isStaff || $user->marga_id !== null,
         ]);
     }
 
     /**
      * Show the create family entry form.
      */
-    public function create(): Response
+    public function create(Request $request): Response
     {
+        $user = $request->user();
+        $isStaff = $user->isStaff();
+
         return Inertia::render('people/form', [
             'person' => null,
-            'margas' => $this->margaOptions(),
+            'margas' => $isStaff ? $this->margaOptions() : $this->margaOptionsForUser($user),
             'nameSuggestions' => $this->nameSuggestions(),
             'nomorUsed' => $this->nomorUsed(),
+            'lockedMarga' => $isStaff ? null : $this->lockedMarga($user),
         ]);
     }
 
@@ -89,7 +96,19 @@ class PersonController extends Controller
      */
     public function store(StorePersonRequest $request): RedirectResponse
     {
-        app(FamilyEntryService::class)->save($request->validated());
+        $user = $request->user();
+
+        if ($user->isStaff()) {
+            app(FamilyEntryService::class)->save($request->validated());
+        } else {
+            abort_unless($user->marga_id, 403, 'Akun Anda belum memiliki marga.');
+
+            app(FamilyEntryService::class)->save(
+                $request->validated(),
+                forcedMargaId: $user->marga_id,
+                createdBy: $user->id,
+            );
+        }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Keluarga berhasil ditambahkan.')]);
 
@@ -112,13 +131,21 @@ class PersonController extends Controller
     /**
      * Show the edit family entry form.
      */
-    public function edit(Person $person): Response
+    public function edit(Request $request, Person $person): Response
     {
+        $user = $request->user();
+        $isStaff = $user->isStaff();
+
+        if (! $isStaff) {
+            abort_unless($this->ownsFamily($user, $person), 403, 'Anda tidak memiliki akses ke keluarga ini.');
+        }
+
         return Inertia::render('people/form', [
             'person' => $this->familyPayload($person),
-            'margas' => $this->margaOptions(),
+            'margas' => $isStaff ? $this->margaOptions() : $this->margaOptionsForUser($user),
             'nameSuggestions' => $this->nameSuggestions(),
             'nomorUsed' => $this->nomorUsed($person->id),
+            'lockedMarga' => $isStaff ? null : $this->lockedMarga($user),
         ]);
     }
 
@@ -278,9 +305,20 @@ class PersonController extends Controller
      */
     public function update(UpdatePersonRequest $request, Person $person): RedirectResponse
     {
-        $data = array_merge($request->validated(), ['id' => $person->id]);
+        $user = $request->user();
+        $isStaff = $user->isStaff();
 
-        app(FamilyEntryService::class)->save($data);
+        if (! $isStaff) {
+            abort_unless($this->ownsFamily($user, $person), 403, 'Anda tidak memiliki akses ke keluarga ini.');
+
+            app(FamilyEntryService::class)->save(
+                [...$request->validated(), 'id' => $person->id],
+                forcedMargaId: $user->marga_id,
+                createdBy: $user->id,
+            );
+        } else {
+            app(FamilyEntryService::class)->save([...$request->validated(), 'id' => $person->id]);
+        }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Jejak keluarga berhasil diperbarui.')]);
 
@@ -406,6 +444,54 @@ class PersonController extends Controller
                 'name' => $marga->name,
             ])
             ->all();
+    }
+
+    /**
+     * Marga options scoped to a single user's marga.
+     *
+     * @return array<int, array{id: int, name: string}>
+     */
+    protected function margaOptionsForUser(User $user): array
+    {
+        if ($user->marga_id === null) {
+            return [];
+        }
+
+        return Marga::query()
+            ->where('id', $user->marga_id)
+            ->get()
+            ->map(fn (Marga $marga) => [
+                'id' => $marga->id,
+                'name' => $marga->name,
+            ])
+            ->all();
+    }
+
+    /**
+     * Locked marga payload sent to the form so family entries stay scoped.
+     *
+     * @return array{id: int, name: string}|null
+     */
+    protected function lockedMarga(User $user): ?array
+    {
+        $marga = $user->marga;
+
+        return $marga !== null ? ['id' => $marga->id, 'name' => $marga->name] : null;
+    }
+
+    /**
+     * Determine whether a regular user owns a family entry and may edit it.
+     *
+     * A family entry is considered owned by the user when the focused person
+     * was recorded as created by that user.
+     */
+    protected function ownsFamily(User $user, Person $person): bool
+    {
+        if ($user->isStaff()) {
+            return true;
+        }
+
+        return $person->created_by !== null && $person->created_by === $user->id;
     }
 
     /**

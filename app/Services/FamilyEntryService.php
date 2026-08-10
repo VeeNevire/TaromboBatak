@@ -14,26 +14,38 @@ class FamilyEntryService
      * inside a single transaction.
      *
      * @param  array<string, mixed>  $data  Validated request data.
+     * @param  int|null  $forcedMargaId  When set, every family member is forced
+     *                                    into this marga and free-text marga
+     *                                    creation is disabled.
+     * @param  int|null  $createdBy  User id stamped on newly created records
+     *                               so their owner can edit them later.
      * @return array{father: Person|null, mother: Person|null, children: Collection<int, Person>}
      */
-    public function save(array $data): array
+    public function save(array $data, ?int $forcedMargaId = null, ?int $createdBy = null): array
     {
-        $result = DB::transaction(function () use ($data) {
-            $fatherMargaId = $this->resolveMargaId(
-                ($data['father'] ?? [])['marga_id'] ?? null,
-                ($data['father'] ?? [])['new_marga'] ?? null,
-            ) ?? $data['marga_id'] ?? null;
+        $result = DB::transaction(function () use ($data, $forcedMargaId, $createdBy) {
+            $fatherMargaId = $forcedMargaId
+                ?? $this->resolveMargaId(
+                    ($data['father'] ?? [])['marga_id'] ?? null,
+                    ($data['father'] ?? [])['new_marga'] ?? null,
+                )
+                ?? $data['marga_id']
+                ?? null;
 
             $father = $this->resolveParent(
                 $data['father_id'] ?? null,
                 $data['father'] ?? null,
                 $fatherMargaId,
+                $forcedMargaId,
+                $createdBy,
             );
 
             $mother = $this->resolveParent(
                 $data['mother_id'] ?? null,
                 $data['mother'] ?? null,
                 null,
+                $forcedMargaId,
+                $createdBy,
             );
 
             $children = $this->upsertChildren(
@@ -44,6 +56,8 @@ class FamilyEntryService
                 $data['sibling_count'] ?? null,
                 $data['birth_order'] ?? null,
                 $data,
+                $forcedMargaId,
+                $createdBy,
             );
 
             return [
@@ -66,9 +80,9 @@ class FamilyEntryService
      *
      * @param  array<string, mixed>|null  $data
      */
-    protected function resolveParent(?int $parentId, ?array $data, ?int $margaId): ?Person
+    protected function resolveParent(?int $parentId, ?array $data, ?int $margaId, ?int $forcedMargaId = null, ?int $createdBy = null): ?Person
     {
-        if ($parentId) {
+        if ($parentId && $forcedMargaId === null) {
             $parent = Person::find($parentId);
 
             if ($parent) {
@@ -86,12 +100,14 @@ class FamilyEntryService
 
         $parent = Person::query()
             ->where('name', $name)
+            ->when($forcedMargaId !== null, fn ($query) => $query->where('marga_id', $forcedMargaId))
             ->first();
 
         if ($parent === null) {
             $parent = Person::create(array_filter([
                 'name' => $name,
                 'marga_id' => $margaId,
+                'created_by' => $createdBy,
                 'birth_year' => $data['birth_year'] ?? null,
                 'death_year' => $data['death_year'] ?? null,
             ], fn ($value) => $value !== null));
@@ -119,6 +135,8 @@ class FamilyEntryService
         ?int $siblingCount,
         mixed $focusOrder,
         array $data,
+        ?int $forcedMargaId = null,
+        ?int $createdBy = null,
     ): Collection {
         $children = new Collection;
 
@@ -139,15 +157,19 @@ class FamilyEntryService
                 'bio' => $data['bio'] ?? null,
             ] : [];
 
+            $childMargaId = $forcedMargaId
+                ?? $this->resolveMargaId(
+                    $row['marga_id'] ?? null,
+                    $row['new_marga'] ?? null,
+                )
+                ?? $fatherMargaId;
+
             $attributes = array_filter([
                 'name' => $this->normalizeName($row['name'] ?? null) ?? 'N/A',
                 'gender' => $row['gender'] ?? null,
                 'spouse' => $row['spouse'] ?? null,
                 'spouse_marga' => $row['spouse_marga'] ?? null,
-                'marga_id' => $this->resolveMargaId(
-                    $row['marga_id'] ?? null,
-                    $row['new_marga'] ?? null,
-                ) ?? $fatherMargaId,
+                'marga_id' => $childMargaId,
                 'father_id' => $fatherId,
                 'mother_id' => $motherId,
                 'birth_order' => $index + 1,
@@ -161,7 +183,7 @@ class FamilyEntryService
             if ($child) {
                 $child->update($attributes);
             } else {
-                $child = Person::create($attributes);
+                $child = Person::create([...$attributes, 'created_by' => $createdBy]);
             }
 
             $children->push($child);

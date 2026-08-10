@@ -1,7 +1,9 @@
 import { Head } from '@inertiajs/react';
 import { useState } from 'react';
+import { DescendantsTree } from '@/components/people/descendants-tree';
 import { TaromboDiagram } from '@/components/landing/tarombo-diagram';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { buildTaromboPeople } from '@/data/tarombo-tree';
 import type { MargaInfo, TaromboPersonRow } from '@/data/tarombo-tree';
 import { dashboard } from '@/routes';
@@ -20,6 +22,8 @@ export default function TaromboIndex({ people: rows, margas }: Props) {
     const people = buildTaromboPeople(rows);
     const rootPerson = people.find((p) => !p.parentId) ?? people[0];
     const [centerPersonId, setCenterPersonId] = useState<string>(rootPerson?.id ?? '');
+    const centerPerson = people.find((p) => p.id === centerPersonId);
+    const hasChildren = people.some((p) => p.parentId === centerPersonId);
 
     const searchSelect = (value: string) => {
         const person = people.find((p) => p.name.toLowerCase().includes(value.toLowerCase()));
@@ -79,18 +83,106 @@ export default function TaromboIndex({ people: rows, margas }: Props) {
                             className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                         />
                     </div>
-                    <div className="rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-4">
-                        <TaromboDiagram
-                            onSelect={handlePersonSelect}
-                            onPaneClick={() => setSelectedId(null)}
-                            onBack={handleBack}
-                            canGoBack={history.length > 0}
-                            selectedId={selectedId ?? undefined}
-                            centerPersonId={centerPersonId}
-                            people={people}
-                            margas={margas}
-                            context="descendants"
-                        />
+
+                    {/* Desktop: Side by side */}
+                    <div className="hidden gap-6 lg:grid lg:grid-cols-2">
+                        {/* Left: Diagram Radial */}
+                        <div className="overflow-hidden rounded-2xl border border-tb-outline-variant bg-tb-surface-bright">
+                            <div className="max-h-[600px] overflow-y-auto p-4">
+                                <TaromboDiagram
+                                    onSelect={handlePersonSelect}
+                                    onPaneClick={() => setSelectedId(null)}
+                                    onBack={handleBack}
+                                    canGoBack={history.length > 0}
+                                    selectedId={selectedId ?? undefined}
+                                    centerPersonId={centerPersonId}
+                                    people={people}
+                                    margas={margas}
+                                    context="descendants"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Right: Silsilah Tree */}
+                        <div className="overflow-hidden rounded-2xl border border-tb-outline-variant bg-tb-surface-bright">
+                            <div className="max-h-[600px] overflow-y-auto p-4">
+                                <div className="mb-4 border-b border-tb-outline-variant pb-3 text-center">
+                                    <h3 className="font-display text-lg font-bold text-tb-on-surface">
+                                        Silsilah Keturunan
+                                    </h3>
+                                    <p className="mt-1 text-xs text-tb-on-surface-variant">
+                                        Pohon vertikal dari {centerPerson?.name ?? 'Leluhur Utama'}
+                                    </p>
+                                </div>
+                                {hasChildren ? (
+                                    <DescendantsTree
+                                        people={people}
+                                        centerId={centerPersonId}
+                                        onSelect={handlePersonSelect}
+                                        highlightId={selectedId}
+                                    />
+                                ) : (
+                                    <div className="py-8 text-center text-sm text-tb-on-surface-variant">
+                                        <p className="mb-2 text-base font-medium text-tb-on-surface">
+                                            {centerPerson?.name ?? 'Anggota ini'}
+                                        </p>
+                                        <p>belum memiliki keturunan tercatat.</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Mobile: Tabs */}
+                    <div className="lg:hidden">
+                        <Tabs defaultValue="tree" className="w-full">
+                            <TabsList className="grid w-full grid-cols-2">
+                                <TabsTrigger value="diagram">Diagram Radial</TabsTrigger>
+                                <TabsTrigger value="tree">Silsilah Pohon</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="diagram">
+                                <div className="rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-4">
+                                    <TaromboDiagram
+                                        onSelect={handlePersonSelect}
+                                        onPaneClick={() => setSelectedId(null)}
+                                        onBack={handleBack}
+                                        canGoBack={history.length > 0}
+                                        selectedId={selectedId ?? undefined}
+                                        centerPersonId={centerPersonId}
+                                        people={people}
+                                        margas={margas}
+                                        context="descendants"
+                                    />
+                                </div>
+                            </TabsContent>
+                            <TabsContent value="tree">
+                                <div className="rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-4">
+                                    <div className="mb-4 border-b border-tb-outline-variant pb-3 text-center">
+                                        <h3 className="font-display text-lg font-bold text-tb-on-surface">
+                                            Silsilah Keturunan
+                                        </h3>
+                                        <p className="mt-1 text-xs text-tb-on-surface-variant">
+                                            Pohon vertikal dari {centerPerson?.name ?? 'Leluhur Utama'}
+                                        </p>
+                                    </div>
+                                    {hasChildren ? (
+                                        <DescendantsTree
+                                            people={people}
+                                            centerId={centerPersonId}
+                                            onSelect={handlePersonSelect}
+                                            highlightId={selectedId}
+                                        />
+                                    ) : (
+                                        <div className="py-8 text-center text-sm text-tb-on-surface-variant">
+                                            <p className="mb-2 text-base font-medium text-tb-on-surface">
+                                                {centerPerson?.name ?? 'Anggota ini'}
+                                            </p>
+                                            <p>belum memiliki keturunan tercatat.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </TabsContent>
+                        </Tabs>
                     </div>
                 </div>
 
