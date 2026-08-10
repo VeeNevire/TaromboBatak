@@ -66,6 +66,9 @@ jobs:
             echo "Migrate"
             php artisan migrate --force
 
+            echo "Clear cache before generating routes"
+            php artisan route:clear   
+
             echo "Generate Wayfinder routes"
             php artisan wayfinder:generate
 
