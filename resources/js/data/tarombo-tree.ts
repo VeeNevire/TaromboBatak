@@ -582,6 +582,7 @@ export function buildRadialLayout(people: TaromboPerson[], margas: MargaInfo[]):
         ids.sort((a, b) => {
             const orderA = byId.get(a)?.birthOrder ?? Number.POSITIVE_INFINITY;
             const orderB = byId.get(b)?.birthOrder ?? Number.POSITIVE_INFINITY;
+
             return orderA - orderB;
         });
     }

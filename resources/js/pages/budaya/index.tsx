@@ -1,12 +1,12 @@
 import { Head, Link } from '@inertiajs/react';
-import { ArrowRight, Heart, Palette, Sparkles, Users } from 'lucide-react';
 import { MotionConfig } from 'framer-motion';
+import { ArrowRight, Heart, Palette, Sparkles, Users } from 'lucide-react';
 import { Reveal } from '@/components/landing/reveal';
 import { SiteFooter } from '@/components/landing/site-footer';
 import { SiteHeader } from '@/components/landing/site-header';
 import { budayaStats, dalihanNaTolu, gorgaSymbols, upacara, ulosTypes } from '@/data/budaya';
 import { home } from '@/routes';
-import stories from '@/routes/stories';
+import cerita from '@/routes/cerita';
 
 export default function BudayaIndex() {
     return (
@@ -197,7 +197,7 @@ export default function BudayaIndex() {
                             </p>
                             <div className="mt-8 flex flex-wrap justify-center gap-4">
                                 <Link
-                                    href={stories.index()}
+                                    href={cerita.index()}
                                     className="flex items-center gap-2 rounded-full bg-tb-primary px-6 py-3 font-medium text-white transition-colors hover:bg-tb-primary-light"
                                 >
                                     Baca Cerita Budaya <ArrowRight className="h-4 w-4" />

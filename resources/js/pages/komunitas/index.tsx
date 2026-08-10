@@ -1,6 +1,6 @@
 import { Head, Link } from '@inertiajs/react';
-import { ArrowRight, Building2, Mail, MessageCircle } from 'lucide-react';
 import { MotionConfig } from 'framer-motion';
+import { ArrowRight, Building2, Mail, MessageCircle } from 'lucide-react';
 import { Reveal } from '@/components/landing/reveal';
 import { SiteFooter } from '@/components/landing/site-footer';
 import { SiteHeader } from '@/components/landing/site-header';

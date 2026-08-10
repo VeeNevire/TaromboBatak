@@ -1,5 +1,7 @@
+import { Link } from '@inertiajs/react';
 import { ChevronRight } from 'lucide-react';
 import { Reveal } from '@/components/landing/reveal';
+import cerita from '@/routes/cerita';
 
 type StoryItem = {
     id: number;
@@ -13,9 +15,9 @@ export function StoriesSection({ stories }: { stories: StoryItem[] }) {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <h2 className="font-display text-xl font-bold">Cerita Leluhur & Budaya</h2>
-                <a href="#" className="text-xs font-medium text-tb-outline hover:text-tb-primary">
+                <Link href={cerita.index()} className="text-xs font-medium text-tb-outline hover:text-tb-primary">
                     Lihat Semua
-                </a>
+                </Link>
             </div>
             <div className="space-y-4">
                 {stories.length === 0 && (
@@ -25,8 +27,8 @@ export function StoriesSection({ stories }: { stories: StoryItem[] }) {
                 )}
                 {stories.map((story, index) => (
                     <Reveal key={story.id} delay={index * 0.08}>
-                        <a
-                            href="#"
+                        <Link
+                            href={cerita.show(story.id)}
                             className="group -m-2 flex gap-4 rounded-lg p-2 transition-colors hover:bg-tb-surface-container"
                         >
                             {story.image ? (
@@ -45,7 +47,7 @@ export function StoriesSection({ stories }: { stories: StoryItem[] }) {
                                 <p className="line-clamp-2 text-xs text-tb-on-surface-variant">{story.description}</p>
                             </div>
                             <ChevronRight className="h-4 w-4 self-center text-tb-outline transition-colors group-hover:text-tb-primary" />
-                        </a>
+                        </Link>
                     </Reveal>
                 ))}
             </div>

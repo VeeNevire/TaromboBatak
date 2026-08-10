@@ -23,6 +23,8 @@ function baseLayout(name: string): ComponentType<LayoutProps> | ComponentType<La
         case name === 'tarombo/public':
         case name === 'marga/public':
         case name === 'budaya/index':
+        case name === 'cerita/index':
+        case name === 'cerita/show':
         case name === 'komunitas/index':
         case name === 'tentang/index':
         case name === 'auth/login':
