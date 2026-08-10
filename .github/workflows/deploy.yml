@@ -63,11 +63,14 @@ jobs:
             echo "Install node modules"
             npm install
 
-            echo "Build frontend"
-            npm run build
-
             echo "Migrate"
             php artisan migrate --force
+
+            echo "Generate Wayfinder routes"
+            php artisan wayfinder:generate
+
+            echo "Build frontend"
+            npm run build
 
             echo "Clear cache & OPcache"
             php artisan optimize:clear
