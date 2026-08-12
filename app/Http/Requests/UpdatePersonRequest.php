@@ -17,7 +17,7 @@ class UpdatePersonRequest extends FormRequest
     {
         $person = $this->route('person');
 
-        return [
+        $rules = [
             'name' => ['required', 'string', 'max:255'],
             'alias' => ['nullable', 'string', 'max:255'],
             'gender' => ['nullable', 'string', 'max:1'],
@@ -26,6 +26,7 @@ class UpdatePersonRequest extends FormRequest
             'mother_id' => ['nullable', 'exists:people,id'],
             'birth_order' => ['nullable', 'integer', 'min:1'],
             'sibling_count' => ['nullable', 'integer', 'min:1'],
+            'is_leader' => ['nullable', 'boolean'],
             'nomor' => ['nullable', 'string', 'max:50', Rule::unique('people', 'nomor')->ignore($person?->id)],
             'birth_year' => ['nullable', 'digits:4'],
             'death_year' => ['nullable', 'digits:4'],
@@ -51,7 +52,16 @@ class UpdatePersonRequest extends FormRequest
             'children.*.new_marga' => ['nullable', 'string', 'max:255'],
             'children.*.spouse' => ['nullable', 'string', 'max:255'],
             'children.*.spouse_marga' => ['nullable', 'string', 'max:255'],
-            'children.*.nomor' => ['nullable', 'string', 'max:50', Rule::unique('people', 'nomor')->ignore($person?->id)],
         ];
+
+        // Each sibling row owns its number, so only that row's id is ignored.
+        foreach ($this->input('children', []) as $index => $child) {
+            $rules["children.$index.nomor"] = [
+                'nullable', 'string', 'max:50',
+                Rule::unique('people', 'nomor')->ignore($child['id'] ?? null),
+            ];
+        }
+
+        return $rules;
     }
 }

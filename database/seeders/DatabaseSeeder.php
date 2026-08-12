@@ -20,7 +20,7 @@ class DatabaseSeeder extends Seeder
 
         User::factory()->asAdmin()->create([
             'name' => 'Admin Tarombo',
-            'email' => 'test@example.com',
+            'email' => 'admin@example.com',
         ]);
 
         $this->call(TaromboSeeder::class);

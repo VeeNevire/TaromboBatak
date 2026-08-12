@@ -164,3 +164,21 @@ test('recompute reflects birth order changes down the lineage', function () {
         ->and($b->fresh()->nomor)->toBe('1.1')
         ->and($c->fresh()->nomor)->toBe('1.2.1');
 });
+
+test('leaders get flat lineage numbers while children follow the father number', function () {
+    $service = app(TaromboNumberingService::class);
+
+    $root = Person::factory()->create(['name' => 'Si Raja Batak', 'father_id' => null, 'is_leader' => true]);
+    $line = Person::factory()->create(['name' => 'Pemimpin Kedua', 'father_id' => $root->id, 'birth_order' => 1, 'is_leader' => true]);
+    $side = Person::factory()->create(['name' => 'Anak Samping', 'father_id' => $root->id, 'birth_order' => 2]);
+    $line2 = Person::factory()->create(['name' => 'Pemimpin Ketiga', 'father_id' => $line->id, 'birth_order' => 1, 'is_leader' => true]);
+    $leaf = Person::factory()->create(['name' => 'Cucu', 'father_id' => $line2->id, 'birth_order' => 2]);
+
+    $service->recomputeFromAncestor($root);
+
+    expect($root->fresh()->nomor)->toBe('1')
+        ->and($line->fresh()->nomor)->toBe('2')
+        ->and($side->fresh()->nomor)->toBe('1.2')
+        ->and($line2->fresh()->nomor)->toBe('3')
+        ->and($leaf->fresh()->nomor)->toBe('3.2');
+});

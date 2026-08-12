@@ -2,7 +2,7 @@ import { Head, Link } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import FamilyForm from '@/pages/people/family-form';
-import type { FamilyData } from '@/pages/people/family-form';
+import type { FamilyData, MargaLineageEntry } from '@/pages/people/family-form';
 import { dashboard } from '@/routes';
 import people from '@/routes/people';
 
@@ -12,9 +12,10 @@ type Props = {
     nameSuggestions: string[];
     nomorUsed: { nomor: string; name: string }[];
     lockedMarga?: { id: number; name: string } | null;
+    margaLineage?: MargaLineageEntry[];
 };
 
-export default function PersonForm({ person, margas, nameSuggestions, nomorUsed, lockedMarga }: Props) {
+export default function PersonForm({ person, margas, nameSuggestions, nomorUsed, lockedMarga, margaLineage }: Props) {
     const isEdit = person !== null;
 
     return (
@@ -40,7 +41,7 @@ export default function PersonForm({ person, margas, nameSuggestions, nomorUsed,
                     </div>
                 </div>
 
-                <FamilyForm person={person} margas={margas} nameSuggestions={nameSuggestions} nomorUsed={nomorUsed} lockedMarga={lockedMarga} />
+                <FamilyForm person={person} margas={margas} nameSuggestions={nameSuggestions} nomorUsed={nomorUsed} lockedMarga={lockedMarga} margaLineage={margaLineage} />
             </div>
         </>
     );

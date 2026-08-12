@@ -245,3 +245,76 @@ test('the preview gracefully falls back when the person has no parents', functio
         ->assertJsonCount(1, 'children')
         ->assertJsonPath('children.0.id', (string) $person->id);
 });
+
+test('the show route exposes the patrilineal lineage chain ordered root to self', function () {
+    $marga = Marga::factory()->create();
+    $buyut = Person::factory()->create(['name' => 'Buyut', 'marga_id' => $marga->id, 'nomor' => '1', 'nomor_manual' => true]);
+    $kakek = Person::factory()->create(['name' => 'Kakek', 'marga_id' => $marga->id, 'father_id' => $buyut->id]);
+    $ayah = Person::factory()->create(['name' => 'Ayah', 'marga_id' => $marga->id, 'father_id' => $kakek->id]);
+    $fokus = Person::factory()->create(['name' => 'Fokus', 'marga_id' => $marga->id, 'father_id' => $ayah->id, 'birth_order' => 1]);
+
+    $this->actingAs($this->admin)
+        ->get(route('people.show', $fokus))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('people/show')
+            ->where('person.lineage.0.name', 'Buyut')
+            ->where('person.lineage.1.name', 'Kakek')
+            ->where('person.lineage.2.name', 'Ayah')
+            ->where('person.lineage.3.name', 'Fokus')
+            ->where('person.lineage.3.is_self', true)
+            ->where('person.lineage.0.is_self', false));
+});
+
+test('updating a family keeps existing sibling numbers and persists is_leader', function () {
+    $marga = Marga::factory()->create();
+    $father = Person::factory()->create(['marga_id' => $marga->id]);
+
+    $focused = Person::factory()->create([
+        'name' => 'Guru Tatea Bulan',
+        'marga_id' => $marga->id,
+        'father_id' => $father->id,
+        'birth_order' => 1,
+        'sibling_count' => 3,
+        'nomor' => '5',
+        'nomor_manual' => true,
+    ]);
+    $second = Person::factory()->create([
+        'name' => 'Raja Biakbiak',
+        'marga_id' => $marga->id,
+        'father_id' => $father->id,
+        'birth_order' => 2,
+        'nomor' => '2',
+        'nomor_manual' => true,
+    ]);
+    $third = Person::factory()->create([
+        'name' => 'Limbong Mulana',
+        'marga_id' => $marga->id,
+        'father_id' => $father->id,
+        'birth_order' => 3,
+        'nomor' => '3',
+        'nomor_manual' => true,
+    ]);
+
+    $this->actingAs($this->admin)
+        ->put(route('people.update', $focused), [
+            'name' => $focused->name,
+            'marga_id' => $marga->id,
+            'birth_order' => 1,
+            'sibling_count' => 3,
+            'is_leader' => true,
+            'nomor' => '5',
+            'father' => ['name' => $father->name],
+            'children' => [
+                ['id' => $focused->id, 'name' => $focused->name, 'gender' => 'L', 'nomor' => '5'],
+                ['id' => $second->id, 'name' => $second->name, 'gender' => 'L', 'nomor' => '2'],
+                ['id' => $third->id, 'name' => $third->name, 'gender' => 'L', 'nomor' => '3'],
+            ],
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect($focused->fresh()->is_leader)->toBeTrue()
+        ->and($second->fresh()->nomor)->toBe('2')
+        ->and($third->fresh()->nomor)->toBe('3');
+});

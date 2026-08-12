@@ -15,8 +15,8 @@ class FamilyEntryService
      *
      * @param  array<string, mixed>  $data  Validated request data.
      * @param  int|null  $forcedMargaId  When set, every family member is forced
-     *                                    into this marga and free-text marga
-     *                                    creation is disabled.
+     *                                   into this marga and free-text marga
+     *                                   creation is disabled.
      * @param  int|null  $createdBy  User id stamped on newly created records
      *                               so their owner can edit them later.
      * @return array{father: Person|null, mother: Person|null, children: Collection<int, Person>}
@@ -150,6 +150,7 @@ class FamilyEntryService
             }
 
             $focusedFields = $isFocus ? [
+                'is_leader' => filter_var($data['is_leader'] ?? false, FILTER_VALIDATE_BOOLEAN),
                 'alias' => $data['alias'] ?? null,
                 'birth_year' => $data['birth_year'] ?? null,
                 'death_year' => $data['death_year'] ?? null,

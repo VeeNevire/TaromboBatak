@@ -1,7 +1,7 @@
 import { Head, Link, router } from '@inertiajs/react';
+import { MotionConfig } from 'framer-motion';
 import { ArrowRight, Calendar, MapPin, Search } from 'lucide-react';
 import { useState } from 'react';
-import { MotionConfig } from 'framer-motion';
 import { Reveal } from '@/components/landing/reveal';
 import { SiteFooter } from '@/components/landing/site-footer';
 import { SiteHeader } from '@/components/landing/site-header';

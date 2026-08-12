@@ -1,5 +1,5 @@
-import { MapPin } from 'lucide-react';
 import { Link } from '@inertiajs/react';
+import { MapPin } from 'lucide-react';
 import { Reveal } from '@/components/landing/reveal';
 import kegiatan from '@/routes/kegiatan';
 

@@ -1,7 +1,7 @@
 import { Head } from '@inertiajs/react';
 import { useState } from 'react';
-import { DescendantsTree } from '@/components/people/descendants-tree';
 import { TaromboDiagram } from '@/components/landing/tarombo-diagram';
+import { DescendantsTree } from '@/components/people/descendants-tree';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { buildTaromboPeople } from '@/data/tarombo-tree';

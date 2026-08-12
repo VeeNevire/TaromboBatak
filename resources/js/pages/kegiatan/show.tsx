@@ -1,6 +1,6 @@
 import { Head, Link } from '@inertiajs/react';
-import { ArrowLeft, ArrowRight, Calendar, ExternalLink, MapPin } from 'lucide-react';
 import { MotionConfig } from 'framer-motion';
+import { ArrowLeft, ArrowRight, Calendar, ExternalLink, MapPin } from 'lucide-react';
 import { Reveal } from '@/components/landing/reveal';
 import { SiteFooter } from '@/components/landing/site-footer';
 import { SiteHeader } from '@/components/landing/site-header';

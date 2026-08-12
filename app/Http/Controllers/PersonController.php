@@ -88,7 +88,34 @@ class PersonController extends Controller
             'nameSuggestions' => $this->nameSuggestions(),
             'nomorUsed' => $this->nomorUsed(),
             'lockedMarga' => $isStaff ? null : $this->lockedMarga($user),
+            'margaLineage' => $this->createMargaLineage($user, $isStaff),
         ]);
+    }
+
+    /**
+     * Pemimpin of the user's marga (or all margas for staff) shown read-only on
+     * the create form as the marga's lineage context.
+     *
+     * @return array<int, array{id: int, name: string, marga_id: int|null, marga: string|null, nomor: string|null}>
+     */
+    protected function createMargaLineage(User $user, bool $isStaff): array
+    {
+        return Person::query()
+            ->where('is_leader', true)
+            ->with('marga')
+            ->when(! $isStaff && $user->marga_id !== null, fn ($query) => $query->where('marga_id', $user->marga_id))
+            ->orderByRaw('nomor IS NULL')
+            ->orderByRaw('CAST(nomor AS UNSIGNED)')
+            ->orderBy('name')
+            ->get()
+            ->map(fn (Person $person) => [
+                'id' => $person->id,
+                'name' => $person->name,
+                'marga_id' => $person->marga_id,
+                'marga' => $person->marga?->name,
+                'nomor' => $person->nomor,
+            ])
+            ->all();
     }
 
     /**
@@ -355,6 +382,18 @@ class PersonController extends Controller
             $siblings = $siblings->push($person)->sortBy('birth_order')->values();
         }
 
+        $lineageIds = $person->lineage()->pluck('id')->push($person->id)->all();
+
+        $lineage = Person::query()
+            ->whereIn('id', $lineageIds)
+            ->with([
+                'marga',
+                'children' => fn ($query) => $query->where('is_leader', false)->orderBy('birth_order'),
+            ])
+            ->get()
+            ->sortBy(fn (Person $row) => array_search($row->id, $lineageIds))
+            ->values();
+
         return [
             'id' => $person->id,
             'name' => $person->name,
@@ -365,6 +404,7 @@ class PersonController extends Controller
             'mother_id' => $person->mother_id,
             'birth_order' => $person->birth_order,
             'sibling_count' => $person->sibling_count,
+            'is_leader' => $person->is_leader,
             'nomor' => $person->nomor,
             'nomor_manual' => $person->nomor_manual,
             'birth_year' => $person->birth_year,
@@ -380,6 +420,7 @@ class PersonController extends Controller
                     'marga_id' => $person->father->marga_id,
                     'marga' => $person->father->marga?->name,
                     'nomor' => $person->father->nomor,
+                    'is_leader' => $person->father->is_leader,
                     'birth_year' => $person->father->birth_year,
                     'death_year' => $person->father->death_year,
                 ]
@@ -394,6 +435,28 @@ class PersonController extends Controller
                     'death_year' => $person->mother->death_year,
                 ]
                 : null,
+            'lineage' => $lineage
+                ->map(fn (Person $row) => [
+                    'id' => $row->id,
+                    'name' => $row->name,
+                    'marga' => $row->marga?->name,
+                    'nomor' => $row->nomor,
+                    'is_leader' => $row->is_leader,
+                    'is_self' => $row->id === $person->id,
+                    'children' => $row->children
+                        ->map(fn (Person $child) => [
+                            'id' => $child->id,
+                            'name' => $child->name,
+                            'gender' => $child->gender,
+                            'marga' => $child->marga?->name,
+                            'nomor' => $child->nomor,
+                            'birth_order' => $child->birth_order,
+                        ])
+                        ->values()
+                        ->all(),
+                ])
+                ->values()
+                ->all(),
             'children' => $siblings
                 ->map(fn (Person $sibling) => [
                     'id' => $sibling->id,
@@ -404,6 +467,7 @@ class PersonController extends Controller
                     'marga_id' => $sibling->marga_id,
                     'marga' => $sibling->marga?->name,
                     'birth_order' => $sibling->birth_order,
+                    'is_leader' => $sibling->is_leader,
                     'nomor' => $sibling->nomor,
                 ])
                 ->values()
