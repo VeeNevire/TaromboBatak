@@ -1,5 +1,13 @@
 import { Link, useForm } from '@inertiajs/react';
-import { ChevronDown, ChevronRight, Eye, Pencil, Plus, Trash2, X } from 'lucide-react';
+import {
+    ChevronDown,
+    ChevronRight,
+    Eye,
+    Pencil,
+    Plus,
+    Trash2,
+    X,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import InputError from '@/components/input-error';
@@ -11,7 +19,6 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -66,6 +73,8 @@ export type LineageChild = {
     marga: string | null;
     nomor: string | null;
     birth_order: number | null;
+    is_leader?: boolean;
+    isSelf?: boolean;
 };
 
 export type LineageEntry = {
@@ -80,10 +89,13 @@ export type LineageEntry = {
 
 export type MargaLineageEntry = {
     id: number;
-    name: string;
+    name: string | null;
     marga_id: number | null;
     marga: string | null;
     nomor: string | null;
+    isAyah?: boolean;
+    isSelf?: boolean;
+    children?: LineageChild[];
 };
 
 export type FamilyData = {
@@ -134,30 +146,6 @@ function isRowFilled(row: ChildRow): boolean {
     );
 }
 
-function parseNomor(nomor?: string | null): number[] | null {
-    const trimmed = (nomor ?? '').trim();
-
-    if (!trimmed) {
-        return null;
-    }
-
-    const parts = trimmed.split('.').map((part) => parseInt(part, 10));
-
-    return parts.every((part) => Number.isFinite(part)) ? parts : null;
-}
-
-function impliedNomorPosition(nomor?: string | null): number | null {
-    const parts = parseNomor(nomor);
-
-    if (parts === null) {
-        return null;
-    }
-
-    const last = parts[parts.length - 1];
-
-    return last > 0 ? last : null;
-}
-
 function isNaPlaceholder(name: string | null | undefined): boolean {
     return (name ?? '').trim().toUpperCase() === 'N/A';
 }
@@ -180,64 +168,6 @@ function isGapRow(row: ChildRow): boolean {
     );
 }
 
-function normalizeChildrenPositions(children: ChildRow[]): ChildRow[] {
-    const rows = [...children];
-
-    if (rows.length === 0) {
-        return rows;
-    }
-
-    const placed: { row: ChildRow; position: number }[] = [];
-    const fallback: ChildRow[] = [];
-
-    rows.forEach((row, index) => {
-        // Pemimpin have flat lineage numbers (1, 2, 3, ...) that are NOT
-        // sibling positions, so they always stay at their array position.
-        const fromNomor = row.is_leader ? null : impliedNomorPosition(row.nomor ?? null);
-        const position = fromNomor ?? index + 1;
-
-        if (position >= 1) {
-            placed.push({ row, position });
-        } else {
-            fallback.push(row);
-        }
-    });
-
-    const maxPosition = Math.max(rows.length, ...placed.map((p) => p.position));
-    const slots: (ChildRow | undefined)[] = Array.from({ length: maxPosition }, () => undefined);
-
-    placed.forEach(({ row, position }) => {
-        const target = position - 1;
-
-        if (target >= 0 && target < maxPosition && slots[target] === undefined) {
-            slots[target] = row;
-        } else {
-            fallback.push(row);
-        }
-    });
-
-    const result: ChildRow[] = [];
-    let fallbackIndex = 0;
-
-    for (let index = 0; index < maxPosition; index++) {
-        if (slots[index] !== undefined) {
-            result.push(slots[index]!);
-        } else if (fallbackIndex < fallback.length) {
-            result.push(fallback[fallbackIndex++]);
-        } else if (index < rows.length) {
-            result.push(isGapRow(rows[index]) ? rows[index] : emptyRow());
-        } else {
-            result.push(emptyRow());
-        }
-    }
-
-    for (; fallbackIndex < fallback.length; fallbackIndex++) {
-        result.push(fallback[fallbackIndex]);
-    }
-
-    return result;
-}
-
 function SilsilahListCard({
     lineage,
     selfId,
@@ -248,7 +178,9 @@ function SilsilahListCard({
     const [expanded, setExpanded] = useState<Set<number>>(() => {
         const selfIndex = lineage.findIndex((entry) => entry.is_self);
 
-        return selfIndex > 0 ? new Set([lineage[selfIndex - 1].id]) : new Set<number>();
+        return selfIndex > 0
+            ? new Set([lineage[selfIndex - 1].id])
+            : new Set<number>();
     });
 
     const toggle = (id: number) => {
@@ -265,7 +197,11 @@ function SilsilahListCard({
         });
     };
 
-    const childNomor = (entry: LineageEntry, child: LineageChild, index: number): string => {
+    const childNomor = (
+        entry: LineageEntry,
+        child: LineageChild,
+        index: number,
+    ): string => {
         if (child.nomor?.trim()) {
             return child.nomor.trim();
         }
@@ -292,7 +228,7 @@ function SilsilahListCard({
             </CardHeader>
             <CardContent className="grid gap-2">
                 {lineage.length === 0 ? (
-                    <p className="text-sm italic text-tb-on-surface-variant">
+                    <p className="text-sm text-tb-on-surface-variant italic">
                         Belum ada catatan garis keturunan.
                     </p>
                 ) : (
@@ -315,7 +251,11 @@ function SilsilahListCard({
                                         <button
                                             type="button"
                                             onClick={() => toggle(entry.id)}
-                                            aria-label={isOpen ? 'Tutup daftar saudara' : 'Buka daftar saudara'}
+                                            aria-label={
+                                                isOpen
+                                                    ? 'Tutup daftar saudara'
+                                                    : 'Buka daftar saudara'
+                                            }
                                             className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-tb-outline transition-colors hover:bg-tb-surface-container hover:text-tb-on-surface"
                                         >
                                             {isOpen ? (
@@ -329,76 +269,118 @@ function SilsilahListCard({
                                         </span>
                                         <div className="min-w-0 flex-1">
                                             <div className="flex items-center gap-1.5">
-                                                <p className="min-w-0 flex-1 truncate text-sm font-semibold text-tb-on-surface">
+                                                <Link
+                                                    href={people.show(entry.id)}
+                                                    className="min-w-0 flex-1 truncate text-sm font-semibold text-tb-on-surface hover:text-tb-primary"
+                                                >
                                                     {displayRowName(entry.name)}
-                                                </p>
+                                                </Link>
                                                 {entry.is_self && (
                                                     <span className="shrink-0 rounded-full bg-tb-primary px-2 py-0.5 text-[10px] font-bold text-white">
                                                         Anda
                                                     </span>
                                                 )}
-                                                {!entry.is_self && entry.is_leader && (
-                                                    <span className="shrink-0 rounded-full bg-tb-surface-container px-2 py-0.5 text-[10px] font-semibold text-tb-on-surface-variant">
-                                                        Pemimpin
-                                                    </span>
-                                                )}
+                                                {!entry.is_self &&
+                                                    entry.is_leader && (
+                                                        <span className="shrink-0 rounded-full bg-tb-surface-container px-2 py-0.5 text-[10px] font-semibold text-tb-on-surface-variant">
+                                                            Pemimpin
+                                                        </span>
+                                                    )}
                                             </div>
                                             <p className="mt-0.5 truncate text-xs text-tb-on-surface-variant">
                                                 {entry.marga || 'Tanpa marga'}
-                                                {count > 0 && ` · ${count} anak`}
+                                                {count > 0 &&
+                                                    ` · ${count} anak`}
                                             </p>
                                         </div>
+                                        <Link
+                                            href={people.edit(entry.id)}
+                                            aria-label={`Ubah ${entry.name}`}
+                                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-tb-outline-variant text-tb-outline opacity-70 transition-opacity hover:border-tb-primary hover:text-tb-primary hover:opacity-100"
+                                        >
+                                            <Pencil className="h-3.5 w-3.5" />
+                                        </Link>
                                     </div>
 
                                     {isOpen && (
                                         <div className="ml-[3.25rem] border-l border-tb-outline-variant pb-1.5 pl-2">
                                             {count === 0 ? (
-                                                <p className="px-1 py-1 text-xs italic text-tb-on-surface-variant">
+                                                <p className="px-1 py-1 text-xs text-tb-on-surface-variant italic">
                                                     Belum ada saudara tercatat.
                                                 </p>
                                             ) : (
                                                 <ul className="grid gap-0.5">
-                                                    {entry.children.map((child, index) => {
-                                                        const filled = isNameFilled(child.name);
-                                                        const isSelf = child.id === selfId;
+                                                    {entry.children.map(
+                                                        (child, index) => {
+                                                            const filled =
+                                                                isNameFilled(
+                                                                    child.name,
+                                                                );
+                                                            const isSelf =
+                                                                child.id ===
+                                                                selfId;
 
-                                                        return (
-                                                            <li key={child.id}>
-                                                                <div className="group flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors hover:bg-tb-surface-container/70">
-                                                                    <Link
-                                                                        href={people.show(child.id)}
-                                                                        className="flex min-w-0 flex-1 items-center gap-2 rounded-md"
-                                                                    >
-                                                                        <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-tb-surface-container px-1 text-[10px] font-semibold text-tb-on-surface-variant">
-                                                                            {childNomor(entry, child, index)}
-                                                                        </span>
-                                                                        <span
-                                                                            className={cn(
-                                                                                'min-w-0 flex-1 truncate text-sm',
-                                                                                filled
-                                                                                    ? 'text-tb-on-surface'
-                                                                                    : 'italic text-tb-on-surface-variant',
+                                                            return (
+                                                                <li
+                                                                    key={
+                                                                        child.id
+                                                                    }
+                                                                >
+                                                                    <div className="group flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors hover:bg-tb-surface-container/70">
+                                                                        <Link
+                                                                            href={people.show(
+                                                                                child.id,
                                                                             )}
+                                                                            className="flex min-w-0 flex-1 items-center gap-2 rounded-md"
                                                                         >
-                                                                            {filled ? child.name : displayRowName(child.name)}
-                                                                        </span>
-                                                                        {isSelf && (
-                                                                            <span className="shrink-0 text-[11px] font-medium text-tb-primary">
-                                                                                Anda
+                                                                            <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-tb-surface-container px-1 text-[10px] font-semibold text-tb-on-surface-variant">
+                                                                                {childNomor(
+                                                                                    entry,
+                                                                                    child,
+                                                                                    index,
+                                                                                )}
                                                                             </span>
-                                                                        )}
-                                                                    </Link>
-                                                                    <Link
-                                                                        href={people.edit(child.id)}
-                                                                        aria-label={`Ubah ${child.name}`}
-                                                                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-tb-outline-variant text-tb-outline opacity-70 transition-opacity hover:border-tb-primary hover:text-tb-primary group-hover:opacity-100"
-                                                                    >
-                                                                        <Pencil className="h-3.5 w-3.5" />
-                                                                    </Link>
-                                                                </div>
-                                                            </li>
-                                                        );
-                                                    })}
+                                                                            <span
+                                                                                className={cn(
+                                                                                    'min-w-0 flex-1 truncate text-sm',
+                                                                                    filled
+                                                                                        ? 'text-tb-on-surface'
+                                                                                        : 'text-tb-on-surface-variant italic',
+                                                                                )}
+                                                                            >
+                                                                                {filled
+                                                                                    ? child.name
+                                                                                    : displayRowName(
+                                                                                          child.name,
+                                                                                      )}
+                                                                            </span>
+                                                                            {child.is_leader &&
+                                                                                child.id !==
+                                                                                    selfId && (
+                                                                                <span className="shrink-0 rounded-full bg-tb-surface-container px-2 py-0.5 text-[10px] font-semibold text-tb-on-surface-variant">
+                                                                                    Pemimpin
+                                                                                </span>
+                                                                            )}
+                                                                            {isSelf && (
+                                                                                <span className="shrink-0 text-[11px] font-medium text-tb-primary">
+                                                                                    Anda
+                                                                                </span>
+                                                                            )}
+                                                                        </Link>
+                                                                        <Link
+                                                                            href={people.edit(
+                                                                                child.id,
+                                                                            )}
+                                                                            aria-label={`Ubah ${child.name}`}
+                                                                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-tb-outline-variant text-tb-outline opacity-70 transition-opacity group-hover:opacity-100 hover:border-tb-primary hover:text-tb-primary"
+                                                                        >
+                                                                            <Pencil className="h-3.5 w-3.5" />
+                                                                        </Link>
+                                                                    </div>
+                                                                </li>
+                                                            );
+                                                        },
+                                                    )}
                                                 </ul>
                                             )}
                                         </div>
@@ -414,6 +396,22 @@ function SilsilahListCard({
 }
 
 function MargaLineageCard({ entries }: { entries: MargaLineageEntry[] }) {
+    const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+    const toggle = (key: string) => {
+        setExpanded((prev) => {
+            const next = new Set(prev);
+
+            if (next.has(key)) {
+                next.delete(key);
+            } else {
+                next.add(key);
+            }
+
+            return next;
+        });
+    };
+
     return (
         <Card className="border-tb-outline-variant bg-tb-surface-bright">
             <CardHeader>
@@ -421,34 +419,216 @@ function MargaLineageCard({ entries }: { entries: MargaLineageEntry[] }) {
                     List Silsilah
                 </CardTitle>
                 <CardDescription>
-                    Garis keturunan marga saat ini (read-only).
+                    Garis keturunan marga saat ini. Klik baris untuk melihat
+                    saudaranya.
                 </CardDescription>
             </CardHeader>
             <CardContent>
                 {entries.length === 0 ? (
-                    <p className="text-sm italic text-tb-on-surface-variant">
+                    <p className="text-sm text-tb-on-surface-variant italic">
                         Belum ada pemimpin yang ditandai.
                     </p>
                 ) : (
                     <ul className="grid gap-1.5">
-                        {entries.map((entry) => (
-                            <li
-                                key={entry.id}
-                                className="flex items-center gap-2 rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-2 py-1.5"
-                            >
-                                <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-tb-surface-container px-1 text-xs font-bold text-tb-on-surface-variant">
-                                    {entry.nomor ?? '—'}
-                                </span>
-                                <span className="min-w-0 flex-1 truncate text-sm font-medium text-tb-on-surface">
-                                    {displayRowName(entry.name)}
-                                </span>
-                                {entry.marga && (
-                                    <span className="shrink-0 text-xs text-tb-on-surface-variant">
-                                        {entry.marga}
-                                    </span>
-                                )}
-                            </li>
-                        ))}
+                        {entries.map((entry) => {
+                            const isGap =
+                                (entry.id === 0 &&
+                                    (entry.name ?? '').trim() === '') ||
+                                isNaPlaceholder(entry.name);
+                            const hasChildren =
+                                (entry.children ?? []).length > 0;
+                            const expandKey = `${entry.id}-${entry.nomor ?? 'na'}`;
+                            const isOpen = expanded.has(expandKey);
+
+                            return (
+                                <li
+                                    key={`${entry.id}-${entry.nomor ?? 'na'}`}
+                                    className={cn(
+                                        'overflow-hidden rounded-lg border transition-colors',
+                                        isGap
+                                            ? 'border-tb-outline-variant/50 bg-tb-surface-bright opacity-60'
+                                            : entry.isSelf
+                                              ? 'border-tb-primary/50 bg-tb-primary/5'
+                                              : isOpen
+                                                ? 'border-tb-primary/40 bg-tb-primary/5'
+                                                : 'border-tb-outline-variant bg-tb-surface-bright',
+                                    )}
+                                >
+                                    <div className="flex items-center gap-2 px-2 py-1.5">
+                                        {hasChildren ? (
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    toggle(expandKey)
+                                                }
+                                                aria-label={
+                                                    isOpen
+                                                        ? 'Tutup daftar saudara'
+                                                        : 'Buka daftar saudara'
+                                                }
+                                                className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-tb-outline transition-colors hover:bg-tb-surface-container hover:text-tb-on-surface"
+                                            >
+                                                {isOpen ? (
+                                                    <ChevronDown className="h-4 w-4" />
+                                                ) : (
+                                                    <ChevronRight className="h-4 w-4" />
+                                                )}
+                                            </button>
+                                        ) : (
+                                            <span className="size-6 shrink-0" />
+                                        )}
+                                        <span
+                                            className={cn(
+                                                'flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full px-1 text-xs font-bold',
+                                                isGap
+                                                    ? 'bg-tb-surface-container text-tb-on-surface-variant'
+                                                    : 'bg-tb-surface-container text-tb-on-surface-variant',
+                                            )}
+                                        >
+                                            {entry.nomor ?? '—'}
+                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-1.5">
+                                                {entry.id > 0 ? (
+                                                    <Link
+                                                        href={people.show(
+                                                            entry.id,
+                                                        )}
+                                                        className="min-w-0 flex-1 truncate text-sm font-medium text-tb-on-surface hover:text-tb-primary"
+                                                    >
+                                                        {displayRowName(
+                                                            entry.name,
+                                                        )}
+                                                    </Link>
+                                                ) : (
+                                                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-tb-on-surface">
+                                                        {isGap
+                                                            ? 'N/A'
+                                                            : displayRowName(
+                                                                  entry.name,
+                                                              )}
+                                                    </span>
+                                                )}
+                                                {entry.isAyah &&
+                                                    !entry.isSelf && (
+                                                        <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                                                            Ayah
+                                                        </span>
+                                                    )}
+                                                {entry.isSelf && (
+                                                    <span className="shrink-0 rounded-full bg-tb-primary px-2 py-0.5 text-[10px] font-bold text-white">
+                                                        Anda
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {entry.marga && !isGap && (
+                                                <p className="mt-0.5 truncate text-xs text-tb-on-surface-variant">
+                                                    {entry.marga}
+                                                </p>
+                                            )}
+                                        </div>
+                                        {entry.id > 0 && (
+                                            <Link
+                                                href={people.edit(entry.id)}
+                                                aria-label={`Ubah ${entry.name}`}
+                                                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-tb-outline-variant text-tb-outline opacity-70 transition-opacity hover:border-tb-primary hover:text-tb-primary hover:opacity-100"
+                                            >
+                                                <Pencil className="h-3.5 w-3.5" />
+                                            </Link>
+                                        )}
+                                    </div>
+
+                                    {isOpen && (
+                                        <div className="ml-[3.25rem] border-l border-tb-outline-variant pb-1.5 pl-2">
+                                            {(entry.children ?? []).length ===
+                                            0 ? (
+                                                <p className="px-1 py-1 text-xs text-tb-on-surface-variant italic">
+                                                    Belum ada saudara tercatat.
+                                                </p>
+                                            ) : (
+                                                <ul className="grid gap-0.5">
+                                                    {(entry.children ?? []).map(
+                                                        (child, childIndex) => (
+                                                            <li
+                                                                key={`${child.id}-${childIndex}`}
+                                                            >
+                                                                <div className="group flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors hover:bg-tb-surface-container/70">
+                                                                    {child.id >
+                                                                    0 ? (
+                                                                        <Link
+                                                                            href={people.show(
+                                                                                child.id,
+                                                                            )}
+                                                                            className="flex min-w-0 flex-1 items-center gap-2 rounded-md"
+                                                                        >
+                                                                            <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-tb-surface-container px-1 text-[10px] font-semibold text-tb-on-surface-variant">
+                                                                                {child.nomor?.trim() ||
+                                                                                    (entry.nomor
+                                                                                        ? `${entry.nomor}.${child.birth_order ?? ''}`
+                                                                                        : String(
+                                                                                              child.birth_order ??
+                                                                                                  '',
+                                                                                          ))}
+                                                                            </span>
+                                                                            <span className="min-w-0 flex-1 truncate text-sm text-tb-on-surface">
+                                                                                {displayRowName(
+                                                                                    child.name,
+                                                                                )}
+                                                                            </span>
+                                                                        </Link>
+                                                                    ) : (
+                                                                        <span className="flex min-w-0 flex-1 items-center gap-2 rounded-md">
+                                                                            <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-tb-surface-container px-1 text-[10px] font-semibold text-tb-on-surface-variant">
+                                                                                {child.nomor?.trim() ||
+                                                                                    (entry.nomor
+                                                                                        ? `${entry.nomor}.${child.birth_order ?? ''}`
+                                                                                        : String(
+                                                                                              child.birth_order ??
+                                                                                                  '',
+                                                                                          ))}
+                                                                            </span>
+                                                                            <span className="min-w-0 flex-1 truncate text-sm text-tb-on-surface">
+                                                                                {displayRowName(
+                                                                                    child.name,
+                                                                                )}
+                                                                            </span>
+                                                                        </span>
+                                                                    )}
+                                                                    {child.is_leader &&
+                                                                        child.id >
+                                                                            0 && (
+                                                                        <span className="shrink-0 rounded-full bg-tb-surface-container px-2 py-0.5 text-[10px] font-semibold text-tb-on-surface-variant">
+                                                                            Pemimpin
+                                                                        </span>
+                                                                    )}
+                                                                    {child.isSelf && (
+                                                                        <span className="shrink-0 text-[11px] font-medium text-tb-primary">
+                                                                            Anda
+                                                                        </span>
+                                                                    )}
+                                                                    {child.id >
+                                                                        0 && (
+                                                                        <Link
+                                                                            href={people.edit(
+                                                                                child.id,
+                                                                            )}
+                                                                            aria-label={`Ubah ${child.name}`}
+                                                                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-tb-outline-variant text-tb-outline opacity-70 transition-opacity group-hover:opacity-100 hover:border-tb-primary hover:text-tb-primary"
+                                                                        >
+                                                                            <Pencil className="h-3.5 w-3.5" />
+                                                                        </Link>
+                                                                    )}
+                                                                </div>
+                                                            </li>
+                                                        ),
+                                                    )}
+                                                </ul>
+                                            )}
+                                        </div>
+                                    )}
+                                </li>
+                            );
+                        })}
                     </ul>
                 )}
             </CardContent>
@@ -560,58 +740,234 @@ function MargaField({
     );
 }
 
-export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed, lockedMarga, margaLineage }: Props) {
+export default function FamilyForm({
+    person,
+    margas,
+    nameSuggestions,
+    nomorUsed,
+    lockedMarga,
+    margaLineage,
+}: Props) {
     const isEdit = person !== null;
 
-    const { data, setData, transform, post, put, processing, errors } = useForm({
-        name: person?.name ?? '',
-        gender: person?.gender ?? '',
-        alias: person?.alias ?? '',
-        marga_id: person?.marga_id ?? lockedMarga?.id ?? null,
-        new_marga: person?.new_marga ?? '',
-        birth_order: person?.birth_order ?? 1,
-        sibling_count:
-            person?.sibling_count ?? Math.max(person?.children.length ?? 1, 1),
-        is_leader: person?.is_leader ?? false,
-        nomor: person?.nomor_manual ? (person?.nomor ?? '') : '',
-        birth_year: person?.birth_year ?? '',
-        death_year: person?.death_year ?? '',
-        image: person?.image ?? '',
-        bio: person?.bio ?? '',
-        father: person?.father
-            ? {
-                  name: person.father.name ?? '',
-                  birth_year: person.father.birth_year ?? '',
-                  death_year: person.father.death_year ?? '',
-                  marga_id: person.father.marga_id ?? lockedMarga?.id ?? null,
-                  new_marga: '',
-                  nomor: person.father.nomor ?? null,
-              }
-            : emptyParent(),
-        mother: person?.mother
-            ? {
-                  name: person.mother.name ?? '',
-                  birth_year: person.mother.birth_year ?? '',
-                  death_year: person.mother.death_year ?? '',
-                  marga_id: person.mother.marga_id ?? null,
-                  new_marga: '',
-              }
-            : emptyParent(),
-        children:
-            person?.children && person.children.length > 0
-                ? person.children.map((child) => ({
-                      id: child.id ?? null,
-                      name: child.name ?? '',
-                      gender: child.gender ?? '',
-                      spouse: child.spouse ?? '',
-                      spouse_marga: child.spouse_marga ?? '',
-                      marga_id: child.marga_id ?? lockedMarga?.id ?? null,
+    const { data, setData, transform, post, put, processing, errors } = useForm(
+        {
+            name: person?.name ?? '',
+            gender: person?.gender ?? '',
+            alias: person?.alias ?? '',
+            marga_id: person?.marga_id ?? lockedMarga?.id ?? null,
+            new_marga: person?.new_marga ?? '',
+            birth_order: person?.birth_order ?? 1,
+            sibling_count:
+                person?.sibling_count ??
+                Math.max(person?.children.length ?? 1, 1),
+            is_leader: true,
+            nomor: person?.nomor_manual ? (person?.nomor ?? '') : '',
+            birth_year: person?.birth_year ?? '',
+            death_year: person?.death_year ?? '',
+            image: person?.image ?? '',
+            bio: person?.bio ?? '',
+            father: person?.father
+                ? {
+                      name: person.father.name ?? '',
+                      birth_year: person.father.birth_year ?? '',
+                      death_year: person.father.death_year ?? '',
+                      marga_id:
+                          person.father.marga_id ?? lockedMarga?.id ?? null,
                       new_marga: '',
-                      nomor: child.nomor ?? '',
-                      is_leader: child.is_leader ?? false,
-                  }))
-                : [emptyRow()],
+                      nomor: person.father.nomor ?? null,
+                  }
+                : emptyParent(),
+            mother: person?.mother
+                ? {
+                      name: person.mother.name ?? '',
+                      birth_year: person.mother.birth_year ?? '',
+                      death_year: person.mother.death_year ?? '',
+                      marga_id: person.mother.marga_id ?? null,
+                      new_marga: '',
+                  }
+                : emptyParent(),
+            children:
+                person?.children && person.children.length > 0
+                    ? person.children.map((child) => ({
+                          id: child.id ?? null,
+                          name: child.name ?? '',
+                          gender: child.gender ?? '',
+                          spouse: child.spouse ?? '',
+                          spouse_marga: child.spouse_marga ?? '',
+                          marga_id: child.marga_id ?? lockedMarga?.id ?? null,
+                          new_marga: '',
+                          nomor: child.nomor ?? '',
+                          is_leader: child.is_leader ?? false,
+                      }))
+                    : [emptyRow()],
+        },
+    );
+
+    const focusNomorNumber = parseInt(data.nomor, 10) || null;
+    const existingLeaderNumeros = (margaLineage ?? [])
+        .map((entry) => {
+            const n = parseInt(entry.nomor ?? '', 10);
+
+            return Number.isFinite(n) && n > 0 ? n : null;
+        })
+        .filter((n): n is number => n !== null)
+        .sort((a, b) => a - b);
+
+    const allLeaderNumbers = Array.from(
+        new Set([
+            ...existingLeaderNumeros,
+            ...(focusNomorNumber ? [focusNomorNumber] : []),
+        ]),
+    ).sort((a, b) => a - b);
+
+    const maxLeaderNumber =
+        allLeaderNumbers.length > 0 ? Math.max(...allLeaderNumbers) : 0;
+
+    const leaderGaps: MargaLineageEntry[] = [];
+
+    if (maxLeaderNumber > 0) {
+        for (let n = 1; n <= maxLeaderNumber; n++) {
+            if (!allLeaderNumbers.includes(n)) {
+                leaderGaps.push({
+                    id: 0,
+                    name: null,
+                    marga_id: data.marga_id ?? lockedMarga?.id ?? null,
+                    marga: null,
+                    nomor: String(n),
+                });
+            }
+        }
+    }
+
+    const mergedLineage: MargaLineageEntry[] = [
+        ...(margaLineage ?? []),
+        ...leaderGaps,
+    ].sort((a, b) => {
+        const an = parseInt(a.nomor ?? '', 10);
+        const bn = parseInt(b.nomor ?? '', 10);
+        const anValid = Number.isFinite(an) && an > 0 ? an : Infinity;
+        const bnValid = Number.isFinite(bn) && bn > 0 ? bn : Infinity;
+
+        return anValid - bnValid;
     });
+
+    const focusFlatNumber = parseInt(data.nomor, 10) || null;
+    const expectedFatherNomor =
+        focusFlatNumber !== null && focusFlatNumber >= 2
+            ? String(focusFlatNumber - 1)
+            : null;
+    const fatherName = data.father?.name?.trim() ?? '';
+    const hasFatherName = isNameFilled(fatherName);
+
+    const predictedFatherNomor =
+        data.father?.nomor?.trim() ||
+        (focusFlatNumber !== null && focusFlatNumber >= 2
+            ? String(focusFlatNumber - 1)
+            : null);
+
+    const siblingAutoNomor = (index: number): string => {
+        if (!predictedFatherNomor) {
+            return '';
+        }
+
+        return `${predictedFatherNomor}.${index + 1}`;
+    };
+
+    const liveLineage: MargaLineageEntry[] = [...(mergedLineage ?? [])];
+
+    if (expectedFatherNomor !== null) {
+        const ayahSlotIndex = liveLineage.findIndex(
+            (entry) => entry.nomor === expectedFatherNomor,
+        );
+
+        if (ayahSlotIndex >= 0) {
+            const entry = liveLineage[ayahSlotIndex];
+
+            if (
+                hasFatherName ||
+                entry.id === 0 ||
+                isNaPlaceholder(entry.name)
+            ) {
+                liveLineage[ayahSlotIndex] = {
+                    ...entry,
+                    name: hasFatherName ? fatherName : entry.name,
+                    isAyah: true,
+                };
+            }
+        }
+    }
+
+    const nextAutoNomor = maxLeaderNumber > 0 ? String(maxLeaderNumber + 1) : '1';
+    const displayNomor = focusFlatNumber !== null ? String(focusFlatNumber) : nextAutoNomor;
+    const hasSelf = data.name.trim() !== '';
+
+    const focusMarga = hasSelf
+        ? data.new_marga?.trim() ||
+          margas.find((marga) => marga.id === data.marga_id)?.name ||
+          null
+        : null;
+
+    if (hasSelf) {
+        liveLineage.push({
+            id: 0,
+            name: data.name,
+            marga_id: data.marga_id ?? lockedMarga?.id ?? null,
+            marga: focusMarga,
+            nomor: displayNomor,
+            isSelf: true,
+        });
+    }
+
+    if (hasFatherName && expectedFatherNomor === null) {
+        const fatherMarga =
+            data.father?.new_marga?.trim() ||
+            margas.find((marga) => marga.id === data.father?.marga_id)?.name ||
+            null;
+
+        liveLineage.push({
+            id: 0,
+            name: fatherName,
+            marga_id: data.father?.marga_id ?? lockedMarga?.id ?? null,
+            marga: fatherMarga,
+            nomor: String(maxLeaderNumber > 0 ? maxLeaderNumber : 1),
+            isAyah: true,
+        });
+    }
+
+    liveLineage.sort((a, b) => {
+        const an = parseInt(a.nomor ?? '', 10);
+        const bn = parseInt(b.nomor ?? '', 10);
+        const anValid = Number.isFinite(an) && an > 0 ? an : Infinity;
+        const bnValid = Number.isFinite(bn) && bn > 0 ? bn : Infinity;
+
+        return anValid - bnValid;
+    });
+
+    if (hasSelf) {
+        const fatherIndex = liveLineage.findIndex((entry) => entry.isAyah);
+
+        if (fatherIndex >= 0) {
+            const fatherEntry = liveLineage[fatherIndex];
+
+            liveLineage[fatherIndex] = {
+                ...fatherEntry,
+                children: [
+                    ...(fatherEntry.children ?? []),
+                    {
+                        id: 0,
+                        name: data.name,
+                        gender: data.gender,
+                        marga: focusMarga,
+                        nomor: displayNomor,
+                        birth_order: null,
+                        is_leader: true,
+                        isSelf: true,
+                    },
+                ],
+            };
+        }
+    }
 
     transform((currentData) => {
         const withMarga = lockedMarga
@@ -620,7 +976,11 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed,
                   marga_id: lockedMarga.id,
                   new_marga: '',
                   father: currentData.father
-                      ? { ...currentData.father, marga_id: lockedMarga.id, new_marga: '' }
+                      ? {
+                            ...currentData.father,
+                            marga_id: lockedMarga.id,
+                            new_marga: '',
+                        }
                       : null,
                   children: (currentData.children ?? []).map((child) => ({
                       ...child,
@@ -630,7 +990,21 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed,
               }
             : currentData;
 
-        const sorted = normalizeChildrenPositions(withMarga.children ?? []);
+        const focusFlat = parseInt(currentData.nomor ?? '', 10) || null;
+        const expectedFather =
+            focusFlat !== null && focusFlat >= 2 ? String(focusFlat - 1) : null;
+        const injectedFather =
+            withMarga.father &&
+            expectedFather !== null &&
+            isNameFilled(withMarga.father.name ?? '')
+                ? {
+                      ...withMarga.father,
+                      nomor: withMarga.father.nomor ?? expectedFather,
+                      is_leader: true,
+                  }
+            : (withMarga.father ?? null);
+
+        const sorted = withMarga.children ?? [];
         const focusIndex =
             person?.id != null
                 ? sorted.findIndex((child) => child.id === person.id)
@@ -638,6 +1012,7 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed,
 
         return {
             ...withMarga,
+            father: injectedFather,
             children: sorted,
             birth_order: Math.max(1, (focusIndex >= 0 ? focusIndex : 0) + 1),
         };
@@ -668,15 +1043,20 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed,
         setSelectedIndex(null);
     };
 
-    const selectedChild = selectedIndex != null
-        ? (data.children[selectedIndex] as ChildRow | undefined)
-        : undefined;
+    const selectedChild =
+        selectedIndex != null
+            ? (data.children[selectedIndex] as ChildRow | undefined)
+            : undefined;
 
-    const isFocusRow = person?.id != null
-        ? selectedChild?.id === person.id
-        : selectedIndex === birthOrder - 1;
+    const isFocusRow =
+        person?.id != null
+            ? selectedChild?.id === person.id
+            : selectedIndex === birthOrder - 1;
 
-    const margaName = (margaId: number | null | undefined, newMarga?: string | null): string => {
+    const margaName = (
+        margaId: number | null | undefined,
+        newMarga?: string | null,
+    ): string => {
         if (newMarga?.trim()) {
             return newMarga.trim();
         }
@@ -689,9 +1069,10 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed,
             return;
         }
 
-        const focusIndex = person?.id != null
-            ? data.children.findIndex((child) => child.id === person.id)
-            : Math.min(birthOrder - 1, data.children.length - 1);
+        const focusIndex =
+            person?.id != null
+                ? data.children.findIndex((child) => child.id === person.id)
+                : Math.min(birthOrder - 1, data.children.length - 1);
 
         if (focusIndex < 0) {
             return;
@@ -710,6 +1091,7 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed,
                           marga_id: data.marga_id,
                           new_marga: data.new_marga,
                           nomor: data.nomor || null,
+                          is_leader: true,
                           birth_year: data.birth_year || null,
                           death_year: data.death_year || null,
                           image: data.image || null,
@@ -733,16 +1115,6 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed,
         birthOrder,
         person?.id,
     ]);
-
-    useEffect(() => {
-        const sorted = normalizeChildrenPositions(data.children);
-        const changed = sorted.some((child, index) => child !== data.children[index]);
-
-        if (changed) {
-            setData('children', sorted);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [data.children]);
 
     useEffect(() => {
         const prev = prevSiblingCount.current;
@@ -780,7 +1152,11 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed,
                 return;
             }
 
-            if (excessNewFilled === 0 && excessSaved > 0 && !savedExcessToastShown.current) {
+            if (
+                excessNewFilled === 0 &&
+                excessSaved > 0 &&
+                !savedExcessToastShown.current
+            ) {
                 savedExcessToastShown.current = true;
 
                 toast.info(
@@ -809,6 +1185,41 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed,
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [birthOrder, siblingCount]);
 
+    useEffect(() => {
+        if (person != null || lockedMarga != null) {
+            return;
+        }
+
+        const margaId = data.marga_id ?? null;
+        const newMarga = (data.new_marga ?? '').trim();
+
+        if (margaId == null && !newMarga) {
+            return;
+        }
+
+        const targetNewMarga = margaId != null ? '' : newMarga;
+
+        setData(
+            'father',
+            data.father
+                ? {
+                      ...data.father,
+                      marga_id: margaId,
+                      new_marga: targetNewMarga,
+                  }
+                : data.father,
+        );
+        setData(
+            'children',
+            (data.children ?? []).map((child) => ({
+                ...child,
+                marga_id: margaId,
+                new_marga: targetNewMarga,
+            })),
+        );
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [data.marga_id, data.new_marga, person, lockedMarga]);
+
     const setChild = (
         index: number,
         key: 'name' | 'gender' | 'spouse' | 'spouse_marga' | 'nomor',
@@ -817,18 +1228,6 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed,
         const next = data.children.map((child, i) =>
             i === index ? { ...child, [key]: value } : child,
         );
-
-        if (key === 'nomor') {
-            const normalized = normalizeChildrenPositions(next);
-
-            setData('children', normalized);
-
-            if (normalized.length > data.children.length) {
-                setData('sibling_count', Math.max(normalized.length, siblingCount));
-            }
-
-            return;
-        }
 
         setData('children', next);
     };
@@ -986,665 +1385,140 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed,
     return (
         <>
             <div className="max-w-full min-w-0 overflow-x-auto">
-            <form
-                onSubmit={submit}
-                className={cn(
-                    'grid gap-6',
-                    selectedChild
-                        ? 'min-w-[1240px]'
-                        : 'max-w-4xl',
-                )}
-            >
-            <div
-                className={cn(
-                    'grid gap-6',
-                    selectedChild
-                        ? 'lg:grid-cols-[1fr_320px_320px]'
-                        : 'lg:grid-cols-[1fr_320px]',
-                )}
-            >
-                <div className="grid gap-6">
-                <Card className="border-tb-outline-variant bg-tb-surface-bright">
-                    <CardHeader>
-                        <CardTitle className="font-display text-lg text-tb-on-surface">
-                            Informasi Pribadi
-                        </CardTitle>
-                        <CardDescription>
-                            Data dasar anggota yang sedang dicatat dalam jejak
-                            keluarga.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="grid gap-5">
-                        <div className="grid gap-1.5">
-                            <Label
-                                htmlFor="name"
-                                className="text-tb-on-surface"
-                            >
-                                Nama Lengkap{' '}
-                                <span className="text-red-600">*</span>
-                            </Label>
-                            <Input
-                                id="name"
-                                value={data.name}
-                                onChange={(e) =>
-                                    setData('name', e.target.value)
-                                }
-                                placeholder="Mis. Ompu Sitorus"
-                                className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
-                            />
-                            <InputError message={errors.name} />
-                        </div>
-
-                        <div className="grid gap-5 sm:grid-cols-3">
-                            <div className="grid gap-1.5">
-                                <Label
-                                    htmlFor="alias"
-                                    className="text-tb-on-surface"
-                                >
-                                    Alias / Gelar
-                                </Label>
-                                <Input
-                                    id="alias"
-                                    value={data.alias}
-                                    onChange={(e) =>
-                                        setData('alias', e.target.value)
-                                    }
-                                    placeholder="Tuan Sorba Dibanua"
-                                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
-                                />
-                                <InputError message={errors.alias} />
-                            </div>
-                            <div className="grid gap-1.5">
-                                <Label className="text-tb-on-surface">
-                                    Jenis Kelamin
-                                </Label>
-                                <Select
-                                    value={data.gender || ''}
-                                    onValueChange={(value) =>
-                                        setData('gender', value)
-                                    }
-                                >
-                                    <SelectTrigger className="w-full border-tb-outline-variant bg-tb-surface-bright">
-                                        <SelectValue placeholder="Pilih" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="L">
-                                            Laki-laki (L)
-                                        </SelectItem>
-                                        <SelectItem value="P">
-                                            Perempuan (P)
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <InputError message={errors.gender} />
-                            </div>
-                            <div className="grid gap-1.5">
-                                <Label className="text-tb-on-surface">
-                                    Marga
-                                </Label>
-                                <MargaField
-                                    value={data.marga_id}
-                                    newMarga={data.new_marga}
-                                    onValue={(value) =>
-                                        setData('marga_id', value)
-                                    }
-                                    onNewMarga={(value) =>
-                                        setData('new_marga', value)
-                                    }
-                                    margas={margas}
-                                    disabled={lockedMarga !== null}
-                                />
-                                <InputError message={errors.marga_id} />
-                            </div>
-                        </div>
-
-                        <div className="grid gap-5 sm:grid-cols-3">
-                            <div className="grid gap-1.5">
-                                <Label className="text-tb-on-surface">
-                                    Anak ke
-                                </Label>
-                                <Input
-                                    type="number"
-                                    min={1}
-                                    value={data.birth_order ?? ''}
-                                    onChange={(e) =>
-                                        setData(
-                                            'birth_order',
-                                            Number(e.target.value),
-                                        )
-                                    }
-                                    placeholder="2"
-                                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
-                                />
-                                <InputError message={errors.birth_order} />
-                            </div>
-                            <div className="grid gap-1.5">
-                                <Label className="text-tb-on-surface">
-                                    dari total bersaudara
-                                </Label>
-                                <Input
-                                    type="number"
-                                    min={1}
-                                    value={data.sibling_count ?? ''}
-                                    onChange={(e) =>
-                                        setData(
-                                            'sibling_count',
-                                            Number(e.target.value),
-                                        )
-                                    }
-                                    placeholder="5"
-                                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
-                                />
-                                <InputError message={errors.sibling_count} />
-                            </div>
-                            <div className="grid gap-1.5">
-                                <Label
-                                    htmlFor="nomor"
-                                    className="text-tb-on-surface"
-                                >
-                                    Nomor Silsilah
-                                </Label>
-                                <Input
-                                    id="nomor"
-                                    value={data.nomor}
-                                    onChange={(e) =>
-                                        setData('nomor', e.target.value)
-                                    }
-                                    placeholder="otomatis (mis. 1.2.1)"
-                                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
-                                />
-                                <p className="text-xs text-tb-on-surface-variant">
-                                    Kosongkan untuk nomor otomatis berjenjang;
-                                    isi untuk koreksi manual.
-                                </p>
-                                {nomorConflict && (
-                                    <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
-                                        Nomor silsilah &ldquo;{nomorConflict.nomor}&rdquo; sudah dipakai oleh{' '}
-                                        {nomorConflict.name}.
-                                    </p>
-                                )}
-                                <InputError message={errors.nomor} />
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="grid gap-1.5">
-                                <Label
-                                    htmlFor="birth_year"
-                                    className="text-tb-on-surface"
-                                >
-                                    Tahun Lahir
-                                </Label>
-                                <Input
-                                    id="birth_year"
-                                    value={data.birth_year}
-                                    onChange={(e) =>
-                                        setData('birth_year', e.target.value)
-                                    }
-                                    placeholder="1920"
-                                    maxLength={4}
-                                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
-                                />
-                                <InputError message={errors.birth_year} />
-                            </div>
-                            <div className="grid gap-1.5">
-                                <Label
-                                    htmlFor="death_year"
-                                    className="text-tb-on-surface"
-                                >
-                                    Tahun Wafat
-                                </Label>
-                                <Input
-                                    id="death_year"
-                                    value={data.death_year}
-                                    onChange={(e) =>
-                                        setData('death_year', e.target.value)
-                                    }
-                                    placeholder="2001"
-                                    maxLength={4}
-                                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
-                                />
-                                <InputError message={errors.death_year} />
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-3 rounded-lg border border-tb-outline-variant bg-tb-surface-container/50 px-3 py-2.5">
-                            <Checkbox
-                                id="is_leader"
-                                checked={data.is_leader}
-                                onCheckedChange={(checked) => setData('is_leader', checked === true)}
-                                className="rounded border-tb-outline-variant text-tb-primary focus:ring-tb-primary/20"
-                            />
-                            <Label htmlFor="is_leader" className="cursor-pointer text-sm font-medium text-tb-on-surface">
-                                Pemimpin Marga
-                            </Label>
-                            <p className="ml-auto text-xs text-tb-on-surface-variant">
-                                Orang ini memimpin/melanjutkan marga dan masuk daftar silsilah.
-                            </p>
-                        </div>
-                        <InputError message={errors.is_leader} />
-
-                        <div className="grid gap-1.5">
-                            <Label
-                                htmlFor="image"
-                                className="text-tb-on-surface"
-                            >
-                                URL Foto
-                            </Label>
-                            <Input
-                                id="image"
-                                type="url"
-                                value={data.image}
-                                onChange={(e) =>
-                                    setData('image', e.target.value)
-                                }
-                                placeholder="https://..."
-                                className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
-                            />
-                            <InputError message={errors.image} />
-                        </div>
-
-                        <div className="grid gap-1.5">
-                            <Label htmlFor="bio" className="text-tb-on-surface">
-                                Biografi
-                            </Label>
-                            <textarea
-                                id="bio"
-                                value={data.bio}
-                                onChange={(e) => setData('bio', e.target.value)}
-                                rows={4}
-                                placeholder="Cerita singkat tentang anggota ini..."
-                                className="w-full rounded-md border border-tb-outline-variant bg-tb-surface-bright px-3 py-2 text-sm shadow-xs outline-none focus:border-tb-primary focus:ring-tb-primary/20 focus-visible:ring-[3px]"
-                            />
-                            <InputError message={errors.bio} />
-                        </div>
-                    </CardContent>
-                </Card>
-                </div>
-                {person ? (
-                    <SilsilahListCard
-                        lineage={person.lineage}
-                        selfId={person.id}
-                    />
-                ) : (
-                    <MargaLineageCard entries={margaLineage ?? []} />
-                )}
-                {selectedChild && selectedIndex != null && (
-                    <Card className="border-tb-outline-variant bg-tb-surface-bright">
-                        <CardHeader className="flex flex-row items-start justify-between gap-2">
-                            <div>
-                                <CardTitle className="font-display text-lg text-tb-on-surface">
-                                    Detail Silsilah
-                                </CardTitle>
-                                <CardDescription>
-                                    Keluarga dari baris nomor {selectedIndex + 1}.
-                                </CardDescription>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={clearSelection}
-                                aria-label="Tutup preview"
-                                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-tb-on-surface-variant transition-colors hover:bg-tb-surface-container hover:text-tb-on-surface"
-                            >
-                                <X className="h-4 w-4" />
-                            </button>
-                        </CardHeader>
-                        <CardContent className="grid gap-4">
-                            <div className="grid gap-1.5">
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-tb-on-surface-variant">
-                                    Orang Tua
-                                </p>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div className="rounded-lg border border-tb-outline-variant bg-tb-surface-container/60 px-3 py-2">
-                                        <p className="text-[11px] font-medium text-tb-on-surface-variant">Ayah</p>
-                                        <p className="text-sm font-semibold text-tb-on-surface">
-                                            {displayRowName(data.father?.name)}
-                                        </p>
-                                        <p className="text-xs text-tb-on-surface-variant">
-                                            {margaName(data.father?.marga_id ?? null, data.father?.new_marga)}
-                                        </p>
-                                    </div>
-                                    <div className="rounded-lg border border-tb-outline-variant bg-tb-surface-container/60 px-3 py-2">
-                                        <p className="text-[11px] font-medium text-tb-on-surface-variant">Ibu</p>
-                                        <p className="text-sm font-semibold text-tb-on-surface">
-                                            {displayRowName(data.mother?.name)}
-                                        </p>
-                                        <p className="text-xs text-tb-on-surface-variant">
-                                            {margaName(data.mother?.marga_id ?? null, data.mother?.new_marga)}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="grid gap-1.5">
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-tb-on-surface-variant">
-                                    Orang Ini
-                                </p>
-                                <div className="grid gap-3 rounded-lg border border-tb-primary/50 bg-tb-primary/5 p-3">
-                                    <div className="flex items-center justify-between gap-2">
-                                        <p className="min-w-0 flex-1 truncate font-display text-base font-semibold text-tb-on-surface">
-                                            {displayRowName(selectedChild.name)}
-                                        </p>
-                                        <span className="shrink-0 rounded-full bg-tb-primary px-2 py-0.5 text-[10px] font-bold text-white">
-                                            Anak ke {selectedIndex + 1}
-                                        </span>
-                                    </div>
-
-                                    {isFocusRow && (
-                                        <p className="text-[11px] font-medium italic text-tb-on-surface-variant">
-                                            Ini Anda — nama, jenis kelamin, marga, dan nomor silsilah diisi lewat Informasi Pribadi.
-                                        </p>
-                                    )}
-
-                                    <div className="grid gap-2.5">
-                                        <div className="grid gap-1">
-                                            <Label className="text-tb-on-surface">Nama</Label>
-                                            {isFocusRow ? (
-                                                <div className="flex min-h-9 items-center rounded-md border border-tb-outline-variant bg-tb-surface-container px-3 text-sm font-medium text-tb-on-surface">
-                                                    {data.name || '—'}
-                                                </div>
-                                            ) : (
-                                                <NameCombobox
-                                                    value={selectedChild.name}
-                                                    onChange={(value) => setChild(selectedIndex, 'name', value)}
-                                                    suggestions={nameSuggestions}
-                                                    placeholder="Nama"
-                                                    allowNa
-                                                />
-                                            )}
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-2.5">
-                                            <div className="grid gap-1">
-                                                <Label className="text-tb-on-surface">Jenis Kelamin</Label>
-                                                {isFocusRow ? (
-                                                    <div className="flex min-h-9 items-center rounded-md border border-tb-outline-variant bg-tb-surface-container px-3 text-sm text-tb-on-surface">
-                                                        {data.gender || '—'}
-                                                    </div>
-                                                ) : (
-                                                    <Select
-                                                        value={selectedChild.gender || ''}
-                                                        onValueChange={(value) => setChild(selectedIndex, 'gender', value)}
-                                                    >
-                                                        <SelectTrigger className="w-full border-tb-outline-variant bg-tb-surface-bright">
-                                                            <SelectValue placeholder="L/P" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="L">L</SelectItem>
-                                                            <SelectItem value="P">P</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                )}
-                                            </div>
-                                            <div className="grid gap-1">
-                                                <Label className="text-tb-on-surface">Nomor Silsilah</Label>
-                                                {isFocusRow ? (
-                                                    <div className="flex min-h-9 items-center rounded-md border border-tb-outline-variant bg-tb-surface-container px-3 text-sm text-tb-on-surface">
-                                                        {data.nomor || '—'}
-                                                    </div>
-                                                ) : (
-                                                    <Input
-                                                        value={selectedChild.nomor ?? ''}
-                                                        onChange={(e) => setChild(selectedIndex, 'nomor', e.target.value)}
-                                                        placeholder="otomatis"
-                                                        className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
-                                                    />
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        <div className="grid gap-1">
-                                            <Label className="text-tb-on-surface">Marga</Label>
-                                            {isFocusRow ? (
-                                                <div className="flex min-h-9 items-center rounded-md border border-tb-outline-variant bg-tb-surface-container px-3 text-sm text-tb-on-surface">
-                                                    {margaName(data.marga_id, data.new_marga)}
-                                                </div>
-                                            ) : (
-                                                <MargaField
-                                                    value={selectedChild.marga_id ?? null}
-                                                    newMarga={selectedChild.new_marga ?? ''}
-                                                    onValue={(value) => setChildMarga(selectedIndex, value)}
-                                                    onNewMarga={(value) => setChildNewMarga(selectedIndex, value)}
-                                                    margas={margas}
-                                                    placeholder="Marga"
-                                                    disabled={lockedMarga !== null}
-                                                />
-                                            )}
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-2.5">
-                                            <div className="grid gap-1">
-                                                <Label className="text-tb-on-surface">Pasangan</Label>
-                                                <Input
-                                                    value={selectedChild.spouse}
-                                                    onChange={(e) => setChild(selectedIndex, 'spouse', e.target.value)}
-                                                    placeholder="Nama pasangan"
-                                                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
-                                                />
-                                            </div>
-                                            <div className="grid gap-1">
-                                                <Label className="text-tb-on-surface">Marga Pasangan</Label>
-                                                <Input
-                                                    value={selectedChild.spouse_marga}
-                                                    onChange={(e) => setChild(selectedIndex, 'spouse_marga', e.target.value)}
-                                                    placeholder="Marga pasangan"
-                                                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="grid gap-1.5">
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-tb-on-surface-variant">
-                                    Saudara
-                                </p>
-                                {data.children.length === 0 ? (
-                                    <p className="text-sm italic text-tb-on-surface-variant">Belum ada saudara.</p>
-                                ) : (
-                                    <div className="flex flex-wrap gap-1.5">
-                                        {data.children.map((sibling, index) => (
-                                            <button
-                                                key={sibling.id ?? `sibling-${index}`}
-                                                type="button"
-                                                onClick={() => selectRow(index)}
-                                                className={cn(
-                                                    'max-w-full rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
-                                                    index === selectedIndex
-                                                        ? 'border-tb-primary bg-tb-primary text-white'
-                                                        : 'border-tb-outline-variant bg-tb-surface-container/60 text-tb-on-surface hover:border-tb-primary',
-                                                )}
-                                            >
-                                                <span className="truncate">
-                                                    {isNameFilled(sibling.name ?? '')
-                                                        ? sibling.name
-                                                        : `Anak ke ${index + 1}`}
-                                                </span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        </CardContent>
-                    </Card>
-                )}
-            </div>
-
-            <Card className="border-tb-outline-variant bg-tb-surface-bright">
-                <CardHeader>
-                    <CardTitle className="font-display text-lg text-tb-on-surface">
-                        Orang Tua
-                    </CardTitle>
-                    <CardDescription>
-                        Ayah dan ibu dari anak-anak yang dicatat di bawah.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-5 lg:grid-cols-2">
-                    {renderParentBlock('father', 'Ayah', '1950', '2020')}
-                    {renderParentBlock('mother', 'Ibu', '1955', '2025', false)}
-                </CardContent>
-            </Card>
-
-            <Card className="border-tb-outline-variant bg-tb-surface-bright">
-                <CardHeader className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <CardTitle className="font-display text-lg text-tb-on-surface">
-                            Daftar Saudara
-                        </CardTitle>
-                        <CardDescription>
-                            Total bersaudara: {siblingCount} — menambah total otomatis menambah baris di bawah.
-                            Baris tanpa nomor silsilah tidak tampil di "List Silsilah" sampai disimpan (nomor kosong diisi otomatis).
-                        </CardDescription>
-                    </div>
-                    <div className="text-xs text-tb-on-surface-variant">
-                        Urut 01, 02, …
-                    </div>
-                </CardHeader>
-                <CardContent className="grid gap-3">
-                    {data.children.map((child, index) => {
-                        const focused =
-                            person?.id != null
-                                ? child.id === person.id
-                                : index === birthOrder - 1;
-
-                        return (
-                            <div
-                                key={child.id ?? `new-${index}`}
-                                className={cn(
-                                    'grid gap-3 rounded-lg border p-3',
-                                    focused
-                                        ? 'border-tb-primary/50 bg-tb-primary/5'
-                                        : selectedIndex === index
-                                          ? 'border-tb-primary bg-tb-primary/5'
-                                          : 'border-tb-outline-variant bg-tb-surface-bright',
-                                )}
-                            >
-                                <div className="flex items-center justify-between gap-2">
-                                    <span className="flex items-center gap-1.5">
-                                        <span
-                                            className={cn(
-                                                'inline-flex w-fit items-center rounded-full px-2 py-0.5 text-xs font-semibold',
-                                                focused
-                                                    ? 'bg-tb-primary text-white'
-                                                    : 'bg-tb-surface-container text-tb-on-surface-variant',
-                                            )}
-                                        >
-                                            Urut{' '}
-                                            {String(index + 1).padStart(2, '0')}
-                                        </span>
-                                        {isGapRow(child) && (
-                                            <span className="inline-flex w-fit items-center rounded-md bg-tb-surface-container px-1.5 py-0.5 text-[10px] font-semibold text-tb-on-surface-variant">
-                                                N/A
-                                            </span>
-                                        )}
-                                    </span>
-                                    <span className="flex items-center gap-2">
-                                        {focused && (
-                                            <span className="text-[11px] font-medium text-tb-primary">
-                                                (Anda sedang diedit)
-                                            </span>
-                                        )}
-                                        <button
-                                            type="button"
-                                            onClick={() => selectRow(index)}
-                                            aria-label={`Lihat detail ${child.name || `baris ${index + 1}`}`}
-                                            title="Lihat detail"
-                                            className={cn(
-                                                'inline-flex h-6 w-6 items-center justify-center rounded-full transition-colors',
-                                                selectedIndex === index
-                                                    ? 'bg-tb-primary text-white'
-                                                    : 'text-tb-outline hover:bg-tb-surface-container hover:text-tb-on-surface',
-                                            )}
-                                        >
-                                            <Eye className="h-3.5 w-3.5" />
-                                        </button>
-                                        {!child.id && (
-                                            <button
-                                                type="button"
-                                                onClick={() => removeChild(index)}
-                                                aria-label="Hapus baris"
-                                                className="inline-flex h-6 w-6 items-center justify-center rounded-full text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-950"
-                                            >
-                                                <Trash2 className="h-3.5 w-3.5" />
-                                            </button>
-                                        )}
-                                    </span>
-                                </div>
-
-                                <div className="grid gap-3 sm:grid-cols-2">
+                <form
+                    onSubmit={submit}
+                    className={cn(
+                        'grid gap-6',
+                        selectedChild ? 'min-w-[1240px]' : 'max-w-4xl',
+                    )}
+                >
+                    <div
+                        className={cn(
+                            'grid gap-6',
+                            selectedChild
+                                ? 'lg:grid-cols-[1fr_320px_320px]'
+                                : 'lg:grid-cols-[1fr_320px]',
+                        )}
+                    >
+                        <div className="grid gap-6">
+                            <Card className="border-tb-outline-variant bg-tb-surface-bright">
+                                <CardHeader>
+                                    <CardTitle className="font-display text-lg text-tb-on-surface">
+                                        Informasi Pribadi
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Data dasar anggota yang sedang dicatat
+                                        dalam jejak keluarga.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="grid gap-5">
                                     <div className="grid gap-1.5">
-                                        <Label>
-                                            {focused
-                                                ? 'Nama (ini Anda)'
-                                                : 'Nama'}
+                                        <Label
+                                            htmlFor="name"
+                                            className="text-tb-on-surface"
+                                        >
+                                            Nama Lengkap{' '}
+                                            <span className="text-red-600">
+                                                *
+                                            </span>
                                         </Label>
-                                        {focused ? (
-                                            <div className="flex min-h-9 items-center rounded-md border border-tb-primary/40 bg-tb-surface-container px-3 text-sm font-medium text-tb-on-surface">
-                                                {data.name || '—'}
-                                            </div>
-                                        ) : (
-                                            <NameCombobox
-                                                value={child.name}
-                                                onChange={(value) =>
-                                                    setChild(
-                                                        index,
-                                                        'name',
-                                                        value,
+                                        <Input
+                                            id="name"
+                                            value={data.name}
+                                            onChange={(e) =>
+                                                setData('name', e.target.value)
+                                            }
+                                            placeholder="Mis. Ompu Sitorus"
+                                            className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                        />
+                                        <InputError message={errors.name} />
+                                    </div>
+
+                                    <div className="grid gap-5 sm:grid-cols-3">
+                                        <div className="grid gap-1.5">
+                                            <Label
+                                                htmlFor="alias"
+                                                className="text-tb-on-surface"
+                                            >
+                                                Alias / Gelar
+                                            </Label>
+                                            <Input
+                                                id="alias"
+                                                value={data.alias}
+                                                onChange={(e) =>
+                                                    setData(
+                                                        'alias',
+                                                        e.target.value,
                                                     )
                                                 }
-                                                suggestions={nameSuggestions}
-                                                placeholder={isGapRow(child) ? 'N/A' : 'Nama saudara'}
-                                                allowNa
+                                                placeholder="Tuan Sorba Dibanua"
+                                                className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                             />
-                                        )}
-                                    </div>
-                                    <div className="grid gap-1.5">
-                                        <Label>Jenis Kelamin</Label>
-                                        {focused ? (
-                                            <div className="flex min-h-9 items-center rounded-md border border-tb-primary/40 bg-tb-surface-container px-3 text-sm text-tb-on-surface">
-                                                {data.gender || '—'}
-                                            </div>
-                                        ) : (
+                                            <InputError
+                                                message={errors.alias}
+                                            />
+                                        </div>
+                                        <div className="grid gap-1.5">
+                                            <Label className="text-tb-on-surface">
+                                                Jenis Kelamin
+                                            </Label>
                                             <Select
-                                                value={child.gender || ''}
+                                                value={data.gender || ''}
                                                 onValueChange={(value) =>
-                                                    setChild(
-                                                        index,
-                                                        'gender',
-                                                        value,
-                                                    )
+                                                    setData('gender', value)
                                                 }
                                             >
                                                 <SelectTrigger className="w-full border-tb-outline-variant bg-tb-surface-bright">
-                                                    <SelectValue placeholder="L/P" />
+                                                    <SelectValue placeholder="Pilih" />
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="L">
-                                                        L
+                                                        Laki-laki (L)
                                                     </SelectItem>
                                                     <SelectItem value="P">
-                                                        P
+                                                        Perempuan (P)
                                                     </SelectItem>
                                                 </SelectContent>
                                             </Select>
-                                        )}
+                                            <InputError
+                                                message={errors.gender}
+                                            />
+                                        </div>
+                                        <div className="grid gap-1.5">
+                                            <Label className="text-tb-on-surface">
+                                                Marga
+                                            </Label>
+                                            <MargaField
+                                                value={data.marga_id}
+                                                newMarga={data.new_marga}
+                                                onValue={(value) =>
+                                                    setData('marga_id', value)
+                                                }
+                                                onNewMarga={(value) =>
+                                                    setData('new_marga', value)
+                                                }
+                                                margas={margas}
+                                                disabled={lockedMarga !== null}
+                                            />
+                                            <InputError
+                                                message={errors.marga_id}
+                                            />
+                                        </div>
                                     </div>
-                                </div>
 
-                                <div className="grid gap-3 sm:grid-cols-2">
-                                    <div className="grid gap-1.5">
-                                        <Label>Nomor Silsilah</Label>
-                                        {focused ? (
-                                            <div className="flex min-h-9 items-center rounded-md border border-tb-primary/40 bg-tb-surface-container px-3 text-sm text-tb-on-surface">
-                                                {data.nomor || '—'}
-                                            </div>
-                                        ) : (
+                                    <div className="grid gap-5 sm:grid-cols-1">
+                                        <div className="grid gap-1.5">
+                                            <Label
+                                                htmlFor="nomor"
+                                                className="text-tb-on-surface"
+                                            >
+                                                Nomor Silsilah
+                                            </Label>
                                             <Input
-                                                value={child.nomor ?? ''}
+                                                id="nomor"
+                                                value={data.nomor}
                                                 onChange={(e) =>
-                                                    setChild(
-                                                        index,
+                                                    setData(
                                                         'nomor',
                                                         e.target.value,
                                                     )
@@ -1652,105 +1526,794 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed,
                                                 placeholder="otomatis (mis. 1.2.1)"
                                                 className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                             />
-                                        )}
-                                        <p className="text-xs text-tb-on-surface-variant">
-                                            Kosongkan untuk nomor otomatis.
-                                        </p>
-                                        <InputError message={errors[`children.${index}.nomor`]} />
+                                            <p className="text-xs text-tb-on-surface-variant">
+                                                Nomor silsilah untuk list
+                                                silsilah.
+                                            </p>
+                                            {nomorConflict && (
+                                                <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                                                    Nomor silsilah &ldquo;
+                                                    {nomorConflict.nomor}&rdquo;
+                                                    sudah dipakai oleh{' '}
+                                                    {nomorConflict.name}.
+                                                </p>
+                                            )}
+                                            <InputError
+                                                message={errors.nomor}
+                                            />
+                                        </div>
                                     </div>
-                                    <div className="grid gap-1.5">
-                                        <Label>Marga</Label>
-                                        {focused ? (
-                                            <div className="flex min-h-9 items-center rounded-md border border-tb-primary/40 bg-tb-surface-container px-3 text-sm text-tb-on-surface">
-                                                {margas.find(
-                                                    (marga) =>
-                                                        marga.id ===
-                                                        data.marga_id,
-                                                )?.name ??
-                                                    (data.new_marga || '—')}
-                                            </div>
-                                        ) : (
-                                            <MargaField
-                                                value={child.marga_id ?? null}
-                                                newMarga={child.new_marga ?? ''}
-                                                onValue={(value) =>
-                                                    setChildMarga(index, value)
-                                                }
-                                                onNewMarga={(value) =>
-                                                    setChildNewMarga(
-                                                        index,
-                                                        value,
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="grid gap-1.5">
+                                            <Label
+                                                htmlFor="birth_year"
+                                                className="text-tb-on-surface"
+                                            >
+                                                Tahun Lahir
+                                            </Label>
+                                            <Input
+                                                id="birth_year"
+                                                value={data.birth_year}
+                                                onChange={(e) =>
+                                                    setData(
+                                                        'birth_year',
+                                                        e.target.value,
                                                     )
                                                 }
-                                                margas={margas}
-                                                placeholder="Marga saudara"
-                                                disabled={lockedMarga !== null}
+                                                placeholder="1920"
+                                                maxLength={4}
+                                                className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                             />
-                                        )}
-                                    </div>
-                                    <div className="grid gap-1.5">
-                                        <Label>Pasangan</Label>
-                                        <Input
-                                            value={child.spouse}
-                                            onChange={(e) =>
-                                                setChild(
-                                                    index,
-                                                    'spouse',
-                                                    e.target.value,
-                                                )
-                                            }
-                                            placeholder="Nama pasangan"
-                                            className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
-                                        />
-                                    </div>
-                                    <div className="grid gap-1.5">
-                                        <Label>Marga/Suku Lain</Label>
-                                        <Input
-                                            value={child.spouse_marga}
-                                            onChange={(e) =>
-                                                setChild(
-                                                    index,
-                                                    'spouse_marga',
-                                                    e.target.value,
-                                                )
-                                            }
-                                            placeholder="Marga pasangan"
-                                            className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
-                                        />
+                                            <InputError
+                                                message={errors.birth_year}
+                                            />
+                                        </div>
+                                        <div className="grid gap-1.5">
+                                            <Label
+                                                htmlFor="death_year"
+                                                className="text-tb-on-surface"
+                                            >
+                                                Tahun Wafat
+                                            </Label>
+                                            <Input
+                                                id="death_year"
+                                                value={data.death_year}
+                                                onChange={(e) =>
+                                                    setData(
+                                                        'death_year',
+                                                        e.target.value,
+                                                    )
+                                                }
+                                                placeholder="2001"
+                                                maxLength={4}
+                                                className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                            />
+                                            <InputError
+                                                message={errors.death_year}
+                                            />
                                     </div>
                                 </div>
+
+                                <div className="grid gap-1.5">
+                                        <Label
+                                            htmlFor="image"
+                                            className="text-tb-on-surface"
+                                        >
+                                            URL Foto
+                                        </Label>
+                                        <Input
+                                            id="image"
+                                            type="url"
+                                            value={data.image}
+                                            onChange={(e) =>
+                                                setData('image', e.target.value)
+                                            }
+                                            placeholder="https://..."
+                                            className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                        />
+                                        <InputError message={errors.image} />
+                                    </div>
+
+                                    <div className="grid gap-1.5">
+                                        <Label
+                                            htmlFor="bio"
+                                            className="text-tb-on-surface"
+                                        >
+                                            Biografi
+                                        </Label>
+                                        <textarea
+                                            id="bio"
+                                            value={data.bio}
+                                            onChange={(e) =>
+                                                setData('bio', e.target.value)
+                                            }
+                                            rows={4}
+                                            placeholder="Cerita singkat tentang anggota ini..."
+                                            className="w-full rounded-md border border-tb-outline-variant bg-tb-surface-bright px-3 py-2 text-sm shadow-xs outline-none focus:border-tb-primary focus:ring-tb-primary/20 focus-visible:ring-[3px]"
+                                        />
+                                        <InputError message={errors.bio} />
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+                        {person ? (
+                            <SilsilahListCard
+                                lineage={person.lineage}
+                                selfId={person.id}
+                            />
+                        ) : (
+                            <MargaLineageCard entries={liveLineage} />
+                        )}
+                        {selectedChild && selectedIndex != null && (
+                            <Card className="border-tb-outline-variant bg-tb-surface-bright">
+                                <CardHeader className="flex flex-row items-start justify-between gap-2">
+                                    <div>
+                                        <CardTitle className="font-display text-lg text-tb-on-surface">
+                                            Detail Silsilah
+                                        </CardTitle>
+                                        <CardDescription>
+                                            Keluarga dari baris nomor{' '}
+                                            {selectedIndex + 1}.
+                                        </CardDescription>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={clearSelection}
+                                        aria-label="Tutup preview"
+                                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-tb-on-surface-variant transition-colors hover:bg-tb-surface-container hover:text-tb-on-surface"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                </CardHeader>
+                                <CardContent className="grid gap-4">
+                                    <div className="grid gap-1.5">
+                                        <p className="text-[11px] font-semibold tracking-[0.14em] text-tb-on-surface-variant uppercase">
+                                            Orang Tua
+                                        </p>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div className="rounded-lg border border-tb-outline-variant bg-tb-surface-container/60 px-3 py-2">
+                                                <p className="text-[11px] font-medium text-tb-on-surface-variant">
+                                                    Ayah
+                                                </p>
+                                                <p className="text-sm font-semibold text-tb-on-surface">
+                                                    {displayRowName(
+                                                        data.father?.name,
+                                                    )}
+                                                </p>
+                                                <p className="text-xs text-tb-on-surface-variant">
+                                                    {margaName(
+                                                        data.father?.marga_id ??
+                                                            null,
+                                                        data.father?.new_marga,
+                                                    )}
+                                                </p>
+                                            </div>
+                                            <div className="rounded-lg border border-tb-outline-variant bg-tb-surface-container/60 px-3 py-2">
+                                                <p className="text-[11px] font-medium text-tb-on-surface-variant">
+                                                    Ibu
+                                                </p>
+                                                <p className="text-sm font-semibold text-tb-on-surface">
+                                                    {displayRowName(
+                                                        data.mother?.name,
+                                                    )}
+                                                </p>
+                                                <p className="text-xs text-tb-on-surface-variant">
+                                                    {margaName(
+                                                        data.mother?.marga_id ??
+                                                            null,
+                                                        data.mother?.new_marga,
+                                                    )}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid gap-1.5">
+                                        <p className="text-[11px] font-semibold tracking-[0.14em] text-tb-on-surface-variant uppercase">
+                                            Orang Ini
+                                        </p>
+                                        <div className="grid gap-3 rounded-lg border border-tb-primary/50 bg-tb-primary/5 p-3">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <p className="min-w-0 flex-1 truncate font-display text-base font-semibold text-tb-on-surface">
+                                                    {displayRowName(
+                                                        selectedChild.name,
+                                                    )}
+                                                </p>
+                                                <span className="shrink-0 rounded-full bg-tb-primary px-2 py-0.5 text-[10px] font-bold text-white">
+                                                    Anak ke {selectedIndex + 1}
+                                                </span>
+                                            </div>
+
+                                            {isFocusRow && (
+                                                <p className="text-[11px] font-medium text-tb-on-surface-variant italic">
+                                                    Ini Anda — nama, jenis
+                                                    kelamin, marga, dan nomor
+                                                    silsilah diisi lewat
+                                                    Informasi Pribadi.
+                                                </p>
+                                            )}
+
+                                            <div className="grid gap-2.5">
+                                                <div className="grid gap-1">
+                                                    <Label className="text-tb-on-surface">
+                                                        Nama
+                                                    </Label>
+                                                    {isFocusRow ? (
+                                                        <div className="flex min-h-9 items-center rounded-md border border-tb-outline-variant bg-tb-surface-container px-3 text-sm font-medium text-tb-on-surface">
+                                                            {data.name || '—'}
+                                                        </div>
+                                                    ) : (
+                                                        <NameCombobox
+                                                            value={
+                                                                selectedChild.name
+                                                            }
+                                                            onChange={(value) =>
+                                                                setChild(
+                                                                    selectedIndex,
+                                                                    'name',
+                                                                    value,
+                                                                )
+                                                            }
+                                                            suggestions={
+                                                                nameSuggestions
+                                                            }
+                                                            placeholder="Nama"
+                                                            allowNa
+                                                        />
+                                                    )}
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-2.5">
+                                                    <div className="grid gap-1">
+                                                        <Label className="text-tb-on-surface">
+                                                            Jenis Kelamin
+                                                        </Label>
+                                                        {isFocusRow ? (
+                                                            <div className="flex min-h-9 items-center rounded-md border border-tb-outline-variant bg-tb-surface-container px-3 text-sm text-tb-on-surface">
+                                                                {data.gender ||
+                                                                    '—'}
+                                                            </div>
+                                                        ) : (
+                                                            <Select
+                                                                value={
+                                                                    selectedChild.gender ||
+                                                                    ''
+                                                                }
+                                                                onValueChange={(
+                                                                    value,
+                                                                ) =>
+                                                                    setChild(
+                                                                        selectedIndex,
+                                                                        'gender',
+                                                                        value,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <SelectTrigger className="w-full border-tb-outline-variant bg-tb-surface-bright">
+                                                                    <SelectValue placeholder="L/P" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="L">
+                                                                        L
+                                                                    </SelectItem>
+                                                                    <SelectItem value="P">
+                                                                        P
+                                                                    </SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        )}
+                                                    </div>
+                                                    <div className="grid gap-1">
+                                                        <Label className="text-tb-on-surface">
+                                                            Nomor Silsilah
+                                                        </Label>
+                                                        {isFocusRow ? (
+                                                            <div className="flex min-h-9 items-center rounded-md border border-tb-outline-variant bg-tb-surface-container px-3 text-sm text-tb-on-surface">
+                                                                {data.nomor ||
+                                                                    '—'}
+                                                            </div>
+                                                        ) : (
+                                                            <Input
+                                                                value={
+                                                                    selectedChild.nomor ??
+                                                                    ''
+                                                                }
+                                                                onChange={(e) =>
+                                                                    setChild(
+                                                                        selectedIndex,
+                                                                        'nomor',
+                                                                        e.target
+                                                                            .value,
+                                                                    )
+                                                                }
+                                                                placeholder="otomatis"
+                                                                className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                                            />
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid gap-1">
+                                                    <Label className="text-tb-on-surface">
+                                                        Marga
+                                                    </Label>
+                                                    {isFocusRow ? (
+                                                        <div className="flex min-h-9 items-center rounded-md border border-tb-outline-variant bg-tb-surface-container px-3 text-sm text-tb-on-surface">
+                                                            {margaName(
+                                                                data.marga_id,
+                                                                data.new_marga,
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <MargaField
+                                                            value={
+                                                                selectedChild.marga_id ??
+                                                                null
+                                                            }
+                                                            newMarga={
+                                                                selectedChild.new_marga ??
+                                                                ''
+                                                            }
+                                                            onValue={(value) =>
+                                                                setChildMarga(
+                                                                    selectedIndex,
+                                                                    value,
+                                                                )
+                                                            }
+                                                            onNewMarga={(
+                                                                value,
+                                                            ) =>
+                                                                setChildNewMarga(
+                                                                    selectedIndex,
+                                                                    value,
+                                                                )
+                                                            }
+                                                            margas={margas}
+                                                            placeholder="Marga"
+                                                            disabled={
+                                                                lockedMarga !==
+                                                                null
+                                                            }
+                                                        />
+                                                    )}
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-2.5">
+                                                    <div className="grid gap-1">
+                                                        <Label className="text-tb-on-surface">
+                                                            Pasangan
+                                                        </Label>
+                                                        <Input
+                                                            value={
+                                                                selectedChild.spouse
+                                                            }
+                                                            onChange={(e) =>
+                                                                setChild(
+                                                                    selectedIndex,
+                                                                    'spouse',
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            placeholder="Nama pasangan"
+                                                            className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                                        />
+                                                    </div>
+                                                    <div className="grid gap-1">
+                                                        <Label className="text-tb-on-surface">
+                                                            Marga Pasangan
+                                                        </Label>
+                                                        <Input
+                                                            value={
+                                                                selectedChild.spouse_marga
+                                                            }
+                                                            onChange={(e) =>
+                                                                setChild(
+                                                                    selectedIndex,
+                                                                    'spouse_marga',
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            placeholder="Marga pasangan"
+                                                            className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid gap-1.5">
+                                        <p className="text-[11px] font-semibold tracking-[0.14em] text-tb-on-surface-variant uppercase">
+                                            Saudara
+                                        </p>
+                                        {data.children.length === 0 ? (
+                                            <p className="text-sm text-tb-on-surface-variant italic">
+                                                Belum ada saudara.
+                                            </p>
+                                        ) : (
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {data.children.map(
+                                                    (sibling, index) => (
+                                                        <button
+                                                            key={
+                                                                sibling.id ??
+                                                                `sibling-${index}`
+                                                            }
+                                                            type="button"
+                                                            onClick={() =>
+                                                                selectRow(index)
+                                                            }
+                                                            className={cn(
+                                                                'max-w-full rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
+                                                                index ===
+                                                                    selectedIndex
+                                                                    ? 'border-tb-primary bg-tb-primary text-white'
+                                                                    : 'border-tb-outline-variant bg-tb-surface-container/60 text-tb-on-surface hover:border-tb-primary',
+                                                            )}
+                                                        >
+                                                            <span className="truncate">
+                                                                {isNameFilled(
+                                                                    sibling.name ??
+                                                                        '',
+                                                                )
+                                                                    ? sibling.name
+                                                                    : `Anak ke ${index + 1}`}
+                                                            </span>
+                                                        </button>
+                                                    ),
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
+                    </div>
+
+                    <Card className="border-tb-outline-variant bg-tb-surface-bright">
+                        <CardHeader>
+                            <CardTitle className="font-display text-lg text-tb-on-surface">
+                                Orang Tua
+                            </CardTitle>
+                            <CardDescription>
+                                Ayah dan ibu dari anak-anak yang dicatat di
+                                bawah.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="grid gap-5 lg:grid-cols-2">
+                            {renderParentBlock(
+                                'father',
+                                'Ayah',
+                                '1950',
+                                '2020',
+                            )}
+                            {renderParentBlock(
+                                'mother',
+                                'Ibu',
+                                '1955',
+                                '2025',
+                                false,
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border-tb-outline-variant bg-tb-surface-bright">
+                        <CardHeader className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <CardTitle className="font-display text-lg text-tb-on-surface">
+                                    Daftar Saudara
+                                </CardTitle>
+                                <CardDescription>
+                                    Total bersaudara: {siblingCount} — menambah
+                                    total otomatis menambah baris di bawah.
+                                    Urutan saudara mengikuti urutan baris
+                                    ("Urut"); nomor silsilah terpisah dan
+                                    dihitung otomatis saat disimpan.
+                                </CardDescription>
                             </div>
-                        );
-                    })}
+                            <div className="text-xs text-tb-on-surface-variant">
+                                Urut 01, 02, …
+                            </div>
+                        </CardHeader>
+                        <CardContent className="grid gap-3">
+                            {data.children.map((child, index) => {
+                                const focused =
+                                    person?.id != null
+                                        ? child.id === person.id
+                                        : index === birthOrder - 1;
 
-                    <Button
-                        type="button"
-                        variant="outline"
-                        onClick={addChild}
-                        className="mt-1 w-full border-dashed border-tb-outline-variant text-tb-primary hover:bg-tb-primary/5"
-                    >
-                        <Plus className="size-4" /> Tambah Saudara
-                    </Button>
-                </CardContent>
-            </Card>
+                                return (
+                                    <div
+                                        key={child.id ?? `new-${index}`}
+                                        className={cn(
+                                            'grid gap-3 rounded-lg border p-3',
+                                            focused
+                                                ? 'border-tb-primary/50 bg-tb-primary/5'
+                                                : selectedIndex === index
+                                                  ? 'border-tb-primary bg-tb-primary/5'
+                                                  : 'border-tb-outline-variant bg-tb-surface-bright',
+                                        )}
+                                    >
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="flex items-center gap-1.5">
+                                                <span
+                                                    className={cn(
+                                                        'inline-flex w-fit items-center rounded-full px-2 py-0.5 text-xs font-semibold',
+                                                        focused
+                                                            ? 'bg-tb-primary text-white'
+                                                            : 'bg-tb-surface-container text-tb-on-surface-variant',
+                                                    )}
+                                                >
+                                                    Urut{' '}
+                                                    {String(index + 1).padStart(
+                                                        2,
+                                                        '0',
+                                                    )}
+                                                </span>
+                                                {isGapRow(child) && (
+                                                    <span className="inline-flex w-fit items-center rounded-md bg-tb-surface-container px-1.5 py-0.5 text-[10px] font-semibold text-tb-on-surface-variant">
+                                                        N/A
+                                                    </span>
+                                                )}
+                                            </span>
+                                            <span className="flex items-center gap-2">
+                                                {focused && (
+                                                    <span className="text-[11px] font-medium text-tb-primary">
+                                                        (Anda sedang diedit)
+                                                    </span>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        selectRow(index)
+                                                    }
+                                                    aria-label={`Lihat detail ${child.name || `baris ${index + 1}`}`}
+                                                    title="Lihat detail"
+                                                    className={cn(
+                                                        'inline-flex h-6 w-6 items-center justify-center rounded-full transition-colors',
+                                                        selectedIndex === index
+                                                            ? 'bg-tb-primary text-white'
+                                                            : 'text-tb-outline hover:bg-tb-surface-container hover:text-tb-on-surface',
+                                                    )}
+                                                >
+                                                    <Eye className="h-3.5 w-3.5" />
+                                                </button>
+                                                {!child.id && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            removeChild(index)
+                                                        }
+                                                        aria-label="Hapus baris"
+                                                        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-950"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </button>
+                                                )}
+                                            </span>
+                                        </div>
 
-            <div className="flex items-center gap-3 pb-6">
-                <Button
-                    type="submit"
-                    disabled={processing}
-                    className="rounded-full bg-tb-primary px-6 hover:bg-tb-primary-light"
-                >
-                    {processing
-                        ? 'Menyimpan...'
-                        : person
-                          ? 'Simpan Perubahan'
-                          : 'Tambah Keluarga'}
-                </Button>
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                            <div className="grid gap-1.5">
+                                                <Label>
+                                                    {focused
+                                                        ? 'Nama (ini Anda)'
+                                                        : 'Nama'}
+                                                </Label>
+                                                {focused ? (
+                                                    <div className="flex min-h-9 items-center rounded-md border border-tb-primary/40 bg-tb-surface-container px-3 text-sm font-medium text-tb-on-surface">
+                                                        {data.name || '—'}
+                                                    </div>
+                                                ) : (
+                                                    <NameCombobox
+                                                        value={child.name}
+                                                        onChange={(value) =>
+                                                            setChild(
+                                                                index,
+                                                                'name',
+                                                                value,
+                                                            )
+                                                        }
+                                                        suggestions={
+                                                            nameSuggestions
+                                                        }
+                                                        placeholder={
+                                                            isGapRow(child)
+                                                                ? 'N/A'
+                                                                : 'Nama saudara'
+                                                        }
+                                                        allowNa
+                                                    />
+                                                )}
+                                            </div>
+                                            <div className="grid gap-1.5">
+                                                <Label>Jenis Kelamin</Label>
+                                                {focused ? (
+                                                    <div className="flex min-h-9 items-center rounded-md border border-tb-primary/40 bg-tb-surface-container px-3 text-sm text-tb-on-surface">
+                                                        {data.gender || '—'}
+                                                    </div>
+                                                ) : (
+                                                    <Select
+                                                        value={
+                                                            child.gender || ''
+                                                        }
+                                                        onValueChange={(
+                                                            value,
+                                                        ) =>
+                                                            setChild(
+                                                                index,
+                                                                'gender',
+                                                                value,
+                                                            )
+                                                        }
+                                                    >
+                                                        <SelectTrigger className="w-full border-tb-outline-variant bg-tb-surface-bright">
+                                                            <SelectValue placeholder="L/P" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="L">
+                                                                Laki-Laki
+                                                            </SelectItem>
+                                                            <SelectItem value="P">
+                                                                Perempuan
+                                                            </SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                            <div className="grid gap-1.5">
+                                                <Label>Nomor Saudara</Label>
+                                                {focused ? (
+                                                    <div className="flex min-h-9 items-center rounded-md border border-tb-primary/40 bg-tb-surface-container px-3 text-sm text-tb-on-surface">
+                                                        {data.nomor || '—'}
+                                                    </div>
+                                                ) : (
+                                                    <Input
+                                                        value={
+                                                            child.nomor ||
+                                                            siblingAutoNomor(
+                                                                index,
+                                                            )
+                                                        }
+                                                        onChange={(e) =>
+                                                            setChild(
+                                                                index,
+                                                                'nomor',
+                                                                e.target.value,
+                                                            )
+                                                        }
+                                                        placeholder="otomatis (mis. 1.2.1)"
+                                                        className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                                    />
+                                                )}
+                                                <p className="text-xs text-tb-on-surface-variant">
+                                                    Nomor saudara terisi
+                                                    otomatis. Ketik untuk
+                                                    mengubah, kosongkan untuk
+                                                    kembali ke nomor otomatis.
+                                                </p>
+                                                <InputError
+                                                    message={
+                                                        errors[
+                                                            `children.${index}.nomor`
+                                                        ]
+                                                    }
+                                                />
+                                            </div>
+                                            <div className="grid gap-1.5">
+                                                <Label>Marga</Label>
+                                                {focused ? (
+                                                    <div className="flex min-h-9 items-center rounded-md border border-tb-primary/40 bg-tb-surface-container px-3 text-sm text-tb-on-surface">
+                                                        {margas.find(
+                                                            (marga) =>
+                                                                marga.id ===
+                                                                data.marga_id,
+                                                        )?.name ??
+                                                            (data.new_marga ||
+                                                                '—')}
+                                                    </div>
+                                                ) : (
+                                                    <MargaField
+                                                        value={
+                                                            child.marga_id ??
+                                                            null
+                                                        }
+                                                        newMarga={
+                                                            child.new_marga ??
+                                                            ''
+                                                        }
+                                                        onValue={(value) =>
+                                                            setChildMarga(
+                                                                index,
+                                                                value,
+                                                            )
+                                                        }
+                                                        onNewMarga={(value) =>
+                                                            setChildNewMarga(
+                                                                index,
+                                                                value,
+                                                            )
+                                                        }
+                                                        margas={margas}
+                                                        placeholder="Marga saudara"
+                                                        disabled={
+                                                            lockedMarga !== null
+                                                        }
+                                                    />
+                                                )}
+                                            </div>
+                                            <div className="grid gap-1.5">
+                                                <Label>Pasangan</Label>
+                                                <Input
+                                                    value={child.spouse}
+                                                    onChange={(e) =>
+                                                        setChild(
+                                                            index,
+                                                            'spouse',
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    placeholder="Nama pasangan"
+                                                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                                />
+                                            </div>
+                                            <div className="grid gap-1.5">
+                                                <Label>Marga/Suku Lain</Label>
+                                                <Input
+                                                    value={child.spouse_marga}
+                                                    onChange={(e) =>
+                                                        setChild(
+                                                            index,
+                                                            'spouse_marga',
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    placeholder="Marga pasangan"
+                                                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={addChild}
+                                className="mt-1 w-full border-dashed border-tb-outline-variant text-tb-primary hover:bg-tb-primary/5"
+                            >
+                                <Plus className="size-4" /> Tambah Saudara
+                            </Button>
+                        </CardContent>
+                    </Card>
+
+                    <div className="flex items-center gap-3 pb-6">
+                        <Button
+                            type="submit"
+                            disabled={processing}
+                            className="rounded-full bg-tb-primary px-6 hover:bg-tb-primary-light"
+                        >
+                            {processing
+                                ? 'Menyimpan...'
+                                : person
+                                  ? 'Simpan Perubahan'
+                                  : 'Tambah Keluarga'}
+                        </Button>
+                    </div>
+                </form>
             </div>
-            </form>
-            </div>
 
-            <Dialog open={reductionConfirm !== null} onOpenChange={(open) => !open && cancelReduction()}>
+            <Dialog
+                open={reductionConfirm !== null}
+                onOpenChange={(open) => !open && cancelReduction()}
+            >
                 <DialogContent className="border-tb-outline-variant bg-tb-surface-bright sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle className="text-tb-on-surface">
@@ -1758,10 +2321,11 @@ export default function FamilyForm({ person, margas, nameSuggestions, nomorUsed,
                         </DialogTitle>
                         <DialogDescription>
                             Mengurangi total bersaudara ke{' '}
-                            <strong>{reductionConfirm?.to}</strong> akan menghapus{' '}
-                            <strong>{reductionConfirm?.filledNew}</strong> baris yang baru
-                            diisi. Baris tersimpan tetap dipertahankan. Tindakan ini tidak
-                            dapat dibatalkan.
+                            <strong>{reductionConfirm?.to}</strong> akan
+                            menghapus{' '}
+                            <strong>{reductionConfirm?.filledNew}</strong> baris
+                            yang baru diisi. Baris tersimpan tetap
+                            dipertahankan. Tindakan ini tidak dapat dibatalkan.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>

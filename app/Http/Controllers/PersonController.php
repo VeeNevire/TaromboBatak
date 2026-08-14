@@ -96,13 +96,16 @@ class PersonController extends Controller
      * Pemimpin of the user's marga (or all margas for staff) shown read-only on
      * the create form as the marga's lineage context.
      *
-     * @return array<int, array{id: int, name: string, marga_id: int|null, marga: string|null, nomor: string|null}>
+     * @return array<int, array{id: int, name: string, marga_id: int|null, marga: string|null, nomor: string|null, children: array<int, array{id: int, name: string, gender: string|null, marga: string|null, nomor: string|null, birth_order: int|null, is_leader: bool}>}>
      */
     protected function createMargaLineage(User $user, bool $isStaff): array
     {
         return Person::query()
             ->where('is_leader', true)
-            ->with('marga')
+            ->with([
+                'marga',
+                'children' => fn ($query) => $query->orderBy('birth_order'),
+            ])
             ->when(! $isStaff && $user->marga_id !== null, fn ($query) => $query->where('marga_id', $user->marga_id))
             ->orderByRaw('nomor IS NULL')
             ->orderByRaw('CAST(nomor AS UNSIGNED)')
@@ -114,6 +117,18 @@ class PersonController extends Controller
                 'marga_id' => $person->marga_id,
                 'marga' => $person->marga?->name,
                 'nomor' => $person->nomor,
+                'children' => $person->children
+                    ->map(fn (Person $child) => [
+                        'id' => $child->id,
+                        'name' => $child->name,
+                        'gender' => $child->gender,
+                        'marga' => $child->marga?->name,
+                        'nomor' => $child->nomor,
+                        'birth_order' => $child->birth_order,
+                        'is_leader' => $child->is_leader,
+                    ])
+                    ->values()
+                    ->all(),
             ])
             ->all();
     }
@@ -388,7 +403,7 @@ class PersonController extends Controller
             ->whereIn('id', $lineageIds)
             ->with([
                 'marga',
-                'children' => fn ($query) => $query->where('is_leader', false)->orderBy('birth_order'),
+                'children' => fn ($query) => $query->orderBy('birth_order'),
             ])
             ->get()
             ->sortBy(fn (Person $row) => array_search($row->id, $lineageIds))
@@ -451,6 +466,7 @@ class PersonController extends Controller
                             'marga' => $child->marga?->name,
                             'nomor' => $child->nomor,
                             'birth_order' => $child->birth_order,
+                            'is_leader' => $child->is_leader,
                         ])
                         ->values()
                         ->all(),

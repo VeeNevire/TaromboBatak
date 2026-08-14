@@ -397,6 +397,24 @@
     animation: tb-pulse 1.6s ease-out infinite;
 }
 
+::view-transition-old(root),
+::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+}
+
+::view-transition-new(root) {
+    z-index: 9999;
+    animation: tb-theme-reveal 550ms cubic-bezier(0.4, 0, 0.2, 1);
+    clip-path: circle(0 at var(--tb-theme-x) var(--tb-theme-y));
+}
+
+@keyframes tb-theme-reveal {
+    to {
+        clip-path: circle(150% at var(--tb-theme-x) var(--tb-theme-y));
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .tb-node-enter,
     .tarombo-flow .tarombo-flow-edge,

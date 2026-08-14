@@ -24,9 +24,13 @@ test('auto numbering assigns dotted numbers to a new family', function () {
 
     $father = Person::where('name', 'Si Raja Batak')->first();
     expect($father->nomor)->toBe('1');
+    expect($father->is_leader)->toBeTrue();
 
     $children = Person::where('father_id', $father->id)->orderBy('birth_order')->get();
-    expect($children->pluck('nomor')->all())->toBe(['1.1', '1.2', '1.3']);
+    // Focus person (A, birth_order 1) is now a leader -> flat nomor 2
+    // Siblings B, C get dotted numbers from father
+    expect($children->pluck('nomor')->all())->toBe(['2', '1.2', '1.3']);
+    expect($children->pluck('is_leader')->all())->toBe([true, false, false]);
 });
 
 test('a second root lineage gets the next root number', function () {
@@ -45,8 +49,9 @@ test('a second root lineage gets the next root number', function () {
     $store('Root Satu');
     $store('Root Dua');
 
+    // Each family adds 2 leaders (father + focus), so numbers: 1,2,3,4
     expect(Person::where('name', 'Root Satu')->first()->nomor)->toBe('1');
-    expect(Person::where('name', 'Root Dua')->first()->nomor)->toBe('2');
+    expect(Person::where('name', 'Root Dua')->first()->nomor)->toBe('3');
 });
 
 test('grandchildren inherit the dotted number of their father', function () {
@@ -71,7 +76,10 @@ test('grandchildren inherit the dotted number of their father', function () {
         'children' => [['name' => 'Cucu Satu', 'gender' => 'L']],
     ])->assertRedirect(route('people.index'));
 
-    expect(Person::where('name', 'Cucu Satu')->first()->nomor)->toBe('1.1.1');
+    // First family: Si Raja Batak (1), Anak Satu (2, leader)
+    // Second family: Anak Satu is father (already leader 2), Cucu Satu is focus -> leader 3
+    expect(Person::where('name', 'Cucu Satu')->first()->nomor)->toBe('3');
+    expect(Person::where('name', 'Cucu Satu')->first()->is_leader)->toBeTrue();
 });
 
 test('a manual number is preserved and never overwritten', function () {
@@ -138,7 +146,8 @@ test('the mother does not receive an auto number or marga', function () {
 
     $mother = Person::where('name', 'Ibu Sitorus')->first();
     expect($mother->nomor)->toBeNull()
-        ->and($mother->marga_id)->toBeNull();
+        ->and($mother->marga_id)->toBeNull()
+        ->and($mother->is_leader)->toBeFalse();
 });
 
 test('recompute reflects birth order changes down the lineage', function () {
@@ -181,4 +190,95 @@ test('leaders get flat lineage numbers while children follow the father number',
         ->and($side->fresh()->nomor)->toBe('1.2')
         ->and($line2->fresh()->nomor)->toBe('3')
         ->and($leaf->fresh()->nomor)->toBe('3.2');
+});
+
+test('placing the focus leader at slot 9 moves the father to slot 8 and links the grandfather', function () {
+    $admin = User::factory()->asAdmin()->create();
+    $marga = Marga::factory()->create(['name' => 'Sitorus']);
+
+    // Rantai patrilineal leader 1..7 (ayah -> anak) yang sudah tersimpan.
+    $root = Person::factory()->create([
+        'name' => 'Si Raja Batak',
+        'marga_id' => $marga->id,
+        'is_leader' => true,
+        'nomor' => '1',
+        'nomor_manual' => true,
+    ]);
+
+    $prev = $root;
+
+    for ($i = 2; $i <= 7; $i++) {
+        $prev = Person::factory()->create([
+            'name' => "Pemimpin $i",
+            'marga_id' => $marga->id,
+            'father_id' => $prev->id,
+            'is_leader' => true,
+            'nomor' => (string) $i,
+            'nomor_manual' => true,
+        ]);
+    }
+
+    $this->actingAs($admin)->post(route('people.store'), [
+        'name' => 'Saya',
+        'marga_id' => $marga->id,
+        'is_leader' => true,
+        'nomor' => '9',
+        'birth_order' => 1,
+        'sibling_count' => 1,
+        'father' => ['name' => 'Si Bapak', 'marga_id' => $marga->id, 'nomor' => '8', 'is_leader' => true],
+        'children' => [['name' => 'Saya', 'gender' => 'L']],
+    ])->assertRedirect(route('people.index'));
+
+    $father = Person::where('name', 'Si Bapak')->first();
+    $focus = Person::where('name', 'Saya')->first();
+
+    expect($father)->not->toBeNull()
+        ->and($father->nomor)->toBe('8')
+        ->and($father->is_leader)->toBeTrue()
+        ->and($father->nomor_manual)->toBeTrue()
+        ->and($father->father_id)->toBe($prev->id)
+        ->and($focus->father_id)->toBe($father->id)
+        ->and($focus->nomor)->toBe('9')
+        ->and(Person::where('nomor', '8')->count())->toBe(1);
+});
+
+test('typing a father name fills the N/A placeholder leader slot', function () {
+    $admin = User::factory()->asAdmin()->create();
+    $marga = Marga::factory()->create(['name' => 'Sitorus']);
+
+    $root = Person::factory()->create([
+        'name' => 'Si Raja Batak',
+        'marga_id' => $marga->id,
+        'is_leader' => true,
+        'nomor' => '1',
+        'nomor_manual' => true,
+    ]);
+
+    $placeholder = Person::factory()->create([
+        'name' => 'N/A',
+        'marga_id' => $marga->id,
+        'is_leader' => true,
+        'nomor' => '8',
+        'nomor_manual' => true,
+    ]);
+
+    $this->actingAs($admin)->post(route('people.store'), [
+        'name' => 'Saya',
+        'marga_id' => $marga->id,
+        'is_leader' => true,
+        'nomor' => '9',
+        'birth_order' => 1,
+        'sibling_count' => 1,
+        'father' => ['name' => 'Si Bapak', 'marga_id' => $marga->id, 'nomor' => '8', 'is_leader' => true],
+        'children' => [['name' => 'Saya', 'gender' => 'L']],
+    ])->assertRedirect(route('people.index'));
+
+    $father = Person::where('name', 'Si Bapak')->first();
+    $focus = Person::where('name', 'Saya')->first();
+
+    expect($father->id)->toBe($placeholder->id)
+        ->and($father->nomor)->toBe('8')
+        ->and($focus->father_id)->toBe($placeholder->id)
+        ->and(Person::where('nomor', '8')->count())->toBe(1)
+        ->and(Person::where('name', 'N/A')->where('nomor', '8')->count())->toBe(0);
 });

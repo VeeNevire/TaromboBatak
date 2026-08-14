@@ -40,6 +40,8 @@ class UpdatePersonRequest extends FormRequest
             'father.new_marga' => ['nullable', 'string', 'max:255'],
             'father.birth_year' => ['nullable', 'digits:4'],
             'father.death_year' => ['nullable', 'digits:4'],
+            'father.nomor' => ['nullable', 'string', 'max:50'],
+            'father.is_leader' => ['nullable', 'boolean'],
             'mother' => ['nullable', 'array'],
             'mother.name' => ['nullable', 'string', 'max:255'],
             'mother.birth_year' => ['nullable', 'digits:4'],
