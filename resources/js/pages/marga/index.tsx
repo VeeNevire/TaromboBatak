@@ -1,12 +1,13 @@
 import { Head, router, useForm } from '@inertiajs/react';
-import { Pencil, Plus, Shapes, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { ImagePlus, Pencil, Plus, Shapes, Trash2, X } from 'lucide-react';
+import { useRef, useState } from 'react';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import marga from '@/routes/marga';
 
@@ -15,12 +16,127 @@ type MargaItem = {
     name: string;
     description: string | null;
     color: string | null;
+    image: string | null;
+    image_url: string | null;
     people_count: number;
 };
 
 type Props = {
     margas: MargaItem[];
 };
+
+function MargaAvatar({ m, className }: { m: MargaItem; className?: string }) {
+    if (m.image_url) {
+        return (
+            <img
+                src={m.image_url}
+                alt={m.name}
+                className={cn('object-cover', className)}
+            />
+        );
+    }
+
+    return (
+        <div
+            className={cn(
+                'flex items-center justify-center rounded-xl text-sm font-bold text-white',
+                className,
+            )}
+            style={{ backgroundColor: m.color ?? 'var(--color-tb-primary)' }}
+        >
+            {m.name.charAt(0)}
+        </div>
+    );
+}
+
+function ImageInput({
+    value,
+    onChange,
+    error,
+}: {
+    value: string | File;
+    onChange: (value: string | File) => void;
+    error?: string;
+}) {
+    const inputRef = useRef<HTMLInputElement>(null);
+    const preview = typeof value === 'string' ? value : URL.createObjectURL(value);
+
+    return (
+        <div className="grid gap-1.5">
+            <Label className="text-tb-on-surface">Gambar Marga (opsional)</Label>
+
+            <div className="flex items-center gap-3">
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-tb-outline-variant bg-tb-surface-container text-xs text-tb-on-surface-variant">
+                    {preview ? (
+                        <img src={preview} alt="Pratinjau marga" className="h-full w-full object-cover" />
+                    ) : (
+                        <ImagePlus className="size-6" />
+                    )}
+                </div>
+
+                <div className="flex flex-1 flex-col gap-2">
+                    <div className="flex flex-wrap gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => inputRef.current?.click()}
+                        >
+                            Pilih File
+                        </Button>
+                        {preview && (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="text-tb-on-surface-variant hover:text-red-600"
+                                onClick={() => {
+                                    onChange('');
+                                    if (inputRef.current) {
+                                        inputRef.current.value = '';
+                                    }
+                                }}
+                            >
+                                <X className="size-4" /> Hapus
+                            </Button>
+                        )}
+                    </div>
+                    {typeof value !== 'string' && (
+                        <p className="truncate text-xs text-tb-on-surface-variant">
+                            {value.name}
+                        </p>
+                    )}
+                </div>
+
+                <input
+                    ref={inputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
+                    className="hidden"
+                    onChange={(e) => {
+                        const file = e.target.files?.[0] ?? null;
+                        onChange(file ?? '');
+                    }}
+                />
+            </div>
+
+            <div className="grid gap-1">
+                <Input
+                    value={typeof value === 'string' ? value : ''}
+                    onChange={(e) => {
+                        onChange(e.target.value);
+                        if (inputRef.current) {
+                            inputRef.current.value = '';
+                        }
+                    }}
+                    placeholder="Atau tempel URL gambar (https://...)"
+                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                />
+                {error && <InputError message={error} />}
+            </div>
+        </div>
+    );
+}
 
 export default function MargaIndex({ margas }: Props) {
     const [dialog, setDialog] = useState<null | 'create' | MargaItem>(null);
@@ -30,6 +146,7 @@ export default function MargaIndex({ margas }: Props) {
         name: '',
         description: '',
         color: '#b34b1e',
+        image: '' as string | File,
     });
 
     const openCreate = () => {
@@ -42,6 +159,7 @@ export default function MargaIndex({ margas }: Props) {
             name: m.name,
             description: m.description ?? '',
             color: m.color ?? '#b34b1e',
+            image: m.image_url ?? '',
         });
         setDialog(m);
     };
@@ -51,10 +169,12 @@ export default function MargaIndex({ margas }: Props) {
 
         if (dialog === 'create') {
             form.post(marga.store().url, {
+                forceFormData: true,
                 onSuccess: () => setDialog(null),
             });
         } else if (dialog) {
             form.put(marga.update(dialog.id).url, {
+                forceFormData: true,
                 onSuccess: () => setDialog(null),
             });
         }
@@ -82,7 +202,7 @@ export default function MargaIndex({ margas }: Props) {
                             Daftar Marga
                         </h1>
                         <p className="mt-1 text-sm text-tb-on-surface-variant">
-                            Marga Batak yang tercatat beserta jumlah anggotanya.
+                            Marga Batak yang tercatat beserta jumlah anggotanya. Klik kartu untuk mengubah.
                         </p>
                     </div>
                     <Button className="rounded-full bg-tb-primary hover:bg-tb-primary-light" onClick={openCreate}>
@@ -104,22 +224,32 @@ export default function MargaIndex({ margas }: Props) {
                     {margas.map((m) => (
                         <Card
                             key={m.id}
-                            className="group border-tb-outline-variant bg-tb-surface-bright transition-shadow hover:shadow-md"
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => openEdit(m)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    openEdit(m);
+                                }
+                            }}
+                            className="group cursor-pointer border-tb-outline-variant bg-tb-surface-bright transition-shadow hover:shadow-md"
                         >
                             <CardContent className="gap-4 py-5">
                                 <div className="flex items-start justify-between">
-                                    <div
-                                        className="flex h-11 w-11 items-center justify-center rounded-xl text-sm font-bold text-white"
-                                        style={{ backgroundColor: m.color ?? 'var(--color-tb-primary)' }}
-                                    >
-                                        {m.name.charAt(0)}
-                                    </div>
+                                    <MargaAvatar
+                                        m={m}
+                                        className="h-11 w-11 rounded-xl"
+                                    />
                                     <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                                         <Button
                                             variant="ghost"
                                             size="icon"
                                             className="size-8 text-tb-on-surface-variant hover:text-tb-primary"
-                                            onClick={() => openEdit(m)}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                openEdit(m);
+                                            }}
                                         >
                                             <Pencil className="size-4" />
                                         </Button>
@@ -127,7 +257,10 @@ export default function MargaIndex({ margas }: Props) {
                                             variant="ghost"
                                             size="icon"
                                             className="size-8 text-tb-on-surface-variant hover:text-red-600"
-                                            onClick={() => setToDelete(m)}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setToDelete(m);
+                                            }}
                                         >
                                             <Trash2 className="size-4" />
                                         </Button>
@@ -151,7 +284,7 @@ export default function MargaIndex({ margas }: Props) {
 
                 <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
                     <DialogContent className="sm:max-w-md">
-                        <form onSubmit={submit}>
+                        <form onSubmit={submit} encType="multipart/form-data">
                             <DialogHeader>
                                 <DialogTitle className="text-tb-on-surface">
                                     {dialog === 'create'
@@ -195,6 +328,14 @@ export default function MargaIndex({ margas }: Props) {
                                     />
                                     <InputError message={form.errors.description} />
                                 </div>
+
+                                <ImageInput
+                                    value={form.data.image}
+                                    onChange={(value) =>
+                                        form.setData('image', value)
+                                    }
+                                    error={form.errors.image}
+                                />
 
                                 <div className="grid gap-1.5">
                                     <Label htmlFor="color" className="text-tb-on-surface">

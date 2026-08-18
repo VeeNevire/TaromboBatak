@@ -14,10 +14,11 @@ use Illuminate\Support\Carbon;
  * @property string $name
  * @property string|null $description
  * @property string|null $color
+ * @property string|null $image
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'description', 'color'])]
+#[Fillable(['name', 'description', 'color', 'image'])]
 class Marga extends Model
 {
     /** @use HasFactory<MargaFactory> */

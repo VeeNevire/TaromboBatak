@@ -13,7 +13,7 @@ export type TaromboPersonRow = {
     spouse?: string | null;
     image?: string | null;
     bio?: string;
-    nomor?: string | null;
+    chain?: string | null;
     childrenNames?: string[];
 };
 
@@ -30,7 +30,7 @@ export type TaromboPerson = {
     spouse?: string | null;
     image?: string | null;
     bio?: string;
-    nomor?: string | null;
+    chain?: string | null;
     childrenNames?: string[];
 };
 

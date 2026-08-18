@@ -19,7 +19,6 @@ test('a family store creates the father, mother, and all sibling rows as people'
         'marga_id' => $marga->id,
         'birth_order' => 2,
         'sibling_count' => 3,
-        'nomor' => '001',
         'father' => ['name' => 'Si Raja Batak', 'birth_year' => '1850', 'death_year' => '1920'],
         'mother' => ['name' => 'Borbor', 'birth_year' => '1855'],
         'children' => [
@@ -36,7 +35,8 @@ test('a family store creates the father, mother, and all sibling rows as people'
 
     expect($father)->not->toBeNull()
         ->and($mother)->not->toBeNull()
-        ->and($father->marga_id)->toBe($marga->id);
+        ->and($father->marga_id)->toBe($marga->id)
+        ->and($father->chain)->toBe('1');
 
     $children = Person::where('father_id', $father->id)->orderBy('birth_order')->get();
 
@@ -46,37 +46,9 @@ test('a family store creates the father, mother, and all sibling rows as people'
         ->and($children[1]->name)->toBe('Ompu Sitorus')
         ->and($children[1]->birth_order)->toBe(2)
         ->and($children[1]->sibling_count)->toBe(3)
-        ->and($children[1]->nomor)->toBe('001')
+        ->and($children[1]->chain)->toBe('1-2')
         ->and($children[0]->spouse_marga)->toBe('Hutapea')
         ->and($children[2]->name)->toBe('N/A');
-});
-
-test('nomor silsilah must be unique across people', function () {
-    $marga = Marga::factory()->create();
-
-    $this->actingAs($this->admin)->post(route('people.store'), [
-        'name' => 'Satyo',
-        'nomor' => '001',
-        'marga_id' => $marga->id,
-        'birth_order' => 1,
-        'sibling_count' => 1,
-        'children' => [
-            ['name' => 'Satyo', 'gender' => 'L'],
-        ],
-    ])->assertSessionHasNoErrors();
-
-    $this->actingAs($this->admin)
-        ->post(route('people.store'), [
-            'name' => 'Satyo Lagi',
-            'nomor' => '001',
-            'marga_id' => $marga->id,
-            'birth_order' => 1,
-            'sibling_count' => 1,
-            'children' => [
-                ['name' => 'Satyo Lagi', 'gender' => 'L'],
-            ],
-        ])
-        ->assertSessionHasErrors('nomor');
 });
 
 test('the show route exposes the whole family sheet', function () {
@@ -248,7 +220,7 @@ test('the preview gracefully falls back when the person has no parents', functio
 
 test('the show route exposes the patrilineal lineage chain ordered root to self', function () {
     $marga = Marga::factory()->create();
-    $buyut = Person::factory()->create(['name' => 'Buyut', 'marga_id' => $marga->id, 'nomor' => '1', 'nomor_manual' => true]);
+    $buyut = Person::factory()->create(['name' => 'Buyut', 'marga_id' => $marga->id, 'chain' => '1']);
     $kakek = Person::factory()->create(['name' => 'Kakek', 'marga_id' => $marga->id, 'father_id' => $buyut->id]);
     $ayah = Person::factory()->create(['name' => 'Ayah', 'marga_id' => $marga->id, 'father_id' => $kakek->id]);
     $fokus = Person::factory()->create(['name' => 'Fokus', 'marga_id' => $marga->id, 'father_id' => $ayah->id, 'birth_order' => 1]);
@@ -266,9 +238,9 @@ test('the show route exposes the patrilineal lineage chain ordered root to self'
             ->where('person.lineage.0.is_self', false));
 });
 
-test('updating a family keeps existing sibling numbers and persists is_leader', function () {
+test('updating a family recomputes chains for the patrilineal lineage', function () {
     $marga = Marga::factory()->create();
-    $father = Person::factory()->create(['marga_id' => $marga->id]);
+    $father = Person::factory()->create(['name' => 'Si Bapak', 'marga_id' => $marga->id, 'father_id' => null]);
 
     $focused = Person::factory()->create([
         'name' => 'Guru Tatea Bulan',
@@ -276,24 +248,18 @@ test('updating a family keeps existing sibling numbers and persists is_leader', 
         'father_id' => $father->id,
         'birth_order' => 1,
         'sibling_count' => 3,
-        'nomor' => '5',
-        'nomor_manual' => true,
     ]);
     $second = Person::factory()->create([
         'name' => 'Raja Biakbiak',
         'marga_id' => $marga->id,
         'father_id' => $father->id,
         'birth_order' => 2,
-        'nomor' => '2',
-        'nomor_manual' => true,
     ]);
     $third = Person::factory()->create([
         'name' => 'Limbong Mulana',
         'marga_id' => $marga->id,
         'father_id' => $father->id,
         'birth_order' => 3,
-        'nomor' => '3',
-        'nomor_manual' => true,
     ]);
 
     $this->actingAs($this->admin)
@@ -302,19 +268,18 @@ test('updating a family keeps existing sibling numbers and persists is_leader', 
             'marga_id' => $marga->id,
             'birth_order' => 1,
             'sibling_count' => 3,
-            'is_leader' => true,
-            'nomor' => '5',
             'father' => ['name' => $father->name],
             'children' => [
-                ['id' => $focused->id, 'name' => $focused->name, 'gender' => 'L', 'nomor' => '5'],
-                ['id' => $second->id, 'name' => $second->name, 'gender' => 'L', 'nomor' => '2'],
-                ['id' => $third->id, 'name' => $third->name, 'gender' => 'L', 'nomor' => '3'],
+                ['id' => $focused->id, 'name' => $focused->name, 'gender' => 'L'],
+                ['id' => $second->id, 'name' => $second->name, 'gender' => 'L'],
+                ['id' => $third->id, 'name' => $third->name, 'gender' => 'L'],
             ],
         ])
         ->assertRedirect()
         ->assertSessionHasNoErrors();
 
-    expect($focused->fresh()->is_leader)->toBeTrue()
-        ->and($second->fresh()->nomor)->toBe('2')
-        ->and($third->fresh()->nomor)->toBe('3');
+    expect($father->fresh()->chain)->toBe('1')
+        ->and($focused->fresh()->chain)->toBe('1-1')
+        ->and($second->fresh()->chain)->toBe('1-2')
+        ->and($third->fresh()->chain)->toBe('1-3');
 });

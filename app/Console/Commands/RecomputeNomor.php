@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Person;
-use App\Services\TaromboNumberingService;
+use App\Services\ChainNumberingService;
 use Illuminate\Console\Command;
 
 class RecomputeNomor extends Command
@@ -20,24 +20,21 @@ class RecomputeNomor extends Command
      *
      * @var string
      */
-    protected $description = 'Recompute the auto silsilah numbers (nomor) for every patrilineal root lineage.';
+    protected $description = 'Recompute the auto silsilah chain numbers for every patrilineal root lineage.';
 
     /**
      * Execute the console command.
      */
-    public function handle(TaromboNumberingService $service): int
+    public function handle(ChainNumberingService $service): int
     {
         $roots = Person::query()
             ->whereNull('father_id')
-            ->whereHas('children')
             ->orderBy('id')
             ->get();
 
-        foreach ($roots as $root) {
-            $service->recomputeFromAncestor($root);
-        }
+        $service->recomputeAll();
 
-        $this->info(sprintf('Recomputed numbers for %d root lineage(s).', $roots->count()));
+        $this->info(sprintf('Recomputed chain numbers for %d root lineage(s).', $roots->count()));
 
         return Command::SUCCESS;
     }

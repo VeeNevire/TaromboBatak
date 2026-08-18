@@ -8,7 +8,7 @@ export type TreeNode = {
     margaColor?: string | null;
     birthYear?: string | null;
     birthOrder?: number | null;
-    nomor?: string | null;
+    chain?: string | null;
     image?: string | null;
 };
 
@@ -72,9 +72,9 @@ export function NodeCard({
                 className="mt-2 rounded-md border bg-white px-2 py-1 text-center text-[11px] font-semibold leading-snug"
                 style={{ borderColor: highlighted ? GOLD : '#E3DFD2', color: highlighted ? FOREST : INK }}
             >
-                {node.nomor && (
+                {node.chain && (
                     <span className="block text-[9px] font-semibold uppercase tracking-wide text-[#5B6A61]">
-                        No. {node.nomor}
+                        No. {node.chain}
                     </span>
                 )}
                 <span className="block break-words">{node.name}</span>

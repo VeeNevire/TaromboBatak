@@ -5,7 +5,7 @@ namespace Database\Seeders;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
-use App\Services\TaromboNumberingService;
+use App\Services\ChainNumberingService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -71,20 +71,6 @@ class WikipediaTaromboSeeder extends Seeder
     ];
 
     /**
-     * Pemimpin garis utama yang ditandai is_leader.
-     *
-     * @var array<int, string>
-     */
-    protected const LEADER_NAMES = [
-        'Si Raja Batak',
-        'Guru Tatea Bulan',
-        'Tuan Sorimangaraja',
-        'Siraja Lontung',
-        'Tuan Sorbadibanua',
-        'Raja Silahisabungan',
-    ];
-
-    /**
      * Seed the tarombo from tarombo-tree.json.
      */
     public function run(): void
@@ -105,7 +91,7 @@ class WikipediaTaromboSeeder extends Seeder
             $this->resetPeople();
             $margaIds = $this->upsertMargas($rows);
             $this->upsertPeople($rows, $margaIds);
-            $this->assignNumbers();
+            $this->assignChains();
             $this->cleanupOrphanMargas(array_values($margaIds));
         });
     }
@@ -182,7 +168,6 @@ class WikipediaTaromboSeeder extends Seeder
                 'father_id' => $parent !== null ? ($idMap[$parent] ?? null) : null,
                 'birth_order' => $order,
                 'sibling_count' => $siblingCount[$parentKey] ?? 1,
-                'is_leader' => in_array($row['name'], self::LEADER_NAMES, true),
                 'birth_year' => $row['birthYear'] ?? null,
                 'death_year' => $row['deathYear'] ?? null,
                 'image' => $row['image'] ?? null,
@@ -194,15 +179,11 @@ class WikipediaTaromboSeeder extends Seeder
     }
 
     /**
-     * Assign the hierarchical silsilah numbers from the topmost ancestor.
+     * Assign the chain numbers for the whole patrilineal lineage.
      */
-    protected function assignNumbers(): void
+    protected function assignChains(): void
     {
-        $root = Person::query()->whereNull('father_id')->orderBy('id')->first();
-
-        if ($root !== null) {
-            app(TaromboNumberingService::class)->recomputeFromAncestor($root);
-        }
+        app(ChainNumberingService::class)->recomputeAll();
     }
 
     /**

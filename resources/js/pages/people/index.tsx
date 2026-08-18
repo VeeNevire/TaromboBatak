@@ -18,7 +18,7 @@ type PersonItem = {
     marga_color: string | null;
     parent: string | null;
     birth_year: string | null;
-    nomor: string | null;
+    chain: string | null;
     created_at: string | null;
     editable: boolean;
 };
@@ -169,9 +169,9 @@ export default function PeopleIndex({ people: page, filters, margas, canManage, 
                                                     {person.alias && (
                                                         <p className="text-xs text-tb-on-surface-variant">{person.alias}</p>
                                                     )}
-                                                    {person.nomor && (
+                                                    {person.chain && (
                                                         <p className="mt-0.5 text-[11px] font-medium text-tb-primary">
-                                                            No. {person.nomor}
+                                                            No. {person.chain}
                                                         </p>
                                                     )}
                                                 </div>

@@ -7,6 +7,9 @@ use App\Http\Requests\UpdateMargaRequest;
 use App\Models\Marga;
 use App\Models\Person;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -27,6 +30,8 @@ class MargaController extends Controller
                 'name' => $marga->name,
                 'description' => $marga->description,
                 'color' => $marga->color,
+                'image' => $marga->image,
+                'image_url' => $this->imageUrl($marga->image),
                 'people_count' => $marga->people_count,
             ]);
 
@@ -48,6 +53,7 @@ class MargaController extends Controller
             ->map(fn (Marga $marga) => [
                 'name' => $marga->name,
                 'color' => $marga->color,
+                'image_url' => $this->imageUrl($marga->image),
                 'count' => $marga->people_count,
             ]);
 
@@ -93,7 +99,11 @@ class MargaController extends Controller
      */
     public function store(StoreMargaRequest $request): RedirectResponse
     {
-        Marga::create($request->validated());
+        $data = $request->validated();
+
+        $data['image'] = $this->resolveImage($request);
+
+        Marga::create($data);
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Marga berhasil ditambahkan.')]);
 
@@ -105,7 +115,15 @@ class MargaController extends Controller
      */
     public function update(UpdateMargaRequest $request, Marga $marga): RedirectResponse
     {
-        $marga->update($request->validated());
+        $data = $request->validated();
+
+        $data['image'] = $this->resolveImage($request);
+
+        if ($marga->image !== null && $data['image'] !== $marga->image) {
+            $this->deleteStoredImage($marga->image);
+        }
+
+        $marga->update($data);
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Marga berhasil diperbarui.')]);
 
@@ -117,10 +135,73 @@ class MargaController extends Controller
      */
     public function destroy(Marga $marga): RedirectResponse
     {
+        $this->deleteStoredImage($marga->image);
+
         $marga->delete();
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Marga berhasil dihapus.')]);
 
         return to_route('marga.index');
+    }
+
+    /**
+     * Persist an uploaded image file or keep a plain URL string.
+     *
+     * @return string|null  Stored path (margas/...) or the raw URL.
+     */
+    protected function resolveImage(Request $request): ?string
+    {
+        $image = $request->file('image');
+
+        if ($image instanceof UploadedFile) {
+            return $image->store('margas', 'public');
+        }
+
+        $raw = $request->input('image');
+
+        if (! is_string($raw) || trim($raw) === '') {
+            return null;
+        }
+
+        $trimmed = trim($raw);
+
+        if (str_starts_with($trimmed, '/storage/')) {
+            return $trimmed;
+        }
+
+        return $trimmed;
+    }
+
+    /**
+     * Build a publicly reachable URL for the marga image.
+     */
+    protected function imageUrl(?string $image): ?string
+    {
+        if ($image === null) {
+            return null;
+        }
+
+        if (str_starts_with($image, 'http://') || str_starts_with($image, 'https://')) {
+            return $image;
+        }
+
+        return Storage::disk('public')->url($image);
+    }
+
+    /**
+     * Remove a stored marga image file from the public disk when it was not a
+     * plain external URL.
+     */
+    protected function deleteStoredImage(?string $image): void
+    {
+        if ($image === null || str_starts_with($image, 'http://') || str_starts_with($image, 'https://')) {
+            return;
+        }
+
+        $path = str_starts_with($image, '/storage/')
+            ? ltrim(substr($image, strlen('/storage/')), '/')
+            : $image;
+
+        Storage::disk('public')->delete($path);
     }
 }

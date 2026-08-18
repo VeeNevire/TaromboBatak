@@ -19,7 +19,7 @@ function toNode(person: TaromboPerson): TreeNode {
         marga: person.marga,
         birthYear: person.birthYear,
         birthOrder: person.birthOrder,
-        nomor: person.nomor,
+        chain: person.chain,
         image: person.image,
     };
 }

@@ -27,7 +27,7 @@ class TaromboTreeService
                 'parentId' => $person->father_id !== null ? (string) $person->father_id : null,
                 'birthYear' => $person->birth_year,
                 'birthOrder' => $person->birth_order,
-                'nomor' => $person->nomor,
+                'chain' => $person->chain,
                 'gender' => $person->gender,
                 'spouse' => $person->spouse,
                 'image' => $person->image,

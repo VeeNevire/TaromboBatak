@@ -9,6 +9,7 @@ import marga from '@/routes/marga';
 type MargaItem = {
     name: string;
     color: string | null;
+    image_url: string | null;
     count: number;
 };
 
@@ -149,7 +150,16 @@ export default function MargaPublic({ margas, stats }: Props) {
                                                 backgroundColor: item.color ?? 'var(--color-tb-primary)',
                                             }}
                                         >
-                                            <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-40 transition-opacity group-hover:opacity-60" />
+                                            {item.image_url ? (
+                                                <img
+                                                    src={item.image_url}
+                                                    alt={item.name}
+                                                    className="absolute inset-0 h-full w-full object-cover"
+                                                />
+                                            ) : (
+                                                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-40 transition-opacity group-hover:opacity-60" />
+                                            )}
+                                            <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-60 transition-opacity group-hover:opacity-70" />
                                             <div className="relative z-10">
                                                 <h3 className="font-display text-xl font-bold text-white">
                                                     {item.name}

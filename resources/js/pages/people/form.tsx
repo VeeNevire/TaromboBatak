@@ -10,12 +10,11 @@ type Props = {
     person: FamilyData | null;
     margas: { id: number; name: string }[];
     nameSuggestions: string[];
-    nomorUsed: { nomor: string; name: string }[];
     lockedMarga?: { id: number; name: string } | null;
-    margaLineage?: MargaLineageEntry[];
+    lineage?: MargaLineageEntry[];
 };
 
-export default function PersonForm({ person, margas, nameSuggestions, nomorUsed, lockedMarga, margaLineage }: Props) {
+export default function PersonForm({ person, margas, nameSuggestions, lockedMarga, lineage }: Props) {
     const isEdit = person !== null;
 
     return (
@@ -41,7 +40,7 @@ export default function PersonForm({ person, margas, nameSuggestions, nomorUsed,
                     </div>
                 </div>
 
-                <FamilyForm person={person} margas={margas} nameSuggestions={nameSuggestions} nomorUsed={nomorUsed} lockedMarga={lockedMarga} margaLineage={margaLineage} />
+                <FamilyForm person={person} margas={margas} nameSuggestions={nameSuggestions} lockedMarga={lockedMarga} lineage={lineage} />
             </div>
         </>
     );
