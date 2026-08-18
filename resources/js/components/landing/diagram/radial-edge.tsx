@@ -2,8 +2,15 @@ import { BaseEdge } from '@xyflow/react';
 import type { EdgeProps } from '@xyflow/react';
 import type { RadialEdgeData } from '@/data/tarombo-tree';
 
-export function RadialEdge({ sourceX, sourceY, targetX, targetY, data }: EdgeProps) {
-    const { stroke, sourceRadius, targetRadius, active, dimmed } = data as RadialEdgeData;
+export function RadialEdge({
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    data,
+}: EdgeProps) {
+    const { stroke, sourceRadius, targetRadius, active, dimmed } =
+        data as RadialEdgeData;
 
     const dx = targetX - sourceX;
     const dy = targetY - sourceY;
@@ -35,7 +42,11 @@ export function RadialEdge({ sourceX, sourceY, targetX, targetY, data }: EdgePro
             />
             <BaseEdge
                 path={path}
-                style={{ stroke, strokeWidth: mainWidth, strokeOpacity: mainOpacity }}
+                style={{
+                    stroke,
+                    strokeWidth: mainWidth,
+                    strokeOpacity: mainOpacity,
+                }}
                 strokeLinecap="round"
             />
             <path

@@ -96,7 +96,14 @@ export type TaromboLayout = {
     metrics: { extent: number };
 };
 
-export const generationColors = ['#b34b1e', '#2a527c', '#3e6b48', '#f59e0b', '#7c3aed', '#0e7490'];
+export const generationColors = [
+    '#b34b1e',
+    '#2a527c',
+    '#3e6b48',
+    '#f59e0b',
+    '#7c3aed',
+    '#0e7490',
+];
 
 export const margaColors = [
     '#b34b1e',
@@ -144,40 +151,63 @@ const PAD = 36;
 
 const TAROMBO_ROWS = taromboRows as TaromboPersonRow[];
 
-export const MOCK_MARGAS: MargaInfo[] = [...new Set(TAROMBO_ROWS.map((row) => row.marga))]
-    .map((name, index) => ({
-        name,
-        color: margaColors[index % margaColors.length],
-    }));
+export const MOCK_MARGAS: MargaInfo[] = [
+    ...new Set(TAROMBO_ROWS.map((row) => row.marga)),
+].map((name, index) => ({
+    name,
+    color: margaColors[index % margaColors.length],
+}));
 
 export const MOCK_TAROMBO: TaromboPerson[] = buildTaromboPeople(TAROMBO_ROWS);
 
-export function findPerson(people: TaromboPerson[], id: string): TaromboPerson | undefined {
+export function findPerson(
+    people: TaromboPerson[],
+    id: string,
+): TaromboPerson | undefined {
     return people.find((person) => person.id === id);
 }
 
-export function findPersonChildren(people: TaromboPerson[], id: string): TaromboPerson[] {
+export function findPersonChildren(
+    people: TaromboPerson[],
+    id: string,
+): TaromboPerson[] {
     return people.filter((person) => person.parentId === id);
 }
 
 export function buildTaromboPeople(rows: TaromboPersonRow[]): TaromboPerson[] {
+    if (rows.length === 0) {
+        return [];
+    }
+
     const byId = new Map(rows.map((row) => [row.id, row]));
+    const parentById = new Map(
+        rows.map((row) => [
+            row.id,
+            row.parentId && row.parentId !== row.id && byId.has(row.parentId)
+                ? row.parentId
+                : null,
+        ]),
+    );
     const childrenOf = new Map<string, string[]>();
 
     for (const row of rows) {
-        if (row.parentId) {
-            const siblings = childrenOf.get(row.parentId) ?? [];
+        const parentId = parentById.get(row.id);
+
+        if (parentId) {
+            const siblings = childrenOf.get(parentId) ?? [];
             siblings.push(row.id);
-            childrenOf.set(row.parentId, siblings);
+            childrenOf.set(parentId, siblings);
         }
     }
 
-    const root = rows.find((row) => row.parentId == null) ?? rows[0];
+    const roots = rows.filter((row) => parentById.get(row.id) === null);
     const generation = new Map<string, number>();
-    const visited = new Set<string>();
-    const queue: string[] = [root.id];
-    generation.set(root.id, 1);
-    visited.add(root.id);
+    const visited = new Set<string>(roots.map((root) => root.id));
+    const queue: string[] = roots.map((root) => root.id);
+
+    for (const root of roots) {
+        generation.set(root.id, 1);
+    }
 
     while (queue.length > 0) {
         const id = queue.shift() as string;
@@ -194,15 +224,28 @@ export function buildTaromboPeople(rows: TaromboPersonRow[]): TaromboPerson[] {
         }
     }
 
-    return rows.map((row) => {
-        const hasValidParent = row.parentId != null && byId.has(row.parentId);
-        const parentId = hasValidParent ? row.parentId : row.id === root.id ? null : root.id;
+    // Legacy cycles have no valid root. Keep those records disconnected rather
+    // than inventing a genealogical relationship in the visualization.
+    for (const row of rows) {
+        if (!visited.has(row.id)) {
+            parentById.set(row.id, null);
+            generation.set(row.id, 1);
+        }
+    }
 
-        return { ...row, parentId, generation: generation.get(row.id) ?? 1 };
+    return rows.map((row) => {
+        return {
+            ...row,
+            parentId: parentById.get(row.id) ?? null,
+            generation: generation.get(row.id) ?? 1,
+        };
     });
 }
 
-export function getConnectionIds(people: TaromboPerson[], id: string): Set<string> {
+export function getConnectionIds(
+    people: TaromboPerson[],
+    id: string,
+): Set<string> {
     const person = findPerson(people, id);
     const ids = new Set<string>([id]);
 
@@ -230,24 +273,30 @@ export function shortestAngle(angle: number): number {
     let diff = angle % (2 * Math.PI);
 
     if (diff > Math.PI) {
-diff -= 2 * Math.PI;
-}
+        diff -= 2 * Math.PI;
+    }
 
     if (diff < -Math.PI) {
-diff += 2 * Math.PI;
-}
+        diff += 2 * Math.PI;
+    }
 
     return diff;
 }
 
-function subtreeLeafCount(id: string, childrenOf: Map<string, string[]>): number {
+function subtreeLeafCount(
+    id: string,
+    childrenOf: Map<string, string[]>,
+): number {
     const children = childrenOf.get(id) ?? [];
 
     if (children.length === 0) {
-return 1;
-}
+        return 1;
+    }
 
-    return children.reduce((sum, child) => sum + subtreeLeafCount(child, childrenOf), 0);
+    return children.reduce(
+        (sum, child) => sum + subtreeLeafCount(child, childrenOf),
+        0,
+    );
 }
 
 function assignSpans(
@@ -261,10 +310,13 @@ function assignSpans(
     spans.set(id, { start, end, angle: (start + end) / 2 });
 
     if (children.length === 0) {
-return;
-}
+        return;
+    }
 
-    const totalWeight = children.reduce((sum, child) => sum + subtreeLeafCount(child, childrenOf), 0);
+    const totalWeight = children.reduce(
+        (sum, child) => sum + subtreeLeafCount(child, childrenOf),
+        0,
+    );
     let cursor = start;
 
     for (const child of children) {
@@ -275,7 +327,11 @@ return;
     }
 }
 
-function normalizeAngleWithin(angle: number, start: number, end: number): number {
+function normalizeAngleWithin(
+    angle: number,
+    start: number,
+    end: number,
+): number {
     const width = end - start;
     const relative = angle - start;
     const wrapped = ((relative % width) + width) % width;
@@ -306,7 +362,10 @@ function enforceMinGap(
 
         // Increased passes from 2 to 8 for better overlap resolution
         for (let pass = 0; pass < 8; pass++) {
-            const ordered = [...ids].sort((a, b) => (spans.get(a)?.angle ?? 0) - (spans.get(b)?.angle ?? 0));
+            const ordered = [...ids].sort(
+                (a, b) =>
+                    (spans.get(a)?.angle ?? 0) - (spans.get(b)?.angle ?? 0),
+            );
 
             // Forward pass: push nodes to the right
             for (let i = 0; i < ordered.length - 1; i++) {
@@ -320,7 +379,11 @@ function enforceMinGap(
                 const gap = shortestAngle(right.angle - left.angle);
 
                 if (gap < minGap) {
-                    right.angle = normalizeAngleWithin(left.angle + minGap, right.start, right.end);
+                    right.angle = normalizeAngleWithin(
+                        left.angle + minGap,
+                        right.start,
+                        right.end,
+                    );
                 }
             }
 
@@ -332,10 +395,14 @@ function enforceMinGap(
                 if (first && last) {
                     // Check gap from last to first (crossing 2π boundary)
                     const wrapGap = shortestAngle(first.angle - last.angle);
-                    
+
                     if (wrapGap < minGap && wrapGap > 0) {
                         // Push first node forward
-                        first.angle = normalizeAngleWithin(last.angle + minGap, first.start, first.end);
+                        first.angle = normalizeAngleWithin(
+                            last.angle + minGap,
+                            first.start,
+                            first.end,
+                        );
                     }
                 }
             }
@@ -352,7 +419,11 @@ function enforceMinGap(
                 const gap = shortestAngle(right.angle - left.angle);
 
                 if (gap < minGap) {
-                    left.angle = normalizeAngleWithin(right.angle - minGap, left.start, left.end);
+                    left.angle = normalizeAngleWithin(
+                        right.angle - minGap,
+                        left.start,
+                        left.end,
+                    );
                 }
             }
         }
@@ -402,7 +473,11 @@ function recenterParents(
             continue;
         }
 
-        span.angle = normalizeAngleWithin(Math.atan2(sinSum, cosSum), span.start, span.end);
+        span.angle = normalizeAngleWithin(
+            Math.atan2(sinSum, cosSum),
+            span.start,
+            span.end,
+        );
     }
 }
 
@@ -429,7 +504,9 @@ export function getDescendantsUpToDepth(
     }
 
     const result: TaromboPerson[] = [root];
-    const queue: Array<{ id: string; depth: number }> = [{ id: rootId, depth: 0 }];
+    const queue: Array<{ id: string; depth: number }> = [
+        { id: rootId, depth: 0 },
+    ];
     const visited = new Set<string>([rootId]);
 
     while (queue.length > 0) {
@@ -477,7 +554,9 @@ export function buildRadialLayoutFromPerson(
         }
     }
 
-    const centerPerson = byId.get(centerPersonId) ?? allPeople.find((p) => p.id === centerPersonId);
+    const centerPerson =
+        byId.get(centerPersonId) ??
+        allPeople.find((p) => p.id === centerPersonId);
 
     if (!centerPerson) {
         return buildRadialLayout(allPeople, margas);
@@ -492,12 +571,20 @@ export function buildRadialLayoutFromPerson(
 
     if (context === 'descendants') {
         // Center + keturunan dengan depth limit
-        for (const person of getDescendantsUpToDepth(allPeople, centerPersonId, maxDepth)) {
+        for (const person of getDescendantsUpToDepth(
+            allPeople,
+            centerPersonId,
+            maxDepth,
+        )) {
             add(person);
         }
     } else {
         // Descendants: children → grandchildren (3 generations deep).
-        for (const person of getDescendantsUpToDepth(allPeople, centerPersonId, 3)) {
+        for (const person of getDescendantsUpToDepth(
+            allPeople,
+            centerPersonId,
+            3,
+        )) {
             add(person);
         }
 
@@ -506,7 +593,9 @@ export function buildRadialLayoutFromPerson(
 
         for (let depth = 0; depth < 2; depth++) {
             const parentId: string | null | undefined = current?.parentId;
-            const parent: TaromboPerson | undefined = parentId ? byId.get(parentId) : undefined;
+            const parent: TaromboPerson | undefined = parentId
+                ? byId.get(parentId)
+                : undefined;
             add(parent);
             current = parent;
         }
@@ -539,7 +628,9 @@ export function buildRadialLayoutFromPerson(
         const currentGeneration = generation.get(id) ?? 1;
         const ids = [
             ...(childrenOf.get(id) ?? []),
-            ...(byId.get(id)?.parentId ? [byId.get(id)?.parentId as string] : []),
+            ...(byId.get(id)?.parentId
+                ? [byId.get(id)?.parentId as string]
+                : []),
         ];
 
         for (const neighborId of ids) {
@@ -556,7 +647,9 @@ export function buildRadialLayoutFromPerson(
         }
 
         const parentId =
-            person.parentId && selected.has(person.parentId) ? person.parentId : centerPersonId;
+            person.parentId && selected.has(person.parentId)
+                ? person.parentId
+                : centerPersonId;
 
         return {
             ...person,
@@ -568,7 +661,22 @@ export function buildRadialLayoutFromPerson(
     return buildRadialLayout(renumberedPeople, margas);
 }
 
-export function buildRadialLayout(people: TaromboPerson[], margas: MargaInfo[]): TaromboLayout {
+export function buildRadialLayout(
+    people: TaromboPerson[],
+    margas: MargaInfo[],
+): TaromboLayout {
+    if (people.length === 0) {
+        return {
+            nodes: [],
+            edges: [],
+            sectors: [],
+            guides: [],
+            labels: [],
+            generationTags: [],
+            metrics: { extent: 0 },
+        };
+    }
+
     const byId = new Map(people.map((person) => [person.id, person]));
     const childrenOf = new Map<string, string[]>();
 
@@ -590,10 +698,21 @@ export function buildRadialLayout(people: TaromboPerson[], margas: MargaInfo[]):
     }
 
     const root = people.find((person) => !person.parentId) ?? people[0];
-    const maxGeneration = Math.max(...people.map((person) => person.generation));
+    const maxGeneration = Math.max(
+        ...people.map((person) => person.generation),
+    );
 
-    const spans = new Map<string, { start: number; end: number; angle: number }>();
-    assignSpans(root.id, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI, childrenOf, spans);
+    const spans = new Map<
+        string,
+        { start: number; end: number; angle: number }
+    >();
+    assignSpans(
+        root.id,
+        -Math.PI / 2,
+        -Math.PI / 2 + 2 * Math.PI,
+        childrenOf,
+        spans,
+    );
     enforceMinGap(people, spans);
     recenterParents(root.id, childrenOf, spans);
     enforceMinGap(people, spans);
@@ -605,19 +724,23 @@ export function buildRadialLayout(people: TaromboPerson[], margas: MargaInfo[]):
         const span = spans.get(person.id);
 
         if (!span) {
-continue;
-}
+            continue;
+        }
 
         const ringRadius = (person.generation - 1) * RING_GAP;
         const x = ringRadius * Math.cos(span.angle);
         const y = ringRadius * Math.sin(span.angle);
-        const ringColor = generationColors[(person.generation - 1) % generationColors.length];
+        const ringColor =
+            generationColors[(person.generation - 1) % generationColors.length];
 
         if (person.id === root.id) {
             nodes.push({
                 id: person.id,
                 type: 'center',
-                position: { x: x - ROOT_NODE_SIZE / 2, y: y - ROOT_NODE_SIZE / 2 },
+                position: {
+                    x: x - ROOT_NODE_SIZE / 2,
+                    y: y - ROOT_NODE_SIZE / 2,
+                },
                 width: ROOT_NODE_SIZE,
                 height: ROOT_NODE_SIZE,
                 data: { person, ringColor },
@@ -627,7 +750,10 @@ continue;
             nodes.push({
                 id: person.id,
                 type: 'person',
-                position: { x: x - PERSON_NODE_WIDTH / 2, y: y - PERSON_NODE_HEIGHT / 2 },
+                position: {
+                    x: x - PERSON_NODE_WIDTH / 2,
+                    y: y - PERSON_NODE_HEIGHT / 2,
+                },
                 width: PERSON_NODE_WIDTH,
                 height: PERSON_NODE_HEIGHT,
                 data: { person, ringColor },
@@ -638,31 +764,48 @@ continue;
 
     for (const person of people) {
         if (!person.parentId) {
-continue;
-}
+            continue;
+        }
 
         const parent = byId.get(person.parentId);
-        const stroke = generationColors[(person.generation - 1) % generationColors.length];
-        const sourceRadius = parent?.generation === 1 ? ROOT_NODE_RADIUS : PERSON_AVATAR_RADIUS;
+        const stroke =
+            generationColors[(person.generation - 1) % generationColors.length];
+        const sourceRadius =
+            parent?.generation === 1 ? ROOT_NODE_RADIUS : PERSON_AVATAR_RADIUS;
         edges.push({
             id: `edge-${person.parentId}-${person.id}`,
             source: person.parentId,
             target: person.id,
             type: 'radial',
-            data: { centerX: 0, centerY: 0, stroke, sourceRadius, targetRadius: PERSON_AVATAR_RADIUS },
-            style: { stroke: parent ? generationColors[(parent.generation - 1) % generationColors.length] : stroke },
+            data: {
+                centerX: 0,
+                centerY: 0,
+                stroke,
+                sourceRadius,
+                targetRadius: PERSON_AVATAR_RADIUS,
+            },
+            style: {
+                stroke: parent
+                    ? generationColors[
+                          (parent.generation - 1) % generationColors.length
+                      ]
+                    : stroke,
+            },
         });
     }
 
     const maxRingRadius = (maxGeneration - 1) * RING_GAP;
-    const outerLabelRadius = maxRingRadius + PERSON_NODE_HEIGHT / 2 + LABEL_OFFSET;
+    const outerLabelRadius =
+        maxRingRadius + PERSON_NODE_HEIGHT / 2 + LABEL_OFFSET;
     const extent = 2 * (outerLabelRadius + PAD);
 
     const sectorRootIds = childrenOf.get(root.id) ?? [];
     const sectors: TaromboSector[] = sectorRootIds.map((childId) => {
         const child = byId.get(childId);
         const span = spans.get(childId);
-        const marga = margas.find((margaInfo) => margaInfo.name === child?.marga);
+        const marga = margas.find(
+            (margaInfo) => margaInfo.name === child?.marga,
+        );
 
         return {
             marga: child?.marga ?? 'Marga',
@@ -672,7 +815,10 @@ continue;
         };
     });
 
-    const guides: number[] = Array.from({ length: maxGeneration - 1 }, (_, index) => (index + 1) * RING_GAP);
+    const guides: number[] = Array.from(
+        { length: maxGeneration - 1 },
+        (_, index) => (index + 1) * RING_GAP,
+    );
 
     const labels: TaromboLabel[] = sectors.map((sector) => ({
         text: sector.marga,
@@ -681,11 +827,14 @@ continue;
         radius: outerLabelRadius,
     }));
 
-    const generationTags: TaromboTag[] = Array.from({ length: maxGeneration - 1 }, (_, index) => ({
-        label: `Generasi ${index + 2}`,
-        radius: guides[index],
-        angle: -Math.PI / 2,
-    }));
+    const generationTags: TaromboTag[] = Array.from(
+        { length: maxGeneration - 1 },
+        (_, index) => ({
+            label: `Generasi ${index + 2}`,
+            radius: guides[index],
+            angle: -Math.PI / 2,
+        }),
+    );
 
     nodes.push({
         id: 'sectors',
@@ -700,7 +849,15 @@ continue;
         style: { pointerEvents: 'none' },
     });
 
-    return { nodes, edges, sectors, guides, labels, generationTags, metrics: { extent } };
+    return {
+        nodes,
+        edges,
+        sectors,
+        guides,
+        labels,
+        generationTags,
+        metrics: { extent },
+    };
 }
 
 export { INNER_RADIUS };

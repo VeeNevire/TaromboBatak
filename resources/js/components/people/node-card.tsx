@@ -49,36 +49,50 @@ export function NodeCard({
     badge?: string;
 }) {
     return (
-        <div className="flex min-w-[110px] max-w-[170px] flex-col items-center">
+        <div className="flex max-w-[170px] min-w-[110px] flex-col items-center">
             <div
                 className={cn(
                     'flex h-16 w-16 items-center justify-center overflow-hidden border transition-shadow',
                     highlighted ? 'rounded-xl' : 'rounded-full',
                 )}
                 style={{
-                    background: node.image ? 'transparent' : (node.margaColor ?? pastelFor(node.id)),
+                    background: node.image
+                        ? 'transparent'
+                        : (node.margaColor ?? pastelFor(node.id)),
                     borderColor: highlighted ? GOLD : '#E3DFD2',
-                    boxShadow: highlighted ? '0 3px 10px rgba(184,147,74,0.3)' : '0 2px 6px rgba(36,50,43,0.06)',
+                    boxShadow: highlighted
+                        ? '0 3px 10px rgba(184,147,74,0.3)'
+                        : '0 2px 6px rgba(36,50,43,0.06)',
                 }}
             >
                 {node.image ? (
-                    <img alt={node.name} src={node.image} className="h-full w-full object-cover" />
+                    <img
+                        alt={node.name}
+                        src={node.image}
+                        className="h-full w-full object-cover"
+                    />
                 ) : (
-                    <div style={{ color: FOREST }} className="text-sm font-bold opacity-80">
+                    <div
+                        style={{ color: FOREST }}
+                        className="text-sm font-bold opacity-80"
+                    >
                         {initials(node.name)}
                     </div>
                 )}
             </div>
             <div
-                className="mt-2 rounded-md border bg-white px-2 py-1 text-center text-[11px] font-semibold leading-snug"
-                style={{ borderColor: highlighted ? GOLD : '#E3DFD2', color: highlighted ? FOREST : INK }}
+                className="mt-2 rounded-md border bg-white px-2 py-1 text-center text-[11px] leading-snug font-semibold"
+                style={{
+                    borderColor: highlighted ? GOLD : '#E3DFD2',
+                    color: highlighted ? FOREST : INK,
+                }}
             >
                 {node.chain ? (
-                    <span className="block text-[9px] font-semibold uppercase tracking-wide text-[#5B6A61]">
+                    <span className="block text-[9px] font-semibold tracking-wide text-[#5B6A61] uppercase">
                         No. {node.chain}
                     </span>
                 ) : node.pending ? (
-                    <span className="block text-[9px] font-semibold uppercase tracking-wide text-[#B8934A]">
+                    <span className="block text-[9px] font-semibold tracking-wide text-[#B8934A] uppercase">
                         —
                     </span>
                 ) : null}

@@ -14,8 +14,13 @@ export function StoriesSection({ stories }: { stories: StoryItem[] }) {
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
-                <h2 className="font-display text-xl font-bold">Cerita Leluhur & Budaya</h2>
-                <Link href={cerita.index()} className="text-xs font-medium text-tb-outline hover:text-tb-primary">
+                <h2 className="font-display text-xl font-bold">
+                    Cerita Leluhur & Budaya
+                </h2>
+                <Link
+                    href={cerita.index()}
+                    className="text-xs font-medium text-tb-outline hover:text-tb-primary"
+                >
                     Lihat Semua
                 </Link>
             </div>
@@ -44,7 +49,9 @@ export function StoriesSection({ stories }: { stories: StoryItem[] }) {
                                 <h3 className="mb-1 text-sm font-bold transition-colors group-hover:text-tb-primary">
                                     {story.title}
                                 </h3>
-                                <p className="line-clamp-2 text-xs text-tb-on-surface-variant">{story.description}</p>
+                                <p className="line-clamp-2 text-xs text-tb-on-surface-variant">
+                                    {story.description}
+                                </p>
                             </div>
                             <ChevronRight className="h-4 w-4 self-center text-tb-outline transition-colors group-hover:text-tb-primary" />
                         </Link>

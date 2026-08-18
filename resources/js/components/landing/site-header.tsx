@@ -33,7 +33,9 @@ export function SiteHeader() {
     const { url } = usePage();
     const pathname = url.split('?')[0];
 
-    const activeKey = navLinks.find((l) => pageHref(l.label) === pathname)?.label;
+    const activeKey = navLinks.find(
+        (l) => pageHref(l.label) === pathname,
+    )?.label;
 
     useEffect(() => {
         const scrollToHash = () => {
@@ -44,7 +46,9 @@ export function SiteHeader() {
             }
 
             requestAnimationFrame(() => {
-                document.querySelector(hash)?.scrollIntoView({ behavior: 'smooth' });
+                document
+                    .querySelector(hash)
+                    ?.scrollIntoView({ behavior: 'smooth' });
             });
         };
 
@@ -65,7 +69,11 @@ export function SiteHeader() {
                     <motion.span
                         layoutId="nav-active"
                         className="absolute inset-x-0 -bottom-1 h-0.5 bg-tb-primary"
-                        transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                        transition={{
+                            type: 'spring',
+                            stiffness: 380,
+                            damping: 30,
+                        }}
                     />
                 )}
             </>
@@ -85,22 +93,24 @@ export function SiteHeader() {
     return (
         <header className="sticky top-0 z-50 border-b border-tb-outline-variant bg-tb-surface-bright/90 px-6 py-4 backdrop-blur-md">
             <div className="mx-auto flex max-w-7xl items-center justify-between">
-                 <Link href={home()} className="flex items-center gap-2">
-           <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded bg-tb-primary">
-                        <BrandLogo className="size-7" />
+                <Link href={home()} className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded bg-tb-primary">
+                            <BrandLogo className="size-7" />
+                        </div>
+                        <div>
+                            <h1 className="font-display text-xl leading-tight font-bold">
+                                Tarombo Batak
+                            </h1>
+                            <p className="text-xs text-tb-on-surface-variant">
+                                Silsilah • Budaya • Identitas
+                            </p>
+                        </div>
                     </div>
-                    <div>
-                        <h1 className="font-display text-xl font-bold leading-tight">Tarombo Batak</h1>
-                        <p className="text-xs text-tb-on-surface-variant">Silsilah • Budaya • Identitas</p>
-                    </div>
-                </div>
-        </Link>
-                
+                </Link>
+
                 <nav className="hidden items-center gap-8 text-sm font-medium md:flex">
-                    {navLinks.map((link) =>
-                        renderLink(link.label),
-                    )}
+                    {navLinks.map((link) => renderLink(link.label))}
                 </nav>
                 <div className="flex items-center gap-3">
                     <ThemeToggle />

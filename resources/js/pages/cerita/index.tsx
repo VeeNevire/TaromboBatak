@@ -60,13 +60,15 @@ export default function CeritaIndex({ stories: page, filters }: Props) {
                             </div>
                         </Reveal>
                         <Reveal delay={0.1}>
-                            <h1 className="font-display text-4xl font-bold leading-tight md:text-5xl lg:text-6xl">
+                            <h1 className="font-display text-4xl leading-tight font-bold md:text-5xl lg:text-6xl">
                                 Cerita Leluhur & Budaya
                             </h1>
                         </Reveal>
                         <Reveal delay={0.2}>
                             <p className="mx-auto max-w-3xl text-lg leading-relaxed text-tb-on-surface-variant">
-                                Jelajahi kearifan, sejarah, dan nilai-nilai luhur yang diwariskan turun-temurun dalam cerita-cerita leluhur masyarakat Batak.
+                                Jelajahi kearifan, sejarah, dan nilai-nilai
+                                luhur yang diwariskan turun-temurun dalam
+                                cerita-cerita leluhur masyarakat Batak.
                             </p>
                         </Reveal>
                     </section>
@@ -74,7 +76,7 @@ export default function CeritaIndex({ stories: page, filters }: Props) {
                     <section className="mx-auto max-w-7xl px-6 pb-16">
                         <div className="mb-8">
                             <div className="relative mx-auto max-w-xl">
-                                <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-tb-outline" />
+                                <Search className="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-tb-outline" />
                                 <Input
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
@@ -93,7 +95,9 @@ export default function CeritaIndex({ stories: page, filters }: Props) {
                             <div className="py-16 text-center">
                                 <BookOpen className="mx-auto h-12 w-12 text-tb-outline" />
                                 <p className="mt-4 text-tb-on-surface-variant">
-                                    {filters.search ? 'Tidak ada cerita yang cocok dengan pencarian Anda.' : 'Belum ada cerita untuk ditampilkan.'}
+                                    {filters.search
+                                        ? 'Tidak ada cerita yang cocok dengan pencarian Anda.'
+                                        : 'Belum ada cerita untuk ditampilkan.'}
                                 </p>
                             </div>
                         )}
@@ -126,7 +130,9 @@ export default function CeritaIndex({ stories: page, filters }: Props) {
                                                 {story.description}
                                             </p>
                                             {story.created_at && (
-                                                <p className="text-xs text-tb-outline">{story.created_at}</p>
+                                                <p className="text-xs text-tb-outline">
+                                                    {story.created_at}
+                                                </p>
                                             )}
                                         </div>
                                     </Link>
@@ -137,7 +143,8 @@ export default function CeritaIndex({ stories: page, filters }: Props) {
                         {page.total > 0 && (
                             <div className="mt-12 flex flex-col items-center justify-between gap-4 text-sm text-tb-on-surface-variant sm:flex-row">
                                 <p>
-                                    Menampilkan {page.from ?? 0}–{page.to ?? 0} dari {page.total} cerita
+                                    Menampilkan {page.from ?? 0}–{page.to ?? 0}{' '}
+                                    dari {page.total} cerita
                                 </p>
                                 <div className="flex gap-2">
                                     <Button
@@ -145,7 +152,14 @@ export default function CeritaIndex({ stories: page, filters }: Props) {
                                         size="sm"
                                         className="border-tb-outline-variant bg-tb-surface-bright text-tb-on-surface"
                                         disabled={!page.prev_page_url}
-                                        onClick={() => page.prev_page_url && router.get(page.prev_page_url, {}, { preserveState: true })}
+                                        onClick={() =>
+                                            page.prev_page_url &&
+                                            router.get(
+                                                page.prev_page_url,
+                                                {},
+                                                { preserveState: true },
+                                            )
+                                        }
                                     >
                                         Sebelumnya
                                     </Button>
@@ -154,7 +168,14 @@ export default function CeritaIndex({ stories: page, filters }: Props) {
                                         size="sm"
                                         className="border-tb-outline-variant bg-tb-surface-bright text-tb-on-surface"
                                         disabled={!page.next_page_url}
-                                        onClick={() => page.next_page_url && router.get(page.next_page_url, {}, { preserveState: true })}
+                                        onClick={() =>
+                                            page.next_page_url &&
+                                            router.get(
+                                                page.next_page_url,
+                                                {},
+                                                { preserveState: true },
+                                            )
+                                        }
                                     >
                                         Berikutnya
                                     </Button>
@@ -169,14 +190,16 @@ export default function CeritaIndex({ stories: page, filters }: Props) {
                                         Jelajahi Lebih Banyak
                                     </h2>
                                     <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-tb-on-surface-variant">
-                                        Telusuri silsilah keluarga Anda atau pelajari tentang kekayaan budaya Batak.
+                                        Telusuri silsilah keluarga Anda atau
+                                        pelajari tentang kekayaan budaya Batak.
                                     </p>
                                     <div className="mt-8 flex flex-wrap justify-center gap-4">
                                         <Link
                                             href={home()}
                                             className="flex items-center gap-2 rounded-full bg-tb-primary px-6 py-3 font-medium text-white transition-colors hover:bg-tb-primary-light"
                                         >
-                                            Kembali ke Beranda <ArrowRight className="h-4 w-4" />
+                                            Kembali ke Beranda{' '}
+                                            <ArrowRight className="h-4 w-4" />
                                         </Link>
                                     </div>
                                 </div>

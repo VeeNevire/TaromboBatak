@@ -58,17 +58,27 @@ function TreeBranch({
                 <NodeCard
                     node={toNode(person)}
                     highlighted={isCenter || isHighlighted}
-                    badge={isCenter ? undefined : `Anak ke ${person.birthOrder ?? '?'}`}
+                    badge={
+                        isCenter
+                            ? undefined
+                            : `Anak ke ${person.birthOrder ?? '?'}`
+                    }
                 />
             </button>
             {children.length > 0 && (
                 <button
                     type="button"
                     onClick={() => onToggle(person.id)}
-                    aria-label={isCollapsed ? 'Bentangkan cabang' : 'Ciutkan cabang'}
+                    aria-label={
+                        isCollapsed ? 'Bentangkan cabang' : 'Ciutkan cabang'
+                    }
                     className="mt-1 flex h-5 w-5 items-center justify-center rounded-full border border-[#a79e8c]/60 bg-white text-[#5B6A61] transition-colors hover:bg-[#EFE2C9]"
                 >
-                    {isCollapsed ? <ChevronRight className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                    {isCollapsed ? (
+                        <ChevronRight className="size-3.5" />
+                    ) : (
+                        <ChevronDown className="size-3.5" />
+                    )}
                 </button>
             )}
             {!isCollapsed && children.length > 0 && (
@@ -91,7 +101,12 @@ function TreeBranch({
     );
 }
 
-export function DescendantsTree({ people, centerId, onSelect, highlightId }: Props) {
+export function DescendantsTree({
+    people,
+    centerId,
+    onSelect,
+    highlightId,
+}: Props) {
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
     const childrenOf = useMemo(() => {

@@ -35,6 +35,9 @@ test('sub-admins can manage people', function () {
         ->post(route('people.store'), [
             'name' => 'Orang Baru',
             'marga_id' => $marga->id,
+            'birth_order' => 1,
+            'sibling_count' => 1,
+            'children' => [['name' => 'Orang Baru']],
         ])
         ->assertRedirect(route('people.index'));
 });

@@ -16,7 +16,9 @@ type LayoutProps = {
     [key: string]: unknown;
 };
 
-function baseLayout(name: string): ComponentType<LayoutProps> | ComponentType<LayoutProps>[] | null {
+function baseLayout(
+    name: string,
+): ComponentType<LayoutProps> | ComponentType<LayoutProps>[] | null {
     switch (true) {
         case name === 'welcome':
         case name === 'home':
@@ -58,9 +60,7 @@ createInertiaApp({
                 const layouts = Array.isArray(base) ? base : [base];
 
                 content = layouts.reduceRight<ReactNode>(
-                    (acc, Layout) => (
-                        <Layout {...props}>{acc}</Layout>
-                    ),
+                    (acc, Layout) => <Layout {...props}>{acc}</Layout>,
                     children,
                 );
             }
@@ -78,7 +78,7 @@ createInertiaApp({
         );
     },
     progress: {
-       color: 'var(--color-tb-primary)',
+        color: 'var(--color-tb-primary)',
     },
 });
 

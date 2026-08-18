@@ -12,9 +12,17 @@ type Props = {
     nameSuggestions: string[];
     lockedMarga?: { id: number; name: string } | null;
     lineage?: MargaLineageEntry[];
+    canPublish: boolean;
 };
 
-export default function PersonForm({ person, margas, nameSuggestions, lockedMarga, lineage }: Props) {
+export default function PersonForm({
+    person,
+    margas,
+    nameSuggestions,
+    lockedMarga,
+    lineage,
+    canPublish,
+}: Props) {
     const isEdit = person !== null;
 
     return (
@@ -23,9 +31,15 @@ export default function PersonForm({ person, margas, nameSuggestions, lockedMarg
 
             <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
                 <div className="flex flex-col gap-3">
-                    <Button asChild variant="ghost" size="sm" className="w-fit text-tb-on-surface-variant">
+                    <Button
+                        asChild
+                        variant="ghost"
+                        size="sm"
+                        className="w-fit text-tb-on-surface-variant"
+                    >
                         <Link href={people.index()}>
-                            <ArrowLeft className="size-4" /> Kembali ke Data Anggota
+                            <ArrowLeft className="size-4" /> Kembali ke Data
+                            Anggota
                         </Link>
                     </Button>
                     <div>
@@ -40,7 +54,14 @@ export default function PersonForm({ person, margas, nameSuggestions, lockedMarg
                     </div>
                 </div>
 
-                <FamilyForm person={person} margas={margas} nameSuggestions={nameSuggestions} lockedMarga={lockedMarga} lineage={lineage} />
+                <FamilyForm
+                    person={person}
+                    margas={margas}
+                    nameSuggestions={nameSuggestions}
+                    lockedMarga={lockedMarga}
+                    lineage={lineage}
+                    canPublish={canPublish}
+                />
             </div>
         </>
     );

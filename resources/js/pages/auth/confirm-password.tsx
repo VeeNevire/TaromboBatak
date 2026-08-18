@@ -46,6 +46,5 @@ export default function ConfirmPassword() {
 
 ConfirmPassword.layout = {
     title: 'Konfirmasi Password',
-    description:
-        'Silakan konfirmasi password Anda sebelum melanjutkan.',
+    description: 'Silakan konfirmasi password Anda sebelum melanjutkan.',
 };

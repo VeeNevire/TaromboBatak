@@ -9,7 +9,13 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { store as loginStore } from '@/routes/login';
 import { request as passwordRequest } from '@/routes/password';
 import { store as registerStore } from '@/routes/register';
@@ -40,14 +46,16 @@ export default function Login({ canResetPassword, margas }: Props) {
         <>
             <Head title={mode === 'login' ? 'Masuk' : 'Daftar'} />
 
-            <div className="flex items-center justify-center min-h-svh px-4 py-12 bg-tb-surface bg-tb-gorga">
+            <div className="bg-tb-gorga flex min-h-svh items-center justify-center bg-tb-surface px-4 py-12">
                 <div className="w-full max-w-md">
-                    <div className="text-center mb-8">
+                    <div className="mb-8 text-center">
                         <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-tb-primary">
                             <BrandLogo className="size-10" />
                         </div>
                         <h1 className="font-display text-3xl font-bold text-tb-on-surface">
-                            {mode === 'login' ? 'Selamat Datang Kembali' : 'Bergabung dengan Tarombo Batak'}
+                            {mode === 'login'
+                                ? 'Selamat Datang Kembali'
+                                : 'Bergabung dengan Tarombo Batak'}
                         </h1>
                         <p className="mt-2 text-tb-on-surface-variant">
                             {mode === 'login'
@@ -56,13 +64,16 @@ export default function Login({ canResetPassword, margas }: Props) {
                         </p>
                     </div>
 
-                    <div className="bg-tb-surface-bright rounded-3xl border border-tb-outline-variant shadow-xl p-6 sm:p-8">
-                        <div className="relative flex mb-6 border-b border-tb-outline-variant" role="tablist">
+                    <div className="rounded-3xl border border-tb-outline-variant bg-tb-surface-bright p-6 shadow-xl sm:p-8">
+                        <div
+                            className="relative mb-6 flex border-b border-tb-outline-variant"
+                            role="tablist"
+                        >
                             <button
                                 role="tab"
                                 aria-selected={mode === 'login'}
                                 onClick={() => switchMode('login')}
-                                className={`relative flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+                                className={`relative flex-1 px-4 py-3 text-sm font-medium transition-colors ${
                                     mode === 'login'
                                         ? 'text-tb-primary'
                                         : 'text-tb-on-surface-variant hover:text-tb-on-surface'
@@ -73,7 +84,11 @@ export default function Login({ canResetPassword, margas }: Props) {
                                     <motion.span
                                         layoutId="tab-active"
                                         className="absolute inset-x-0 bottom-0 h-0.5 bg-tb-primary"
-                                        transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                                        transition={{
+                                            type: 'spring',
+                                            stiffness: 420,
+                                            damping: 32,
+                                        }}
                                     />
                                 )}
                             </button>
@@ -81,7 +96,7 @@ export default function Login({ canResetPassword, margas }: Props) {
                                 role="tab"
                                 aria-selected={mode === 'register'}
                                 onClick={() => switchMode('register')}
-                                className={`relative flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+                                className={`relative flex-1 px-4 py-3 text-sm font-medium transition-colors ${
                                     mode === 'register'
                                         ? 'text-tb-primary'
                                         : 'text-tb-on-surface-variant hover:text-tb-on-surface'
@@ -92,13 +107,22 @@ export default function Login({ canResetPassword, margas }: Props) {
                                     <motion.span
                                         layoutId="tab-active"
                                         className="absolute inset-x-0 bottom-0 h-0.5 bg-tb-primary"
-                                        transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                                        transition={{
+                                            type: 'spring',
+                                            stiffness: 420,
+                                            damping: 32,
+                                        }}
                                     />
                                 )}
                             </button>
                         </div>
 
-                        <SlideSwap mode={mode} direction={direction} margas={margas} canResetPassword={canResetPassword} />
+                        <SlideSwap
+                            mode={mode}
+                            direction={direction}
+                            margas={margas}
+                            canResetPassword={canResetPassword}
+                        />
                     </div>
 
                     <p className="mt-6 text-center text-sm text-tb-on-surface-variant">
@@ -108,7 +132,7 @@ export default function Login({ canResetPassword, margas }: Props) {
                                 <button
                                     type="button"
                                     onClick={() => switchMode('register')}
-                                    className="text-tb-primary font-medium hover:underline"
+                                    className="font-medium text-tb-primary hover:underline"
                                 >
                                     Daftar di sini
                                 </button>
@@ -119,7 +143,7 @@ export default function Login({ canResetPassword, margas }: Props) {
                                 <button
                                     type="button"
                                     onClick={() => switchMode('login')}
-                                    className="text-tb-primary font-medium hover:underline"
+                                    className="font-medium text-tb-primary hover:underline"
                                 >
                                     Masuk di sini
                                 </button>
@@ -159,7 +183,11 @@ function SlideSwap({
             transition={{ duration: 0.25, ease: 'easeInOut' }}
             className="relative overflow-x-clip"
         >
-            <AnimatePresence mode="popLayout" initial={false} custom={direction}>
+            <AnimatePresence
+                mode="popLayout"
+                initial={false}
+                custom={direction}
+            >
                 <motion.div
                     key={mode}
                     ref={boxRef}
@@ -191,11 +219,14 @@ function LoginForm({ canResetPassword }: { canResetPassword: boolean }) {
                 <>
                     <div className="grid gap-5">
                         <div className="grid gap-1.5">
-                            <Label htmlFor="email" className="font-medium text-tb-on-surface">
+                            <Label
+                                htmlFor="email"
+                                className="font-medium text-tb-on-surface"
+                            >
                                 Alamat Email
                             </Label>
                             <div className="relative">
-                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-tb-outline" />
+                                <Mail className="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-tb-outline" />
                                 <Input
                                     id="email"
                                     type="email"
@@ -205,15 +236,21 @@ function LoginForm({ canResetPassword }: { canResetPassword: boolean }) {
                                     tabIndex={1}
                                     autoComplete="email"
                                     placeholder="email@example.com"
-                                    className="pl-11 bg-tb-surface-bright border-tb-outline-variant focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
+                                    className="border-tb-outline-variant bg-tb-surface-bright pl-11 focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
                                 />
                             </div>
-                            <InputError message={errors.email} className="text-sm text-red-600" />
+                            <InputError
+                                message={errors.email}
+                                className="text-sm text-red-600"
+                            />
                         </div>
 
                         <div className="grid gap-1.5">
                             <div className="flex items-center justify-between">
-                                <Label htmlFor="password" className="font-medium text-tb-on-surface">
+                                <Label
+                                    htmlFor="password"
+                                    className="font-medium text-tb-on-surface"
+                                >
                                     Kata Sandi
                                 </Label>
                                 {canResetPassword && (
@@ -233,9 +270,12 @@ function LoginForm({ canResetPassword }: { canResetPassword: boolean }) {
                                 tabIndex={2}
                                 autoComplete="current-password"
                                 placeholder="Kata sandi"
-                                className="bg-tb-surface-bright border-tb-outline-variant focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
+                                className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
                             />
-                            <InputError message={errors.password} className="text-sm text-red-600" />
+                            <InputError
+                                message={errors.password}
+                                className="text-sm text-red-600"
+                            />
                         </div>
 
                         <div className="flex items-center space-x-3">
@@ -245,7 +285,10 @@ function LoginForm({ canResetPassword }: { canResetPassword: boolean }) {
                                 tabIndex={3}
                                 className="rounded border-tb-outline-variant text-tb-primary focus:ring-tb-primary"
                             />
-                            <Label htmlFor="remember" className="text-sm text-tb-on-surface-variant cursor-pointer">
+                            <Label
+                                htmlFor="remember"
+                                className="cursor-pointer text-sm text-tb-on-surface-variant"
+                            >
                                 Ingat saya
                             </Label>
                         </div>
@@ -285,11 +328,14 @@ function RegisterForm({ margas }: { margas: MargaOption[] }) {
                 <>
                     <div className="grid gap-5">
                         <div className="grid gap-1.5">
-                            <Label htmlFor="name" className="font-medium text-tb-on-surface">
+                            <Label
+                                htmlFor="name"
+                                className="font-medium text-tb-on-surface"
+                            >
                                 Nama Lengkap
                             </Label>
                             <div className="relative">
-                                <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-tb-outline" />
+                                <User className="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-tb-outline" />
                                 <Input
                                     id="name"
                                     type="text"
@@ -299,18 +345,24 @@ function RegisterForm({ margas }: { margas: MargaOption[] }) {
                                     tabIndex={1}
                                     autoComplete="name"
                                     placeholder="Nama lengkap"
-                                    className="pl-11 bg-tb-surface-bright border-tb-outline-variant focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
+                                    className="border-tb-outline-variant bg-tb-surface-bright pl-11 focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
                                 />
                             </div>
-                            <InputError message={errors.name} className="text-sm text-red-600" />
+                            <InputError
+                                message={errors.name}
+                                className="text-sm text-red-600"
+                            />
                         </div>
 
                         <div className="grid gap-1.5">
-                            <Label htmlFor="email" className="font-medium text-tb-on-surface">
+                            <Label
+                                htmlFor="email"
+                                className="font-medium text-tb-on-surface"
+                            >
                                 Alamat Email
                             </Label>
                             <div className="relative">
-                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-tb-outline" />
+                                <Mail className="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-tb-outline" />
                                 <Input
                                     id="email"
                                     type="email"
@@ -319,40 +371,62 @@ function RegisterForm({ margas }: { margas: MargaOption[] }) {
                                     tabIndex={2}
                                     autoComplete="email"
                                     placeholder="email@example.com"
-                                    className="pl-11 bg-tb-surface-bright border-tb-outline-variant focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
+                                    className="border-tb-outline-variant bg-tb-surface-bright pl-11 focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
                                 />
                             </div>
-                            <InputError message={errors.email} className="text-sm text-red-600" />
+                            <InputError
+                                message={errors.email}
+                                className="text-sm text-red-600"
+                            />
                         </div>
 
                         <div className="grid gap-1.5">
-                            <Label htmlFor="marga" className="font-medium text-tb-on-surface">
+                            <Label
+                                htmlFor="marga"
+                                className="font-medium text-tb-on-surface"
+                            >
                                 Marga Keluarga
                             </Label>
                             <div className="relative">
-                                <Shapes className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-tb-outline" />
-                                <Select value={margaId} onValueChange={setMargaId}>
+                                <Shapes className="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-tb-outline" />
+                                <Select
+                                    value={margaId}
+                                    onValueChange={setMargaId}
+                                >
                                     <SelectTrigger
                                         id="marga"
-                                        className="w-full pl-11 bg-tb-surface-bright border-tb-outline-variant focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
+                                        className="w-full border-tb-outline-variant bg-tb-surface-bright pl-11 focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
                                     >
                                         <SelectValue placeholder="Pilih marga keluarga" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         {margas.map((marga) => (
-                                            <SelectItem key={marga.id} value={String(marga.id)}>
+                                            <SelectItem
+                                                key={marga.id}
+                                                value={String(marga.id)}
+                                            >
                                                 {marga.name}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                <input type="hidden" name="marga_id" value={margaId} />
+                                <input
+                                    type="hidden"
+                                    name="marga_id"
+                                    value={margaId}
+                                />
                             </div>
-                            <InputError message={errors.marga_id} className="text-sm text-red-600" />
+                            <InputError
+                                message={errors.marga_id}
+                                className="text-sm text-red-600"
+                            />
                         </div>
 
                         <div className="grid gap-1.5">
-                            <Label htmlFor="password" className="font-medium text-tb-on-surface">
+                            <Label
+                                htmlFor="password"
+                                className="font-medium text-tb-on-surface"
+                            >
                                 Kata Sandi
                             </Label>
                             <PasswordInput
@@ -362,13 +436,19 @@ function RegisterForm({ margas }: { margas: MargaOption[] }) {
                                 tabIndex={3}
                                 autoComplete="new-password"
                                 placeholder="Minimal 8 karakter"
-                                className="bg-tb-surface-bright border-tb-outline-variant focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
+                                className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
                             />
-                            <InputError message={errors.password} className="text-sm text-red-600" />
+                            <InputError
+                                message={errors.password}
+                                className="text-sm text-red-600"
+                            />
                         </div>
 
                         <div className="grid gap-1.5">
-                            <Label htmlFor="password_confirmation" className="font-medium text-tb-on-surface">
+                            <Label
+                                htmlFor="password_confirmation"
+                                className="font-medium text-tb-on-surface"
+                            >
                                 Konfirmasi Kata Sandi
                             </Label>
                             <PasswordInput
@@ -378,9 +458,12 @@ function RegisterForm({ margas }: { margas: MargaOption[] }) {
                                 tabIndex={4}
                                 autoComplete="new-password"
                                 placeholder="Ulangi kata sandi"
-                                className="bg-tb-surface-bright border-tb-outline-variant focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
+                                className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
                             />
-                            <InputError message={errors.password_confirmation} className="text-sm text-red-600" />
+                            <InputError
+                                message={errors.password_confirmation}
+                                className="text-sm text-red-600"
+                            />
                         </div>
 
                         <Button

@@ -7,7 +7,9 @@ export function FeaturesSection() {
             <div className="mx-auto max-w-7xl">
                 <div className="mb-12 flex items-center justify-center gap-4">
                     <div className="h-px w-16 bg-tb-outline-variant" />
-                    <h2 className="font-display text-2xl font-bold text-center">Fitur Unggulan</h2>
+                    <h2 className="text-center font-display text-2xl font-bold">
+                        Fitur Unggulan
+                    </h2>
                     <div className="h-px w-16 bg-tb-outline-variant" />
                 </div>
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-3 lg:grid-cols-6">
@@ -19,8 +21,12 @@ export function FeaturesSection() {
                                 >
                                     <feature.icon className="h-6 w-6" />
                                 </div>
-                                <h3 className="mb-2 text-sm font-bold">{feature.title}</h3>
-                                <p className="text-xs leading-relaxed text-tb-on-surface-variant">{feature.description}</p>
+                                <h3 className="mb-2 text-sm font-bold">
+                                    {feature.title}
+                                </h3>
+                                <p className="text-xs leading-relaxed text-tb-on-surface-variant">
+                                    {feature.description}
+                                </p>
                             </div>
                         </Reveal>
                     ))}

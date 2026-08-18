@@ -4,8 +4,12 @@ import { useMemo, useState } from 'react';
 import { ProfileCard } from '@/components/landing/profile-card';
 import { TaromboDiagram } from '@/components/landing/tarombo-diagram';
 import { stats } from '@/data/landing';
-import { findPerson, findPersonChildren, MOCK_TAROMBO  } from '@/data/tarombo-tree';
-import type {TaromboPerson} from '@/data/tarombo-tree';
+import {
+    findPerson,
+    findPersonChildren,
+    MOCK_TAROMBO,
+} from '@/data/tarombo-tree';
+import type { TaromboPerson } from '@/data/tarombo-tree';
 
 const DEFAULT_PERSON_ID = 'tuan-sorimangaraja';
 
@@ -16,12 +20,17 @@ const container = {
 
 const item = {
     hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } },
+    visible: {
+        opacity: 1,
+        y: 0,
+        transition: { duration: 0.5, ease: 'easeOut' as const },
+    },
 };
 
 export function Hero() {
     const [selected, setSelected] = useState<TaromboPerson | null>(null);
-    const [centerPersonId, setCenterPersonId] = useState<string>(DEFAULT_PERSON_ID);
+    const [centerPersonId, setCenterPersonId] =
+        useState<string>(DEFAULT_PERSON_ID);
     const [history, setHistory] = useState<string[]>([]);
     const children = useMemo(
         () => (selected ? findPersonChildren(MOCK_TAROMBO, selected.id) : []),
@@ -56,7 +65,10 @@ export function Hero() {
     };
 
     return (
-        <section id="beranda" className="mx-auto flex max-w-7xl flex-col items-center gap-12 px-6 py-12 md:py-20 lg:flex-row">
+        <section
+            id="beranda"
+            className="mx-auto flex max-w-7xl flex-col items-center gap-12 px-6 py-12 md:py-20 lg:flex-row"
+        >
             <motion.div
                 className="space-y-8 lg:w-[28%]"
                 variants={container}
@@ -65,7 +77,7 @@ export function Hero() {
             >
                 <motion.h2
                     variants={item}
-                    className="font-display text-5xl font-bold leading-tight text-tb-on-surface md:text-6xl"
+                    className="font-display text-5xl leading-tight font-bold text-tb-on-surface md:text-6xl"
                 >
                     Lestarikan Silsilah,
                     <br />
@@ -75,37 +87,50 @@ export function Hero() {
                     variants={item}
                     className="text-lg leading-relaxed text-tb-on-surface-variant"
                 >
-                    Tarombo Batak adalah platform digital untuk menelusuri silsilah keluarga, menjaga warisan leluhur,
-                    dan menghubungkan generasi masa kini dengan akar budaya Batak.
+                    Tarombo Batak adalah platform digital untuk menelusuri
+                    silsilah keluarga, menjaga warisan leluhur, dan
+                    menghubungkan generasi masa kini dengan akar budaya Batak.
                 </motion.p>
-                <motion.div variants={item} className="flex w-fit gap-6 border-t border-tb-outline-variant pt-4">
+                <motion.div
+                    variants={item}
+                    className="flex w-fit gap-6 border-t border-tb-outline-variant pt-4"
+                >
                     {stats.map((stat) => (
                         <div key={stat.label}>
                             <p className="flex items-center text-xl font-bold">
-                                {stat.icon && <stat.icon className="mr-1 h-4 w-4 text-tb-on-surface-variant" />}
+                                {stat.icon && (
+                                    <stat.icon className="mr-1 h-4 w-4 text-tb-on-surface-variant" />
+                                )}
                                 {stat.value}
                             </p>
-                            <p className="text-xs text-tb-on-surface-variant">{stat.label}</p>
+                            <p className="text-xs text-tb-on-surface-variant">
+                                {stat.label}
+                            </p>
                         </div>
                     ))}
                 </motion.div>
-               <motion.div variants={item} className="flex flex-col gap-4 pt-4">
-    <button
-        type="button"
-        className="flex w-full items-center justify-between gap-2 whitespace-nowrap rounded-full bg-tb-primary px-6 py-3 font-medium text-white transition-colors hover:bg-tb-primary-light"
-    >
-        Mulai Telusuri Tarombo <ArrowRight className="h-4 w-4 shrink-0" />
-    </button>
+                <motion.div
+                    variants={item}
+                    className="flex flex-col gap-4 pt-4"
+                >
+                    <button
+                        type="button"
+                        className="flex w-full items-center justify-between gap-2 rounded-full bg-tb-primary px-6 py-3 font-medium whitespace-nowrap text-white transition-colors hover:bg-tb-primary-light"
+                    >
+                        Mulai Telusuri Tarombo{' '}
+                        <ArrowRight className="h-4 w-4 shrink-0" />
+                    </button>
 
-    <button
-        type="button"
-        className="flex w-full items-center justify-between gap-2 whitespace-nowrap rounded-full border border-tb-primary px-6 py-3 font-medium transition-colors hover:bg-tb-primary hover:text-white"
-    >
-        <span className="flex items-center gap-2">
-            <CirclePlay className="h-5 w-5 shrink-0" /> Pelajari Lebih Lanjut
-        </span>
-    </button>
-</motion.div>
+                    <button
+                        type="button"
+                        className="flex w-full items-center justify-between gap-2 rounded-full border border-tb-primary px-6 py-3 font-medium whitespace-nowrap transition-colors hover:bg-tb-primary hover:text-white"
+                    >
+                        <span className="flex items-center gap-2">
+                            <CirclePlay className="h-5 w-5 shrink-0" /> Pelajari
+                            Lebih Lanjut
+                        </span>
+                    </button>
+                </motion.div>
             </motion.div>
             <motion.div
                 className="w-full lg:w-[44%]"
@@ -130,7 +155,11 @@ export function Hero() {
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.6, delay: 0.4 }}
             >
-                <ProfileCard person={selected} childrenList={children} onClose={handleCloseProfile} />
+                <ProfileCard
+                    person={selected}
+                    childrenList={children}
+                    onClose={handleCloseProfile}
+                />
             </motion.div>
         </section>
     );

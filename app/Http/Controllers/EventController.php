@@ -50,7 +50,7 @@ class EventController extends Controller
             ->when($request->filled('search'), function ($query) use ($request) {
                 $query->where('title', 'like', '%'.$request->string('search').'%');
             })
-            ->orderByRaw('CASE WHEN date >= CURDATE() THEN 0 ELSE 1 END')
+            ->orderByRaw('CASE WHEN date >= ? THEN 0 ELSE 1 END', [now()->toDateString()])
             ->orderBy('date')
             ->paginate(12)
             ->withQueryString()

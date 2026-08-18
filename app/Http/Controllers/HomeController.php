@@ -44,7 +44,7 @@ class HomeController extends Controller
             ]);
 
         $margas = Marga::query()
-            ->withCount('people')
+            ->withCount(['people' => fn ($query) => $query->public()])
             ->orderByDesc('people_count')
             ->orderBy('name')
             ->limit(5)

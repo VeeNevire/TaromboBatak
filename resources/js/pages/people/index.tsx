@@ -4,9 +4,22 @@ import { useState } from 'react';
 import { AppAvatar } from '@/components/app-avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { dashboard } from '@/routes';
 import people from '@/routes/people';
 
@@ -46,18 +59,34 @@ type Props = {
     hasMarga: boolean;
 };
 
-export default function PeopleIndex({ people: page, filters, margas, canManage, hasMarga }: Props) {
+export default function PeopleIndex({
+    people: page,
+    filters,
+    margas,
+    canManage,
+    hasMarga,
+}: Props) {
     const [search, setSearch] = useState(filters.search ?? '');
     const [toDelete, setToDelete] = useState<PersonItem | null>(null);
     const deleteForm = useForm({});
-    const showActions = canManage || page.data.some((person) => person.editable);
+    const showActions =
+        canManage || page.data.some((person) => person.editable);
 
-    const applyFilter = (updates: { search?: string; marga_id?: string | null }) => {
+    const applyFilter = (updates: {
+        search?: string;
+        marga_id?: string | null;
+    }) => {
         router.get(
             people.index().url,
             {
-                search: updates.search !== undefined ? updates.search : filters.search,
-                marga_id: updates.marga_id !== undefined ? updates.marga_id : filters.marga_id,
+                search:
+                    updates.search !== undefined
+                        ? updates.search
+                        : filters.search,
+                marga_id:
+                    updates.marga_id !== undefined
+                        ? updates.marga_id
+                        : filters.marga_id,
             },
             { preserveState: true, replace: true },
         );
@@ -82,7 +111,9 @@ export default function PeopleIndex({ people: page, filters, margas, canManage, 
                 <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                     <div>
                         <h1 className="font-display text-2xl font-bold text-tb-on-surface md:text-3xl">
-                            {canManage ? 'Data Anggota' : 'Silsilah Keluarga Saya'}
+                            {canManage
+                                ? 'Data Anggota'
+                                : 'Silsilah Keluarga Saya'}
                         </h1>
                         <p className="mt-1 text-sm text-tb-on-surface-variant">
                             {canManage
@@ -91,14 +122,20 @@ export default function PeopleIndex({ people: page, filters, margas, canManage, 
                         </p>
                     </div>
                     {canManage && (
-                        <Button asChild className="rounded-full bg-tb-primary hover:bg-tb-primary-light">
+                        <Button
+                            asChild
+                            className="rounded-full bg-tb-primary hover:bg-tb-primary-light"
+                        >
                             <Link href={people.create()}>
                                 <Plus className="size-4" /> Tambah Anggota
                             </Link>
                         </Button>
                     )}
                     {!canManage && hasMarga && (
-                        <Button asChild className="rounded-full bg-tb-primary hover:bg-tb-primary-light">
+                        <Button
+                            asChild
+                            className="rounded-full bg-tb-primary hover:bg-tb-primary-light"
+                        >
                             <Link href={people.create()}>
                                 <Plus className="size-4" /> Tambah Keluarga
                             </Link>
@@ -109,7 +146,7 @@ export default function PeopleIndex({ people: page, filters, margas, canManage, 
                 <Card className="border-tb-outline-variant bg-tb-surface-bright">
                     <CardContent className="flex flex-col gap-3 py-4 md:flex-row md:items-center">
                         <div className="relative flex-1">
-                            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-tb-outline" />
+                            <Search className="absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-tb-outline" />
                             <Input
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
@@ -126,16 +163,24 @@ export default function PeopleIndex({ people: page, filters, margas, canManage, 
                             <Select
                                 value={filters.marga_id ?? 'all'}
                                 onValueChange={(value) =>
-                                    applyFilter({ marga_id: value === 'all' ? null : value })
+                                    applyFilter({
+                                        marga_id:
+                                            value === 'all' ? null : value,
+                                    })
                                 }
                             >
-                                <SelectTrigger className="w-full md:w-56 border-tb-outline-variant bg-tb-surface-bright">
+                                <SelectTrigger className="w-full border-tb-outline-variant bg-tb-surface-bright md:w-56">
                                     <SelectValue placeholder="Semua marga" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">Semua marga</SelectItem>
+                                    <SelectItem value="all">
+                                        Semua marga
+                                    </SelectItem>
                                     {margas.map((marga) => (
-                                        <SelectItem key={marga.id} value={String(marga.id)}>
+                                        <SelectItem
+                                            key={marga.id}
+                                            value={String(marga.id)}
+                                        >
                                             {marga.name}
                                         </SelectItem>
                                     ))}
@@ -150,25 +195,45 @@ export default function PeopleIndex({ people: page, filters, margas, canManage, 
                         <table className="w-full min-w-[640px] text-sm">
                             <thead>
                                 <tr className="border-b border-tb-outline-variant text-left text-xs text-tb-on-surface-variant">
-                                    <th className="px-3 py-3 font-medium">Anggota</th>
-                                    <th className="px-3 py-3 font-medium">Marga</th>
-                                    <th className="px-3 py-3 font-medium">Orang Tua</th>
-                                    <th className="px-3 py-3 font-medium">Lahir</th>
+                                    <th className="px-3 py-3 font-medium">
+                                        Anggota
+                                    </th>
+                                    <th className="px-3 py-3 font-medium">
+                                        Marga
+                                    </th>
+                                    <th className="px-3 py-3 font-medium">
+                                        Orang Tua
+                                    </th>
+                                    <th className="px-3 py-3 font-medium">
+                                        Lahir
+                                    </th>
                                     {showActions && (
-                                        <th className="px-3 py-3 text-right font-medium">Aksi</th>
+                                        <th className="px-3 py-3 text-right font-medium">
+                                            Aksi
+                                        </th>
                                     )}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-tb-outline-variant">
                                 {page.data.map((person) => (
-                                    <tr key={person.id} className="hover:bg-tb-surface-container/40">
+                                    <tr
+                                        key={person.id}
+                                        className="hover:bg-tb-surface-container/40"
+                                    >
                                         <td className="px-3 py-3">
                                             <div className="flex items-center gap-3">
-                                                <AppAvatar name={person.name} color={person.marga_color} />
+                                                <AppAvatar
+                                                    name={person.name}
+                                                    color={person.marga_color}
+                                                />
                                                 <div>
-                                                    <p className="font-medium text-tb-on-surface">{person.name}</p>
+                                                    <p className="font-medium text-tb-on-surface">
+                                                        {person.name}
+                                                    </p>
                                                     {person.alias && (
-                                                        <p className="text-xs text-tb-on-surface-variant">{person.alias}</p>
+                                                        <p className="text-xs text-tb-on-surface-variant">
+                                                            {person.alias}
+                                                        </p>
                                                     )}
                                                     {person.chain ? (
                                                         <p className="mt-0.5 text-[11px] font-medium text-tb-primary">
@@ -191,12 +256,18 @@ export default function PeopleIndex({ people: page, filters, margas, canManage, 
                                             {person.marga ? (
                                                 <span
                                                     className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium text-white"
-                                                    style={{ backgroundColor: person.marga_color ?? 'var(--color-tb-primary)' }}
+                                                    style={{
+                                                        backgroundColor:
+                                                            person.marga_color ??
+                                                            'var(--color-tb-primary)',
+                                                    }}
                                                 >
                                                     {person.marga}
                                                 </span>
                                             ) : (
-                                                <span className="text-xs text-tb-on-surface-variant">-</span>
+                                                <span className="text-xs text-tb-on-surface-variant">
+                                                    -
+                                                </span>
                                             )}
                                         </td>
                                         <td className="px-3 py-3 text-tb-on-surface-variant">
@@ -211,33 +282,45 @@ export default function PeopleIndex({ people: page, filters, margas, canManage, 
                                                     {canManage ? (
                                                         <>
                                                             <Button
-                                                            title='Edit'
+                                                                title="Edit"
                                                                 asChild
                                                                 variant="ghost"
                                                                 size="icon"
                                                                 className="size-8 text-tb-primary hover:bg-tb-surface-container"
                                                             >
-                                                                <Link href={people.edit(person.id)}>
+                                                                <Link
+                                                                    href={people.edit(
+                                                                        person.id,
+                                                                    )}
+                                                                >
                                                                     <Pencil className="size-4" />
                                                                 </Link>
                                                             </Button>
                                                             <Button
-                                                            title='Hapus'
+                                                                title="Hapus"
                                                                 variant="ghost"
                                                                 size="icon"
                                                                 className="size-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
-                                                                onClick={() => setToDelete(person)}
+                                                                onClick={() =>
+                                                                    setToDelete(
+                                                                        person,
+                                                                    )
+                                                                }
                                                             >
                                                                 <Trash className="size-4" />
                                                             </Button>
                                                             <Button
-                                                           title='detail silsilah keluarga'
+                                                                title="detail silsilah keluarga"
                                                                 asChild
                                                                 variant="ghost"
                                                                 size="icon"
                                                                 className="size-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950"
                                                             >
-                                                                <Link href={people.show(person.id)}>
+                                                                <Link
+                                                                    href={people.show(
+                                                                        person.id,
+                                                                    )}
+                                                                >
                                                                     <NotebookPen className="size-4" />
                                                                 </Link>
                                                             </Button>
@@ -247,7 +330,13 @@ export default function PeopleIndex({ people: page, filters, margas, canManage, 
                                                                 size="icon"
                                                                 className="size-8 text-green-600 hover:bg-green-50 dark:hover:bg-green-950"
                                                             >
-                                                                <Link href={people.silsilah(person.id)} target="_blank" rel="noopener">
+                                                                <Link
+                                                                    href={people.silsilah(
+                                                                        person.id,
+                                                                    )}
+                                                                    target="_blank"
+                                                                    rel="noopener"
+                                                                >
                                                                     <Route className="size-4" />
                                                                 </Link>
                                                             </Button>
@@ -261,7 +350,11 @@ export default function PeopleIndex({ people: page, filters, margas, canManage, 
                                                                 size="icon"
                                                                 className="size-8 text-tb-primary hover:bg-tb-surface-container"
                                                             >
-                                                                <Link href={people.edit(person.id)}>
+                                                                <Link
+                                                                    href={people.edit(
+                                                                        person.id,
+                                                                    )}
+                                                                >
                                                                     <Pencil className="size-4" />
                                                                 </Link>
                                                             </Button>
@@ -289,16 +382,26 @@ export default function PeopleIndex({ people: page, filters, margas, canManage, 
 
                 <Pagination page={page} />
 
-                <Dialog open={toDelete !== null} onOpenChange={(open) => !open && setToDelete(null)}>
+                <Dialog
+                    open={toDelete !== null}
+                    onOpenChange={(open) => !open && setToDelete(null)}
+                >
                     <DialogContent className="sm:max-w-md">
                         <DialogHeader>
-                            <DialogTitle className="text-tb-on-surface">Hapus Anggota</DialogTitle>
+                            <DialogTitle className="text-tb-on-surface">
+                                Hapus Anggota
+                            </DialogTitle>
                             <DialogDescription>
-                                Yakin ingin menghapus <strong>{toDelete?.name}</strong> dari silsilah? Tindakan ini tidak dapat dibatalkan.
+                                Yakin ingin menghapus{' '}
+                                <strong>{toDelete?.name}</strong> dari silsilah?
+                                Tindakan ini tidak dapat dibatalkan.
                             </DialogDescription>
                         </DialogHeader>
                         <DialogFooter>
-                            <Button variant="outline" onClick={() => setToDelete(null)}>
+                            <Button
+                                variant="outline"
+                                onClick={() => setToDelete(null)}
+                            >
                                 Batal
                             </Button>
                             <Button
@@ -306,7 +409,9 @@ export default function PeopleIndex({ people: page, filters, margas, canManage, 
                                 onClick={confirmDelete}
                                 disabled={deleteForm.processing}
                             >
-                                {deleteForm.processing ? 'Menghapus...' : 'Ya, Hapus'}
+                                {deleteForm.processing
+                                    ? 'Menghapus...'
+                                    : 'Ya, Hapus'}
                             </Button>
                         </DialogFooter>
                     </DialogContent>
@@ -330,7 +435,8 @@ function Pagination({ page }: { page: Paginated }) {
     return (
         <div className="flex flex-col items-center justify-between gap-3 text-sm text-tb-on-surface-variant sm:flex-row">
             <p>
-                Menampilkan {page.from ?? 0}–{page.to ?? 0} dari {page.total} anggota
+                Menampilkan {page.from ?? 0}–{page.to ?? 0} dari {page.total}{' '}
+                anggota
             </p>
             <div className="flex gap-2">
                 <Button
@@ -338,7 +444,10 @@ function Pagination({ page }: { page: Paginated }) {
                     size="sm"
                     className="border-tb-outline-variant bg-tb-surface-bright text-tb-on-surface"
                     disabled={!prevUrl}
-                    onClick={() => prevUrl && router.get(prevUrl, {}, { preserveState: true })}
+                    onClick={() =>
+                        prevUrl &&
+                        router.get(prevUrl, {}, { preserveState: true })
+                    }
                 >
                     Sebelumnya
                 </Button>
@@ -347,7 +456,10 @@ function Pagination({ page }: { page: Paginated }) {
                     size="sm"
                     className="border-tb-outline-variant bg-tb-surface-bright text-tb-on-surface"
                     disabled={!nextUrl}
-                    onClick={() => nextUrl && router.get(nextUrl, {}, { preserveState: true })}
+                    onClick={() =>
+                        nextUrl &&
+                        router.get(nextUrl, {}, { preserveState: true })
+                    }
                 >
                     Berikutnya
                 </Button>

@@ -13,7 +13,9 @@ export function MargaDirectory({ margas }: { margas: MargaItem[] }) {
     return (
         <section id="marga" className="mx-auto max-w-7xl px-6 py-16">
             <div className="mb-8 flex items-center justify-between">
-                <h2 className="font-display text-2xl font-bold">Direktori Marga Populer</h2>
+                <h2 className="font-display text-2xl font-bold">
+                    Direktori Marga Populer
+                </h2>
                 <Link
                     href={marga.view()}
                     className="flex items-center rounded-full bg-tb-surface-container px-4 py-2 text-sm font-medium transition-colors hover:bg-tb-surface-container-high"
@@ -28,7 +30,9 @@ export function MargaDirectory({ margas }: { margas: MargaItem[] }) {
                             href="#"
                             className="group relative flex h-40 flex-col justify-end overflow-hidden rounded-2xl p-4 shadow-md transition-transform duration-300 hover:-translate-y-1"
                             style={{
-                                backgroundColor: margaItem.color ?? 'var(--color-tb-primary)',
+                                backgroundColor:
+                                    margaItem.color ??
+                                    'var(--color-tb-primary)',
                             }}
                         >
                             <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-40 transition-opacity group-hover:opacity-60" />

@@ -15,9 +15,9 @@ export default function ForgotPassword({ status }: Props) {
         <>
             <Head title="Lupa Kata Sandi" />
 
-            <div className="flex items-center justify-center min-h-svh px-4 py-12 bg-tb-surface bg-tb-gorga">
+            <div className="bg-tb-gorga flex min-h-svh items-center justify-center bg-tb-surface px-4 py-12">
                 <div className="w-full max-w-md">
-                    <div className="text-center mb-8">
+                    <div className="mb-8 text-center">
                         <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-full bg-tb-primary text-white">
                             <KeyRound className="h-7 w-7" />
                         </div>
@@ -25,13 +25,14 @@ export default function ForgotPassword({ status }: Props) {
                             Lupa Kata Sandi?
                         </h1>
                         <p className="mt-2 text-tb-on-surface-variant">
-                            Masukkan email Anda dan kami akan mengirimkan tautan untuk mengatur ulang kata sandi
+                            Masukkan email Anda dan kami akan mengirimkan tautan
+                            untuk mengatur ulang kata sandi
                         </p>
                     </div>
 
-                    <div className="bg-tb-surface-bright rounded-3xl border border-tb-outline-variant shadow-xl p-6 sm:p-8">
+                    <div className="rounded-3xl border border-tb-outline-variant bg-tb-surface-bright p-6 shadow-xl sm:p-8">
                         {status && (
-                            <div className="mb-5 rounded-xl bg-tb-primary/10 border border-tb-primary/20 px-4 py-3 text-sm font-medium text-tb-primary">
+                            <div className="mb-5 rounded-xl border border-tb-primary/20 bg-tb-primary/10 px-4 py-3 text-sm font-medium text-tb-primary">
                                 {status}
                             </div>
                         )}
@@ -44,11 +45,14 @@ export default function ForgotPassword({ status }: Props) {
                                 <>
                                     <div className="grid gap-5">
                                         <div className="grid gap-1.5">
-                                            <Label htmlFor="email" className="font-medium text-tb-on-surface">
+                                            <Label
+                                                htmlFor="email"
+                                                className="font-medium text-tb-on-surface"
+                                            >
                                                 Alamat Email
                                             </Label>
                                             <div className="relative">
-                                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-tb-outline" />
+                                                <Mail className="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-tb-outline" />
                                                 <Input
                                                     id="email"
                                                     type="email"
@@ -58,10 +62,13 @@ export default function ForgotPassword({ status }: Props) {
                                                     tabIndex={1}
                                                     autoComplete="email"
                                                     placeholder="email@example.com"
-                                                    className="pl-11 bg-tb-surface-bright border-tb-outline-variant focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
+                                                    className="border-tb-outline-variant bg-tb-surface-bright pl-11 focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
                                                 />
                                             </div>
-                                            <InputError message={errors.email} className="text-sm text-red-600" />
+                                            <InputError
+                                                message={errors.email}
+                                                className="text-sm text-red-600"
+                                            />
                                         </div>
 
                                         <Button
@@ -88,7 +95,7 @@ export default function ForgotPassword({ status }: Props) {
                     <p className="mt-6 text-center text-sm text-tb-on-surface-variant">
                         <Link
                             href={loginRoute()}
-                            className="inline-flex items-center gap-1.5 text-tb-primary font-medium hover:underline"
+                            className="inline-flex items-center gap-1.5 font-medium text-tb-primary hover:underline"
                         >
                             <ArrowLeft className="h-4 w-4" />
                             Kembali ke halaman masuk

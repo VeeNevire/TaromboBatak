@@ -16,10 +16,18 @@ export function AppAvatar({
     const getInitials = useInitials();
 
     return (
-        <Avatar className={cn('size-9 shrink-0 overflow-hidden rounded-full', className)}>
+        <Avatar
+            className={cn(
+                'size-9 shrink-0 overflow-hidden rounded-full',
+                className,
+            )}
+        >
             {image ? <AvatarImage src={image} alt={name} /> : null}
             <AvatarFallback
-                className={cn('text-sm font-semibold text-white', !color && 'bg-tb-primary')}
+                className={cn(
+                    'text-sm font-semibold text-white',
+                    !color && 'bg-tb-primary',
+                )}
                 style={color ? { backgroundColor: color } : undefined}
             >
                 {getInitials(name)}

@@ -15,8 +15,6 @@ import marga from '@/routes/marga';
 import tarombo from '@/routes/tarombo';
 import tentang from '@/routes/tentang';
 
-
-
 export const navLinks = [
     { label: 'Beranda', href: home() },
     { label: 'Tarombo', href: tarombo.view() },
@@ -47,7 +45,8 @@ export const features: {
 }[] = [
     {
         title: 'Pohon Tarombo',
-        description: 'Visualisasi silsilah interaktif hingga generasi tak terbatas.',
+        description:
+            'Visualisasi silsilah interaktif hingga generasi tak terbatas.',
         icon: TreePine,
         iconClass: 'bg-green-100 text-green-700',
     },
@@ -65,7 +64,8 @@ export const features: {
     },
     {
         title: 'Privasi Terjaga',
-        description: 'Data keluarga aman dengan kontrol privasi yang fleksibel.',
+        description:
+            'Data keluarga aman dengan kontrol privasi yang fleksibel.',
         icon: ShieldCheck,
         iconClass: 'bg-emerald-100 text-emerald-700',
     },
@@ -77,23 +77,22 @@ export const features: {
     },
     {
         title: 'Aman & Terbackup',
-        description: 'Data tersimpan aman di cloud dan dapat diunduh kapan saja.',
+        description:
+            'Data tersimpan aman di cloud dan dapat diunduh kapan saja.',
         icon: CloudUpload,
         iconClass: 'bg-indigo-100 text-indigo-700',
     },
 ];
 
 export const testimonial = {
-    quote:
-        'Tarombo Batak membantu saya menemukan cabang keluarga yang sudah lama hilang kontaknya. Platform yang keren dan sangat bermanfaat untuk generasi muda seperti saya.',
+    quote: 'Tarombo Batak membantu saya menemukan cabang keluarga yang sudah lama hilang kontaknya. Platform yang keren dan sangat bermanfaat untuk generasi muda seperti saya.',
     name: 'Rafael Simanjuntak',
     since: 'Anggota sejak 2023',
-    image:
-        'https://lh3.googleusercontent.com/aida-public/AB6AXuAU0yZO3D4Yq8g3TJt5q0OjELCadDm06lVfMDxZO-6e8Tr6MW0fidoBQmGsYguSKN4P6fk7f0yOv9aZHq3Fxzcdt2wJde6_vO5zAjUm9kYWE-pcFRNKI7FSBJlRRXFbSCI4iRXYCbRTDpKOfq7jz_coSaY7SGnoAxdnw8LyZIPgknPOjyKXPDWZtbva7bmbBm9oVUTLyskvHbMaJKryPgkF9TVm1HsIKVWp-07RxZWOP6K0tbHRF2g',
+    image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAU0yZO3D4Yq8g3TJt5q0OjELCadDm06lVfMDxZO-6e8Tr6MW0fidoBQmGsYguSKN4P6fk7f0yOv9aZHq3Fxzcdt2wJde6_vO5zAjUm9kYWE-pcFRNKI7FSBJlRRXFbSCI4iRXYCbRTDpKOfq7jz_coSaY7SGnoAxdnw8LyZIPgknPOjyKXPDWZtbva7bmbBm9oVUTLyskvHbMaJKryPgkF9TVm1HsIKVWp-07RxZWOP6K0tbHRF2g',
 };
 
 export const footerNav = {
-     navigasi: [
+    navigasi: [
         { label: 'Beranda', href: home() },
         { label: 'Tarombo', href: tarombo.view() },
         { label: 'Marga', href: marga.view() },

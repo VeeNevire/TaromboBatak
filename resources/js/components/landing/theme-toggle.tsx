@@ -10,7 +10,9 @@ export function ThemeToggle() {
         const { clientX, clientY } = e;
         const root = document.documentElement;
 
-        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const prefersReducedMotion = window.matchMedia(
+            '(prefers-reduced-motion: reduce)',
+        ).matches;
 
         if (prefersReducedMotion) {
             updateAppearance(next);
@@ -34,10 +36,16 @@ export function ThemeToggle() {
         <button
             type="button"
             onClick={handleToggle}
-            aria-label={isDark ? 'Beralih ke mode terang' : 'Beralih ke mode gelap'}
+            aria-label={
+                isDark ? 'Beralih ke mode terang' : 'Beralih ke mode gelap'
+            }
             className="flex h-10 w-10 items-center justify-center rounded-full border border-tb-outline-variant text-tb-on-surface transition-colors hover:bg-tb-surface-container hover:text-tb-primary"
         >
-            {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            {isDark ? (
+                <Sun className="h-5 w-5" />
+            ) : (
+                <Moon className="h-5 w-5" />
+            )}
         </button>
     );
 }

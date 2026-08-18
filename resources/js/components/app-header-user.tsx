@@ -20,7 +20,7 @@ export function AppHeaderUser() {
             <DropdownMenuTrigger asChild>
                 <button
                     type="button"
-                    className="flex items-center gap-2 rounded-full border border-tb-outline-variant py-1.5 pl-1.5 pr-3 text-left transition-colors hover:bg-tb-surface-container"
+                    className="flex items-center gap-2 rounded-full border border-tb-outline-variant py-1.5 pr-3 pl-1.5 text-left transition-colors hover:bg-tb-surface-container"
                     data-test="header-user-button"
                 >
                     <UserInfo user={auth.user} />
