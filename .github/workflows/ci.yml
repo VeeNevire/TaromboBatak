@@ -53,6 +53,9 @@ jobs:
       - name: Generate Wayfinder routes
         run: php artisan wayfinder:generate --with-form --no-interaction
 
+      - name: Build production assets
+        run: npm run build
+
       - name: Check PHP and frontend quality
         run: composer run ci:check
 
@@ -61,9 +64,6 @@ jobs:
 
       - name: Audit npm dependencies
         run: npm audit --audit-level=high
-
-      - name: Build production assets
-        run: npm run build
 
       - name: Ensure development Vite marker is absent
         shell: bash
