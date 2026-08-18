@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_ENV: testing
+  DB_CONNECTION: sqlite
+  DB_DATABASE: ':memory:'
+
+jobs:
+  quality:
+    name: Quality checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, intl, xml, zip, bcmath, pdo_sqlite
+          coverage: none
+          tools: composer:v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist --optimize-autoloader
+
+      - name: Install Node dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Prepare Laravel environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate --force
+          php artisan config:clear
+
+      - name: Generate Wayfinder routes
+        run: php artisan wayfinder:generate --with-form --no-interaction
+
+      - name: Build production assets
+        run: npm run build
+
+      - name: Check PHP and frontend quality
+        run: composer run ci:check
+
+      - name: Audit Composer dependencies
+        run: composer audit --no-interaction
+
+      - name: Audit npm dependencies
+        run: npm audit --audit-level=high
+
+      - name: Ensure development Vite marker is absent
+        shell: bash
+        run: test ! -f public/hot

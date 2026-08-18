@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 use App\Models\Marga;
 use App\Models\Person;

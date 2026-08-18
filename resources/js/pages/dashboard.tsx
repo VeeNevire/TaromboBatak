@@ -1,7 +1,13 @@
 import { Head, Link, usePage } from '@inertiajs/react';
 import { Layers, Plus, Shapes, TreePine, Users } from 'lucide-react';
 import { AppAvatar } from '@/components/app-avatar';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
 import { dashboard } from '@/routes';
 import people from '@/routes/people';
 import tarombo from '@/routes/tarombo';
@@ -52,12 +58,16 @@ export default function Dashboard({
                             Horas, {auth.user?.name?.split(' ')[0]}!
                         </h1>
                         <p className="mt-1 text-sm text-tb-on-surface-variant">
-                            Selamat datang di Dashboard Tarombo Batak — kelola silsilah keluarga Anda.
+                            Selamat datang di Dashboard Tarombo Batak — kelola
+                            silsilah keluarga Anda.
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                         {isStaff && (
-                            <ButtonLink href={people.create()} variant="secondary">
+                            <ButtonLink
+                                href={people.create()}
+                                variant="secondary"
+                            >
                                 <Plus className="size-4" /> Tambah Anggota
                             </ButtonLink>
                         )}
@@ -89,7 +99,7 @@ export default function Dashboard({
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-                    <Card className="lg:col-span-3 border-tb-outline-variant bg-tb-surface-bright">
+                    <Card className="border-tb-outline-variant bg-tb-surface-bright lg:col-span-3">
                         <CardHeader>
                             <CardTitle className="font-display text-lg text-tb-on-surface">
                                 Distribusi Anggota per Marga
@@ -105,17 +115,26 @@ export default function Dashboard({
                                 </p>
                             )}
                             {margaDistribution.map((m) => (
-                                <div key={m.name} className="flex flex-col gap-1.5">
+                                <div
+                                    key={m.name}
+                                    className="flex flex-col gap-1.5"
+                                >
                                     <div className="flex items-center justify-between text-sm">
-                                        <span className="font-medium text-tb-on-surface">{m.name}</span>
-                                        <span className="text-tb-on-surface-variant">{m.count} anggota</span>
+                                        <span className="font-medium text-tb-on-surface">
+                                            {m.name}
+                                        </span>
+                                        <span className="text-tb-on-surface-variant">
+                                            {m.count} anggota
+                                        </span>
                                     </div>
                                     <div className="h-2.5 w-full overflow-hidden rounded-full bg-tb-surface-container">
                                         <div
                                             className="h-full rounded-full"
                                             style={{
                                                 width: `${(m.count / maxCount) * 100}%`,
-                                                backgroundColor: m.color ?? 'var(--color-tb-primary)',
+                                                backgroundColor:
+                                                    m.color ??
+                                                    'var(--color-tb-primary)',
                                             }}
                                         />
                                     </div>
@@ -124,13 +143,15 @@ export default function Dashboard({
                         </CardContent>
                     </Card>
 
-                    <Card className="lg:col-span-2 border-tb-outline-variant bg-tb-surface-bright">
+                    <Card className="border-tb-outline-variant bg-tb-surface-bright lg:col-span-2">
                         <CardHeader className="flex-row items-center justify-between space-y-0">
                             <div>
                                 <CardTitle className="font-display text-lg text-tb-on-surface">
                                     Anggota Terbaru
                                 </CardTitle>
-                                <CardDescription>Terakhir ditambahkan ke silsilah.</CardDescription>
+                                <CardDescription>
+                                    Terakhir ditambahkan ke silsilah.
+                                </CardDescription>
                             </div>
                             <Link
                                 href={people.index()}
@@ -150,7 +171,9 @@ export default function Dashboard({
                                     <>
                                         <AppAvatar
                                             name={person.name}
-                                            color={person.marga_color ?? undefined}
+                                            color={
+                                                person.marga_color ?? undefined
+                                            }
                                         />
                                         <div className="min-w-0 flex-1">
                                             <p className="truncate text-sm font-medium text-tb-on-surface">
@@ -158,7 +181,9 @@ export default function Dashboard({
                                             </p>
                                             <p className="truncate text-xs text-tb-on-surface-variant">
                                                 {person.marga ?? 'Tanpa marga'}
-                                                {person.birth_year ? ` • ${person.birth_year}` : ''}
+                                                {person.birth_year
+                                                    ? ` • ${person.birth_year}`
+                                                    : ''}
                                             </p>
                                         </div>
                                     </>
@@ -186,7 +211,7 @@ export default function Dashboard({
                 </div>
 
                 {rootNames.length > 0 && (
-                    <Card className="border-tb-outline-variant bg-tb-surface-container bg-tb-gorga bg-blend-soft-light">
+                    <Card className="bg-tb-gorga border-tb-outline-variant bg-tb-surface-container bg-blend-soft-light">
                         <CardContent className="flex flex-col items-start gap-2 py-6 sm:flex-row sm:items-center sm:gap-4">
                             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-tb-primary text-white">
                                 <TreePine className="h-5 w-5" />
@@ -196,7 +221,8 @@ export default function Dashboard({
                                     Akar Silsilah: {rootNames.join(' & ')}
                                 </p>
                                 <p className="text-xs text-tb-on-surface-variant">
-                                    Leluhur utama dari mana semua marga dan anggota bercabang.
+                                    Leluhur utama dari mana semua marga dan
+                                    anggota bercabang.
                                 </p>
                             </div>
                         </CardContent>
@@ -236,8 +262,12 @@ function StatCard({
                     <Icon className="size-6" />
                 </div>
                 <div>
-                    <p className="font-display text-3xl font-bold text-tb-on-surface">{value}</p>
-                    <p className="text-sm text-tb-on-surface-variant">{label}</p>
+                    <p className="font-display text-3xl font-bold text-tb-on-surface">
+                        {value}
+                    </p>
+                    <p className="text-sm text-tb-on-surface-variant">
+                        {label}
+                    </p>
                 </div>
             </CardContent>
         </Card>

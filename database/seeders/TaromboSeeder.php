@@ -102,11 +102,12 @@ class TaromboSeeder extends Seeder
                 'name' => $row['name'],
                 'alias' => $row['alias'] ?? null,
                 'marga_id' => isset($row['marga']) ? $margaIds[$row['marga']] : null,
-                'parent_id' => $parentId !== null ? $idMap[$parentId] : null,
+                'father_id' => $parentId !== null ? $idMap[$parentId] : null,
                 'birth_year' => $row['birthYear'] ?? null,
                 'death_year' => $row['deathYear'] ?? null,
                 'image' => $row['image'] ?? null,
                 'bio' => $row['bio'] ?? null,
+                'is_public' => true,
             ]);
 
             $idMap[$row['id']] = $person->id;

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Marga;
 use App\Models\Person;
+use App\Services\TaromboStatisticsService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -26,7 +27,8 @@ class DashboardController extends Controller
         $totalMargas = $isStaff
             ? Marga::count()
             : ($user->marga_id ? 1 : 0);
-        $totalGenerations = $this->maxGenerationDepth($peopleQuery);
+        $totalGenerations = app(TaromboStatisticsService::class)
+            ->maxGenerationDepth($peopleQuery, includeExternalAncestors: true);
 
         $margaDistribution = Marga::query()
             ->when(! $isStaff, fn (Builder $query) => $query->where('id', $user->marga_id))
@@ -69,34 +71,5 @@ class DashboardController extends Controller
             'recentPeople' => $recentPeople,
             'rootNames' => $roots,
         ]);
-    }
-
-    /**
-     * Compute the maximum generation depth starting from root ancestors.
-     *
-     * @param  Builder<Person>  $query
-     */
-    protected function maxGenerationDepth(Builder $query): int
-    {
-        $parents = (clone $query)
-            ->select('id', 'father_id')
-            ->get()
-            ->mapWithKeys(fn (Person $person) => [$person->id => $person->father_id]);
-
-        $depth = 0;
-
-        foreach ($parents as $id => $_) {
-            $count = 0;
-            $current = $id;
-
-            while (isset($parents[$current]) && $count < 1000) {
-                $current = $parents[$current];
-                $count++;
-            }
-
-            $depth = max($depth, $count);
-        }
-
-        return $depth + 1;
     }
 }

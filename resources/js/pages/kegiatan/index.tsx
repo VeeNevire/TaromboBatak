@@ -63,13 +63,15 @@ export default function KegiatanIndex({ events: page, filters }: Props) {
                             </div>
                         </Reveal>
                         <Reveal delay={0.1}>
-                            <h1 className="font-display text-4xl font-bold leading-tight md:text-5xl lg:text-6xl">
+                            <h1 className="font-display text-4xl leading-tight font-bold md:text-5xl lg:text-6xl">
                                 Event & Kegiatan Komunitas
                             </h1>
                         </Reveal>
                         <Reveal delay={0.2}>
                             <p className="mx-auto max-w-3xl text-lg leading-relaxed text-tb-on-surface-variant">
-                                Temukan berbagai kegiatan dan acara komunitas Batak. Mari bersama-sama melestarikan budaya dan mempererat tali persaudaraan.
+                                Temukan berbagai kegiatan dan acara komunitas
+                                Batak. Mari bersama-sama melestarikan budaya dan
+                                mempererat tali persaudaraan.
                             </p>
                         </Reveal>
                     </section>
@@ -77,7 +79,7 @@ export default function KegiatanIndex({ events: page, filters }: Props) {
                     <section className="mx-auto max-w-7xl px-6 pb-16">
                         <div className="mb-8">
                             <div className="relative mx-auto max-w-xl">
-                                <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-tb-outline" />
+                                <Search className="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-tb-outline" />
                                 <Input
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
@@ -96,7 +98,9 @@ export default function KegiatanIndex({ events: page, filters }: Props) {
                             <div className="py-16 text-center">
                                 <Calendar className="mx-auto h-12 w-12 text-tb-outline" />
                                 <p className="mt-4 text-tb-on-surface-variant">
-                                    {filters.search ? 'Tidak ada event yang cocok dengan pencarian Anda.' : 'Belum ada event untuk ditampilkan.'}
+                                    {filters.search
+                                        ? 'Tidak ada event yang cocok dengan pencarian Anda.'
+                                        : 'Belum ada event untuk ditampilkan.'}
                                 </p>
                             </div>
                         )}
@@ -109,9 +113,15 @@ export default function KegiatanIndex({ events: page, filters }: Props) {
                                         className={`group flex h-full flex-col overflow-hidden rounded-2xl border border-tb-outline-variant bg-tb-surface-bright transition-all hover:shadow-lg hover:shadow-tb-primary/10 ${event.is_past ? 'opacity-60' : ''}`}
                                     >
                                         <div className="flex items-start gap-4 p-6">
-                                            <div className={`flex w-16 shrink-0 flex-col items-center justify-center rounded-lg py-3 ${event.is_past ? 'bg-tb-surface-container text-tb-outline' : 'bg-tb-primary text-white'}`}>
-                                                <span className="text-xs font-bold uppercase">{event.month}</span>
-                                                <span className="text-2xl font-bold">{event.day}</span>
+                                            <div
+                                                className={`flex w-16 shrink-0 flex-col items-center justify-center rounded-lg py-3 ${event.is_past ? 'bg-tb-surface-container text-tb-outline' : 'bg-tb-primary text-white'}`}
+                                            >
+                                                <span className="text-xs font-bold uppercase">
+                                                    {event.month}
+                                                </span>
+                                                <span className="text-2xl font-bold">
+                                                    {event.day}
+                                                </span>
                                             </div>
                                             <div className="flex-1">
                                                 <h3 className="mb-2 font-display text-lg font-bold transition-colors group-hover:text-tb-primary">
@@ -147,7 +157,8 @@ export default function KegiatanIndex({ events: page, filters }: Props) {
                         {page.total > 0 && (
                             <div className="mt-12 flex flex-col items-center justify-between gap-4 text-sm text-tb-on-surface-variant sm:flex-row">
                                 <p>
-                                    Menampilkan {page.from ?? 0}–{page.to ?? 0} dari {page.total} event
+                                    Menampilkan {page.from ?? 0}–{page.to ?? 0}{' '}
+                                    dari {page.total} event
                                 </p>
                                 <div className="flex gap-2">
                                     <Button
@@ -155,7 +166,14 @@ export default function KegiatanIndex({ events: page, filters }: Props) {
                                         size="sm"
                                         className="border-tb-outline-variant bg-tb-surface-bright text-tb-on-surface"
                                         disabled={!page.prev_page_url}
-                                        onClick={() => page.prev_page_url && router.get(page.prev_page_url, {}, { preserveState: true })}
+                                        onClick={() =>
+                                            page.prev_page_url &&
+                                            router.get(
+                                                page.prev_page_url,
+                                                {},
+                                                { preserveState: true },
+                                            )
+                                        }
                                     >
                                         Sebelumnya
                                     </Button>
@@ -164,7 +182,14 @@ export default function KegiatanIndex({ events: page, filters }: Props) {
                                         size="sm"
                                         className="border-tb-outline-variant bg-tb-surface-bright text-tb-on-surface"
                                         disabled={!page.next_page_url}
-                                        onClick={() => page.next_page_url && router.get(page.next_page_url, {}, { preserveState: true })}
+                                        onClick={() =>
+                                            page.next_page_url &&
+                                            router.get(
+                                                page.next_page_url,
+                                                {},
+                                                { preserveState: true },
+                                            )
+                                        }
                                     >
                                         Berikutnya
                                     </Button>
@@ -179,14 +204,16 @@ export default function KegiatanIndex({ events: page, filters }: Props) {
                                         Jelajahi Lebih Banyak
                                     </h2>
                                     <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-tb-on-surface-variant">
-                                        Telusuri silsilah keluarga Anda atau pelajari tentang kekayaan budaya Batak.
+                                        Telusuri silsilah keluarga Anda atau
+                                        pelajari tentang kekayaan budaya Batak.
                                     </p>
                                     <div className="mt-8 flex flex-wrap justify-center gap-4">
                                         <Link
                                             href={home()}
                                             className="flex items-center gap-2 rounded-full bg-tb-primary px-6 py-3 font-medium text-white transition-colors hover:bg-tb-primary-light"
                                         >
-                                            Kembali ke Beranda <ArrowRight className="h-4 w-4" />
+                                            Kembali ke Beranda{' '}
+                                            <ArrowRight className="h-4 w-4" />
                                         </Link>
                                     </div>
                                 </div>

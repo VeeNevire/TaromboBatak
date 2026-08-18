@@ -1,6 +1,15 @@
 import { Link, useForm } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronDown, ChevronRight, ChevronUp, Eye, Pencil, Plus, Trash2, X } from 'lucide-react';
+import {
+    ChevronDown,
+    ChevronRight,
+    ChevronUp,
+    Eye,
+    Pencil,
+    Plus,
+    Trash2,
+    X,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import InputError from '@/components/input-error';
@@ -12,6 +21,7 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -109,6 +119,7 @@ export type FamilyData = {
     lineage: LineageEntry[];
     children: ChildRow[];
     ownChildren?: ChildRow[];
+    is_public: boolean;
 };
 
 type MargaOption = { id: number; name: string };
@@ -120,6 +131,7 @@ type Props = {
     lockedMarga?: { id: number; name: string } | null;
     lineage?: MargaLineageEntry[];
     initialFatherName?: string;
+    canPublish?: boolean;
 };
 
 const VALUE_NONE = 'none';
@@ -675,6 +687,7 @@ export default function FamilyForm({
     nameSuggestions,
     lockedMarga = null,
     lineage,
+    canPublish = false,
 }: Props) {
     const isEdit = person !== null;
 
@@ -687,11 +700,13 @@ export default function FamilyForm({
             new_marga: person?.new_marga ?? '',
             birth_order: person?.birth_order ?? 1,
             sibling_count:
-                person?.sibling_count ?? Math.max(person?.children.length ?? 1, 1),
+                person?.sibling_count ??
+                Math.max(person?.children.length ?? 1, 1),
             birth_year: person?.birth_year ?? '',
             death_year: person?.death_year ?? '',
             image: person?.image ?? '',
             bio: person?.bio ?? '',
+            is_public: person?.is_public ?? false,
             father: person?.father
                 ? {
                       name: person.father.name ?? '',
@@ -742,7 +757,8 @@ export default function FamilyForm({
                           marga: child.marga ?? null,
                       }))
                     : ([] as ChildRow[]),
-    });
+        },
+    );
 
     const birthOrder = Number(data.birth_order) || 1;
     const siblingCount = Number(data.sibling_count) || 1;
@@ -1190,8 +1206,8 @@ export default function FamilyForm({
                         ) : (
                             <p className="font-medium text-tb-on-surface-variant">
                                 Ayah belum diisi — keluarga ini dicatat sebagai
-                                rumpun sendiri berstatus "Belum tersambung".
-                                Isi nama ayah yang sudah ada untuk menyambung ke
+                                rumpun sendiri berstatus "Belum tersambung". Isi
+                                nama ayah yang sudah ada untuk menyambung ke
                                 silsilahnya.
                             </p>
                         )}
@@ -1268,16 +1284,16 @@ export default function FamilyForm({
                             new_marga: '',
                         }
                       : null,
-children: (currentData.children ?? []).map((child) => ({
-                       ...child,
-                       marga_id: lockedMarga.id,
-                       new_marga: '',
-                   })),
-                   ownChildren: (currentData.ownChildren ?? []).map((child) => ({
-                       ...child,
-                       marga_id: lockedMarga.id,
-                       new_marga: '',
-                   })),
+                  children: (currentData.children ?? []).map((child) => ({
+                      ...child,
+                      marga_id: lockedMarga.id,
+                      new_marga: '',
+                  })),
+                  ownChildren: (currentData.ownChildren ?? []).map((child) => ({
+                      ...child,
+                      marga_id: lockedMarga.id,
+                      new_marga: '',
+                  })),
               }
             : currentData;
 
@@ -1508,9 +1524,41 @@ children: (currentData.children ?? []).map((child) => ({
                                         />
                                         <InputError message={errors.bio} />
                                     </div>
+
+                                    {canPublish && (
+                                        <div className="flex items-start gap-3 rounded-lg border border-tb-outline-variant bg-tb-surface-container/40 p-4">
+                                            <Checkbox
+                                                id="is_public"
+                                                checked={data.is_public}
+                                                onCheckedChange={(checked) =>
+                                                    setData(
+                                                        'is_public',
+                                                        checked === true,
+                                                    )
+                                                }
+                                            />
+                                            <div className="grid gap-1">
+                                                <Label
+                                                    htmlFor="is_public"
+                                                    className="text-tb-on-surface"
+                                                >
+                                                    Tampilkan di tarombo publik
+                                                </Label>
+                                                <p className="text-xs leading-relaxed text-tb-on-surface-variant">
+                                                    Hanya identitas genealogis
+                                                    ringkas yang ditampilkan.
+                                                    Ayah harus sudah publik agar
+                                                    jalur silsilah tetap
+                                                    lengkap.
+                                                </p>
+                                                <InputError
+                                                    message={errors.is_public}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
                                 </CardContent>
                             </Card>
-
                         </div>
                         {person ? (
                             <SilsilahListCard
@@ -1626,9 +1674,7 @@ children: (currentData.children ?? []).map((child) => ({
                                                             value={
                                                                 selectedChild.name
                                                             }
-                                                            onChange={(
-                                                                value,
-                                                            ) =>
+                                                            onChange={(value) =>
                                                                 setChild(
                                                                     selectedIndex,
                                                                     'name',
@@ -1833,7 +1879,9 @@ children: (currentData.children ?? []).map((child) => ({
                                     Daftar Anak
                                 </CardTitle>
                                 <CardDescription>
-                                    Anak kandung dari {data.name || 'anggota ini'}. Urutan anak mengikuti urutan baris.
+                                    Anak kandung dari{' '}
+                                    {data.name || 'anggota ini'}. Urutan anak
+                                    mengikuti urutan baris.
                                 </CardDescription>
                             </div>
                             <div className="text-xs text-tb-on-surface-variant">
@@ -1844,18 +1892,30 @@ children: (currentData.children ?? []).map((child) => ({
                             <AnimatePresence initial={false}>
                                 {data.ownChildren.map((child, index) => (
                                     <motion.div
-                                        key={child.uid ?? child.id ?? `own-row-${index}`}
+                                        key={
+                                            child.uid ??
+                                            child.id ??
+                                            `own-row-${index}`
+                                        }
                                         layout
                                         initial={{ opacity: 0, scale: 0.97 }}
                                         animate={{ opacity: 1, scale: 1 }}
                                         exit={{ opacity: 0, scale: 0.97 }}
-                                        transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+                                        transition={{
+                                            type: 'spring',
+                                            stiffness: 400,
+                                            damping: 35,
+                                        }}
                                         className="grid gap-3 rounded-lg border border-tb-outline-variant bg-tb-surface-bright p-3"
                                     >
                                         <div className="flex items-center justify-between gap-2">
                                             <span className="flex items-center gap-1.5">
                                                 <span className="inline-flex w-fit items-center rounded-full bg-tb-surface-container px-2 py-0.5 text-xs font-semibold text-tb-on-surface-variant">
-                                                    Urut {String(index + 1).padStart(2, '0')}
+                                                    Urut{' '}
+                                                    {String(index + 1).padStart(
+                                                        2,
+                                                        '0',
+                                                    )}
                                                 </span>
                                                 {isGapRow(child) && (
                                                     <span className="inline-flex w-fit items-center rounded-md bg-tb-surface-container px-1.5 py-0.5 text-[10px] font-semibold text-tb-on-surface-variant">
@@ -1869,7 +1929,11 @@ children: (currentData.children ?? []).map((child) => ({
                                                 )}
                                                 <button
                                                     type="button"
-                                                    onClick={() => insertOwnChildAbove(index)}
+                                                    onClick={() =>
+                                                        insertOwnChildAbove(
+                                                            index,
+                                                        )
+                                                    }
                                                     aria-label="Sisipkan anak di atas"
                                                     title="Sisipkan anak di atas"
                                                     className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-tb-outline-variant text-tb-outline transition-colors hover:border-tb-primary hover:text-tb-primary"
@@ -1880,7 +1944,9 @@ children: (currentData.children ?? []).map((child) => ({
                                             <span className="flex items-center gap-2">
                                                 <button
                                                     type="button"
-                                                    onClick={() => moveOwnChild(index, -1)}
+                                                    onClick={() =>
+                                                        moveOwnChild(index, -1)
+                                                    }
                                                     disabled={index === 0}
                                                     aria-label="Pindah ke atas"
                                                     title="Pindah ke atas"
@@ -1890,8 +1956,13 @@ children: (currentData.children ?? []).map((child) => ({
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    onClick={() => moveOwnChild(index, 1)}
-                                                    disabled={index === ownChildrenCount - 1}
+                                                    onClick={() =>
+                                                        moveOwnChild(index, 1)
+                                                    }
+                                                    disabled={
+                                                        index ===
+                                                        ownChildrenCount - 1
+                                                    }
                                                     aria-label="Pindah ke bawah"
                                                     title="Pindah ke bawah"
                                                     className="inline-flex h-6 w-6 items-center justify-center rounded-full text-tb-outline transition-colors hover:bg-tb-surface-container hover:text-tb-on-surface disabled:cursor-not-allowed disabled:opacity-30"
@@ -1901,7 +1972,11 @@ children: (currentData.children ?? []).map((child) => ({
                                                 {!child.id && (
                                                     <button
                                                         type="button"
-                                                        onClick={() => removeOwnChild(index)}
+                                                        onClick={() =>
+                                                            removeOwnChild(
+                                                                index,
+                                                            )
+                                                        }
                                                         aria-label="Hapus anak"
                                                         title="Hapus anak"
                                                         className="inline-flex h-6 w-6 items-center justify-center rounded-full text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-950"
@@ -1916,43 +1991,92 @@ children: (currentData.children ?? []).map((child) => ({
                                                 <Label>Nama</Label>
                                                 <NameCombobox
                                                     value={child.name}
-                                                    onChange={(value) => setOwnChild(index, 'name', value)}
-                                                    suggestions={nameSuggestions}
+                                                    onChange={(value) =>
+                                                        setOwnChild(
+                                                            index,
+                                                            'name',
+                                                            value,
+                                                        )
+                                                    }
+                                                    suggestions={
+                                                        nameSuggestions
+                                                    }
                                                     placeholder="Nama anak"
                                                 />
                                             </div>
                                             <div className="grid gap-1.5">
                                                 <Label>Jenis Kelamin</Label>
                                                 <Select
-                                                    value={child.gender || VALUE_NONE}
-                                                    onValueChange={(value) => setOwnChild(index, 'gender', value === VALUE_NONE ? '' : value)}
+                                                    value={
+                                                        child.gender ||
+                                                        VALUE_NONE
+                                                    }
+                                                    onValueChange={(value) =>
+                                                        setOwnChild(
+                                                            index,
+                                                            'gender',
+                                                            value === VALUE_NONE
+                                                                ? ''
+                                                                : value,
+                                                        )
+                                                    }
                                                 >
                                                     <SelectTrigger className="border-tb-outline-variant bg-tb-surface-bright">
                                                         <SelectValue placeholder="Pilih" />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value={VALUE_NONE}>— Pilih —</SelectItem>
-                                                        <SelectItem value="L">Laki-laki</SelectItem>
-                                                        <SelectItem value="P">Perempuan</SelectItem>
+                                                        <SelectItem
+                                                            value={VALUE_NONE}
+                                                        >
+                                                            — Pilih —
+                                                        </SelectItem>
+                                                        <SelectItem value="L">
+                                                            Laki-laki
+                                                        </SelectItem>
+                                                        <SelectItem value="P">
+                                                            Perempuan
+                                                        </SelectItem>
                                                     </SelectContent>
                                                 </Select>
                                             </div>
                                             <div className="grid gap-1.5">
                                                 <Label>Marga</Label>
                                                 <MargaField
-                                                    value={child.marga_id ?? null}
-                                                    newMarga={child.new_marga ?? ''}
-                                                    onValue={(value) => setOwnChildMarga(index, value)}
-                                                    onNewMarga={(value) => setOwnChildNewMarga(index, value)}
+                                                    value={
+                                                        child.marga_id ?? null
+                                                    }
+                                                    newMarga={
+                                                        child.new_marga ?? ''
+                                                    }
+                                                    onValue={(value) =>
+                                                        setOwnChildMarga(
+                                                            index,
+                                                            value,
+                                                        )
+                                                    }
+                                                    onNewMarga={(value) =>
+                                                        setOwnChildNewMarga(
+                                                            index,
+                                                            value,
+                                                        )
+                                                    }
                                                     margas={margas}
-                                                    disabled={lockedMarga !== null}
+                                                    disabled={
+                                                        lockedMarga !== null
+                                                    }
                                                 />
                                             </div>
                                             <div className="grid gap-1.5">
                                                 <Label>Nama Pasangan</Label>
                                                 <Input
                                                     value={child.spouse}
-                                                    onChange={(event) => setOwnChild(index, 'spouse', event.target.value)}
+                                                    onChange={(event) =>
+                                                        setOwnChild(
+                                                            index,
+                                                            'spouse',
+                                                            event.target.value,
+                                                        )
+                                                    }
                                                     placeholder="Nama pasangan"
                                                     className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                                 />
@@ -1961,7 +2085,13 @@ children: (currentData.children ?? []).map((child) => ({
                                                 <Label>Marga Pasangan</Label>
                                                 <Input
                                                     value={child.spouse_marga}
-                                                    onChange={(event) => setOwnChild(index, 'spouse_marga', event.target.value)}
+                                                    onChange={(event) =>
+                                                        setOwnChild(
+                                                            index,
+                                                            'spouse_marga',
+                                                            event.target.value,
+                                                        )
+                                                    }
                                                     placeholder="Marga pasangan"
                                                     className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                                 />
@@ -2035,9 +2165,16 @@ children: (currentData.children ?? []).map((child) => ({
 
                                     return (
                                         <motion.div
-                                            key={child.uid ?? child.id ?? `row-${index}`}
+                                            key={
+                                                child.uid ??
+                                                child.id ??
+                                                `row-${index}`
+                                            }
                                             layout
-                                            initial={{ opacity: 0, scale: 0.97 }}
+                                            initial={{
+                                                opacity: 0,
+                                                scale: 0.97,
+                                            }}
                                             animate={{ opacity: 1, scale: 1 }}
                                             exit={{ opacity: 0, scale: 0.97 }}
                                             transition={{
@@ -2054,255 +2191,269 @@ children: (currentData.children ?? []).map((child) => ({
                                                       : 'border-tb-outline-variant bg-tb-surface-bright',
                                             )}
                                         >
-                                        <div className="flex items-center justify-between gap-2">
-                                            <span className="flex items-center gap-1.5">
-                                                <span
-                                                    className={cn(
-                                                        'inline-flex w-fit items-center rounded-full px-2 py-0.5 text-xs font-semibold',
-                                                        focused
-                                                            ? 'bg-tb-primary text-white'
-                                                            : 'bg-tb-surface-container text-tb-on-surface-variant',
-                                                    )}
-                                                >
-                                                    Urut{' '}
-                                                    {String(index + 1).padStart(
-                                                        2,
-                                                        '0',
-                                                    )}
-                                                </span>
-                                                {isGapRow(child) && (
-                                                    <span className="inline-flex w-fit items-center rounded-md bg-tb-surface-container px-1.5 py-0.5 text-[10px] font-semibold text-tb-on-surface-variant">
-                                                        N/A
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="flex items-center gap-1.5">
+                                                    <span
+                                                        className={cn(
+                                                            'inline-flex w-fit items-center rounded-full px-2 py-0.5 text-xs font-semibold',
+                                                            focused
+                                                                ? 'bg-tb-primary text-white'
+                                                                : 'bg-tb-surface-container text-tb-on-surface-variant',
+                                                        )}
+                                                    >
+                                                        Urut{' '}
+                                                        {String(
+                                                            index + 1,
+                                                        ).padStart(2, '0')}
                                                     </span>
-                                                )}
-                                                {child.pending && (
-                                                    <span className="inline-flex w-fit items-center rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
-                                                        Belum tersambung
-                                                    </span>
-                                                )}
-                                                <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                        insertChildAbove(index)
-                                                    }
-                                                    aria-label="Sisipkan saudara di atas"
-                                                    title="Sisipkan saudara di atas"
-                                                    className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-tb-outline-variant text-tb-outline transition-colors hover:border-tb-primary hover:text-tb-primary"
-                                                >
-                                                    <Plus className="h-3.5 w-3.5" />
-                                                </button>
-                                            </span>
-                                            <span className="flex items-center gap-2">
-                                                {focused && (
-                                                    <span className="text-[11px] font-medium text-tb-primary">
-                                                        (Anda sedang diedit)
-                                                    </span>
-                                                )}
-                                                <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                        moveChild(index, -1)
-                                                    }
-                                                    disabled={index === 0}
-                                                    aria-label="Pindah ke atas"
-                                                    title="Pindah ke atas"
-                                                    className="inline-flex h-6 w-6 items-center justify-center rounded-full text-tb-outline transition-colors hover:bg-tb-surface-container hover:text-tb-on-surface disabled:cursor-not-allowed disabled:opacity-30"
-                                                >
-                                                    <ChevronUp className="h-3.5 w-3.5" />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                        moveChild(index, 1)
-                                                    }
-                                                    disabled={
-                                                        index ===
-                                                        data.children.length - 1
-                                                    }
-                                                    aria-label="Pindah ke bawah"
-                                                    title="Pindah ke bawah"
-                                                    className="inline-flex h-6 w-6 items-center justify-center rounded-full text-tb-outline transition-colors hover:bg-tb-surface-container hover:text-tb-on-surface disabled:cursor-not-allowed disabled:opacity-30"
-                                                >
-                                                    <ChevronDown className="h-3.5 w-3.5" />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                        selectRow(index)
-                                                    }
-                                                    aria-label={`Lihat detail ${child.name || `baris ${index + 1}`}`}
-                                                    title="Lihat detail"
-                                                    className={cn(
-                                                        'inline-flex h-6 w-6 items-center justify-center rounded-full transition-colors',
-                                                        selectedIndex === index
-                                                            ? 'bg-tb-primary text-white'
-                                                            : 'text-tb-outline hover:bg-tb-surface-container hover:text-tb-on-surface',
+                                                    {isGapRow(child) && (
+                                                        <span className="inline-flex w-fit items-center rounded-md bg-tb-surface-container px-1.5 py-0.5 text-[10px] font-semibold text-tb-on-surface-variant">
+                                                            N/A
+                                                        </span>
                                                     )}
-                                                >
-                                                    <Eye className="h-3.5 w-3.5" />
-                                                </button>
-                                                {!child.id && (
+                                                    {child.pending && (
+                                                        <span className="inline-flex w-fit items-center rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                                                            Belum tersambung
+                                                        </span>
+                                                    )}
                                                     <button
                                                         type="button"
                                                         onClick={() =>
-                                                            removeChild(index)
+                                                            insertChildAbove(
+                                                                index,
+                                                            )
                                                         }
-                                                        aria-label="Hapus baris"
-                                                        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-950"
+                                                        aria-label="Sisipkan saudara di atas"
+                                                        title="Sisipkan saudara di atas"
+                                                        className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-tb-outline-variant text-tb-outline transition-colors hover:border-tb-primary hover:text-tb-primary"
                                                     >
-                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                        <Plus className="h-3.5 w-3.5" />
                                                     </button>
-                                                )}
-                                            </span>
-                                        </div>
-
-                                        <div className="grid gap-3 sm:grid-cols-2">
-                                            <div className="grid gap-1.5">
-                                                <Label>
-                                                    {focused
-                                                        ? 'Nama (ini Anda)'
-                                                        : 'Nama'}
-                                                </Label>
-                                                {focused ? (
-                                                    <div className="flex min-h-9 items-center rounded-md border border-tb-primary/40 bg-tb-surface-container px-3 text-sm font-medium text-tb-on-surface">
-                                                        {data.name || '—'}
-                                                    </div>
-                                                ) : (
-                                                    <NameCombobox
-                                                        value={child.name}
-                                                        onChange={(value) =>
-                                                            setChild(
-                                                                index,
-                                                                'name',
-                                                                value,
-                                                            )
+                                                </span>
+                                                <span className="flex items-center gap-2">
+                                                    {focused && (
+                                                        <span className="text-[11px] font-medium text-tb-primary">
+                                                            (Anda sedang diedit)
+                                                        </span>
+                                                    )}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            moveChild(index, -1)
                                                         }
-                                                        suggestions={
-                                                            nameSuggestions
-                                                        }
-                                                        placeholder={
-                                                            isGapRow(child)
-                                                                ? 'N/A'
-                                                                : 'Nama saudara'
-                                                        }
-                                                        allowNa
-                                                    />
-                                                )}
-                                            </div>
-                                            <div className="grid gap-1.5">
-                                                <Label>Jenis Kelamin</Label>
-                                                {focused ? (
-                                                    <div className="flex min-h-9 items-center rounded-md border border-tb-primary/40 bg-tb-surface-container px-3 text-sm text-tb-on-surface">
-                                                        {data.gender || '—'}
-                                                    </div>
-                                                ) : (
-                                                    <Select
-                                                        value={
-                                                            child.gender || ''
-                                                        }
-                                                        onValueChange={(
-                                                            value,
-                                                        ) =>
-                                                            setChild(
-                                                                index,
-                                                                'gender',
-                                                                value,
-                                                            )
-                                                        }
+                                                        disabled={index === 0}
+                                                        aria-label="Pindah ke atas"
+                                                        title="Pindah ke atas"
+                                                        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-tb-outline transition-colors hover:bg-tb-surface-container hover:text-tb-on-surface disabled:cursor-not-allowed disabled:opacity-30"
                                                     >
-                                                        <SelectTrigger className="w-full border-tb-outline-variant bg-tb-surface-bright">
-                                                            <SelectValue placeholder="L/P" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="L">
-                                                                Laki-Laki
-                                                            </SelectItem>
-                                                            <SelectItem value="P">
-                                                                Perempuan
-                                                            </SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        <div className="grid gap-3 sm:grid-cols-2">
-                                            <div className="grid gap-1.5">
-                                                <Label>Marga</Label>
-                                                {focused ? (
-                                                    <div className="flex min-h-9 items-center rounded-md border border-tb-primary/40 bg-tb-surface-container px-3 text-sm text-tb-on-surface">
-                                                        {margas.find(
-                                                            (marga) =>
-                                                                marga.id ===
-                                                                data.marga_id,
-                                                        )?.name ??
-                                                            (data.new_marga ||
-                                                                '—')}
-                                                    </div>
-                                                ) : (
-                                                    <MargaField
-                                                        value={
-                                                            child.marga_id ??
-                                                            null
+                                                        <ChevronUp className="h-3.5 w-3.5" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            moveChild(index, 1)
                                                         }
-                                                        newMarga={
-                                                            child.new_marga ??
-                                                            ''
-                                                        }
-                                                        onValue={(value) =>
-                                                            setChildMarga(
-                                                                index,
-                                                                value,
-                                                            )
-                                                        }
-                                                        onNewMarga={(value) =>
-                                                            setChildNewMarga(
-                                                                index,
-                                                                value,
-                                                            )
-                                                        }
-                                                        margas={margas}
-                                                        placeholder="Marga saudara"
                                                         disabled={
-                                                            lockedMarga !== null
+                                                            index ===
+                                                            data.children
+                                                                .length -
+                                                                1
                                                         }
+                                                        aria-label="Pindah ke bawah"
+                                                        title="Pindah ke bawah"
+                                                        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-tb-outline transition-colors hover:bg-tb-surface-container hover:text-tb-on-surface disabled:cursor-not-allowed disabled:opacity-30"
+                                                    >
+                                                        <ChevronDown className="h-3.5 w-3.5" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            selectRow(index)
+                                                        }
+                                                        aria-label={`Lihat detail ${child.name || `baris ${index + 1}`}`}
+                                                        title="Lihat detail"
+                                                        className={cn(
+                                                            'inline-flex h-6 w-6 items-center justify-center rounded-full transition-colors',
+                                                            selectedIndex ===
+                                                                index
+                                                                ? 'bg-tb-primary text-white'
+                                                                : 'text-tb-outline hover:bg-tb-surface-container hover:text-tb-on-surface',
+                                                        )}
+                                                    >
+                                                        <Eye className="h-3.5 w-3.5" />
+                                                    </button>
+                                                    {!child.id && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                removeChild(
+                                                                    index,
+                                                                )
+                                                            }
+                                                            aria-label="Hapus baris"
+                                                            className="inline-flex h-6 w-6 items-center justify-center rounded-full text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-950"
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    )}
+                                                </span>
+                                            </div>
+
+                                            <div className="grid gap-3 sm:grid-cols-2">
+                                                <div className="grid gap-1.5">
+                                                    <Label>
+                                                        {focused
+                                                            ? 'Nama (ini Anda)'
+                                                            : 'Nama'}
+                                                    </Label>
+                                                    {focused ? (
+                                                        <div className="flex min-h-9 items-center rounded-md border border-tb-primary/40 bg-tb-surface-container px-3 text-sm font-medium text-tb-on-surface">
+                                                            {data.name || '—'}
+                                                        </div>
+                                                    ) : (
+                                                        <NameCombobox
+                                                            value={child.name}
+                                                            onChange={(value) =>
+                                                                setChild(
+                                                                    index,
+                                                                    'name',
+                                                                    value,
+                                                                )
+                                                            }
+                                                            suggestions={
+                                                                nameSuggestions
+                                                            }
+                                                            placeholder={
+                                                                isGapRow(child)
+                                                                    ? 'N/A'
+                                                                    : 'Nama saudara'
+                                                            }
+                                                            allowNa
+                                                        />
+                                                    )}
+                                                </div>
+                                                <div className="grid gap-1.5">
+                                                    <Label>Jenis Kelamin</Label>
+                                                    {focused ? (
+                                                        <div className="flex min-h-9 items-center rounded-md border border-tb-primary/40 bg-tb-surface-container px-3 text-sm text-tb-on-surface">
+                                                            {data.gender || '—'}
+                                                        </div>
+                                                    ) : (
+                                                        <Select
+                                                            value={
+                                                                child.gender ||
+                                                                ''
+                                                            }
+                                                            onValueChange={(
+                                                                value,
+                                                            ) =>
+                                                                setChild(
+                                                                    index,
+                                                                    'gender',
+                                                                    value,
+                                                                )
+                                                            }
+                                                        >
+                                                            <SelectTrigger className="w-full border-tb-outline-variant bg-tb-surface-bright">
+                                                                <SelectValue placeholder="L/P" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="L">
+                                                                    Laki-Laki
+                                                                </SelectItem>
+                                                                <SelectItem value="P">
+                                                                    Perempuan
+                                                                </SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="grid gap-3 sm:grid-cols-2">
+                                                <div className="grid gap-1.5">
+                                                    <Label>Marga</Label>
+                                                    {focused ? (
+                                                        <div className="flex min-h-9 items-center rounded-md border border-tb-primary/40 bg-tb-surface-container px-3 text-sm text-tb-on-surface">
+                                                            {margas.find(
+                                                                (marga) =>
+                                                                    marga.id ===
+                                                                    data.marga_id,
+                                                            )?.name ??
+                                                                (data.new_marga ||
+                                                                    '—')}
+                                                        </div>
+                                                    ) : (
+                                                        <MargaField
+                                                            value={
+                                                                child.marga_id ??
+                                                                null
+                                                            }
+                                                            newMarga={
+                                                                child.new_marga ??
+                                                                ''
+                                                            }
+                                                            onValue={(value) =>
+                                                                setChildMarga(
+                                                                    index,
+                                                                    value,
+                                                                )
+                                                            }
+                                                            onNewMarga={(
+                                                                value,
+                                                            ) =>
+                                                                setChildNewMarga(
+                                                                    index,
+                                                                    value,
+                                                                )
+                                                            }
+                                                            margas={margas}
+                                                            placeholder="Marga saudara"
+                                                            disabled={
+                                                                lockedMarga !==
+                                                                null
+                                                            }
+                                                        />
+                                                    )}
+                                                </div>
+                                                <div className="grid gap-1.5">
+                                                    <Label>Pasangan</Label>
+                                                    <Input
+                                                        value={child.spouse}
+                                                        onChange={(e) =>
+                                                            setChild(
+                                                                index,
+                                                                'spouse',
+                                                                e.target.value,
+                                                            )
+                                                        }
+                                                        placeholder="Nama pasangan"
+                                                        className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                                     />
-                                                )}
+                                                </div>
+                                                <div className="grid gap-1.5">
+                                                    <Label>
+                                                        Marga/Suku Lain
+                                                    </Label>
+                                                    <Input
+                                                        value={
+                                                            child.spouse_marga
+                                                        }
+                                                        onChange={(e) =>
+                                                            setChild(
+                                                                index,
+                                                                'spouse_marga',
+                                                                e.target.value,
+                                                            )
+                                                        }
+                                                        placeholder="Marga pasangan"
+                                                        className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                                    />
+                                                </div>
                                             </div>
-                                            <div className="grid gap-1.5">
-                                                <Label>Pasangan</Label>
-                                                <Input
-                                                    value={child.spouse}
-                                                    onChange={(e) =>
-                                                        setChild(
-                                                            index,
-                                                            'spouse',
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    placeholder="Nama pasangan"
-                                                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
-                                                />
-                                            </div>
-                                            <div className="grid gap-1.5">
-                                                <Label>Marga/Suku Lain</Label>
-                                                <Input
-                                                    value={child.spouse_marga}
-                                                    onChange={(e) =>
-                                                        setChild(
-                                                            index,
-                                                            'spouse_marga',
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    placeholder="Marga pasangan"
-                                                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
-                                                />
-                                            </div>
-                                        </div>
-                                    </motion.div>
-                                );
-                            })}
+                                        </motion.div>
+                                    );
+                                })}
                             </AnimatePresence>
 
                             <Button

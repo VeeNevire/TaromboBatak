@@ -1,5 +1,13 @@
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, CalendarDays, LayoutGrid, Shapes, ShieldCheck, TreePine, Users } from 'lucide-react';
+import {
+    BookOpen,
+    CalendarDays,
+    LayoutGrid,
+    Shapes,
+    ShieldCheck,
+    TreePine,
+    Users,
+} from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';

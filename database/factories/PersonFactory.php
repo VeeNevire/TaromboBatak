@@ -27,6 +27,12 @@ class PersonFactory extends Factory
             'death_year' => null,
             'image' => null,
             'bio' => fake()->optional()->sentence(),
+            'is_public' => false,
         ];
+    }
+
+    public function public(): static
+    {
+        return $this->state(fn () => ['is_public' => true]);
     }
 }

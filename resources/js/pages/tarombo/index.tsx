@@ -5,7 +5,11 @@ import { DescendantsTree } from '@/components/people/descendants-tree';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { buildTaromboPeople } from '@/data/tarombo-tree';
-import type { MargaInfo, TaromboPersonRow } from '@/data/tarombo-tree';
+import type {
+    MargaInfo,
+    TaromboPerson,
+    TaromboPersonRow,
+} from '@/data/tarombo-tree';
 import { dashboard } from '@/routes';
 import tarombo from '@/routes/tarombo';
 
@@ -21,12 +25,16 @@ export default function TaromboIndex({ people: rows, margas }: Props) {
 
     const people = buildTaromboPeople(rows);
     const rootPerson = people.find((p) => !p.parentId) ?? people[0];
-    const [centerPersonId, setCenterPersonId] = useState<string>(rootPerson?.id ?? '');
+    const [centerPersonId, setCenterPersonId] = useState<string>(
+        rootPerson?.id ?? '',
+    );
     const centerPerson = people.find((p) => p.id === centerPersonId);
     const hasChildren = people.some((p) => p.parentId === centerPersonId);
 
     const searchSelect = (value: string) => {
-        const person = people.find((p) => p.name.toLowerCase().includes(value.toLowerCase()));
+        const person = people.find((p) =>
+            p.name.toLowerCase().includes(value.toLowerCase()),
+        );
 
         if (person && person.id !== centerPersonId) {
             setHistory((prev) => [...prev, centerPersonId]);
@@ -35,15 +43,18 @@ export default function TaromboIndex({ people: rows, margas }: Props) {
         }
     };
 
-    const handlePersonSelect = (person: any) => {
-        if (person.id === centerPersonId) {
+    const handlePersonSelect = (id: string) => {
+        if (id === centerPersonId) {
             return;
         }
 
         setHistory((prev) => [...prev, centerPersonId]);
-        setSelectedId(person.id);
-        setCenterPersonId(person.id);
+        setSelectedId(id);
+        setCenterPersonId(id);
     };
+
+    const handleDiagramSelect = (person: TaromboPerson) =>
+        handlePersonSelect(person.id);
 
     const handleBack = () => {
         if (history.length === 0) {
@@ -57,6 +68,25 @@ export default function TaromboIndex({ people: rows, margas }: Props) {
         setSearch('');
     };
 
+    if (people.length === 0) {
+        return (
+            <>
+                <Head title="Pohon Tarombo" />
+                <div className="flex h-full flex-1 flex-col p-4 md:p-6">
+                    <div className="mx-auto w-full max-w-md rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-6 text-center">
+                        <h1 className="font-display text-2xl font-bold text-tb-on-surface">
+                            Pohon Tarombo
+                        </h1>
+                        <p className="mt-2 text-sm text-tb-on-surface-variant">
+                            Belum ada data tarombo. Tambahkan anggota terlebih
+                            dahulu.
+                        </p>
+                    </div>
+                </div>
+            </>
+        );
+    }
+
     return (
         <>
             <Head title="Pohon Tarombo" />
@@ -67,7 +97,8 @@ export default function TaromboIndex({ people: rows, margas }: Props) {
                         Pohon Tarombo
                     </h1>
                     <p className="mt-1 text-sm text-tb-on-surface-variant">
-                        Visualisasi silsilah keluarga langsung dari database. Klik anggota untuk melihat detail.
+                        Visualisasi silsilah keluarga langsung dari database.
+                        Klik anggota untuk melihat detail.
                     </p>
                 </div>
 
@@ -90,7 +121,7 @@ export default function TaromboIndex({ people: rows, margas }: Props) {
                         <div className="overflow-hidden rounded-2xl border border-tb-outline-variant bg-tb-surface-bright">
                             <div className="max-h-[600px] overflow-y-auto p-4">
                                 <TaromboDiagram
-                                    onSelect={handlePersonSelect}
+                                    onSelect={handleDiagramSelect}
                                     onPaneClick={() => setSelectedId(null)}
                                     onBack={handleBack}
                                     canGoBack={history.length > 0}
@@ -111,7 +142,8 @@ export default function TaromboIndex({ people: rows, margas }: Props) {
                                         Silsilah Keturunan
                                     </h3>
                                     <p className="mt-1 text-xs text-tb-on-surface-variant">
-                                        Pohon vertikal dari {centerPerson?.name ?? 'Leluhur Utama'}
+                                        Pohon vertikal dari{' '}
+                                        {centerPerson?.name ?? 'Leluhur Utama'}
                                     </p>
                                 </div>
                                 {hasChildren ? (
@@ -124,9 +156,12 @@ export default function TaromboIndex({ people: rows, margas }: Props) {
                                 ) : (
                                     <div className="py-8 text-center text-sm text-tb-on-surface-variant">
                                         <p className="mb-2 text-base font-medium text-tb-on-surface">
-                                            {centerPerson?.name ?? 'Anggota ini'}
+                                            {centerPerson?.name ??
+                                                'Anggota ini'}
                                         </p>
-                                        <p>belum memiliki keturunan tercatat.</p>
+                                        <p>
+                                            belum memiliki keturunan tercatat.
+                                        </p>
                                     </div>
                                 )}
                             </div>
@@ -137,13 +172,17 @@ export default function TaromboIndex({ people: rows, margas }: Props) {
                     <div className="lg:hidden">
                         <Tabs defaultValue="tree" className="w-full">
                             <TabsList className="grid w-full grid-cols-2">
-                                <TabsTrigger value="diagram">Diagram Radial</TabsTrigger>
-                                <TabsTrigger value="tree">Silsilah Pohon</TabsTrigger>
+                                <TabsTrigger value="diagram">
+                                    Diagram Radial
+                                </TabsTrigger>
+                                <TabsTrigger value="tree">
+                                    Silsilah Pohon
+                                </TabsTrigger>
                             </TabsList>
                             <TabsContent value="diagram">
                                 <div className="rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-4">
                                     <TaromboDiagram
-                                        onSelect={handlePersonSelect}
+                                        onSelect={handleDiagramSelect}
                                         onPaneClick={() => setSelectedId(null)}
                                         onBack={handleBack}
                                         canGoBack={history.length > 0}
@@ -162,7 +201,9 @@ export default function TaromboIndex({ people: rows, margas }: Props) {
                                             Silsilah Keturunan
                                         </h3>
                                         <p className="mt-1 text-xs text-tb-on-surface-variant">
-                                            Pohon vertikal dari {centerPerson?.name ?? 'Leluhur Utama'}
+                                            Pohon vertikal dari{' '}
+                                            {centerPerson?.name ??
+                                                'Leluhur Utama'}
                                         </p>
                                     </div>
                                     {hasChildren ? (
@@ -175,9 +216,13 @@ export default function TaromboIndex({ people: rows, margas }: Props) {
                                     ) : (
                                         <div className="py-8 text-center text-sm text-tb-on-surface-variant">
                                             <p className="mb-2 text-base font-medium text-tb-on-surface">
-                                                {centerPerson?.name ?? 'Anggota ini'}
+                                                {centerPerson?.name ??
+                                                    'Anggota ini'}
                                             </p>
-                                            <p>belum memiliki keturunan tercatat.</p>
+                                            <p>
+                                                belum memiliki keturunan
+                                                tercatat.
+                                            </p>
                                         </div>
                                     )}
                                 </div>
@@ -185,14 +230,6 @@ export default function TaromboIndex({ people: rows, margas }: Props) {
                         </Tabs>
                     </div>
                 </div>
-
-                {people.length === 0 && (
-                    <div className="mx-auto max-w-md rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-6 text-center">
-                        <p className="text-sm text-tb-on-surface-variant">
-                            Belum ada data tarombo. Tambahkan anggota terlebih dahulu.
-                        </p>
-                    </div>
-                )}
             </div>
         </>
     );
