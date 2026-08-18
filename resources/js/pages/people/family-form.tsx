@@ -534,9 +534,22 @@ function MargaLineageCard({
     );
 }
 
+let uidCounter = 0;
+
+const createUid = (): string => {
+    if (
+        typeof crypto !== 'undefined' &&
+        typeof crypto.randomUUID === 'function'
+    ) {
+        return crypto.randomUUID();
+    }
+
+    return `row-${Date.now().toString(36)}-${(uidCounter++).toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+};
+
 const emptyRow = (): ChildRow => ({
     id: null,
-    uid: crypto.randomUUID(),
+    uid: createUid(),
     name: '',
     gender: '',
     spouse: '',
@@ -682,7 +695,7 @@ export default function FamilyForm({
                 person?.children && person.children.length > 0
                     ? person.children.map((child) => ({
                           id: child.id ?? null,
-                          uid: crypto.randomUUID(),
+                          uid: createUid(),
                           name: child.name ?? '',
                           gender: child.gender ?? '',
                           spouse: child.spouse ?? '',
