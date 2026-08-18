@@ -19,6 +19,7 @@ type PersonItem = {
     parent: string | null;
     birth_year: string | null;
     chain: string | null;
+    pending: boolean;
     created_at: string | null;
     editable: boolean;
 };
@@ -169,10 +170,19 @@ export default function PeopleIndex({ people: page, filters, margas, canManage, 
                                                     {person.alias && (
                                                         <p className="text-xs text-tb-on-surface-variant">{person.alias}</p>
                                                     )}
-                                                    {person.chain && (
+                                                    {person.chain ? (
                                                         <p className="mt-0.5 text-[11px] font-medium text-tb-primary">
                                                             No. {person.chain}
                                                         </p>
+                                                    ) : person.pending ? (
+                                                        <p className="mt-0.5 text-[11px] font-medium text-tb-outline">
+                                                            —
+                                                        </p>
+                                                    ) : null}
+                                                    {person.pending && (
+                                                        <span className="mt-0.5 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-px text-[10px] font-semibold text-amber-700">
+                                                            Belum tersambung
+                                                        </span>
                                                     )}
                                                 </div>
                                             </div>

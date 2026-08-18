@@ -14,6 +14,7 @@ export type TaromboPersonRow = {
     image?: string | null;
     bio?: string;
     chain?: string | null;
+    pending?: boolean;
     childrenNames?: string[];
 };
 
@@ -31,6 +32,7 @@ export type TaromboPerson = {
     image?: string | null;
     bio?: string;
     chain?: string | null;
+    pending?: boolean;
     childrenNames?: string[];
 };
 

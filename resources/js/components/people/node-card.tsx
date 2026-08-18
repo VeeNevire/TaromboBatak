@@ -10,6 +10,7 @@ export type TreeNode = {
     birthOrder?: number | null;
     chain?: string | null;
     image?: string | null;
+    pending?: boolean;
 };
 
 const PASTELS = ['#DCE7DE', '#EFE2C9', '#E6D6E3', '#D6E1EC', '#F0DAD0'];
@@ -72,11 +73,15 @@ export function NodeCard({
                 className="mt-2 rounded-md border bg-white px-2 py-1 text-center text-[11px] font-semibold leading-snug"
                 style={{ borderColor: highlighted ? GOLD : '#E3DFD2', color: highlighted ? FOREST : INK }}
             >
-                {node.chain && (
+                {node.chain ? (
                     <span className="block text-[9px] font-semibold uppercase tracking-wide text-[#5B6A61]">
                         No. {node.chain}
                     </span>
-                )}
+                ) : node.pending ? (
+                    <span className="block text-[9px] font-semibold uppercase tracking-wide text-[#B8934A]">
+                        —
+                    </span>
+                ) : null}
                 <span className="block break-words">{node.name}</span>
                 {badge ? (
                     <span
@@ -87,6 +92,11 @@ export function NodeCard({
                         }}
                     >
                         {badge}
+                    </span>
+                ) : null}
+                {node.pending ? (
+                    <span className="mt-0.5 block rounded-full bg-[#FDEBD0] px-1.5 py-px text-[9px] font-semibold text-[#92400E]">
+                        Belum tersambung
                     </span>
                 ) : null}
             </div>

@@ -21,6 +21,7 @@ function toNode(person: TaromboPerson): TreeNode {
         birthOrder: person.birthOrder,
         chain: person.chain,
         image: person.image,
+        pending: person.pending,
     };
 }
 

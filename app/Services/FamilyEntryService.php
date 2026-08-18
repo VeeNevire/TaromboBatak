@@ -33,13 +33,21 @@ class FamilyEntryService
                 ?? $data['marga_id']
                 ?? null;
 
-            $father = $this->resolveParent(
-                $data['father_id'] ?? null,
-                $data['father'] ?? null,
-                $fatherMargaId,
-                $forcedMargaId,
-                $createdBy,
-            );
+            $fatherNameMd = data_get($data, 'father.name');
+            $fatherNameGiven = $fatherNameMd !== null
+                && $this->normalizeName($fatherNameMd) !== null;
+            $fatherGiven = ! empty($data['father_id']) || $fatherNameGiven;
+            $pending = ! $fatherGiven;
+
+            $father = $fatherGiven
+                ? $this->resolveParent(
+                    $data['father_id'] ?? null,
+                    $data['father'] ?? null,
+                    $fatherMargaId,
+                    $forcedMargaId,
+                    $createdBy,
+                )
+                : null;
 
             $mother = $this->resolveParent(
                 $data['mother_id'] ?? null,
@@ -59,20 +67,62 @@ class FamilyEntryService
                 $data,
                 $forcedMargaId,
                 $createdBy,
+                $pending,
+            );
+
+            // Upsert own children of the focus person
+            $focus = $this->resolveFocus($children, $data);
+            $ownChildren = $this->upsertChildren(
+                $data['ownChildren'] ?? [],
+                $focus?->marga_id ?? null,
+                $focus?->id,
+                null,
+                $data['ownChildren'] ? count($data['ownChildren']) : null,
+                null,
+                $data,
+                $forcedMargaId,
+                $createdBy,
+                false,
             );
 
             return [
                 'father' => $father,
+                'pending' => $pending,
                 'mother' => $mother,
                 'children' => $children,
+                'ownChildren' => $ownChildren,
+                'focus' => $focus,
             ];
         });
 
         if ($result['father'] !== null) {
             app(ChainNumberingService::class)->recomputeFromAncestor($result['father']);
+        } elseif ($result['pending']) {
+            // Keluarga yang belum tersambung tidak berchain; recompute tiap
+            // rumpun baru sekalian membersihkan chain lama bila pernah ada.
+            $service = app(ChainNumberingService::class);
+
+            foreach ($result['children'] as $child) {
+                $service->recomputeFromAncestor($child);
+            }
         }
 
         return $result;
+    }
+
+    /**
+     * Resolve the focus person from the children collection.
+     * For edit: the person being edited (by id). For create: the person at birth_order position.
+     */
+    protected function resolveFocus(Collection $children, array $data): ?Person
+    {
+        if (isset($data['id'])) {
+            $id = (int) $data['id'];
+            return $children->firstWhere('id', $id);
+        }
+
+        $order = max(1, (int) ($data['birth_order'] ?? 1)) - 1;
+        return $children->values()->get($order) ?? $children->first();
     }
 
     /**
@@ -145,6 +195,7 @@ class FamilyEntryService
         array $data,
         ?int $forcedMargaId = null,
         ?int $createdBy = null,
+        bool $pending = false,
     ): Collection {
         $children = new Collection;
 
@@ -176,6 +227,7 @@ class FamilyEntryService
                 'mother_id' => $motherId,
                 'birth_order' => $index + 1,
                 'sibling_count' => $siblingCount,
+                'pending_father' => $pending,
                 ...$focusedFields,
             ], fn ($value) => $value !== null);
 

@@ -28,6 +28,7 @@ class TaromboTreeService
                 'birthYear' => $person->birth_year,
                 'birthOrder' => $person->birth_order,
                 'chain' => $person->chain,
+                'pending' => (bool) $person->pending_father,
                 'gender' => $person->gender,
                 'spouse' => $person->spouse,
                 'image' => $person->image,

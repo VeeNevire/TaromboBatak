@@ -104,10 +104,52 @@ class ChainNumberingService
      */
     protected function assignChain(Person $person): void
     {
+        if ($person->pending_father) {
+            // Masih tertempel ke ayah sementara (data lama): jangan beri chain.
+            if ($person->father_id !== null) {
+                if ($person->chain !== null) {
+                    $person->chain = null;
+                    $person->save();
+                }
+
+                return;
+            }
+
+            // Root yang belum tersambung hanya diberi label cadangan ("-n")
+            // ketika sudah punya anak. Begitu disambung ke ayah asli, flag
+            // pending dihapus dan chain asli dihitung ulang dari ayah tersebut.
+            if (! $person->children()->exists()) {
+                if ($person->chain !== null) {
+                    $person->chain = null;
+                    $person->save();
+                }
+
+                return;
+            }
+
+            if (is_string($person->chain) && str_starts_with($person->chain, '-')) {
+                return;
+            }
+
+            $chain = $this->nextPendingRootChain();
+
+            if ($chain !== $person->chain) {
+                $person->chain = $chain;
+                $person->save();
+            }
+
+            return;
+        }
+
         if ($person->father_id !== null) {
             $father = $person->father;
 
             if ($father === null || $father->chain === null) {
+                if ($person->chain !== null) {
+                    $person->chain = null;
+                    $person->save();
+                }
+
                 return;
             }
 
@@ -153,9 +195,31 @@ class ChainNumberingService
         $last = Person::query()
             ->whereNull('father_id')
             ->whereNotNull('chain')
+            ->where('chain', 'not like', '%-%')
             ->orderByRaw('CAST(chain AS UNSIGNED) DESC')
             ->value('chain');
 
         return (string) ((int) $last + 1);
+    }
+
+    /**
+     * Next available pending label ("-n") based on the highest numeric suffix
+     * already in use. Pending labels are reserved (they never appear in real
+     * chains, which are always numeric and dash-separated) so they never
+     * collide.
+     */
+    protected function nextPendingRootChain(): string
+    {
+        $max = 0;
+
+        foreach (Person::query()->where('chain', 'like', '-%')->pluck('chain') as $chain) {
+            $parts = explode('-', $chain);
+
+            if (count($parts) === 2 && $parts[0] === '') {
+                $max = max($max, (int) $parts[1]);
+            }
+        }
+
+        return '-'.($max + 1);
     }
 }

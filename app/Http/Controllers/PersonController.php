@@ -49,6 +49,7 @@ class PersonController extends Controller
                 'parent' => $person->father?->name,
                 'birth_year' => $person->birth_year,
                 'chain' => $person->chain,
+                'pending' => (bool) $person->pending_father,
                 'created_at' => $person->created_at?->format('d M Y'),
                 'editable' => $isStaff || ($person->created_by !== null && $person->created_by === $user->id),
             ]);
@@ -140,6 +141,7 @@ class PersonController extends Controller
 
         $validated = $request->validated();
         $validated['children'] = $request->input('children', []);
+        $validated['ownChildren'] = $request->input('ownChildren', []);
 
         if ($user->isStaff()) {
             app(FamilyEntryService::class)->save($validated);
@@ -233,13 +235,17 @@ class PersonController extends Controller
         $people = Person::query()->with('marga')->get();
         $byId = $people->keyBy('id');
 
-        $father = $person->father_id !== null ? ($byId[$person->father_id] ?? null) : null;
+        $father = $person->pending_father || $person->father_id === null
+            ? null
+            : ($byId[$person->father_id] ?? null);
         $mother = $person->mother_id !== null ? ($byId[$person->mother_id] ?? null) : null;
 
-        $children = $people
-            ->filter(fn (Person $row) => $row->father_id === $person->father_id)
-            ->sortBy('birth_order')
-            ->values();
+        $children = $person->pending_father
+            ? collect([$person])
+            : $people
+                ->filter(fn (Person $row) => $row->father_id === $person->father_id && ! $row->pending_father)
+                ->sortBy('birth_order')
+                ->values();
 
         $colorsByMarga = [];
         $fallbackIndex = 0;
@@ -307,7 +313,7 @@ class PersonController extends Controller
     protected function siblingsOf(Person $person, $byId): array
     {
         return $byId
-            ->filter(fn (Person $row) => $row->id !== $person->id && $row->father_id === $person->father_id)
+            ->filter(fn (Person $row) => $row->id !== $person->id && $row->father_id === $person->father_id && ! $row->pending_father)
             ->sortBy('birth_order')
             ->values()
             ->map(fn (Person $row) => $this->previewBasic($row))
@@ -351,6 +357,7 @@ class PersonController extends Controller
 
         $validated = $request->validated();
         $validated['children'] = $request->input('children', []);
+        $validated['ownChildren'] = $request->input('ownChildren', []);
         $validated['id'] = $person->id;
 
         if (! $isStaff) {
@@ -389,18 +396,26 @@ class PersonController extends Controller
      */
     protected function familyPayload(Person $person): array
     {
-        $siblings = $person->father_id !== null
-            ? Person::query()
-                ->where('father_id', $person->father_id)
-                ->orderBy('birth_order')
-                ->get()
-            : collect([$person]);
+        if ($person->pending_father) {
+            $siblings = collect([$person]);
+            $lineageIds = [$person->id];
+        } else {
+            $siblings = $person->father_id !== null
+                ? Person::query()
+                    ->where('father_id', $person->father_id)
+                    ->where(fn ($query) => $query
+                        ->where('pending_father', false)
+                        ->orWhere('id', $person->id))
+                    ->orderBy('birth_order')
+                    ->get()
+                : collect([$person]);
 
-        if (! $siblings->contains('id', $person->id)) {
-            $siblings = $siblings->push($person)->sortBy('birth_order')->values();
+            if (! $siblings->contains('id', $person->id)) {
+                $siblings = $siblings->push($person)->sortBy('birth_order')->values();
+            }
+
+            $lineageIds = $person->lineage()->pluck('id')->push($person->id)->all();
         }
-
-        $lineageIds = $person->lineage()->pluck('id')->push($person->id)->all();
 
         $lineage = Person::query()
             ->whereIn('id', $lineageIds)
@@ -418,28 +433,31 @@ class PersonController extends Controller
             'gender' => $person->gender,
             'alias' => $person->alias,
             'marga_id' => $person->marga_id,
-            'father_id' => $person->father_id,
+            'father_id' => $person->pending_father ? null : $person->father_id,
             'mother_id' => $person->mother_id,
             'birth_order' => $person->birth_order,
             'sibling_count' => $person->sibling_count,
             'chain' => $person->chain,
+            'pending' => (bool) $person->pending_father,
             'birth_year' => $person->birth_year,
             'death_year' => $person->death_year,
             'image' => $person->image,
             'bio' => $person->bio,
             'spouse' => $person->spouse,
             'spouse_marga' => $person->spouse_marga,
-            'father' => $person->father
-                ? [
-                    'id' => $person->father->id,
-                    'name' => $person->father->name,
-                    'marga_id' => $person->father->marga_id,
-                    'marga' => $person->father->marga?->name,
-                    'chain' => $person->father->chain,
-                    'birth_year' => $person->father->birth_year,
-                    'death_year' => $person->father->death_year,
-                ]
-                : null,
+            'father' => $person->pending_father
+                ? null
+                : ($person->father
+                    ? [
+                        'id' => $person->father->id,
+                        'name' => $person->father->name,
+                        'marga_id' => $person->father->marga_id,
+                        'marga' => $person->father->marga?->name,
+                        'chain' => $person->father->chain,
+                        'birth_year' => $person->father->birth_year,
+                        'death_year' => $person->father->death_year,
+                    ]
+                    : null),
             'mother' => $person->mother
                 ? [
                     'id' => $person->mother->id,
@@ -482,6 +500,25 @@ class PersonController extends Controller
                     'marga' => $sibling->marga?->name,
                     'birth_order' => $sibling->birth_order,
                     'chain' => $sibling->chain,
+                    'pending' => (bool) $sibling->pending_father,
+                ])
+                ->values()
+                ->all(),
+            'ownChildren' => $person->children()
+                ->orderBy('birth_order')
+                ->get()
+                ->map(fn (Person $child) => [
+                    'id' => $child->id,
+                    'name' => $child->name,
+                    'gender' => $child->gender,
+                    'spouse' => $child->spouse,
+                    'spouse_marga' => $child->spouse_marga,
+                    'marga_id' => $child->marga_id,
+                    'marga' => $child->marga?->name,
+                    'new_marga' => '',
+                    'birth_order' => $child->birth_order,
+                    'chain' => $child->chain,
+                    'pending' => (bool) $child->pending_father,
                 ])
                 ->values()
                 ->all(),

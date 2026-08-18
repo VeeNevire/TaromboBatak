@@ -20,6 +20,7 @@ use Illuminate\Support\Collection as SupportCollection;
  * @property int|null $marga_id
  * @property int|null $created_by
  * @property int|null $father_id
+ * @property bool $pending_father
  * @property int|null $mother_id
  * @property int|null $birth_order
  * @property int|null $sibling_count
@@ -39,7 +40,7 @@ use Illuminate\Support\Collection as SupportCollection;
  * @property-read Collection<int, Person> $children
  * @property-read Collection<int, Person> $siblings
  */
-#[Fillable(['name', 'gender', 'alias', 'marga_id', 'created_by', 'father_id', 'mother_id', 'birth_order', 'sibling_count', 'chain', 'birth_year', 'death_year', 'image', 'bio', 'spouse', 'spouse_marga'])]
+#[Fillable(['name', 'gender', 'alias', 'marga_id', 'created_by', 'father_id', 'mother_id', 'birth_order', 'sibling_count', 'chain', 'birth_year', 'death_year', 'image', 'bio', 'spouse', 'spouse_marga', 'pending_father'])]
 class Person extends Model
 {
     /** @use HasFactory<PersonFactory> */
@@ -91,6 +92,7 @@ class Person extends Model
     public function siblings(): HasMany
     {
         return $this->hasMany(Person::class, 'father_id')
+            ->where('pending_father', false)
             ->whereKeyNot($this->getKey())
             ->orderBy('birth_order');
     }
@@ -102,7 +104,9 @@ class Person extends Model
      */
     protected function casts(): array
     {
-        return [];
+        return [
+            'pending_father' => 'boolean',
+        ];
     }
 
     /**

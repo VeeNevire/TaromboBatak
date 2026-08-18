@@ -42,8 +42,11 @@ export type ChildRow = {
     spouse_marga: string;
     marga_id?: number | null;
     new_marga?: string;
+    marga?: string | null;
+    birth_order?: number | null;
     alias?: string | null;
     chain?: string | null;
+    pending?: boolean;
     birth_year?: string | null;
     death_year?: string | null;
     image?: string | null;
@@ -105,6 +108,7 @@ export type FamilyData = {
     mother: ParentEntry | null;
     lineage: LineageEntry[];
     children: ChildRow[];
+    ownChildren?: ChildRow[];
 };
 
 type MargaOption = { id: number; name: string };
@@ -115,6 +119,7 @@ type Props = {
     nameSuggestions: string[];
     lockedMarga?: { id: number; name: string } | null;
     lineage?: MargaLineageEntry[];
+    initialFatherName?: string;
 };
 
 const VALUE_NONE = 'none';
@@ -558,6 +563,21 @@ const emptyRow = (): ChildRow => ({
     new_marga: '',
 });
 
+const emptyOwnRow = (): ChildRow => ({
+    id: null,
+    uid: createUid(),
+    name: '',
+    gender: '',
+    spouse: '',
+    spouse_marga: '',
+    marga_id: null,
+    marga: null,
+    new_marga: '',
+    birth_order: null,
+    chain: null,
+    pending: false,
+});
+
 const emptyParent = (): ParentEntry => ({
     name: '',
     birth_year: '',
@@ -653,7 +673,7 @@ export default function FamilyForm({
     person,
     margas,
     nameSuggestions,
-    lockedMarga,
+    lockedMarga = null,
     lineage,
 }: Props) {
     const isEdit = person !== null;
@@ -702,10 +722,27 @@ export default function FamilyForm({
                           spouse_marga: child.spouse_marga ?? '',
                           marga_id: child.marga_id ?? lockedMarga?.id ?? null,
                           new_marga: '',
+                          pending: child.pending ?? false,
                       }))
                     : [emptyRow()],
-        },
-    );
+            ownChildren:
+                person?.ownChildren && person.ownChildren.length > 0
+                    ? person.ownChildren.map((child) => ({
+                          id: child.id ?? null,
+                          uid: createUid(),
+                          name: child.name ?? '',
+                          gender: child.gender ?? '',
+                          spouse: child.spouse ?? '',
+                          spouse_marga: child.spouse_marga ?? '',
+                          marga_id: child.marga_id ?? lockedMarga?.id ?? null,
+                          new_marga: '',
+                          pending: child.pending ?? false,
+                          birth_order: child.birth_order ?? null,
+                          chain: child.chain ?? null,
+                          marga: child.marga ?? null,
+                      }))
+                    : ([] as ChildRow[]),
+    });
 
     const birthOrder = Number(data.birth_order) || 1;
     const siblingCount = Number(data.sibling_count) || 1;
@@ -731,6 +768,8 @@ export default function FamilyForm({
         selectedIndex != null
             ? (data.children[selectedIndex] as ChildRow | undefined)
             : undefined;
+
+    const ownChildrenCount = data.ownChildren.length;
 
     const isFocusRow =
         person?.id != null
@@ -1006,6 +1045,60 @@ export default function FamilyForm({
         setReductionConfirm(null);
     };
 
+    const setOwnChild = (
+        index: number,
+        key: 'name' | 'gender' | 'spouse' | 'spouse_marga',
+        value: string,
+    ) => {
+        const next = data.ownChildren.map((child, i) =>
+            i === index ? { ...child, [key]: value } : child,
+        );
+        setData('ownChildren', next);
+    };
+
+    const setOwnChildMarga = (index: number, margaId: number | null) => {
+        const next = data.ownChildren.map((child, i) =>
+            i === index ? { ...child, marga_id: margaId } : child,
+        );
+        setData('ownChildren', next);
+    };
+
+    const setOwnChildNewMarga = (index: number, name: string) => {
+        const next = data.ownChildren.map((child, i) =>
+            i === index ? { ...child, new_marga: name } : child,
+        );
+        setData('ownChildren', next);
+    };
+
+    const addOwnChild = () => {
+        setData('ownChildren', [...data.ownChildren, emptyOwnRow()]);
+    };
+
+    const removeOwnChild = (index: number) => {
+        setData(
+            'ownChildren',
+            data.ownChildren.filter((_, i) => i !== index),
+        );
+    };
+
+    const moveOwnChild = (index: number, direction: -1 | 1) => {
+        const target = index + direction;
+
+        if (target < 0 || target >= data.ownChildren.length) {
+            return;
+        }
+
+        const next = [...data.ownChildren];
+        [next[index], next[target]] = [next[target], next[index]];
+        setData('ownChildren', next);
+    };
+
+    const insertOwnChildAbove = (index: number) => {
+        const next = [...data.ownChildren];
+        next.splice(index, 0, emptyRow());
+        setData('ownChildren', next);
+    };
+
     const setParentEntry = (
         key: 'father' | 'mother',
         field: 'name' | 'birth_year' | 'death_year',
@@ -1035,6 +1128,24 @@ export default function FamilyForm({
         }
     };
 
+    const fatherName = data.father?.name?.trim() ?? '';
+    const lineageEntries = (lineage ?? []).flatMap((entry) => [
+        entry,
+        ...(entry.children ?? []),
+    ]);
+    const fatherMatch = fatherName
+        ? lineageEntries.find(
+              (entry) =>
+                  (entry.name ?? '').trim().toUpperCase() ===
+                  fatherName.toUpperCase(),
+          )
+        : undefined;
+    const predictedFatherChain = fatherMatch?.chain ?? null;
+    const predictedFocusChain =
+        predictedFatherChain && data.name.trim()
+            ? `${predictedFatherChain}-${birthOrder}`
+            : null;
+
     const renderParentBlock = (
         key: 'father' | 'mother',
         label: string,
@@ -1056,6 +1167,36 @@ export default function FamilyForm({
                     allowNa
                 />
                 <InputError message={errors[`${key}.name`]} />
+                {key === 'father' && (
+                    <div className="text-xs">
+                        {fatherMatch ? (
+                            <p className="font-medium text-emerald-700">
+                                Akan tersambung ke {fatherMatch.name}
+                                {fatherMatch.marga
+                                    ? ` (${fatherMatch.marga})`
+                                    : ''}{' '}
+                                — chain {predictedFatherChain}
+                                {predictedFocusChain
+                                    ? ` → ${predictedFocusChain}`
+                                    : ''}
+                                .
+                            </p>
+                        ) : fatherName && !isNaPlaceholder(fatherName) ? (
+                            <p className="font-medium text-amber-700">
+                                Nama "{fatherName}" tidak ditemukan di silsilah
+                                — akan dibuat sebagai rumpun baru (nomor baru),
+                                bukan menyambung.
+                            </p>
+                        ) : (
+                            <p className="font-medium text-tb-on-surface-variant">
+                                Ayah belum diisi — keluarga ini dicatat sebagai
+                                rumpun sendiri berstatus "Belum tersambung".
+                                Isi nama ayah yang sudah ada untuk menyambung ke
+                                silsilahnya.
+                            </p>
+                        )}
+                    </div>
+                )}
             </div>
             {showMarga && (
                 <div className="grid gap-1.5">
@@ -1103,26 +1244,6 @@ export default function FamilyForm({
         </div>
     );
 
-    // Prediksi chain: cari ayah yang diketik di dalam lineage marga, lalu
-    // susun chain fokus = chain ayah + birth order.
-    const fatherName = data.father?.name?.trim() ?? '';
-    const lineageEntries = (lineage ?? []).flatMap((entry) => [
-        entry,
-        ...(entry.children ?? []),
-    ]);
-    const fatherMatch = fatherName
-        ? lineageEntries.find(
-              (entry) =>
-                  (entry.name ?? '').trim().toUpperCase() ===
-                  fatherName.toUpperCase(),
-          )
-        : undefined;
-    const predictedFatherChain = fatherMatch?.chain ?? null;
-    const predictedFocusChain =
-        predictedFatherChain && data.name.trim()
-            ? `${predictedFatherChain}-${birthOrder}`
-            : null;
-
     const highlightedLineage: MargaLineageEntry[] = (lineage ?? []).map(
         (entry) => ({
             ...entry,
@@ -1147,11 +1268,16 @@ export default function FamilyForm({
                             new_marga: '',
                         }
                       : null,
-                  children: (currentData.children ?? []).map((child) => ({
-                      ...child,
-                      marga_id: lockedMarga.id,
-                      new_marga: '',
-                  })),
+children: (currentData.children ?? []).map((child) => ({
+                       ...child,
+                       marga_id: lockedMarga.id,
+                       new_marga: '',
+                   })),
+                   ownChildren: (currentData.ownChildren ?? []).map((child) => ({
+                       ...child,
+                       marga_id: lockedMarga.id,
+                       new_marga: '',
+                   })),
               }
             : currentData;
 
@@ -1384,6 +1510,7 @@ export default function FamilyForm({
                                     </div>
                                 </CardContent>
                             </Card>
+
                         </div>
                         {person ? (
                             <SilsilahListCard
@@ -1700,6 +1827,161 @@ export default function FamilyForm({
                     </div>
 
                     <Card className="border-tb-outline-variant bg-tb-surface-bright">
+                        <CardHeader className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <CardTitle className="font-display text-lg text-tb-on-surface">
+                                    Daftar Anak
+                                </CardTitle>
+                                <CardDescription>
+                                    Anak kandung dari {data.name || 'anggota ini'}. Urutan anak mengikuti urutan baris.
+                                </CardDescription>
+                            </div>
+                            <div className="text-xs text-tb-on-surface-variant">
+                                Urut 01, 02, …
+                            </div>
+                        </CardHeader>
+                        <CardContent className="grid gap-3">
+                            <AnimatePresence initial={false}>
+                                {data.ownChildren.map((child, index) => (
+                                    <motion.div
+                                        key={child.uid ?? child.id ?? `own-row-${index}`}
+                                        layout
+                                        initial={{ opacity: 0, scale: 0.97 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.97 }}
+                                        transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+                                        className="grid gap-3 rounded-lg border border-tb-outline-variant bg-tb-surface-bright p-3"
+                                    >
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="flex items-center gap-1.5">
+                                                <span className="inline-flex w-fit items-center rounded-full bg-tb-surface-container px-2 py-0.5 text-xs font-semibold text-tb-on-surface-variant">
+                                                    Urut {String(index + 1).padStart(2, '0')}
+                                                </span>
+                                                {isGapRow(child) && (
+                                                    <span className="inline-flex w-fit items-center rounded-md bg-tb-surface-container px-1.5 py-0.5 text-[10px] font-semibold text-tb-on-surface-variant">
+                                                        N/A
+                                                    </span>
+                                                )}
+                                                {child.pending && (
+                                                    <span className="inline-flex w-fit items-center rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                                                        Belum tersambung
+                                                    </span>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => insertOwnChildAbove(index)}
+                                                    aria-label="Sisipkan anak di atas"
+                                                    title="Sisipkan anak di atas"
+                                                    className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-tb-outline-variant text-tb-outline transition-colors hover:border-tb-primary hover:text-tb-primary"
+                                                >
+                                                    <Plus className="h-3.5 w-3.5" />
+                                                </button>
+                                            </span>
+                                            <span className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => moveOwnChild(index, -1)}
+                                                    disabled={index === 0}
+                                                    aria-label="Pindah ke atas"
+                                                    title="Pindah ke atas"
+                                                    className="inline-flex h-6 w-6 items-center justify-center rounded-full text-tb-outline transition-colors hover:bg-tb-surface-container hover:text-tb-on-surface disabled:cursor-not-allowed disabled:opacity-30"
+                                                >
+                                                    <ChevronUp className="h-3.5 w-3.5" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => moveOwnChild(index, 1)}
+                                                    disabled={index === ownChildrenCount - 1}
+                                                    aria-label="Pindah ke bawah"
+                                                    title="Pindah ke bawah"
+                                                    className="inline-flex h-6 w-6 items-center justify-center rounded-full text-tb-outline transition-colors hover:bg-tb-surface-container hover:text-tb-on-surface disabled:cursor-not-allowed disabled:opacity-30"
+                                                >
+                                                    <ChevronDown className="h-3.5 w-3.5" />
+                                                </button>
+                                                {!child.id && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeOwnChild(index)}
+                                                        aria-label="Hapus anak"
+                                                        title="Hapus anak"
+                                                        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-950"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </button>
+                                                )}
+                                            </span>
+                                        </div>
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                            <div className="grid gap-1.5">
+                                                <Label>Nama</Label>
+                                                <NameCombobox
+                                                    value={child.name}
+                                                    onChange={(value) => setOwnChild(index, 'name', value)}
+                                                    suggestions={nameSuggestions}
+                                                    placeholder="Nama anak"
+                                                />
+                                            </div>
+                                            <div className="grid gap-1.5">
+                                                <Label>Jenis Kelamin</Label>
+                                                <Select
+                                                    value={child.gender || VALUE_NONE}
+                                                    onValueChange={(value) => setOwnChild(index, 'gender', value === VALUE_NONE ? '' : value)}
+                                                >
+                                                    <SelectTrigger className="border-tb-outline-variant bg-tb-surface-bright">
+                                                        <SelectValue placeholder="Pilih" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value={VALUE_NONE}>— Pilih —</SelectItem>
+                                                        <SelectItem value="L">Laki-laki</SelectItem>
+                                                        <SelectItem value="P">Perempuan</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="grid gap-1.5">
+                                                <Label>Marga</Label>
+                                                <MargaField
+                                                    value={child.marga_id ?? null}
+                                                    newMarga={child.new_marga ?? ''}
+                                                    onValue={(value) => setOwnChildMarga(index, value)}
+                                                    onNewMarga={(value) => setOwnChildNewMarga(index, value)}
+                                                    margas={margas}
+                                                    disabled={lockedMarga !== null}
+                                                />
+                                            </div>
+                                            <div className="grid gap-1.5">
+                                                <Label>Nama Pasangan</Label>
+                                                <Input
+                                                    value={child.spouse}
+                                                    onChange={(event) => setOwnChild(index, 'spouse', event.target.value)}
+                                                    placeholder="Nama pasangan"
+                                                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                                />
+                                            </div>
+                                            <div className="grid gap-1.5 sm:col-span-2">
+                                                <Label>Marga Pasangan</Label>
+                                                <Input
+                                                    value={child.spouse_marga}
+                                                    onChange={(event) => setOwnChild(index, 'spouse_marga', event.target.value)}
+                                                    placeholder="Marga pasangan"
+                                                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                                />
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                ))}
+                            </AnimatePresence>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={addOwnChild}
+                                className="mt-1 w-full border-dashed border-tb-outline-variant text-tb-primary hover:bg-tb-primary/5"
+                            >
+                                <Plus className="size-4" /> Tambah Anak
+                            </Button>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border-tb-outline-variant bg-tb-surface-bright">
                         <CardHeader>
                             <CardTitle className="font-display text-lg text-tb-on-surface">
                                 Orang Tua
@@ -1791,6 +2073,11 @@ export default function FamilyForm({
                                                 {isGapRow(child) && (
                                                     <span className="inline-flex w-fit items-center rounded-md bg-tb-surface-container px-1.5 py-0.5 text-[10px] font-semibold text-tb-on-surface-variant">
                                                         N/A
+                                                    </span>
+                                                )}
+                                                {child.pending && (
+                                                    <span className="inline-flex w-fit items-center rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                                                        Belum tersambung
                                                     </span>
                                                 )}
                                                 <button

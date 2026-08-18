@@ -47,6 +47,14 @@ class UpdatePersonRequest extends FormRequest
             'children.*.new_marga' => ['nullable', 'string', 'max:255'],
             'children.*.spouse' => ['nullable', 'string', 'max:255'],
             'children.*.spouse_marga' => ['nullable', 'string', 'max:255'],
+            'ownChildren' => ['nullable', 'array'],
+            'ownChildren.*.id' => ['nullable', 'exists:people,id'],
+            'ownChildren.*.name' => ['nullable', 'string', 'max:255'],
+            'ownChildren.*.gender' => ['nullable', 'string', 'max:1'],
+            'ownChildren.*.marga_id' => ['nullable', 'exists:margas,id'],
+            'ownChildren.*.new_marga' => ['nullable', 'string', 'max:255'],
+            'ownChildren.*.spouse' => ['nullable', 'string', 'max:255'],
+            'ownChildren.*.spouse_marga' => ['nullable', 'string', 'max:255'],
         ];
 
         return $rules;
