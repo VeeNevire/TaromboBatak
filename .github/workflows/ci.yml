@@ -51,7 +51,7 @@ jobs:
           php artisan config:clear
 
       - name: Generate Wayfinder routes
-        run: php artisan wayfinder:generate --no-interaction
+        run: php artisan wayfinder:generate --with-form --no-interaction
 
       - name: Check PHP and frontend quality
         run: composer run ci:check

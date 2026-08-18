@@ -23,13 +23,13 @@ jobs:
       - name: Cache Composer
         uses: actions/cache@v3
         with:
-         path: ~/.composer/cache
-         key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
-         restore-keys: ${{ runner.os }}-composer-
+          path: ~/.composer/cache
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
 
       - name: ✅ Check platform requirements (fast failure)
         run: composer check-platform-reqs || true
-        
+
       - name: 📦 Install Composer
         env:
           COMPOSER_ALLOW_SUPERUSER: 1
@@ -70,14 +70,14 @@ jobs:
             php artisan route:clear   
 
             echo "Generate Wayfinder routes"
-            php artisan wayfinder:generate
+            php artisan wayfinder:generate --with-form
 
             echo "Build frontend"
             npm run build
 
             echo "Clear cache & OPcache"
             php artisan optimize:clear
-            
+
             echo "Cache ulang"
             php artisan config:cache
             php artisan route:cache
