@@ -107,8 +107,6 @@ export function DescendantsTree({
     onSelect,
     highlightId,
 }: Props) {
-    const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-
     const childrenOf = useMemo(() => {
         const map = new Map<string, TaromboPerson[]>();
 
@@ -129,6 +127,34 @@ export function DescendantsTree({
 
     const center = people.find((person) => person.id === centerId) ?? people[0];
 
+    const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+        const initial = new Set<string>();
+        const visited = new Set<string>();
+
+        const walk = (id: string, depth: number) => {
+            if (visited.has(id)) {
+                return;
+            }
+
+            visited.add(id);
+            const children = childrenOf.get(id) ?? [];
+
+            if (depth >= 3 && children.length > 0) {
+                initial.add(id);
+            }
+
+            for (const child of children) {
+                walk(child.id, depth + 1);
+            }
+        };
+
+        if (center) {
+            walk(center.id, 1);
+        }
+
+        return initial;
+    });
+
     if (!center) {
         return null;
     }
@@ -148,7 +174,7 @@ export function DescendantsTree({
     };
 
     return (
-        <div className="overflow-x-auto pb-4">
+        <div className="pb-4">
             <ul className="tb-tree">
                 <TreeBranch
                     person={center}

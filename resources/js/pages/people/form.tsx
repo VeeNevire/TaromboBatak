@@ -1,5 +1,6 @@
 import { Head, Link } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
+import type { FamilyTreeHistoryEntry } from '@/components/people/family-tree-history-card';
 import { Button } from '@/components/ui/button';
 import FamilyForm from '@/pages/people/family-form';
 import type { FamilyData, MargaLineageEntry } from '@/pages/people/family-form';
@@ -10,8 +11,10 @@ type Props = {
     person: FamilyData | null;
     margas: { id: number; name: string }[];
     nameSuggestions: string[];
+    fatherSuggestions: string[];
     lockedMarga?: { id: number; name: string } | null;
     lineage?: MargaLineageEntry[];
+    familyTrees?: FamilyTreeHistoryEntry[];
     canPublish: boolean;
 };
 
@@ -19,8 +22,10 @@ export default function PersonForm({
     person,
     margas,
     nameSuggestions,
+    fatherSuggestions,
     lockedMarga,
     lineage,
+    familyTrees,
     canPublish,
 }: Props) {
     const isEdit = person !== null;
@@ -58,8 +63,10 @@ export default function PersonForm({
                     person={person}
                     margas={margas}
                     nameSuggestions={nameSuggestions}
+                    fatherSuggestions={fatherSuggestions}
                     lockedMarga={lockedMarga}
                     lineage={lineage}
+                    familyTrees={familyTrees}
                     canPublish={canPublish}
                 />
             </div>

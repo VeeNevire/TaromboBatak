@@ -34,6 +34,37 @@ class ChainNumberingService
     }
 
     /**
+     * Recompute only one person's lineage path and descendant branch. This is
+     * used when moving an individual to a different father so their siblings
+     * keep their existing positions and cached chains.
+     */
+    public function recomputeBranch(Person $person): void
+    {
+        $ancestors = [];
+        $current = $person;
+        $seen = [];
+
+        while ($current->father_id !== null && ! isset($seen[$current->id])) {
+            $seen[$current->id] = true;
+            $father = $current->father;
+
+            if ($father === null) {
+                break;
+            }
+
+            $ancestors[] = $father;
+            $current = $father;
+        }
+
+        foreach (array_reverse($ancestors) as $ancestor) {
+            $this->assignChain($ancestor);
+        }
+
+        $visited = [];
+        $this->recomputeSubtree($person, $visited);
+    }
+
+    /**
      * Recompute chains for every person in the database. Used after a full
      * re-seed so every chain is derived consistently.
      */

@@ -10,6 +10,7 @@ type Props = {
     person: FamilyData;
     margas: { id: number; name: string }[];
     nameSuggestions: string[];
+    fatherSuggestions: string[];
     canPublish: boolean;
 };
 
@@ -17,6 +18,7 @@ export default function PersonShow({
     person,
     margas,
     nameSuggestions,
+    fatherSuggestions,
     canPublish,
 }: Props) {
     return (
@@ -51,6 +53,7 @@ export default function PersonShow({
                     person={person}
                     margas={margas}
                     nameSuggestions={nameSuggestions}
+                    fatherSuggestions={fatherSuggestions}
                     canPublish={canPublish}
                 />
             </div>

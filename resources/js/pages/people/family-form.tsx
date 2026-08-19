@@ -13,6 +13,8 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import InputError from '@/components/input-error';
+import { FamilyTreeHistoryCard } from '@/components/people/family-tree-history-card';
+import type { FamilyTreeHistoryEntry } from '@/components/people/family-tree-history-card';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -61,10 +63,13 @@ export type ChildRow = {
     death_year?: string | null;
     image?: string | null;
     bio?: string | null;
+    descendant_count?: number;
+    descendant_names?: string[];
 };
 
 type ParentEntry = {
     name: string;
+    alias: string;
     birth_year: string;
     death_year: string;
     marga_id?: number | null;
@@ -128,8 +133,10 @@ type Props = {
     person: FamilyData | null;
     margas: MargaOption[];
     nameSuggestions: string[];
+    fatherSuggestions: string[];
     lockedMarga?: { id: number; name: string } | null;
     lineage?: MargaLineageEntry[];
+    familyTrees?: FamilyTreeHistoryEntry[];
     initialFatherName?: string;
     canPublish?: boolean;
 };
@@ -592,6 +599,7 @@ const emptyOwnRow = (): ChildRow => ({
 
 const emptyParent = (): ParentEntry => ({
     name: '',
+    alias: '',
     birth_year: '',
     death_year: '',
     marga_id: null,
@@ -685,8 +693,10 @@ export default function FamilyForm({
     person,
     margas,
     nameSuggestions,
+    fatherSuggestions,
     lockedMarga = null,
     lineage,
+    familyTrees = [],
     canPublish = false,
 }: Props) {
     const isEdit = person !== null;
@@ -710,6 +720,7 @@ export default function FamilyForm({
             father: person?.father
                 ? {
                       name: person.father.name ?? '',
+                      alias: person.father.alias ?? '',
                       birth_year: person.father.birth_year ?? '',
                       death_year: person.father.death_year ?? '',
                       marga_id:
@@ -720,6 +731,7 @@ export default function FamilyForm({
             mother: person?.mother
                 ? {
                       name: person.mother.name ?? '',
+                      alias: person.mother.alias ?? '',
                       birth_year: person.mother.birth_year ?? '',
                       death_year: person.mother.death_year ?? '',
                       marga_id: person.mother.marga_id ?? null,
@@ -732,12 +744,15 @@ export default function FamilyForm({
                           id: child.id ?? null,
                           uid: createUid(),
                           name: child.name ?? '',
+                          alias: child.alias ?? '',
                           gender: child.gender ?? '',
                           spouse: child.spouse ?? '',
                           spouse_marga: child.spouse_marga ?? '',
                           marga_id: child.marga_id ?? lockedMarga?.id ?? null,
                           new_marga: '',
                           pending: child.pending ?? false,
+                          descendant_count: child.descendant_count ?? 0,
+                          descendant_names: child.descendant_names ?? [],
                       }))
                     : [emptyRow()],
             ownChildren:
@@ -746,6 +761,7 @@ export default function FamilyForm({
                           id: child.id ?? null,
                           uid: createUid(),
                           name: child.name ?? '',
+                          alias: child.alias ?? '',
                           gender: child.gender ?? '',
                           spouse: child.spouse ?? '',
                           spouse_marga: child.spouse_marga ?? '',
@@ -755,8 +771,12 @@ export default function FamilyForm({
                           birth_order: child.birth_order ?? null,
                           chain: child.chain ?? null,
                           marga: child.marga ?? null,
+                          descendant_count: child.descendant_count ?? 0,
+                          descendant_names: child.descendant_names ?? [],
                       }))
                     : ([] as ChildRow[]),
+            removed_child_ids: [] as number[],
+            removed_own_child_ids: [] as number[],
         },
     );
 
@@ -769,6 +789,11 @@ export default function FamilyForm({
         from: number;
         to: number;
         filledNew: number;
+    } | null>(null);
+    const [removalConfirm, setRemovalConfirm] = useState<{
+        kind: 'children' | 'ownChildren';
+        index: number;
+        row: ChildRow;
     } | null>(null);
     const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
@@ -958,7 +983,7 @@ export default function FamilyForm({
 
     const setChild = (
         index: number,
-        key: 'name' | 'gender' | 'spouse' | 'spouse_marga',
+        key: 'name' | 'alias' | 'gender' | 'spouse' | 'spouse_marga',
         value: string,
     ) => {
         const next = data.children.map((child, i) =>
@@ -1063,7 +1088,7 @@ export default function FamilyForm({
 
     const setOwnChild = (
         index: number,
-        key: 'name' | 'gender' | 'spouse' | 'spouse_marga',
+        key: 'name' | 'alias' | 'gender' | 'spouse' | 'spouse_marga',
         value: string,
     ) => {
         const next = data.ownChildren.map((child, i) =>
@@ -1115,9 +1140,65 @@ export default function FamilyForm({
         setData('ownChildren', next);
     };
 
+    const requestRemoveRow = (
+        kind: 'children' | 'ownChildren',
+        index: number,
+    ) => {
+        const rows = kind === 'children' ? data.children : data.ownChildren;
+        const row = rows[index];
+
+        if (!row) {
+            return;
+        }
+
+        if (row.id == null) {
+            if (kind === 'children') {
+                removeChild(index);
+            } else {
+                removeOwnChild(index);
+            }
+
+            return;
+        }
+
+        setRemovalConfirm({ kind, index, row });
+    };
+
+    const cancelRemove = () => {
+        setRemovalConfirm(null);
+    };
+
+    const confirmRemove = () => {
+        if (removalConfirm === null) {
+            return;
+        }
+
+        const { kind, index, row } = removalConfirm;
+
+        if (kind === 'children') {
+            setData('removed_child_ids', [...data.removed_child_ids, row.id!]);
+            setData(
+                'children',
+                data.children.filter((_, i) => i !== index),
+            );
+            setData('sibling_count', Math.max(siblingCount - 1, 1));
+        } else {
+            setData('removed_own_child_ids', [
+                ...data.removed_own_child_ids,
+                row.id!,
+            ]);
+            setData(
+                'ownChildren',
+                data.ownChildren.filter((_, i) => i !== index),
+            );
+        }
+
+        setRemovalConfirm(null);
+    };
+
     const setParentEntry = (
         key: 'father' | 'mother',
-        field: 'name' | 'birth_year' | 'death_year',
+        field: 'name' | 'alias' | 'birth_year' | 'death_year',
         value: string,
     ) => {
         setData(key, { ...data[key], [field]: value });
@@ -1178,11 +1259,31 @@ export default function FamilyForm({
                 <NameCombobox
                     value={data[key].name}
                     onChange={(value) => setParentEntry(key, 'name', value)}
-                    suggestions={nameSuggestions}
+                    suggestions={
+                        key === 'father' ? fatherSuggestions : nameSuggestions
+                    }
                     placeholder={`Nama ${label.toLowerCase()}`}
                     allowNa
                 />
                 <InputError message={errors[`${key}.name`]} />
+                <div className="grid gap-1.5 pt-2">
+                    <Label
+                        htmlFor={`${key}-alias`}
+                        className="text-tb-on-surface"
+                    >
+                        Alias / Gelar
+                    </Label>
+                    <Input
+                        id={`${key}-alias`}
+                        value={data[key].alias}
+                        onChange={(e) =>
+                            setParentEntry(key, 'alias', e.target.value)
+                        }
+                        placeholder="Tuan Sorba Dibanua"
+                        className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                    />
+                    <InputError message={errors[`${key}.alias`]} />
+                </div>
                 {key === 'father' && (
                     <div className="text-xs">
                         {fatherMatch ? (
@@ -1317,7 +1418,11 @@ export default function FamilyForm({
                     onSubmit={submit}
                     className={cn(
                         'grid gap-6',
-                        selectedChild ? 'min-w-[1240px]' : 'max-w-4xl',
+                        selectedChild
+                            ? 'min-w-[1240px]'
+                            : person
+                              ? 'max-w-4xl'
+                              : 'w-full max-w-none min-w-[1328px]',
                     )}
                 >
                     <div
@@ -1325,7 +1430,9 @@ export default function FamilyForm({
                             'grid gap-6',
                             selectedChild
                                 ? 'lg:grid-cols-[1fr_320px_320px]'
-                                : 'lg:grid-cols-[1fr_320px]',
+                                : person
+                                  ? 'lg:grid-cols-[1fr_320px]'
+                                  : 'grid-cols-[minmax(640px,1fr)_320px_320px]',
                         )}
                     >
                         <div className="grid gap-6">
@@ -1566,11 +1673,14 @@ export default function FamilyForm({
                                 selfId={person.id}
                             />
                         ) : (
-                            <MargaLineageCard
-                                entries={highlightedLineage}
-                                fatherChain={predictedFatherChain}
-                                focusChain={predictedFocusChain}
-                            />
+                            <>
+                                <MargaLineageCard
+                                    entries={highlightedLineage}
+                                    fatherChain={predictedFatherChain}
+                                    focusChain={predictedFocusChain}
+                                />
+                                <FamilyTreeHistoryCard entries={familyTrees} />
+                            </>
                         )}
                         {selectedChild && selectedIndex != null && (
                             <Card className="border-tb-outline-variant bg-tb-surface-bright">
@@ -1969,21 +2079,20 @@ export default function FamilyForm({
                                                 >
                                                     <ChevronDown className="h-3.5 w-3.5" />
                                                 </button>
-                                                {!child.id && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            removeOwnChild(
-                                                                index,
-                                                            )
-                                                        }
-                                                        aria-label="Hapus anak"
-                                                        title="Hapus anak"
-                                                        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-950"
-                                                    >
-                                                        <Trash2 className="h-3.5 w-3.5" />
-                                                    </button>
-                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        requestRemoveRow(
+                                                            'ownChildren',
+                                                            index,
+                                                        )
+                                                    }
+                                                    aria-label="Hapus anak"
+                                                    title="Hapus anak"
+                                                    className="inline-flex h-6 w-6 items-center justify-center rounded-full text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-950"
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </button>
                                             </span>
                                         </div>
                                         <div className="grid gap-3 sm:grid-cols-2">
@@ -2002,6 +2111,21 @@ export default function FamilyForm({
                                                         nameSuggestions
                                                     }
                                                     placeholder="Nama anak"
+                                                />
+                                            </div>
+                                            <div className="grid gap-1.5">
+                                                <Label>Alias / Gelar</Label>
+                                                <Input
+                                                    value={child.alias ?? ''}
+                                                    onChange={(e) =>
+                                                        setOwnChild(
+                                                            index,
+                                                            'alias',
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    placeholder="Tuan Sorba Dibanua"
+                                                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                                 />
                                             </div>
                                             <div className="grid gap-1.5">
@@ -2282,15 +2406,18 @@ export default function FamilyForm({
                                                     >
                                                         <Eye className="h-3.5 w-3.5" />
                                                     </button>
-                                                    {!child.id && (
+                                                    {(!focused ||
+                                                        child.id == null) && (
                                                         <button
                                                             type="button"
                                                             onClick={() =>
-                                                                removeChild(
+                                                                requestRemoveRow(
+                                                                    'children',
                                                                     index,
                                                                 )
                                                             }
                                                             aria-label="Hapus baris"
+                                                            title="Hapus dari silsilah"
                                                             className="inline-flex h-6 w-6 items-center justify-center rounded-full text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-950"
                                                         >
                                                             <Trash2 className="h-3.5 w-3.5" />
@@ -2450,6 +2577,29 @@ export default function FamilyForm({
                                                         className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                                     />
                                                 </div>
+                                                {!focused && (
+                                                    <div className="grid gap-1.5">
+                                                        <Label>
+                                                            Alias / Gelar
+                                                        </Label>
+                                                        <Input
+                                                            value={
+                                                                child.alias ??
+                                                                ''
+                                                            }
+                                                            onChange={(e) =>
+                                                                setChild(
+                                                                    index,
+                                                                    'alias',
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            placeholder="Tuan Sorba Dibanua"
+                                                            className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                                        />
+                                                    </div>
+                                                )}
                                             </div>
                                         </motion.div>
                                     );
@@ -2509,6 +2659,72 @@ export default function FamilyForm({
                             variant="destructive"
                             onClick={confirmReduction}
                         >
+                            Ya, hapus
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={removalConfirm !== null}
+                onOpenChange={(open) => !open && cancelRemove()}
+            >
+                <DialogContent className="border-tb-outline-variant bg-tb-surface-bright sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-tb-on-surface">
+                            Hapus {removalConfirm?.row.name || 'anggota ini'}{' '}
+                            dari silsilah?
+                        </DialogTitle>
+                        <DialogDescription className="space-y-3">
+                            <p>
+                                Baris ini sudah tersimpan dan akan dihapus
+                                permanen dari database bersama seluruh
+                                keturunannya. Tindakan ini tidak dapat
+                                dibatalkan.
+                            </p>
+                            {(removalConfirm?.row.descendant_count ?? 0) >
+                                0 && (
+                                <div className="rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-950 dark:bg-red-950/40">
+                                    <p className="text-sm font-semibold text-red-700 dark:text-red-300">
+                                        Keturunan yang ikut terhapus (
+                                        {removalConfirm?.row.descendant_count}
+                                        ):
+                                    </p>
+                                    <ul className="mt-1.5 max-h-40 space-y-1 overflow-y-auto text-sm text-red-700/90 dark:text-red-300/90">
+                                        {(
+                                            removalConfirm?.row
+                                                .descendant_names ?? []
+                                        ).map((name) => (
+                                            <li key={name}>• {name}</li>
+                                        ))}
+                                        {(removalConfirm?.row
+                                            .descendant_count ?? 0) >
+                                            (
+                                                removalConfirm?.row
+                                                    .descendant_names ?? []
+                                            ).length && (
+                                            <li className="text-xs italic">
+                                                …dan{' '}
+                                                {(removalConfirm?.row
+                                                    .descendant_count ?? 0) -
+                                                    (
+                                                        removalConfirm?.row
+                                                            .descendant_names ??
+                                                        []
+                                                    ).length}{' '}
+                                                lainnya
+                                            </li>
+                                        )}
+                                    </ul>
+                                </div>
+                            )}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={cancelRemove}>
+                            Batal
+                        </Button>
+                        <Button variant="destructive" onClick={confirmRemove}>
                             Ya, hapus
                         </Button>
                     </DialogFooter>

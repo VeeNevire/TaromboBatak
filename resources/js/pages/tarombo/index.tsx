@@ -1,4 +1,5 @@
 import { Head } from '@inertiajs/react';
+import { Maximize2, Minimize2, Minus, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { TaromboDiagram } from '@/components/landing/tarombo-diagram';
 import { DescendantsTree } from '@/components/people/descendants-tree';
@@ -10,6 +11,7 @@ import type {
     TaromboPerson,
     TaromboPersonRow,
 } from '@/data/tarombo-tree';
+import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import tarombo from '@/routes/tarombo';
 
@@ -22,6 +24,37 @@ export default function TaromboIndex({ people: rows, margas }: Props) {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [search, setSearch] = useState('');
     const [history, setHistory] = useState<string[]>([]);
+    const [expanded, setExpanded] = useState<'diagram' | 'tree' | null>(null);
+    const [treeZoom, setTreeZoom] = useState(1);
+
+    const clampZoom = (value: number) =>
+        Math.round(Math.min(2, Math.max(0.5, value)) * 100) / 100;
+
+    const treeZoomControls = (
+        <div className="flex flex-col overflow-hidden rounded-lg border border-tb-outline-variant bg-tb-surface-bright/95 shadow-md backdrop-blur">
+            <button
+                type="button"
+                onClick={() => setTreeZoom((z) => clampZoom(z + 0.25))}
+                aria-label="Perbesar pohon"
+                title="Perbesar pohon"
+                className="inline-flex h-9 w-9 items-center justify-center text-tb-on-surface transition-colors hover:bg-tb-surface-container"
+            >
+                <Plus className="size-4" />
+            </button>
+            <span className="flex h-6 w-9 items-center justify-center border-y border-tb-outline-variant text-[11px] font-medium text-tb-on-surface-variant">
+                {Math.round(treeZoom * 100)}%
+            </span>
+            <button
+                type="button"
+                onClick={() => setTreeZoom((z) => clampZoom(z - 0.25))}
+                aria-label="Perkecil pohon"
+                title="Perkecil pohon"
+                className="inline-flex h-9 w-9 items-center justify-center text-tb-on-surface transition-colors hover:bg-tb-surface-container"
+            >
+                <Minus className="size-4" />
+            </button>
+        </div>
+    );
 
     const people = buildTaromboPeople(rows);
     const rootPerson = people.find((p) => !p.parentId) ?? people[0];
@@ -67,6 +100,91 @@ export default function TaromboIndex({ people: rows, margas }: Props) {
         setCenterPersonId(prev);
         setSearch('');
     };
+
+    const expandButton = (card: 'diagram' | 'tree', isExpanded: boolean) => (
+        <button
+            type="button"
+            onClick={() => setExpanded(isExpanded ? null : card)}
+            aria-label={isExpanded ? 'Kecilkan tampilan' : 'Perbesar tampilan'}
+            title={isExpanded ? 'Kecilkan' : 'Perbesar'}
+            className="absolute top-3 right-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-tb-outline-variant bg-tb-surface-bright/95 text-tb-on-surface shadow-md backdrop-blur transition-colors hover:bg-tb-surface-container"
+        >
+            {isExpanded ? (
+                <Minimize2 className="size-4" />
+            ) : (
+                <Maximize2 className="size-4" />
+            )}
+        </button>
+    );
+
+    const renderDiagramCard = (isExpanded: boolean) => (
+        <div className="relative overflow-hidden rounded-2xl border border-tb-outline-variant bg-tb-surface-bright">
+            {expandButton('diagram', isExpanded)}
+            <div
+                className={cn(
+                    'max-h-[600px] [scrollbar-gutter:stable] overflow-y-scroll p-4',
+                    isExpanded && 'max-h-[70vh]',
+                )}
+            >
+                <TaromboDiagram
+                    onSelect={handleDiagramSelect}
+                    onPaneClick={() => setSelectedId(null)}
+                    onBack={handleBack}
+                    canGoBack={history.length > 0}
+                    selectedId={selectedId ?? undefined}
+                    centerPersonId={centerPersonId}
+                    people={people}
+                    margas={margas}
+                    context="descendants"
+                />
+            </div>
+        </div>
+    );
+
+    const renderTreeCard = (isExpanded: boolean) => (
+        <div className="relative overflow-hidden rounded-2xl border border-tb-outline-variant bg-tb-surface-bright">
+            {expandButton('tree', isExpanded)}
+            <div
+                className={cn(
+                    'max-h-[600px] [scrollbar-gutter:stable] overflow-auto p-4',
+                    isExpanded && 'max-h-[70vh]',
+                )}
+            >
+                <div className="mb-4 border-b border-tb-outline-variant pb-3 text-center">
+                    <h3 className="font-display text-lg font-bold text-tb-on-surface">
+                        Silsilah Keturunan
+                    </h3>
+                    <p className="mt-1 text-xs text-tb-on-surface-variant">
+                        Pohon vertikal dari{' '}
+                        {centerPerson?.name ?? 'Leluhur Utama'}
+                    </p>
+                </div>
+                {hasChildren ? (
+                    <div style={{ zoom: treeZoom }}>
+                        <DescendantsTree
+                            key={centerPersonId}
+                            people={people}
+                            centerId={centerPersonId}
+                            onSelect={handlePersonSelect}
+                            highlightId={selectedId}
+                        />
+                    </div>
+                ) : (
+                    <div className="py-8 text-center text-sm text-tb-on-surface-variant">
+                        <p className="mb-2 text-base font-medium text-tb-on-surface">
+                            {centerPerson?.name ?? 'Anggota ini'}
+                        </p>
+                        <p>belum memiliki keturunan tercatat.</p>
+                    </div>
+                )}
+            </div>
+            {hasChildren && (
+                <div className="absolute bottom-3 left-3 z-10">
+                    {treeZoomControls}
+                </div>
+            )}
+        </div>
+    );
 
     if (people.length === 0) {
         return (
@@ -116,57 +234,18 @@ export default function TaromboIndex({ people: rows, margas }: Props) {
                     </div>
 
                     {/* Desktop: Side by side */}
-                    <div className="hidden gap-6 lg:grid lg:grid-cols-2">
-                        {/* Left: Diagram Radial */}
-                        <div className="overflow-hidden rounded-2xl border border-tb-outline-variant bg-tb-surface-bright">
-                            <div className="max-h-[600px] overflow-y-auto p-4">
-                                <TaromboDiagram
-                                    onSelect={handleDiagramSelect}
-                                    onPaneClick={() => setSelectedId(null)}
-                                    onBack={handleBack}
-                                    canGoBack={history.length > 0}
-                                    selectedId={selectedId ?? undefined}
-                                    centerPersonId={centerPersonId}
-                                    people={people}
-                                    margas={margas}
-                                    context="descendants"
-                                />
-                            </div>
+                    {expanded === null ? (
+                        <div className="hidden gap-6 lg:grid lg:grid-cols-2">
+                            {renderDiagramCard(false)}
+                            {renderTreeCard(false)}
                         </div>
-
-                        {/* Right: Silsilah Tree */}
-                        <div className="overflow-hidden rounded-2xl border border-tb-outline-variant bg-tb-surface-bright">
-                            <div className="max-h-[600px] overflow-y-auto p-4">
-                                <div className="mb-4 border-b border-tb-outline-variant pb-3 text-center">
-                                    <h3 className="font-display text-lg font-bold text-tb-on-surface">
-                                        Silsilah Keturunan
-                                    </h3>
-                                    <p className="mt-1 text-xs text-tb-on-surface-variant">
-                                        Pohon vertikal dari{' '}
-                                        {centerPerson?.name ?? 'Leluhur Utama'}
-                                    </p>
-                                </div>
-                                {hasChildren ? (
-                                    <DescendantsTree
-                                        people={people}
-                                        centerId={centerPersonId}
-                                        onSelect={handlePersonSelect}
-                                        highlightId={selectedId}
-                                    />
-                                ) : (
-                                    <div className="py-8 text-center text-sm text-tb-on-surface-variant">
-                                        <p className="mb-2 text-base font-medium text-tb-on-surface">
-                                            {centerPerson?.name ??
-                                                'Anggota ini'}
-                                        </p>
-                                        <p>
-                                            belum memiliki keturunan tercatat.
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
+                    ) : (
+                        <div className="hidden lg:block">
+                            {expanded === 'diagram'
+                                ? renderDiagramCard(true)
+                                : renderTreeCard(true)}
                         </div>
-                    </div>
+                    )}
 
                     {/* Mobile: Tabs */}
                     <div className="lg:hidden">
@@ -195,7 +274,7 @@ export default function TaromboIndex({ people: rows, margas }: Props) {
                                 </div>
                             </TabsContent>
                             <TabsContent value="tree">
-                                <div className="rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-4">
+                                <div className="relative overflow-hidden rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-4">
                                     <div className="mb-4 border-b border-tb-outline-variant pb-3 text-center">
                                         <h3 className="font-display text-lg font-bold text-tb-on-surface">
                                             Silsilah Keturunan
@@ -207,12 +286,15 @@ export default function TaromboIndex({ people: rows, margas }: Props) {
                                         </p>
                                     </div>
                                     {hasChildren ? (
-                                        <DescendantsTree
-                                            people={people}
-                                            centerId={centerPersonId}
-                                            onSelect={handlePersonSelect}
-                                            highlightId={selectedId}
-                                        />
+                                        <div style={{ zoom: treeZoom }}>
+                                            <DescendantsTree
+                                                key={centerPersonId}
+                                                people={people}
+                                                centerId={centerPersonId}
+                                                onSelect={handlePersonSelect}
+                                                highlightId={selectedId}
+                                            />
+                                        </div>
                                     ) : (
                                         <div className="py-8 text-center text-sm text-tb-on-surface-variant">
                                             <p className="mb-2 text-base font-medium text-tb-on-surface">
@@ -223,6 +305,11 @@ export default function TaromboIndex({ people: rows, margas }: Props) {
                                                 belum memiliki keturunan
                                                 tercatat.
                                             </p>
+                                        </div>
+                                    )}
+                                    {hasChildren && (
+                                        <div className="absolute bottom-3 left-3 z-10">
+                                            {treeZoomControls}
                                         </div>
                                     )}
                                 </div>

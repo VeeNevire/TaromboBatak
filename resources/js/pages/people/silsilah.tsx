@@ -94,7 +94,7 @@ export default function PersonSilsilah(props: Props) {
                     </div>
                 </div>
 
-                <div className="relative rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-4 sm:p-6">
+                <div className="relative overflow-x-auto rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-4 sm:p-6">
                     {history.length > 0 && (
                         <button
                             type="button"

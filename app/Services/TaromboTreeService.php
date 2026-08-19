@@ -15,10 +15,15 @@ class TaromboTreeService
      * @param  Builder<Person>  $query
      * @return array<int, array<string, mixed>>
      */
-    public function rows(Builder $query): array
+    public function rows(Builder $query, ?int $familyTreeId = null): array
     {
         return $query
-            ->with(['marga', 'children'])
+            ->with([
+                'marga',
+                'children' => fn ($query) => $query
+                    ->when($familyTreeId !== null, fn ($query) => $query
+                        ->whereHas('familyTrees', fn ($query) => $query->whereKey($familyTreeId))),
+            ])
             ->get()
             ->map(fn (Person $person) => [
                 'id' => (string) $person->id,

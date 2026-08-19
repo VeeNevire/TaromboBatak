@@ -1,7 +1,14 @@
 import { ReactFlow, ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import type { NodeMouseHandler } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { ArrowLeft } from 'lucide-react';
+import {
+    ArrowLeft,
+    Focus,
+    Minus,
+    Plus,
+    Search,
+    SlidersHorizontal,
+} from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
     edgeTypes,
@@ -86,7 +93,7 @@ function TaromboDiagramInner({
     people: TaromboPerson[];
     margas: MargaInfo[];
 }) {
-    const { fitView } = useReactFlow();
+    const { fitView, zoomIn, zoomOut } = useReactFlow();
     const layout = useMemo(
         () =>
             buildRadialLayoutFromPerson(
@@ -106,6 +113,31 @@ function TaromboDiagramInner({
 
         return () => cancelAnimationFrame(frame);
     }, [fitView, centerPersonId, context]);
+    const squareRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const square = squareRef.current;
+
+        if (!square) {
+            return;
+        }
+
+        let frame = 0;
+
+        const observer = new ResizeObserver(() => {
+            cancelAnimationFrame(frame);
+            frame = requestAnimationFrame(() => {
+                fitView({ padding: 0.02, duration: 0 });
+            });
+        });
+
+        observer.observe(square);
+
+        return () => {
+            observer.disconnect();
+            cancelAnimationFrame(frame);
+        };
+    }, [fitView]);
     const layoutPeople = useMemo(() => {
         const layoutNodeIds = new Set(
             layout.nodes
@@ -218,8 +250,23 @@ function TaromboDiagramInner({
     };
 
     return (
-        <div className="relative w-full max-w-2xl" ref={containerRef}>
-            <div className="relative aspect-square w-full">
+        <div className="relative mx-auto w-full max-w-2xl" ref={containerRef}>
+            <div className="mx-auto mb-6 flex max-w-sm items-center rounded-full border border-tb-outline-variant bg-tb-surface-bright/90 px-4 py-2.5 shadow-lg backdrop-blur-md">
+                <Search className="mr-2 h-4 w-4 shrink-0 text-tb-outline" />
+                <input
+                    type="text"
+                    placeholder="Cari anggota atau marga..."
+                    className="w-full border-none bg-transparent text-sm text-tb-on-surface focus:ring-0"
+                />
+                <button
+                    type="button"
+                    className="ml-2 text-tb-outline hover:text-tb-primary"
+                    aria-label="Filter"
+                >
+                    <SlidersHorizontal className="h-4 w-4" />
+                </button>
+            </div>
+            <div className="relative aspect-square w-full" ref={squareRef}>
                 {canGoBack && onBack && (
                     <button
                         type="button"
@@ -254,6 +301,37 @@ function TaromboDiagramInner({
                     proOptions={{ hideAttribution: true }}
                     className="tarombo-flow"
                 />
+                <div className="absolute right-3 bottom-3 z-10 flex flex-col overflow-hidden rounded-lg border border-tb-outline-variant bg-tb-surface-bright/95 shadow-md backdrop-blur">
+                    <button
+                        type="button"
+                        onClick={() => zoomIn({ duration: 200 })}
+                        aria-label="Perbesar"
+                        title="Perbesar"
+                        className="inline-flex h-9 w-9 items-center justify-center text-tb-on-surface transition-colors hover:bg-tb-surface-container"
+                    >
+                        <Plus className="h-4 w-4" />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => zoomOut({ duration: 200 })}
+                        aria-label="Perkecil"
+                        title="Perkecil"
+                        className="inline-flex h-9 w-9 items-center justify-center border-y border-tb-outline-variant text-tb-on-surface transition-colors hover:bg-tb-surface-container"
+                    >
+                        <Minus className="h-4 w-4" />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() =>
+                            fitView({ padding: 0.02, duration: 300 })
+                        }
+                        aria-label="Sesuaikan tampilan"
+                        title="Sesuaikan tampilan"
+                        className="inline-flex h-9 w-9 items-center justify-center text-tb-on-surface transition-colors hover:bg-tb-surface-container"
+                    >
+                        <Focus className="h-4 w-4" />
+                    </button>
+                </div>
             </div>
             <div className="mt-8">
                 <p className="text-center text-[10px] font-semibold tracking-widest text-tb-outline uppercase">
