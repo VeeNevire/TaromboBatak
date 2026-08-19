@@ -121,7 +121,8 @@ export default function ErrorPage({ status }: { status: number }) {
     const copy: ErrorCopy = errorCopy[status] ?? {
         label: String(status),
         title: 'Terjadi Kesalahan',
-        description: 'Ada sesuatu yang tidak beres. Silakan coba lagi beberapa saat.',
+        description:
+            'Ada sesuatu yang tidak beres. Silakan coba lagi beberapa saat.',
     };
 
     return (
@@ -132,7 +133,10 @@ export default function ErrorPage({ status }: { status: number }) {
                 <SiteHeader />
 
                 <main className="relative overflow-hidden">
-                    <div aria-hidden="true" className="absolute inset-0 bg-tb-gorga opacity-60" />
+                    <div
+                        aria-hidden="true"
+                        className="bg-tb-gorga absolute inset-0 opacity-60"
+                    />
                     <div
                         aria-hidden="true"
                         className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(179,75,30,0.08),transparent_60%)]"
@@ -150,7 +154,7 @@ export default function ErrorPage({ status }: { status: number }) {
                         </Reveal>
 
                         <Reveal delay={0.15}>
-                            <h1 className="mt-6 font-display text-4xl font-bold leading-tight md:text-5xl">
+                            <h1 className="mt-6 font-display text-4xl leading-tight font-bold md:text-5xl">
                                 {copy.title}
                             </h1>
                         </Reveal>

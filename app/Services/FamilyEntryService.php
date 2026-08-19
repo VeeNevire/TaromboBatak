@@ -26,6 +26,8 @@ class FamilyEntryService
      */
     public function save(array $data, ?int $forcedMargaId = null, ?int $createdBy = null): array
     {
+        $oldFathers = $this->validateExistingRows($data);
+
         $result = DB::transaction(function () use ($data, $forcedMargaId, $createdBy) {
             $fatherMargaId = $forcedMargaId
                 ?? $this->resolveMargaId(
@@ -67,6 +69,9 @@ class FamilyEntryService
                 $createdBy,
             );
 
+            $this->validateParentLinks($data, $father, $mother);
+            $this->validatePublication($data, $father);
+
             $children = $this->upsertChildren(
                 $data['children'] ?? [],
                 $fatherMargaId,
@@ -85,8 +90,8 @@ class FamilyEntryService
             $focus = $this->resolveFocus($children, $data);
             $ownChildren = $this->upsertChildren(
                 $data['ownChildren'] ?? [],
-                $focus?->marga_id ?? null,
-                $focus?->id,
+                $focus->marga_id,
+                $focus->id,
                 null,
                 $data['ownChildren'] ? count($data['ownChildren']) : null,
                 null,
@@ -126,17 +131,26 @@ class FamilyEntryService
             ];
         });
 
+<<<<<<< HEAD
         if ($result['fatherChanged'] && $result['focus'] !== null) {
             app(ChainNumberingService::class)->recomputeBranch($result['focus']);
         } elseif ($result['father'] !== null) {
             app(ChainNumberingService::class)->recomputeFromAncestor($result['father']);
+=======
+        $numbering = app(ChainNumberingService::class);
+
+        foreach ($oldFathers as $oldFather) {
+            $numbering->recomputeFromAncestor($oldFather->fresh());
+        }
+
+        if ($result['father'] !== null) {
+            $numbering->recomputeFromAncestor($result['father']->fresh());
+>>>>>>> origin/main
         } elseif ($result['pending']) {
             // Keluarga yang belum tersambung tidak berchain; recompute tiap
             // rumpun baru sekalian membersihkan chain lama bila pernah ada.
-            $service = app(ChainNumberingService::class);
-
             foreach ($result['children'] as $child) {
-                $service->recomputeFromAncestor($child);
+                $numbering->recomputeFromAncestor($child);
             }
         }
 
@@ -152,6 +166,7 @@ class FamilyEntryService
     }
 
     /**
+<<<<<<< HEAD
      * Keep one account-owned history record for every distinct patrilineal
      * tree touched by the family form.
      */
@@ -244,11 +259,169 @@ class FamilyEntryService
         }
 
         return $current;
+=======
+     * Ensure existing row IDs still belong to the family being edited.
+     *
+     * @param  array<string, mixed>  $data
+     * @return Collection<int, Person>
+     */
+    protected function validateExistingRows(array $data): Collection
+    {
+        $focusId = isset($data['id']) ? (int) $data['id'] : null;
+        $siblingRows = $data['children'] ?? [];
+        $childRows = $data['ownChildren'] ?? [];
+        $siblingRows = is_array($siblingRows) ? $siblingRows : [];
+        $childRows = is_array($childRows) ? $childRows : [];
+        $submittedSiblingIds = collect($siblingRows)
+            ->pluck('id')
+            ->filter()
+            ->map(fn ($id) => (int) $id);
+        $submittedChildIds = collect($childRows)
+            ->pluck('id')
+            ->filter()
+            ->map(fn ($id) => (int) $id);
+
+        if ($focusId === null) {
+            if ($submittedSiblingIds->isNotEmpty() || $submittedChildIds->isNotEmpty()) {
+                throw ValidationException::withMessages([
+                    'children' => 'Data keluarga baru tidak boleh memakai ID anggota yang sudah ada.',
+                ]);
+            }
+
+            return new Collection;
+        }
+
+        $focus = Person::query()->findOrFail($focusId);
+        $allowedSiblingIds = $focus->father_id === null || $focus->pending_father
+            ? collect([$focus->id])
+            : Person::query()
+                ->where('father_id', $focus->father_id)
+                ->where(fn ($query) => $query
+                    ->where('pending_father', false)
+                    ->orWhere('id', $focus->id))
+                ->pluck('id');
+        $allowedChildIds = Person::query()
+            ->where('father_id', $focus->id)
+            ->pluck('id');
+        $errors = [];
+
+        foreach ($siblingRows as $index => $row) {
+            if (isset($row['id']) && ! $allowedSiblingIds->contains((int) $row['id'])) {
+                $errors["children.$index.id"] = 'Anggota ini bukan bagian dari keluarga yang sedang diedit.';
+            }
+        }
+
+        foreach ($childRows as $index => $row) {
+            if (isset($row['id']) && ! $allowedChildIds->contains((int) $row['id'])) {
+                $errors["ownChildren.$index.id"] = 'Anggota ini bukan anak dari person yang sedang diedit.';
+            }
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+
+        return Person::query()
+            ->whereIn('id', $submittedSiblingIds)
+            ->whereNotNull('father_id')
+            ->with('father')
+            ->get()
+            ->pluck('father')
+            ->filter()
+            ->unique('id')
+            ->values();
+    }
+
+    /**
+     * Reject self-parenting and patrilineal cycles before any person is changed.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function validateParentLinks(array $data, ?Person $father, ?Person $mother): void
+    {
+        if (! isset($data['id'])) {
+            return;
+        }
+
+        $focusId = (int) $data['id'];
+
+        foreach (['father_id' => $father, 'mother_id' => $mother] as $field => $parent) {
+            if ($parent !== null && $this->parentPathContains($parent, $focusId)) {
+                throw ValidationException::withMessages([
+                    $field => 'Relasi orang tua ini akan membentuk siklus silsilah.',
+                ]);
+            }
+        }
+    }
+
+    protected function parentPathContains(Person $candidate, int $focusId): bool
+    {
+        $stack = [$candidate];
+        $seen = [];
+
+        while ($stack !== []) {
+            /** @var Person $current */
+            $current = array_pop($stack);
+
+            if ($current->id === $focusId) {
+                return true;
+            }
+
+            if (isset($seen[$current->id])) {
+                continue;
+            }
+
+            $seen[$current->id] = true;
+            $current->loadMissing(['father', 'mother']);
+
+            if ($current->father !== null) {
+                $stack[] = $current->father;
+            }
+
+            if ($current->mother !== null) {
+                $stack[] = $current->mother;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Public records must keep a complete public patrilineal path.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function validatePublication(array $data, ?Person $father): void
+    {
+        if (! array_key_exists('is_public', $data)) {
+            return;
+        }
+
+        $isPublic = filter_var($data['is_public'], FILTER_VALIDATE_BOOL);
+
+        if ($isPublic && $father !== null && ! $father->is_public) {
+            throw ValidationException::withMessages([
+                'is_public' => 'Ayah harus dipublikasikan lebih dahulu agar jalur silsilah publik tetap lengkap.',
+            ]);
+        }
+
+        if (! $isPublic && isset($data['id']) && Person::query()
+            ->where('father_id', (int) $data['id'])
+            ->public()
+            ->exists()) {
+            throw ValidationException::withMessages([
+                'is_public' => 'Person ini masih memiliki keturunan publik dan belum dapat dibuat private.',
+            ]);
+        }
+>>>>>>> origin/main
     }
 
     /**
      * Resolve the focus person from the children collection.
      * For edit: the person being edited (by id). For create: the person at birth_order position.
+     *
+     * @param  Collection<int, Person>  $children
+     * @param  array<string, mixed>  $data
      */
     protected function resolveFocus(Collection $children, array $data): ?Person
     {
@@ -304,8 +477,9 @@ class FamilyEntryService
             return null;
         }
 
-        $parent = Person::query()
+        $matches = Person::query()
             ->where('name', $name)
+<<<<<<< HEAD
             ->when($forcedMargaId !== null, fn ($query) => $query->where('marga_id', $forcedMargaId))
             ->whereNotIn('id', $excludedIds)
             ->when($expectedGender !== null, fn ($query) => $query->where(
@@ -314,6 +488,12 @@ class FamilyEntryService
                     ->orWhereNull('gender'),
             ))
             ->first();
+=======
+            ->when($margaId !== null, fn ($query) => $query->where('marga_id', $margaId))
+            ->limit(2)
+            ->get();
+        $parent = $matches->count() === 1 ? $matches->first() : null;
+>>>>>>> origin/main
 
         if ($parent === null) {
             if ($excludedIds !== [] && Person::query()->whereIn('id', $excludedIds)->where('name', $name)->exists()) {
@@ -344,7 +524,7 @@ class FamilyEntryService
         $this->applyExpectedGender($parent, $expectedGender);
 
         // Isi placeholder "N/A" dengan nama ayah yang baru diketik.
-        if ($parent->isNa() && $name !== null) {
+        if ($parent->isNa()) {
             $parent->update(['name' => $name]);
         }
 
@@ -396,6 +576,7 @@ class FamilyEntryService
                 'death_year' => $data['death_year'] ?? null,
                 'image' => $data['image'] ?? null,
                 'bio' => $data['bio'] ?? null,
+                'is_public' => $data['is_public'] ?? null,
             ] : [];
 
             $childMargaId = $forcedMargaId
@@ -420,6 +601,7 @@ class FamilyEntryService
                 ...$focusedFields,
             ], fn ($value) => $value !== null);
 
+<<<<<<< HEAD
             $attributes['father_id'] = $fatherId;
             $attributes['mother_id'] = $motherId;
             $attributes['pending_father'] = $pending;
@@ -435,6 +617,9 @@ class FamilyEntryService
             }
 
             $child = isset($row['id']) ? Person::find($row['id']) : null;
+=======
+            $child = isset($row['id']) ? Person::find((int) $row['id']) : null;
+>>>>>>> origin/main
 
             if ($child) {
                 $child->update($attributes);

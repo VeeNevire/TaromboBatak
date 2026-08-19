@@ -1,8 +1,14 @@
 import { Link } from '@inertiajs/react';
-import { Apple, Facebook, Instagram, Music2, Play, Youtube } from 'lucide-react';
+import {
+    Apple,
+    Facebook,
+    Instagram,
+    Music2,
+    Play,
+    Youtube,
+} from 'lucide-react';
 import { BrandLogo } from '@/components/brand-logo';
 import { footerNav } from '@/data/landing';
-
 
 const socialLinks = [
     { label: 'Facebook', icon: Facebook },
@@ -13,7 +19,7 @@ const socialLinks = [
 
 export function SiteFooter() {
     return (
-        <footer className="border-t border-tb-outline-variant bg-tb-surface-bright px-6 pb-8 pt-16">
+        <footer className="border-t border-tb-outline-variant bg-tb-surface-bright px-6 pt-16 pb-8">
             <div className="mx-auto mb-12 grid max-w-7xl grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-5">
                 <div className="lg:col-span-2">
                     <div className="mb-4 flex items-center gap-3">
@@ -21,12 +27,17 @@ export function SiteFooter() {
                             <BrandLogo className="size-6" />
                         </div>
                         <div>
-                            <h2 className="font-display text-lg font-bold leading-none">Tarombo Batak</h2>
-                            <p className="text-[10px] text-tb-on-surface-variant">Silsilah • Budaya • Identitas</p>
+                            <h2 className="font-display text-lg leading-none font-bold">
+                                Tarombo Batak
+                            </h2>
+                            <p className="text-[10px] text-tb-on-surface-variant">
+                                Silsilah • Budaya • Identitas
+                            </p>
                         </div>
                     </div>
                     <p className="mb-6 max-w-xs text-sm leading-relaxed text-tb-on-surface-variant">
-                        Platform digital untuk melestarikan silsilah dan budaya Batak untuk generasi kini dan masa depan.
+                        Platform digital untuk melestarikan silsilah dan budaya
+                        Batak untuk generasi kini dan masa depan.
                     </p>
                     <div className="flex gap-4">
                         {socialLinks.map((social) => (
@@ -44,13 +55,16 @@ export function SiteFooter() {
                 <div>
                     <h3 className="mb-4 text-sm font-bold">Navigasi</h3>
                     <ul className="space-y-3 text-sm text-tb-on-surface-variant">
-                       {footerNav.navigasi.map((item) => (
-        <li key={item.label}>
-            <Link href={item.href} className="transition-colors hover:text-tb-primary">
-                {item.label}
-            </Link>
-        </li>
-    ))}
+                        {footerNav.navigasi.map((item) => (
+                            <li key={item.label}>
+                                <Link
+                                    href={item.href}
+                                    className="transition-colors hover:text-tb-primary"
+                                >
+                                    {item.label}
+                                </Link>
+                            </li>
+                        ))}
                     </ul>
                 </div>
                 <div>
@@ -58,7 +72,10 @@ export function SiteFooter() {
                     <ul className="space-y-3 text-sm text-tb-on-surface-variant">
                         {footerNav.bantuan.map((item) => (
                             <li key={item}>
-                                <a href="#" className="transition-colors hover:text-tb-primary">
+                                <a
+                                    href="#"
+                                    className="transition-colors hover:text-tb-primary"
+                                >
                                     {item}
                                 </a>
                             </li>
@@ -67,7 +84,9 @@ export function SiteFooter() {
                 </div>
                 <div>
                     <h3 className="mb-4 text-sm font-bold">Unduh Aplikasi</h3>
-                    <p className="mb-4 text-xs text-tb-on-surface-variant">Telusuri tarombo di mana saja, kapan saja.</p>
+                    <p className="mb-4 text-xs text-tb-on-surface-variant">
+                        Telusuri tarombo di mana saja, kapan saja.
+                    </p>
                     <div className="space-y-3">
                         <a
                             href="#"
@@ -75,8 +94,12 @@ export function SiteFooter() {
                         >
                             <Apple className="h-6 w-6" />
                             <div className="text-left">
-                                <p className="text-[8px] uppercase leading-none">Download on the</p>
-                                <p className="mt-1 text-sm font-semibold leading-none">App Store</p>
+                                <p className="text-[8px] leading-none uppercase">
+                                    Download on the
+                                </p>
+                                <p className="mt-1 text-sm leading-none font-semibold">
+                                    App Store
+                                </p>
                             </div>
                         </a>
                         <a
@@ -85,8 +108,12 @@ export function SiteFooter() {
                         >
                             <Play className="h-5 w-5" />
                             <div className="text-left">
-                                <p className="text-[8px] uppercase leading-none">GET IT ON</p>
-                                <p className="mt-1 text-sm font-semibold leading-none">Google Play</p>
+                                <p className="text-[8px] leading-none uppercase">
+                                    GET IT ON
+                                </p>
+                                <p className="mt-1 text-sm leading-none font-semibold">
+                                    Google Play
+                                </p>
                             </div>
                         </a>
                     </div>

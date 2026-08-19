@@ -29,7 +29,7 @@ test('non-admin users can only see people from their own marga', function () {
                 ->etc()));
 });
 
-test('non-admin users cannot access admin-only routes', function () {
+test('regular users without a marga cannot create or edit family data', function () {
     $user = User::factory()->create();
     $person = Person::factory()->create();
 
@@ -39,16 +39,27 @@ test('non-admin users cannot access admin-only routes', function () {
     $this->actingAs($user)->delete(route('people.destroy', $person))->assertForbidden();
 });
 
-test('non-admin users cannot store people', function () {
-    $user = User::factory()->create();
+test('regular users with a marga can store private family data in their own scope', function () {
     $marga = Marga::factory()->create();
+    $otherMarga = Marga::factory()->create();
+    $user = User::factory()->withMarga($marga->id)->create();
 
     $this->actingAs($user)
         ->post(route('people.store'), [
             'name' => 'Orang Baru',
-            'marga_id' => $marga->id,
+            'marga_id' => $otherMarga->id,
+            'birth_order' => 1,
+            'sibling_count' => 1,
+            'children' => [['name' => 'Orang Baru']],
         ])
-        ->assertForbidden();
+        ->assertRedirect(route('people.index'));
+
+    $this->assertDatabaseHas('people', [
+        'name' => 'Orang Baru',
+        'marga_id' => $marga->id,
+        'created_by' => $user->id,
+        'is_public' => false,
+    ]);
 });
 
 test('admin users can access admin-only routes', function () {
@@ -109,5 +120,23 @@ test('non-admin users can view the dashboard even when their ancestor is outside
 
     $this->actingAs($user)
         ->get(route('dashboard'))
-        ->assertOk();
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('stats.totalGenerations', 2)
+            ->etc());
+});
+
+test('dashboard generation depth includes multiple ancestors outside the user marga', function () {
+    $sitorus = Marga::factory()->create(['name' => 'Sitorus']);
+    $batak = Marga::factory()->create(['name' => 'Batak']);
+    $root = Person::factory()->create(['marga_id' => $batak->id]);
+    $middle = Person::factory()->create(['marga_id' => $batak->id, 'father_id' => $root->id]);
+    Person::factory()->create(['marga_id' => $sitorus->id, 'father_id' => $middle->id]);
+    $user = User::factory()->withMarga($sitorus->id)->create();
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('stats.totalGenerations', 3)
+            ->etc());
 });

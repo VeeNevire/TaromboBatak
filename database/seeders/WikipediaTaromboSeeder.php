@@ -176,6 +176,7 @@ class WikipediaTaromboSeeder extends Seeder
                 'death_year' => $row['deathYear'] ?? null,
                 'image' => $row['image'] ?? null,
                 'bio' => $row['bio'] ?? null,
+                'is_public' => true,
             ]);
 
             $idMap[$row['id']] = $person->id;

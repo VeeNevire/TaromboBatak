@@ -2,7 +2,13 @@ import { Head, Link, useForm } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -47,7 +53,12 @@ export default function StoryForm({ story }: Props) {
 
             <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
                 <div className="flex flex-col gap-3">
-                    <Button asChild variant="ghost" size="sm" className="w-fit text-tb-on-surface-variant">
+                    <Button
+                        asChild
+                        variant="ghost"
+                        size="sm"
+                        className="w-fit text-tb-on-surface-variant"
+                    >
                         <Link href={stories.index()}>
                             <ArrowLeft className="size-4" /> Kembali ke Cerita
                         </Link>
@@ -57,7 +68,8 @@ export default function StoryForm({ story }: Props) {
                             {isEdit ? 'Ubah Cerita' : 'Tambah Cerita'}
                         </h1>
                         <p className="mt-1 text-sm text-tb-on-surface-variant">
-                            Cerita akan tampil di halaman utama bila statusnya "Tampil".
+                            Cerita akan tampil di halaman utama bila statusnya
+                            "Tampil".
                         </p>
                     </div>
                 </div>
@@ -68,17 +80,25 @@ export default function StoryForm({ story }: Props) {
                             <CardTitle className="font-display text-lg text-tb-on-surface">
                                 Detail Cerita
                             </CardTitle>
-                            <CardDescription>Judul, deskripsi, dan gambar cerita.</CardDescription>
+                            <CardDescription>
+                                Judul, deskripsi, dan gambar cerita.
+                            </CardDescription>
                         </CardHeader>
                         <CardContent className="grid gap-5">
                             <div className="grid gap-1.5">
-                                <Label htmlFor="title" className="text-tb-on-surface">
-                                    Judul <span className="text-red-600">*</span>
+                                <Label
+                                    htmlFor="title"
+                                    className="text-tb-on-surface"
+                                >
+                                    Judul{' '}
+                                    <span className="text-red-600">*</span>
                                 </Label>
                                 <Input
                                     id="title"
                                     value={data.title}
-                                    onChange={(e) => setData('title', e.target.value)}
+                                    onChange={(e) =>
+                                        setData('title', e.target.value)
+                                    }
                                     placeholder="Mis. Asal Usul Marga Sitorus"
                                     className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                 />
@@ -86,29 +106,40 @@ export default function StoryForm({ story }: Props) {
                             </div>
 
                             <div className="grid gap-1.5">
-                                <Label htmlFor="description" className="text-tb-on-surface">
-                                    Deskripsi <span className="text-red-600">*</span>
+                                <Label
+                                    htmlFor="description"
+                                    className="text-tb-on-surface"
+                                >
+                                    Deskripsi{' '}
+                                    <span className="text-red-600">*</span>
                                 </Label>
                                 <textarea
                                     id="description"
                                     value={data.description}
-                                    onChange={(e) => setData('description', e.target.value)}
+                                    onChange={(e) =>
+                                        setData('description', e.target.value)
+                                    }
                                     rows={5}
                                     placeholder="Ringkasan cerita leluhur atau budaya..."
-                                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20 w-full rounded-md border px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
+                                    className="w-full rounded-md border border-tb-outline-variant bg-tb-surface-bright px-3 py-2 text-sm shadow-xs outline-none focus:border-tb-primary focus:ring-tb-primary/20 focus-visible:ring-[3px]"
                                 />
                                 <InputError message={errors.description} />
                             </div>
 
                             <div className="grid gap-1.5">
-                                <Label htmlFor="image" className="text-tb-on-surface">
+                                <Label
+                                    htmlFor="image"
+                                    className="text-tb-on-surface"
+                                >
                                     URL Gambar
                                 </Label>
                                 <Input
                                     id="image"
                                     type="url"
                                     value={data.image}
-                                    onChange={(e) => setData('image', e.target.value)}
+                                    onChange={(e) =>
+                                        setData('image', e.target.value)
+                                    }
                                     placeholder="https://..."
                                     className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                 />
@@ -119,10 +150,15 @@ export default function StoryForm({ story }: Props) {
                                 <Checkbox
                                     id="published"
                                     checked={data.published}
-                                    onCheckedChange={(checked) => setData('published', checked === true)}
+                                    onCheckedChange={(checked) =>
+                                        setData('published', checked === true)
+                                    }
                                     className="rounded border-tb-outline-variant text-tb-primary focus:ring-tb-primary"
                                 />
-                                <Label htmlFor="published" className="text-sm text-tb-on-surface cursor-pointer">
+                                <Label
+                                    htmlFor="published"
+                                    className="cursor-pointer text-sm text-tb-on-surface"
+                                >
                                     Tampilkan di halaman utama
                                 </Label>
                             </div>
@@ -135,9 +171,17 @@ export default function StoryForm({ story }: Props) {
                             disabled={processing}
                             className="rounded-full bg-tb-primary px-6 hover:bg-tb-primary-light"
                         >
-                            {processing ? 'Menyimpan...' : isEdit ? 'Simpan Perubahan' : 'Tambah Cerita'}
+                            {processing
+                                ? 'Menyimpan...'
+                                : isEdit
+                                  ? 'Simpan Perubahan'
+                                  : 'Tambah Cerita'}
                         </Button>
-                        <Button asChild variant="ghost" className="text-tb-on-surface-variant">
+                        <Button
+                            asChild
+                            variant="ghost"
+                            className="text-tb-on-surface-variant"
+                        >
                             <Link href={stories.index()}>Batal</Link>
                         </Button>
                     </div>

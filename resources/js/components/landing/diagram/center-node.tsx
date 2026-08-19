@@ -5,7 +5,13 @@ import { getInitials } from '@/data/tarombo-tree';
 import type { TaromboNodeData } from '@/data/tarombo-tree';
 import { cn } from '@/lib/utils';
 
-function DetailRow({ label, value }: { label: string; value?: string | number | null }) {
+function DetailRow({
+    label,
+    value,
+}: {
+    label: string;
+    value?: string | number | null;
+}) {
     if (value === undefined || value === null || value === '') {
         return null;
     }
@@ -18,13 +24,23 @@ function DetailRow({ label, value }: { label: string; value?: string | number | 
     );
 }
 
-function CenterBubble({ person, ringColor }: { person: TaromboNodeData['person']; ringColor: string }) {
+function CenterBubble({
+    person,
+    ringColor,
+}: {
+    person: TaromboNodeData['person'];
+    ringColor: string;
+}) {
     return (
         <div className="w-56 rounded-xl border border-tb-outline-variant bg-tb-surface-bright p-3 shadow-xl">
             <div className="flex items-start gap-2.5">
                 <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-tb-surface-container">
                     {person.image ? (
-                        <img src={person.image} alt={person.name} className="h-full w-full object-cover" />
+                        <img
+                            src={person.image}
+                            alt={person.name}
+                            className="h-full w-full object-cover"
+                        />
                     ) : (
                         <span className="flex h-full w-full items-center justify-center text-xs font-bold text-tb-on-surface-variant">
                             {getInitials(person.name)}
@@ -32,9 +48,13 @@ function CenterBubble({ person, ringColor }: { person: TaromboNodeData['person']
                     )}
                 </div>
                 <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold text-tb-on-surface">{person.name}</p>
+                    <p className="truncate text-sm font-bold text-tb-on-surface">
+                        {person.name}
+                    </p>
                     {person.alias && (
-                        <p className="truncate text-[11px] italic text-tb-on-surface-variant">{person.alias}</p>
+                        <p className="truncate text-[11px] text-tb-on-surface-variant italic">
+                            {person.alias}
+                        </p>
                     )}
                 </div>
             </div>
@@ -47,13 +67,18 @@ function CenterBubble({ person, ringColor }: { person: TaromboNodeData['person']
                     {person.marga}
                 </span>
                 {person.birthYear && (
-                    <span className="text-[10px] text-tb-on-surface-variant">{person.birthYear}</span>
+                    <span className="text-[10px] text-tb-on-surface-variant">
+                        {person.birthYear}
+                    </span>
                 )}
             </div>
 
             <div className="mt-2 space-y-1 border-t border-tb-outline-variant pt-2">
                 <DetailRow label="Anak ke" value={person.birthOrder} />
-                <DetailRow label="Jenis Kelamin" value={person.gender?.toUpperCase()} />
+                <DetailRow
+                    label="Jenis Kelamin"
+                    value={person.gender?.toUpperCase()}
+                />
                 <DetailRow label="Pasangan" value={person.spouse} />
             </div>
         </div>
@@ -82,24 +107,32 @@ export function CenterNode({ data }: NodeProps) {
                 animationDelay: `${(person.generation - 1) * 90}ms`,
             }}
         >
-            {selected && <span className="tb-pulse-ring" style={{ inset: -4, borderColor: ringColor }} />}
+            {selected && (
+                <span
+                    className="tb-pulse-ring"
+                    style={{ inset: -4, borderColor: ringColor }}
+                />
+            )}
             <Handle
                 type="source"
                 position={Position.Top}
-                className="!left-1/2 !top-1/2 !h-1 !w-1 !-translate-x-1/2 !-translate-y-1/2"
+                className="!top-1/2 !left-1/2 !h-1 !w-1 !-translate-x-1/2 !-translate-y-1/2"
             />
             <Handle
                 type="target"
                 position={Position.Bottom}
-                className="!left-1/2 !top-1/2 !h-1 !w-1 !-translate-x-1/2 !-translate-y-1/2"
+                className="!top-1/2 !left-1/2 !h-1 !w-1 !-translate-x-1/2 !-translate-y-1/2"
             />
             {selected && (
                 <div
                     className="absolute bottom-full left-1/2 z-30 mb-3"
-                    style={{ transform: `translateX(-50%) scale(${1 / zoom})`, transformOrigin: 'bottom center' }}
+                    style={{
+                        transform: `translateX(-50%) scale(${1 / zoom})`,
+                        transformOrigin: 'bottom center',
+                    }}
                 >
                     <CenterBubble person={person} ringColor={ringColor} />
-                    <div className="absolute -bottom-1 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 border-b border-r border-tb-outline-variant bg-tb-surface-bright" />
+                    <div className="absolute -bottom-1 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 border-r border-b border-tb-outline-variant bg-tb-surface-bright" />
                 </div>
             )}
 
@@ -115,11 +148,11 @@ export function CenterNode({ data }: NodeProps) {
                     />
                 ) : (
                     <>
-                        <p className="font-display text-[15px] font-bold leading-tight text-tb-on-surface">
+                        <p className="font-display text-[15px] leading-tight font-bold text-tb-on-surface">
                             {person.name}
                         </p>
                         {person.alias && (
-                            <p className="mt-0.5 line-clamp-2 text-[8px] italic leading-tight text-tb-on-surface-variant">
+                            <p className="mt-0.5 line-clamp-2 text-[8px] leading-tight text-tb-on-surface-variant italic">
                                 {person.alias}
                             </p>
                         )}

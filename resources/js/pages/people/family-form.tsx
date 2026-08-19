@@ -23,6 +23,7 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -123,6 +124,7 @@ export type FamilyData = {
     lineage: LineageEntry[];
     children: ChildRow[];
     ownChildren?: ChildRow[];
+    is_public: boolean;
 };
 
 type MargaOption = { id: number; name: string };
@@ -136,6 +138,7 @@ type Props = {
     lineage?: MargaLineageEntry[];
     familyTrees?: FamilyTreeHistoryEntry[];
     initialFatherName?: string;
+    canPublish?: boolean;
 };
 
 const VALUE_NONE = 'none';
@@ -693,7 +696,11 @@ export default function FamilyForm({
     fatherSuggestions,
     lockedMarga = null,
     lineage,
+<<<<<<< HEAD
     familyTrees = [],
+=======
+    canPublish = false,
+>>>>>>> origin/main
 }: Props) {
     const isEdit = person !== null;
 
@@ -712,6 +719,7 @@ export default function FamilyForm({
             death_year: person?.death_year ?? '',
             image: person?.image ?? '',
             bio: person?.bio ?? '',
+            is_public: person?.is_public ?? false,
             father: person?.father
                 ? {
                       name: person.father.name ?? '',
@@ -770,8 +778,11 @@ export default function FamilyForm({
                           descendant_names: child.descendant_names ?? [],
                       }))
                     : ([] as ChildRow[]),
+<<<<<<< HEAD
             removed_child_ids: [] as number[],
             removed_own_child_ids: [] as number[],
+=======
+>>>>>>> origin/main
         },
     );
 
@@ -1626,6 +1637,39 @@ export default function FamilyForm({
                                         />
                                         <InputError message={errors.bio} />
                                     </div>
+
+                                    {canPublish && (
+                                        <div className="flex items-start gap-3 rounded-lg border border-tb-outline-variant bg-tb-surface-container/40 p-4">
+                                            <Checkbox
+                                                id="is_public"
+                                                checked={data.is_public}
+                                                onCheckedChange={(checked) =>
+                                                    setData(
+                                                        'is_public',
+                                                        checked === true,
+                                                    )
+                                                }
+                                            />
+                                            <div className="grid gap-1">
+                                                <Label
+                                                    htmlFor="is_public"
+                                                    className="text-tb-on-surface"
+                                                >
+                                                    Tampilkan di tarombo publik
+                                                </Label>
+                                                <p className="text-xs leading-relaxed text-tb-on-surface-variant">
+                                                    Hanya identitas genealogis
+                                                    ringkas yang ditampilkan.
+                                                    Ayah harus sudah publik agar
+                                                    jalur silsilah tetap
+                                                    lengkap.
+                                                </p>
+                                                <InputError
+                                                    message={errors.is_public}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
                                 </CardContent>
                             </Card>
                         </div>
@@ -2041,6 +2085,7 @@ export default function FamilyForm({
                                                 >
                                                     <ChevronDown className="h-3.5 w-3.5" />
                                                 </button>
+<<<<<<< HEAD
                                                 <button
                                                     type="button"
                                                     onClick={() =>
@@ -2055,6 +2100,23 @@ export default function FamilyForm({
                                                 >
                                                     <Trash2 className="h-3.5 w-3.5" />
                                                 </button>
+=======
+                                                {!child.id && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            removeOwnChild(
+                                                                index,
+                                                            )
+                                                        }
+                                                        aria-label="Hapus anak"
+                                                        title="Hapus anak"
+                                                        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-950"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </button>
+                                                )}
+>>>>>>> origin/main
                                             </span>
                                         </div>
                                         <div className="grid gap-3 sm:grid-cols-2">
@@ -2368,6 +2430,7 @@ export default function FamilyForm({
                                                     >
                                                         <Eye className="h-3.5 w-3.5" />
                                                     </button>
+<<<<<<< HEAD
                                                     {(!focused ||
                                                         child.id == null) && (
                                                         <button
@@ -2375,11 +2438,21 @@ export default function FamilyForm({
                                                             onClick={() =>
                                                                 requestRemoveRow(
                                                                     'children',
+=======
+                                                    {!child.id && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                removeChild(
+>>>>>>> origin/main
                                                                     index,
                                                                 )
                                                             }
                                                             aria-label="Hapus baris"
+<<<<<<< HEAD
                                                             title="Hapus dari silsilah"
+=======
+>>>>>>> origin/main
                                                             className="inline-flex h-6 w-6 items-center justify-center rounded-full text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-950"
                                                         >
                                                             <Trash2 className="h-3.5 w-3.5" />
@@ -2539,6 +2612,7 @@ export default function FamilyForm({
                                                         className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                                     />
                                                 </div>
+<<<<<<< HEAD
                                                 {!focused && (
                                                     <div className="grid gap-1.5">
                                                         <Label>
@@ -2562,6 +2636,8 @@ export default function FamilyForm({
                                                         />
                                                     </div>
                                                 )}
+=======
+>>>>>>> origin/main
                                             </div>
                                         </motion.div>
                                     );

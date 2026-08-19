@@ -15,7 +15,12 @@ export function UserInfo({
     variant?: 'default' | 'sidebar';
 }) {
     const getInitials = useInitials();
-    const roleLabel = user.role === 'admin' ? 'Admin' : user.role === 'subadmin' ? 'Sub Admin' : null;
+    const roleLabel =
+        user.role === 'admin'
+            ? 'Admin'
+            : user.role === 'subadmin'
+              ? 'Sub Admin'
+              : null;
 
     return (
         <>
@@ -27,11 +32,16 @@ export function UserInfo({
             </Avatar>
             <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
                 <span className="flex min-w-0 items-center gap-1.5 font-medium">
-                    <span className={cn('truncate', variant === 'sidebar' && 'text-sidebar-foreground')}>
+                    <span
+                        className={cn(
+                            'truncate',
+                            variant === 'sidebar' && 'text-sidebar-foreground',
+                        )}
+                    >
                         {user.name}
                     </span>
                     {showRole && roleLabel && (
-                        <span className="inline-flex shrink-0 items-center rounded-full bg-tb-primary/20 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-tb-primary">
+                        <span className="inline-flex shrink-0 items-center rounded-full bg-tb-primary/20 px-1.5 py-px text-[9px] font-semibold tracking-wide text-tb-primary uppercase">
                             {roleLabel}
                         </span>
                     )}
@@ -40,7 +50,9 @@ export function UserInfo({
                     <span
                         className={cn(
                             'truncate text-xs',
-                            variant === 'sidebar' ? 'text-sidebar-foreground/70' : 'text-muted-foreground',
+                            variant === 'sidebar'
+                                ? 'text-sidebar-foreground/70'
+                                : 'text-muted-foreground',
                         )}
                     >
                         {user.email}

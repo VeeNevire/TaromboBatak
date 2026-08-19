@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import type { Transition } from 'framer-motion';
 import type { ReactNode } from 'react';
 
 const variants = {
@@ -48,7 +49,7 @@ interface RevealProps {
     delay?: number;
     className?: string;
     duration?: number;
-    ease?: string;
+    ease?: Transition['ease'];
     staggerChildren?: number;
 }
 
@@ -68,7 +69,7 @@ export function Reveal({
             whileInView="visible"
             viewport={{ once: true, margin: '-60px' }}
             variants={variants[variant]}
-            transition={{ duration, ease: ease as any, delay, staggerChildren }}
+            transition={{ duration, ease, delay, staggerChildren }}
         >
             {children}
         </motion.div>

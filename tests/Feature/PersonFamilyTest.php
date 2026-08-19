@@ -210,7 +210,7 @@ test('the silsilah page exposes the descendant tree data', function () {
             ->component('people/silsilah')
             ->where('centerPersonId', (string) $person->id)
             ->where('person.name', 'Ompu Sitorus')
-            ->has('people', 2));
+            ->has('people', 1));
 });
 
 test('the preview gracefully falls back when the person has no parents', function () {

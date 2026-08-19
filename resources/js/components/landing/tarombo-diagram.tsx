@@ -1,6 +1,7 @@
 import { ReactFlow, ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import type { NodeMouseHandler } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+<<<<<<< HEAD
 import {
     ArrowLeft,
     Focus,
@@ -9,6 +10,9 @@ import {
     Search,
     SlidersHorizontal,
 } from 'lucide-react';
+=======
+import { ArrowLeft } from 'lucide-react';
+>>>>>>> origin/main
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
     edgeTypes,
@@ -113,6 +117,7 @@ function TaromboDiagramInner({
 
         return () => cancelAnimationFrame(frame);
     }, [fitView, centerPersonId, context]);
+<<<<<<< HEAD
     const squareRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -145,6 +150,15 @@ function TaromboDiagramInner({
                 .map((n) => n.id),
         );
 
+=======
+    const layoutPeople = useMemo(() => {
+        const layoutNodeIds = new Set(
+            layout.nodes
+                .filter((n) => (n.data as TaromboNodeData).person)
+                .map((n) => n.id),
+        );
+
+>>>>>>> origin/main
         return people.filter((p) => layoutNodeIds.has(p.id));
     }, [layout.nodes, people]);
 
@@ -250,6 +264,7 @@ function TaromboDiagramInner({
     };
 
     return (
+<<<<<<< HEAD
         <div className="relative mx-auto w-full max-w-2xl" ref={containerRef}>
             <div className="mx-auto mb-6 flex max-w-sm items-center rounded-full border border-tb-outline-variant bg-tb-surface-bright/90 px-4 py-2.5 shadow-lg backdrop-blur-md">
                 <Search className="mr-2 h-4 w-4 shrink-0 text-tb-outline" />
@@ -267,6 +282,10 @@ function TaromboDiagramInner({
                 </button>
             </div>
             <div className="relative aspect-square w-full" ref={squareRef}>
+=======
+        <div className="relative w-full max-w-2xl" ref={containerRef}>
+            <div className="relative aspect-square w-full">
+>>>>>>> origin/main
                 {canGoBack && onBack && (
                     <button
                         type="button"
@@ -274,6 +293,7 @@ function TaromboDiagramInner({
                         className="absolute top-3 left-3 z-10 inline-flex items-center gap-1.5 rounded-full border border-tb-outline-variant bg-tb-surface-bright/95 px-3 py-1.5 text-xs font-medium text-tb-on-surface shadow-md backdrop-blur transition-colors hover:bg-tb-surface-container"
                     >
                         <ArrowLeft className="h-3.5 w-3.5" /> Kembali
+<<<<<<< HEAD
                     </button>
                 )}
                 <ReactFlow
@@ -332,6 +352,35 @@ function TaromboDiagramInner({
                         <Focus className="h-4 w-4" />
                     </button>
                 </div>
+=======
+                    </button>
+                )}
+                <ReactFlow
+                    nodes={nodes}
+                    edges={edges}
+                    nodeTypes={nodeTypes}
+                    edgeTypes={edgeTypes}
+                    onNodeClick={handleNodeClick}
+                    onNodeMouseEnter={handleNodeMouseEnter}
+                    onNodeMouseLeave={() => setHoveredId(null)}
+                    onPaneClick={() => onPaneClick?.()}
+                    nodesDraggable={false}
+                    nodesConnectable={false}
+                    elementsSelectable={false}
+                    panOnDrag={false}
+                    panOnScroll={false}
+                    selectionOnDrag={false}
+                    zoomOnScroll={false}
+                    zoomOnPinch={false}
+                    zoomOnDoubleClick={false}
+                    fitView
+                    fitViewOptions={{ padding: 0.02 }}
+                    minZoom={0.2}
+                    maxZoom={2}
+                    proOptions={{ hideAttribution: true }}
+                    className="tarombo-flow"
+                />
+>>>>>>> origin/main
             </div>
             <div className="mt-8">
                 <p className="text-center text-[10px] font-semibold tracking-widest text-tb-outline uppercase">

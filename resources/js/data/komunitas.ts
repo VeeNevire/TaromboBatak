@@ -1,7 +1,6 @@
 import {
     Building2,
     Calendar,
-    Mail,
     MapPin,
     MessageCircle,
     Phone,
@@ -115,7 +114,8 @@ export const regionalGroups: {
     {
         name: 'Paguyuban Batak Bandung',
         region: 'Bandung',
-        description: 'Komunitas masyarakat Batak yang tinggal di Bandung dan sekitarnya.',
+        description:
+            'Komunitas masyarakat Batak yang tinggal di Bandung dan sekitarnya.',
         icon: MapPin,
         members: '2000+',
     },
@@ -136,7 +136,8 @@ export const regionalGroups: {
     {
         name: 'Ikatan Batak Batam',
         region: 'Batam',
-        description: 'Perkumpulan masyarakat Batak di Batam dan Kepulauan Riau.',
+        description:
+            'Perkumpulan masyarakat Batak di Batam dan Kepulauan Riau.',
         icon: MapPin,
         members: '1200+',
     },

@@ -4,7 +4,14 @@ import { useRef, useState } from 'react';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -59,16 +66,23 @@ function ImageInput({
     error?: string;
 }) {
     const inputRef = useRef<HTMLInputElement>(null);
-    const preview = typeof value === 'string' ? value : URL.createObjectURL(value);
+    const preview =
+        typeof value === 'string' ? value : URL.createObjectURL(value);
 
     return (
         <div className="grid gap-1.5">
-            <Label className="text-tb-on-surface">Gambar Marga (opsional)</Label>
+            <Label className="text-tb-on-surface">
+                Gambar Marga (opsional)
+            </Label>
 
             <div className="flex items-center gap-3">
                 <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-tb-outline-variant bg-tb-surface-container text-xs text-tb-on-surface-variant">
                     {preview ? (
-                        <img src={preview} alt="Pratinjau marga" className="h-full w-full object-cover" />
+                        <img
+                            src={preview}
+                            alt="Pratinjau marga"
+                            className="h-full w-full object-cover"
+                        />
                     ) : (
                         <ImagePlus className="size-6" />
                     )}
@@ -92,6 +106,7 @@ function ImageInput({
                                 className="text-tb-on-surface-variant hover:text-red-600"
                                 onClick={() => {
                                     onChange('');
+
                                     if (inputRef.current) {
                                         inputRef.current.value = '';
                                     }
@@ -125,6 +140,7 @@ function ImageInput({
                     value={typeof value === 'string' ? value : ''}
                     onChange={(e) => {
                         onChange(e.target.value);
+
                         if (inputRef.current) {
                             inputRef.current.value = '';
                         }
@@ -202,10 +218,14 @@ export default function MargaIndex({ margas }: Props) {
                             Daftar Marga
                         </h1>
                         <p className="mt-1 text-sm text-tb-on-surface-variant">
-                            Marga Batak yang tercatat beserta jumlah anggotanya. Klik kartu untuk mengubah.
+                            Marga Batak yang tercatat beserta jumlah anggotanya.
+                            Klik kartu untuk mengubah.
                         </p>
                     </div>
-                    <Button className="rounded-full bg-tb-primary hover:bg-tb-primary-light" onClick={openCreate}>
+                    <Button
+                        className="rounded-full bg-tb-primary hover:bg-tb-primary-light"
+                        onClick={openCreate}
+                    >
                         <Plus className="size-4" /> Tambah Marga
                     </Button>
                 </div>
@@ -267,7 +287,9 @@ export default function MargaIndex({ margas }: Props) {
                                     </div>
                                 </div>
                                 <div>
-                                    <h3 className="font-display text-lg font-bold text-tb-on-surface">{m.name}</h3>
+                                    <h3 className="font-display text-lg font-bold text-tb-on-surface">
+                                        {m.name}
+                                    </h3>
                                     {m.description && (
                                         <p className="mt-0.5 line-clamp-2 text-sm text-tb-on-surface-variant">
                                             {m.description}
@@ -282,7 +304,10 @@ export default function MargaIndex({ margas }: Props) {
                     ))}
                 </div>
 
-                <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
+                <Dialog
+                    open={dialog !== null}
+                    onOpenChange={(open) => !open && setDialog(null)}
+                >
                     <DialogContent className="sm:max-w-md">
                         <form onSubmit={submit} encType="multipart/form-data">
                             <DialogHeader>
@@ -302,13 +327,19 @@ export default function MargaIndex({ margas }: Props) {
 
                             <div className="grid gap-5 py-4">
                                 <div className="grid gap-1.5">
-                                    <Label htmlFor="name" className="text-tb-on-surface">
-                                        Nama Marga <span className="text-red-600">*</span>
+                                    <Label
+                                        htmlFor="name"
+                                        className="text-tb-on-surface"
+                                    >
+                                        Nama Marga{' '}
+                                        <span className="text-red-600">*</span>
                                     </Label>
                                     <Input
                                         id="name"
                                         value={form.data.name}
-                                        onChange={(e) => form.setData('name', e.target.value)}
+                                        onChange={(e) =>
+                                            form.setData('name', e.target.value)
+                                        }
                                         placeholder="Mis. Sitompul"
                                         className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                     />
@@ -316,17 +347,27 @@ export default function MargaIndex({ margas }: Props) {
                                 </div>
 
                                 <div className="grid gap-1.5">
-                                    <Label htmlFor="description" className="text-tb-on-surface">
+                                    <Label
+                                        htmlFor="description"
+                                        className="text-tb-on-surface"
+                                    >
                                         Deskripsi
                                     </Label>
                                     <Input
                                         id="description"
                                         value={form.data.description}
-                                        onChange={(e) => form.setData('description', e.target.value)}
+                                        onChange={(e) =>
+                                            form.setData(
+                                                'description',
+                                                e.target.value,
+                                            )
+                                        }
                                         placeholder="Asal usul singkat marga"
                                         className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                     />
-                                    <InputError message={form.errors.description} />
+                                    <InputError
+                                        message={form.errors.description}
+                                    />
                                 </div>
 
                                 <ImageInput
@@ -338,7 +379,10 @@ export default function MargaIndex({ margas }: Props) {
                                 />
 
                                 <div className="grid gap-1.5">
-                                    <Label htmlFor="color" className="text-tb-on-surface">
+                                    <Label
+                                        htmlFor="color"
+                                        className="text-tb-on-surface"
+                                    >
                                         Warna
                                     </Label>
                                     <div className="flex items-center gap-3">
@@ -346,12 +390,22 @@ export default function MargaIndex({ margas }: Props) {
                                             id="color"
                                             type="color"
                                             value={form.data.color}
-                                            onChange={(e) => form.setData('color', e.target.value)}
+                                            onChange={(e) =>
+                                                form.setData(
+                                                    'color',
+                                                    e.target.value,
+                                                )
+                                            }
                                             className="h-10 w-16 cursor-pointer border-tb-outline-variant bg-tb-surface-bright p-1"
                                         />
                                         <Input
                                             value={form.data.color}
-                                            onChange={(e) => form.setData('color', e.target.value)}
+                                            onChange={(e) =>
+                                                form.setData(
+                                                    'color',
+                                                    e.target.value,
+                                                )
+                                            }
                                             className="flex-1 border-tb-outline-variant bg-tb-surface-bright font-mono text-xs focus:border-tb-primary focus:ring-tb-primary/20"
                                         />
                                     </div>
@@ -360,7 +414,11 @@ export default function MargaIndex({ margas }: Props) {
                             </div>
 
                             <DialogFooter>
-                                <Button type="button" variant="outline" onClick={() => setDialog(null)}>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setDialog(null)}
+                                >
                                     Batal
                                 </Button>
                                 <Button
@@ -368,26 +426,43 @@ export default function MargaIndex({ margas }: Props) {
                                     disabled={form.processing}
                                     className="bg-tb-primary hover:bg-tb-primary-light"
                                 >
-                                    {form.processing ? 'Menyimpan...' : dialog === 'create' ? 'Tambah' : 'Simpan'}
+                                    {form.processing
+                                        ? 'Menyimpan...'
+                                        : dialog === 'create'
+                                          ? 'Tambah'
+                                          : 'Simpan'}
                                 </Button>
                             </DialogFooter>
                         </form>
                     </DialogContent>
                 </Dialog>
 
-                <Dialog open={toDelete !== null} onOpenChange={(open) => !open && setToDelete(null)}>
+                <Dialog
+                    open={toDelete !== null}
+                    onOpenChange={(open) => !open && setToDelete(null)}
+                >
                     <DialogContent className="sm:max-w-md">
                         <DialogHeader>
-                            <DialogTitle className="text-tb-on-surface">Hapus Marga</DialogTitle>
+                            <DialogTitle className="text-tb-on-surface">
+                                Hapus Marga
+                            </DialogTitle>
                             <DialogDescription>
-                                Yakin ingin menghapus marga <strong>{toDelete?.name}</strong>? Anggota dengan marga ini akan kehilangan keterkaitannya.
+                                Yakin ingin menghapus marga{' '}
+                                <strong>{toDelete?.name}</strong>? Anggota
+                                dengan marga ini akan kehilangan keterkaitannya.
                             </DialogDescription>
                         </DialogHeader>
                         <DialogFooter>
-                            <Button variant="outline" onClick={() => setToDelete(null)}>
+                            <Button
+                                variant="outline"
+                                onClick={() => setToDelete(null)}
+                            >
                                 Batal
                             </Button>
-                            <Button variant="destructive" onClick={confirmDelete}>
+                            <Button
+                                variant="destructive"
+                                onClick={confirmDelete}
+                            >
                                 Ya, Hapus
                             </Button>
                         </DialogFooter>

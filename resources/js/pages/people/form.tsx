@@ -14,17 +14,27 @@ type Props = {
     fatherSuggestions: string[];
     lockedMarga?: { id: number; name: string } | null;
     lineage?: MargaLineageEntry[];
+<<<<<<< HEAD
     familyTrees?: FamilyTreeHistoryEntry[];
+=======
+    canPublish: boolean;
+>>>>>>> origin/main
 };
 
 export default function PersonForm({
     person,
     margas,
     nameSuggestions,
+<<<<<<< HEAD
     fatherSuggestions,
     lockedMarga,
     lineage,
     familyTrees,
+=======
+    lockedMarga,
+    lineage,
+    canPublish,
+>>>>>>> origin/main
 }: Props) {
     const isEdit = person !== null;
 
@@ -61,10 +71,16 @@ export default function PersonForm({
                     person={person}
                     margas={margas}
                     nameSuggestions={nameSuggestions}
+<<<<<<< HEAD
                     fatherSuggestions={fatherSuggestions}
                     lockedMarga={lockedMarga}
                     lineage={lineage}
                     familyTrees={familyTrees}
+=======
+                    lockedMarga={lockedMarga}
+                    lineage={lineage}
+                    canPublish={canPublish}
+>>>>>>> origin/main
                 />
             </div>
         </>

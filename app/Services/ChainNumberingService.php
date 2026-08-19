@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Person;
+use Illuminate\Support\Facades\Cache;
 
 class ChainNumberingService
 {
@@ -20,14 +21,16 @@ class ChainNumberingService
      */
     public function recomputeFromAncestor(Person $person): void
     {
-        $root = $this->climbToRoot($person);
+        Cache::lock('tarombo-chain-numbering', 10)->block(5, function () use ($person) {
+            $root = $this->climbToRoot($person->fresh());
 
-        if ($root === null) {
-            return;
-        }
+            if ($root === null) {
+                return;
+            }
 
-        $visited = [];
-        $this->recomputeSubtree($root, $visited);
+            $visited = [];
+            $this->recomputeSubtree($root, $visited);
+        });
     }
 
     /**
@@ -67,15 +70,17 @@ class ChainNumberingService
      */
     public function recomputeAll(): void
     {
-        $roots = Person::query()
-            ->whereNull('father_id')
-            ->orderBy('id')
-            ->get();
+        Cache::lock('tarombo-chain-numbering', 10)->block(5, function () {
+            $roots = Person::query()
+                ->whereNull('father_id')
+                ->orderBy('id')
+                ->get();
 
-        foreach ($roots as $root) {
-            $visited = [];
-            $this->recomputeSubtree($root, $visited);
-        }
+            foreach ($roots as $root) {
+                $visited = [];
+                $this->recomputeSubtree($root, $visited);
+            }
+        });
     }
 
     /**
@@ -202,6 +207,11 @@ class ChainNumberingService
 
         // Root: only patrilineal ancestors (people who are a father) get a chain.
         if (! $person->children()->exists()) {
+            if ($person->chain !== null) {
+                $person->chain = null;
+                $person->save();
+            }
+
             return;
         }
 
@@ -211,11 +221,8 @@ class ChainNumberingService
         }
 
         $chain = $this->nextRootChain();
-
-        if ($chain !== $person->chain) {
-            $person->chain = $chain;
-            $person->save();
-        }
+        $person->chain = $chain;
+        $person->save();
     }
 
     /**
@@ -223,14 +230,15 @@ class ChainNumberingService
      */
     protected function nextRootChain(): string
     {
-        $last = Person::query()
+        $max = Person::query()
             ->whereNull('father_id')
             ->whereNotNull('chain')
             ->where('chain', 'not like', '%-%')
-            ->orderByRaw('CAST(chain AS UNSIGNED) DESC')
-            ->value('chain');
+            ->pluck('chain')
+            ->map(fn (string $chain) => (int) $chain)
+            ->max() ?? 0;
 
-        return (string) ((int) $last + 1);
+        return (string) ($max + 1);
     }
 
     /**

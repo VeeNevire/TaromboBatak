@@ -6,6 +6,7 @@ use App\Http\Requests\StoreMargaRequest;
 use App\Http\Requests\UpdateMargaRequest;
 use App\Models\Marga;
 use App\Models\Person;
+use App\Services\TaromboStatisticsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -21,7 +22,7 @@ class MargaController extends Controller
     public function index(): Response
     {
         $margas = Marga::query()
-            ->withCount('people')
+            ->withCount(['people' => fn ($query) => $query->public()])
             ->orderBy('people_count', 'desc')
             ->orderBy('name')
             ->get()
@@ -61,37 +62,11 @@ class MargaController extends Controller
             'margas' => $margas,
             'stats' => [
                 'totalMargas' => Marga::count(),
-                'totalPeople' => Person::count(),
-                'totalGenerations' => $this->maxGenerationDepth(),
+                'totalPeople' => Person::query()->public()->count(),
+                'totalGenerations' => app(TaromboStatisticsService::class)
+                    ->maxGenerationDepth(Person::query()->public()),
             ],
         ]);
-    }
-
-    /**
-     * Compute the maximum generation depth starting from root ancestors.
-     */
-    protected function maxGenerationDepth(): int
-    {
-        $parents = Person::query()
-            ->select('id', 'father_id')
-            ->get()
-            ->mapWithKeys(fn (Person $person) => [$person->id => $person->father_id]);
-
-        $depth = 0;
-
-        foreach ($parents as $id => $_) {
-            $count = 0;
-            $current = $id;
-
-            while (isset($parents[$current]) && $count < 1000) {
-                $current = $parents[$current];
-                $count++;
-            }
-
-            $depth = max($depth, $count);
-        }
-
-        return $depth + 1;
     }
 
     /**
@@ -147,14 +122,16 @@ class MargaController extends Controller
     /**
      * Persist an uploaded image file or keep a plain URL string.
      *
-     * @return string|null  Stored path (margas/...) or the raw URL.
+     * @return string|null Stored path (margas/...) or the raw URL.
      */
     protected function resolveImage(Request $request): ?string
     {
         $image = $request->file('image');
 
         if ($image instanceof UploadedFile) {
-            return $image->store('margas', 'public');
+            $path = $image->store('margas', 'public');
+
+            return $path !== false ? $path : null;
         }
 
         $raw = $request->input('image');

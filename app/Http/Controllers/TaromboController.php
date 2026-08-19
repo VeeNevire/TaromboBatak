@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Marga;
 use App\Models\Person;
+use App\Services\TaromboStatisticsService;
 use App\Services\TaromboTreeService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -18,16 +19,16 @@ class TaromboController extends Controller
     public function index(Request $request): Response
     {
         $user = $request->user();
-        $isAdmin = $user->isAdmin();
+        $isStaff = $user->isStaff();
         $service = app(TaromboTreeService::class);
 
         $rows = $service->rows(
             Person::query()
-                ->when(! $isAdmin, fn (Builder $query) => $query->where('marga_id', $user->marga_id))
+                ->when(! $isStaff, fn (Builder $query) => $query->where('marga_id', $user->marga_id))
                 ->orderBy('id'),
         );
 
-        $margas = $service->margas($isAdmin ? null : $user->marga_id);
+        $margas = $service->margas($isStaff ? null : $user->marga_id);
 
         return Inertia::render('tarombo/index', [
             'people' => $rows,
@@ -41,42 +42,18 @@ class TaromboController extends Controller
     public function public(): Response
     {
         $service = app(TaromboTreeService::class);
+        $tree = $service->publicRows();
 
         return Inertia::render('tarombo/public', [
-            'people' => $service->rows(Person::query()->orderBy('id')),
-            'margas' => $service->margas(),
+            'people' => $tree['rows'],
+            'margas' => $service->margas(publicOnly: true),
+            'truncated' => $tree['truncated'],
             'stats' => [
-                'totalPeople' => Person::count(),
-                'totalMargas' => Marga::count(),
-                'totalGenerations' => $this->maxGenerationDepth(),
+                'totalPeople' => Person::query()->public()->count(),
+                'totalMargas' => Marga::query()->whereHas('people', fn (Builder $query) => $query->where('is_public', true))->count(),
+                'totalGenerations' => app(TaromboStatisticsService::class)
+                    ->maxGenerationDepth(Person::query()->public()),
             ],
         ]);
-    }
-
-    /**
-     * Compute the maximum generation depth starting from root ancestors.
-     */
-    protected function maxGenerationDepth(): int
-    {
-        $parents = Person::query()
-            ->select('id', 'father_id')
-            ->get()
-            ->mapWithKeys(fn (Person $person) => [$person->id => $person->father_id]);
-
-        $depth = 0;
-
-        foreach ($parents as $id => $_) {
-            $count = 0;
-            $current = $id;
-
-            while (isset($parents[$current]) && $count < 1000) {
-                $current = $parents[$current];
-                $count++;
-            }
-
-            $depth = max($depth, $count);
-        }
-
-        return $depth + 1;
     }
 }

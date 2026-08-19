@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Database\Factories\PersonFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -22,6 +23,7 @@ use Illuminate\Support\Collection as SupportCollection;
  * @property int|null $created_by
  * @property int|null $father_id
  * @property bool $pending_father
+ * @property bool $is_public
  * @property int|null $mother_id
  * @property int|null $birth_order
  * @property int|null $sibling_count
@@ -42,7 +44,7 @@ use Illuminate\Support\Collection as SupportCollection;
  * @property-read Collection<int, Person> $children
  * @property-read Collection<int, Person> $siblings
  */
-#[Fillable(['name', 'gender', 'alias', 'marga_id', 'created_by', 'father_id', 'mother_id', 'birth_order', 'sibling_count', 'chain', 'birth_year', 'death_year', 'image', 'bio', 'spouse', 'spouse_marga', 'pending_father'])]
+#[Fillable(['name', 'gender', 'alias', 'marga_id', 'created_by', 'father_id', 'mother_id', 'birth_order', 'sibling_count', 'chain', 'birth_year', 'death_year', 'image', 'bio', 'spouse', 'spouse_marga', 'pending_father', 'is_public'])]
 class Person extends Model
 {
     /** @use HasFactory<PersonFactory> */
@@ -108,6 +110,15 @@ class Person extends Model
     }
 
     /**
+     * @param  Builder<Person>  $query
+     * @return Builder<Person>
+     */
+    public function scopePublic(Builder $query): Builder
+    {
+        return $query->where('is_public', true);
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -116,6 +127,7 @@ class Person extends Model
     {
         return [
             'pending_father' => 'boolean',
+            'is_public' => 'boolean',
         ];
     }
 
@@ -124,7 +136,7 @@ class Person extends Model
      */
     public function isNa(): bool
     {
-        return is_null($this->name) || trim($this->name) === '' || mb_strtoupper(trim($this->name)) === 'N/A';
+        return trim($this->name) === '' || mb_strtoupper(trim($this->name)) === 'N/A';
     }
 
     /**

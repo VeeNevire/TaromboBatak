@@ -107,6 +107,11 @@ export function DescendantsTree({
     onSelect,
     highlightId,
 }: Props) {
+<<<<<<< HEAD
+=======
+    const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+>>>>>>> origin/main
     const childrenOf = useMemo(() => {
         const map = new Map<string, TaromboPerson[]>();
 

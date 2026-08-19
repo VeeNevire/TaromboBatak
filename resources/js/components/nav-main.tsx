@@ -23,7 +23,12 @@ const iconVariants = {
     visible: (delay: number) => ({
         scale: 1,
         opacity: 1,
-        transition: { type: 'spring' as const, stiffness: 260, damping: 16, delay },
+        transition: {
+            type: 'spring' as const,
+            stiffness: 260,
+            damping: 16,
+            delay,
+        },
     }),
 };
 
@@ -33,16 +38,20 @@ export function NavMain({ groups = [] }: { groups?: NavGroup[] }) {
     return (
         <>
             {groups.map((group, groupIndex) => (
-                <SidebarGroup key={group.label ?? groupIndex} className="px-2 py-0">
+                <SidebarGroup
+                    key={group.label ?? groupIndex}
+                    className="px-2 py-0"
+                >
                     {group.label && (
-                        <SidebarGroupLabel className="px-2 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider">
+                        <SidebarGroupLabel className="px-2 pt-4 pb-1 text-[11px] font-semibold tracking-wider uppercase">
                             {group.label}
                         </SidebarGroupLabel>
                     )}
                     <SidebarMenu>
                         {group.items.map((item, itemIndex) => {
                             const isActive = isCurrentUrl(item.href);
-                            const delay = 0.08 + groupIndex * 0.1 + itemIndex * 0.06;
+                            const delay =
+                                0.08 + groupIndex * 0.1 + itemIndex * 0.06;
 
                             return (
                                 <motion.li
@@ -51,7 +60,11 @@ export function NavMain({ groups = [] }: { groups?: NavGroup[] }) {
                                     variants={itemVariants}
                                     initial="hidden"
                                     animate="visible"
-                                    transition={{ delay, duration: 0.35, ease: 'easeOut' }}
+                                    transition={{
+                                        delay,
+                                        duration: 0.35,
+                                        ease: 'easeOut',
+                                    }}
                                 >
                                     <SidebarMenuButton
                                         asChild
@@ -59,7 +72,7 @@ export function NavMain({ groups = [] }: { groups?: NavGroup[] }) {
                                         tooltip={{ children: item.title }}
                                         className={
                                             isActive
-                                                ? 'relative data-[active=true]:bg-transparent! data-[active=true]:text-white! font-semibold group-data-[collapsible=icon]:data-[active=true]:bg-tb-primary!'
+                                                ? 'relative font-semibold data-[active=true]:bg-transparent! data-[active=true]:text-white! group-data-[collapsible=icon]:data-[active=true]:bg-tb-primary!'
                                                 : 'relative'
                                         }
                                     >
@@ -82,7 +95,7 @@ export function NavMain({ groups = [] }: { groups?: NavGroup[] }) {
                                                         variants={iconVariants}
                                                         custom={delay + 0.06}
                                                     >
-                                                        <item.icon className="size-4 transition-transform duration-300 group-hover/menu-item:-rotate-6 group-hover/menu-item:scale-110" />
+                                                        <item.icon className="size-4 transition-transform duration-300 group-hover/menu-item:scale-110 group-hover/menu-item:-rotate-6" />
                                                     </motion.span>
                                                 )}
                                                 <span className="min-w-0 truncate group-data-[collapsible=icon]:hidden">

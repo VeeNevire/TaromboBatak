@@ -48,7 +48,10 @@ export default function Home({ stories, events, margas }: Props) {
                     <Hero />
                     <FeaturesSection />
                     <MargaDirectory margas={margas} />
-                    <section id="cerita" className="mx-auto grid max-w-7xl grid-cols-1 gap-8 px-6 py-8 pb-16 lg:grid-cols-3">
+                    <section
+                        id="cerita"
+                        className="mx-auto grid max-w-7xl grid-cols-1 gap-8 px-6 py-8 pb-16 lg:grid-cols-3"
+                    >
                         <StoriesSection stories={stories} />
                         <EventsSection events={events} />
                         <TestimonialsSection />

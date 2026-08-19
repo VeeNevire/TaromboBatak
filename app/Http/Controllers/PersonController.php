@@ -8,11 +8,15 @@ use App\Models\FamilyTree;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
+use App\Services\ChainNumberingService;
 use App\Services\FamilyEntryService;
 use App\Services\TaromboTreeService;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -84,9 +88,12 @@ class PersonController extends Controller
         $user = $request->user();
         $isStaff = $user->isStaff();
 
+        Gate::authorize('create', Person::class);
+
         return Inertia::render('people/form', [
             'person' => null,
             'margas' => $isStaff ? $this->margaOptions() : $this->margaOptionsForUser($user),
+<<<<<<< HEAD
             'nameSuggestions' => $this->nameSuggestions(),
             'fatherSuggestions' => $this->fatherSuggestions(
                 margaId: $isStaff ? null : $user->marga_id,
@@ -94,6 +101,12 @@ class PersonController extends Controller
             'lockedMarga' => $isStaff ? null : $this->lockedMarga($user),
             'lineage' => $this->createLineage($user, $isStaff),
             'familyTrees' => $this->familyTrees($user),
+=======
+            'nameSuggestions' => $this->nameSuggestions($isStaff ? null : $user->marga_id),
+            'lockedMarga' => $isStaff ? null : $this->lockedMarga($user),
+            'lineage' => $this->createLineage($user, $isStaff),
+            'canPublish' => $isStaff,
+>>>>>>> origin/main
         ]);
     }
 
@@ -143,6 +156,7 @@ class PersonController extends Controller
     public function store(StorePersonRequest $request): RedirectResponse
     {
         $user = $request->user();
+        Gate::authorize('create', Person::class);
 
         $validated = $request->validated();
         $validated['children'] = $request->input('children', []);
@@ -153,7 +167,7 @@ class PersonController extends Controller
         if ($user->isStaff()) {
             app(FamilyEntryService::class)->save($validated, createdBy: $user->id);
         } else {
-            abort_unless($user->marga_id, 403, 'Akun Anda belum memiliki marga.');
+            abort_unless($user->marga_id !== null, 403, 'Akun Anda belum memiliki marga.');
 
             app(FamilyEntryService::class)->save(
                 $validated,
@@ -172,11 +186,17 @@ class PersonController extends Controller
      */
     public function show(Person $person): Response
     {
+        Gate::authorize('view', $person);
+
         return Inertia::render('people/show', [
             'person' => $this->familyPayload($person),
             'margas' => $this->margaOptions(),
             'nameSuggestions' => $this->nameSuggestions(),
+<<<<<<< HEAD
             'fatherSuggestions' => $this->fatherSuggestions($person),
+=======
+            'canPublish' => true,
+>>>>>>> origin/main
         ]);
     }
 
@@ -188,19 +208,22 @@ class PersonController extends Controller
         $user = $request->user();
         $isStaff = $user->isStaff();
 
-        if (! $isStaff) {
-            abort_unless($this->ownsFamily($user, $person), 403, 'Anda tidak memiliki akses ke keluarga ini.');
-        }
+        Gate::authorize('update', $person);
 
         return Inertia::render('people/form', [
             'person' => $this->familyPayload($person),
             'margas' => $isStaff ? $this->margaOptions() : $this->margaOptionsForUser($user),
+<<<<<<< HEAD
             'nameSuggestions' => $this->nameSuggestions(),
             'fatherSuggestions' => $this->fatherSuggestions(
                 $person,
                 $isStaff ? null : $user->marga_id,
             ),
+=======
+            'nameSuggestions' => $this->nameSuggestions($isStaff ? null : $user->marga_id),
+>>>>>>> origin/main
             'lockedMarga' => $isStaff ? null : $this->lockedMarga($user),
+            'canPublish' => $isStaff,
         ]);
     }
 
@@ -211,6 +234,8 @@ class PersonController extends Controller
      */
     public function preview(Person $person): JsonResponse
     {
+        Gate::authorize('view', $person);
+
         return response()->json($this->familyPreviewPayload($person));
     }
 
@@ -220,16 +245,18 @@ class PersonController extends Controller
      */
     public function silsilah(Person $person): Response
     {
+        Gate::authorize('view', $person);
+
         $service = app(TaromboTreeService::class);
 
         return Inertia::render('people/silsilah', [
-            'people' => $service->rows(Person::query()->orderBy('id')),
+            'people' => $service->rowsForPerson($person),
             'centerPersonId' => (string) $person->id,
             'person' => [
                 'id' => (string) $person->id,
                 'name' => $person->name,
                 'alias' => $person->alias,
-                'marga' => $person->marga?->name ?? 'Batak',
+                'marga' => $person->marga->name ?? 'Batak',
                 'birthOrder' => $person->birth_order,
             ],
         ]);
@@ -332,7 +359,7 @@ class PersonController extends Controller
     /**
      * Build a preview node with the person's own parents and siblings.
      *
-     * @param  Collection<int, Person>  $byId
+     * @param  Collection<int|string, Person>  $byId
      * @return array<string, mixed>
      */
     protected function previewNode(Person $person, $byId): array
@@ -351,7 +378,7 @@ class PersonController extends Controller
     }
 
     /**
-     * @param  Collection<int, Person>  $byId
+     * @param  Collection<int|string, Person>  $byId
      * @return array<int, array<string, mixed>>
      */
     protected function siblingsOf(Person $person, $byId): array
@@ -373,7 +400,7 @@ class PersonController extends Controller
             'id' => (string) $person->id,
             'name' => $person->name,
             'alias' => $person->alias,
-            'marga' => $person->marga?->name ?? 'Batak',
+            'marga' => $person->marga->name ?? 'Batak',
             'margaColor' => $person->marga?->color,
             'birthYear' => $person->birth_year,
             'birthOrder' => $person->birth_order,
@@ -381,9 +408,6 @@ class PersonController extends Controller
         ];
     }
 
-    /**
-     * @return array<int, string>
-     */
     protected function fallbackColor(int $index): string
     {
         $colors = ['#b34b1e', '#2a527c', '#3e6b48', '#f59e0b', '#7c3aed', '#0e7490'];
@@ -406,9 +430,9 @@ class PersonController extends Controller
         $validated['removed_own_child_ids'] = $request->input('removed_own_child_ids', []);
         $validated['id'] = $person->id;
 
-        if (! $isStaff) {
-            abort_unless($this->ownsFamily($user, $person), 403, 'Anda tidak memiliki akses ke keluarga ini.');
+        Gate::authorize('update', $person);
 
+        if (! $isStaff) {
             app(FamilyEntryService::class)->save(
                 $validated,
                 forcedMargaId: $user->marga_id,
@@ -428,7 +452,23 @@ class PersonController extends Controller
      */
     public function destroy(Person $person): RedirectResponse
     {
+        Gate::authorize('delete', $person);
+
+        if (Person::query()
+            ->where('father_id', $person->id)
+            ->orWhere('mother_id', $person->id)
+            ->exists()) {
+            throw ValidationException::withMessages([
+                'person' => 'Anggota yang masih menjadi orang tua tidak dapat dihapus.',
+            ]);
+        }
+
+        $father = $person->father;
         $person->delete();
+
+        if ($father !== null) {
+            app(ChainNumberingService::class)->recomputeFromAncestor($father);
+        }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Anggota berhasil dihapus.')]);
 
@@ -491,6 +531,7 @@ class PersonController extends Controller
             'sibling_count' => $person->sibling_count,
             'chain' => $person->chain,
             'pending' => (bool) $person->pending_father,
+            'is_public' => (bool) $person->is_public,
             'birth_year' => $person->birth_year,
             'death_year' => $person->death_year,
             'image' => $person->image,
@@ -762,20 +803,5 @@ class PersonController extends Controller
         $marga = $user->marga;
 
         return $marga !== null ? ['id' => $marga->id, 'name' => $marga->name] : null;
-    }
-
-    /**
-     * Determine whether a regular user owns a family entry and may edit it.
-     *
-     * A family entry is considered owned by the user when the focused person
-     * was recorded as created by that user.
-     */
-    protected function ownsFamily(User $user, Person $person): bool
-    {
-        if ($user->isStaff()) {
-            return true;
-        }
-
-        return $person->created_by !== null && $person->created_by === $user->id;
     }
 }

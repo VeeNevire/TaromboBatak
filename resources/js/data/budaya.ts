@@ -1,7 +1,6 @@
 import {
     Handshake,
     Heart,
-    Music,
     Palette,
     Sparkles,
     UserRound,

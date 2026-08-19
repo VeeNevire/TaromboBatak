@@ -33,7 +33,8 @@ export default function CeritaShow({ story }: Props) {
                                 href={cerita.index()}
                                 className="inline-flex items-center gap-2 text-sm font-medium text-tb-outline transition-colors hover:text-tb-primary"
                             >
-                                <ArrowLeft className="h-4 w-4" /> Kembali ke Cerita
+                                <ArrowLeft className="h-4 w-4" /> Kembali ke
+                                Cerita
                             </Link>
 
                             <div className="mt-8 inline-flex items-center gap-2 rounded-full border border-tb-primary/20 bg-tb-primary/10 px-4 py-2 text-sm font-medium text-tb-primary">
@@ -41,7 +42,7 @@ export default function CeritaShow({ story }: Props) {
                                 Cerita Leluhur & Budaya
                             </div>
 
-                            <h1 className="mt-6 font-display text-3xl font-bold leading-tight md:text-5xl">
+                            <h1 className="mt-6 font-display text-3xl leading-tight font-bold md:text-5xl">
                                 {story.title}
                             </h1>
 
@@ -72,7 +73,7 @@ export default function CeritaShow({ story }: Props) {
                         )}
 
                         <Reveal delay={0.15}>
-                            <div className="mt-10 whitespace-pre-line text-base leading-8 text-tb-on-surface">
+                            <div className="mt-10 text-base leading-8 whitespace-pre-line text-tb-on-surface">
                                 {story.description}
                             </div>
                         </Reveal>
@@ -83,14 +84,16 @@ export default function CeritaShow({ story }: Props) {
                                     Terus Jelajahi Warisan Budaya
                                 </h2>
                                 <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-tb-on-surface-variant">
-                                    Temukan lebih banyak cerita leluhur atau kenali kembali akar budaya Batak.
+                                    Temukan lebih banyak cerita leluhur atau
+                                    kenali kembali akar budaya Batak.
                                 </p>
                                 <div className="mt-8 flex flex-wrap justify-center gap-4">
                                     <Link
                                         href={cerita.index()}
                                         className="flex items-center gap-2 rounded-full bg-tb-primary px-6 py-3 font-medium text-white transition-colors hover:bg-tb-primary-light"
                                     >
-                                        Lihat Cerita Lainnya <ArrowRight className="h-4 w-4" />
+                                        Lihat Cerita Lainnya{' '}
+                                        <ArrowRight className="h-4 w-4" />
                                     </Link>
                                     <Link
                                         href={home()}
