@@ -1,5 +1,6 @@
 import { Head, Link } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
+import type { FamilyTreeHistoryEntry } from '@/components/people/family-tree-history-card';
 import { Button } from '@/components/ui/button';
 import FamilyForm from '@/pages/people/family-form';
 import type { FamilyData, MargaLineageEntry } from '@/pages/people/family-form';
@@ -10,11 +11,21 @@ type Props = {
     person: FamilyData | null;
     margas: { id: number; name: string }[];
     nameSuggestions: string[];
+    fatherSuggestions: string[];
     lockedMarga?: { id: number; name: string } | null;
     lineage?: MargaLineageEntry[];
+    familyTrees?: FamilyTreeHistoryEntry[];
 };
 
-export default function PersonForm({ person, margas, nameSuggestions, lockedMarga, lineage }: Props) {
+export default function PersonForm({
+    person,
+    margas,
+    nameSuggestions,
+    fatherSuggestions,
+    lockedMarga,
+    lineage,
+    familyTrees,
+}: Props) {
     const isEdit = person !== null;
 
     return (
@@ -23,9 +34,15 @@ export default function PersonForm({ person, margas, nameSuggestions, lockedMarg
 
             <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
                 <div className="flex flex-col gap-3">
-                    <Button asChild variant="ghost" size="sm" className="w-fit text-tb-on-surface-variant">
+                    <Button
+                        asChild
+                        variant="ghost"
+                        size="sm"
+                        className="w-fit text-tb-on-surface-variant"
+                    >
                         <Link href={people.index()}>
-                            <ArrowLeft className="size-4" /> Kembali ke Data Anggota
+                            <ArrowLeft className="size-4" /> Kembali ke Data
+                            Anggota
                         </Link>
                     </Button>
                     <div>
@@ -40,7 +57,15 @@ export default function PersonForm({ person, margas, nameSuggestions, lockedMarg
                     </div>
                 </div>
 
-                <FamilyForm person={person} margas={margas} nameSuggestions={nameSuggestions} lockedMarga={lockedMarga} lineage={lineage} />
+                <FamilyForm
+                    person={person}
+                    margas={margas}
+                    nameSuggestions={nameSuggestions}
+                    fatherSuggestions={fatherSuggestions}
+                    lockedMarga={lockedMarga}
+                    lineage={lineage}
+                    familyTrees={familyTrees}
+                />
             </div>
         </>
     );

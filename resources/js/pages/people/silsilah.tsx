@@ -25,10 +25,13 @@ const LINE = '#A79E8C';
 
 export default function PersonSilsilah(props: Props) {
     const tree = buildTaromboPeople(props.people);
-    const [centerPersonId, setCenterPersonId] = useState<string>(props.centerPersonId);
+    const [centerPersonId, setCenterPersonId] = useState<string>(
+        props.centerPersonId,
+    );
     const [history, setHistory] = useState<string[]>([]);
 
-    const center = tree.find((person) => person.id === centerPersonId) ?? tree[0];
+    const center =
+        tree.find((person) => person.id === centerPersonId) ?? tree[0];
 
     const handleSelect = (id: string) => {
         if (id === centerPersonId) {
@@ -60,12 +63,13 @@ export default function PersonSilsilah(props: Props) {
                             href={people.index()}
                             className="flex w-fit items-center gap-1.5 text-sm text-tb-on-surface-variant transition-colors hover:text-tb-primary"
                         >
-                            <ArrowLeft className="size-4" /> Kembali ke Data Anggota
+                            <ArrowLeft className="size-4" /> Kembali ke Data
+                            Anggota
                         </Link>
                     </div>
                     <div style={{ color: FOREST }} className="text-center">
                         <p
-                            className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em]"
+                            className="mb-2 text-[11px] font-semibold tracking-[0.18em] uppercase"
                             style={{ color: INK_SOFT }}
                         >
                             Jejak Silsilah Keluarga
@@ -74,21 +78,28 @@ export default function PersonSilsilah(props: Props) {
                             {center?.name ?? props.person.name}
                         </h1>
                         <div className="mt-3 flex items-center justify-center gap-3">
-                            <span className="h-px w-7" style={{ backgroundColor: LINE }} />
-                            <p className="font-display text-base italic text-tb-on-surface-variant sm:text-lg">
-                                Anak ke {center?.birthOrder ?? '?'} · Marga {center?.marga ?? props.person.marga}
+                            <span
+                                className="h-px w-7"
+                                style={{ backgroundColor: LINE }}
+                            />
+                            <p className="font-display text-base text-tb-on-surface-variant italic sm:text-lg">
+                                Anak ke {center?.birthOrder ?? '?'} · Marga{' '}
+                                {center?.marga ?? props.person.marga}
                             </p>
-                            <span className="h-px w-7" style={{ backgroundColor: LINE }} />
+                            <span
+                                className="h-px w-7"
+                                style={{ backgroundColor: LINE }}
+                            />
                         </div>
                     </div>
                 </div>
 
-                <div className="relative rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-4 sm:p-6">
+                <div className="relative overflow-x-auto rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-4 sm:p-6">
                     {history.length > 0 && (
                         <button
                             type="button"
                             onClick={handleBack}
-                            className="absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-full border border-tb-outline-variant bg-tb-surface-bright/95 px-3 py-1.5 text-xs font-medium text-tb-on-surface shadow-md backdrop-blur transition-colors hover:bg-tb-surface-container"
+                            className="absolute top-3 left-3 z-10 inline-flex items-center gap-1.5 rounded-full border border-tb-outline-variant bg-tb-surface-bright/95 px-3 py-1.5 text-xs font-medium text-tb-on-surface shadow-md backdrop-blur transition-colors hover:bg-tb-surface-container"
                         >
                             <ArrowLeft className="size-3.5" /> Kembali
                         </button>

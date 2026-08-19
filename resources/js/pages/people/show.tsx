@@ -10,18 +10,30 @@ type Props = {
     person: FamilyData;
     margas: { id: number; name: string }[];
     nameSuggestions: string[];
+    fatherSuggestions: string[];
 };
 
-export default function PersonShow({ person, margas, nameSuggestions }: Props) {
+export default function PersonShow({
+    person,
+    margas,
+    nameSuggestions,
+    fatherSuggestions,
+}: Props) {
     return (
         <>
             <Head title={`Jejak Keluarga ${person.name}`} />
 
             <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
                 <div className="flex flex-col gap-3">
-                    <Button asChild variant="ghost" size="sm" className="w-fit text-tb-on-surface-variant">
+                    <Button
+                        asChild
+                        variant="ghost"
+                        size="sm"
+                        className="w-fit text-tb-on-surface-variant"
+                    >
                         <Link href={people.index()}>
-                            <ArrowLeft className="size-4" /> Kembali ke Data Anggota
+                            <ArrowLeft className="size-4" /> Kembali ke Data
+                            Anggota
                         </Link>
                     </Button>
                     <div>
@@ -29,12 +41,18 @@ export default function PersonShow({ person, margas, nameSuggestions }: Props) {
                             Jejak Keluarga {person.name}
                         </h1>
                         <p className="mt-1 text-sm text-tb-on-surface-variant">
-                            Ayah, ibu, dan daftar saudara dari {person.name}. Perubahan disimpan sekaligus.
+                            Ayah, ibu, dan daftar saudara dari {person.name}.
+                            Perubahan disimpan sekaligus.
                         </p>
                     </div>
                 </div>
 
-                <FamilyForm person={person} margas={margas} nameSuggestions={nameSuggestions} />
+                <FamilyForm
+                    person={person}
+                    margas={margas}
+                    nameSuggestions={nameSuggestions}
+                    fatherSuggestions={fatherSuggestions}
+                />
             </div>
         </>
     );

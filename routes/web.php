@@ -47,6 +47,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('people/{person}/edit', [PersonController::class, 'edit'])->name('people.edit');
 
     Route::put('people/{person}', [PersonController::class, 'update'])->name('people.update');
+
+    Route::get('family-trees/{familyTree}', [PersonController::class, 'showFamilyTree'])->name('family-trees.show');
 });
 
 Route::middleware(['auth', 'verified', 'role.staff'])->group(function () {
@@ -56,7 +58,6 @@ Route::middleware(['auth', 'verified', 'role.staff'])->group(function () {
 
     Route::get('people/{person}/preview', [PersonController::class, 'preview'])->name('people.preview');
     Route::get('people/{person}/silsilah', [PersonController::class, 'silsilah'])->name('people.silsilah');
-
     Route::get('dashboard/marga', [MargaController::class, 'index'])->name('marga.index');
     Route::post('dashboard/marga', [MargaController::class, 'store'])->name('marga.store');
     Route::put('dashboard/marga/{marga}', [MargaController::class, 'update'])->name('marga.update');

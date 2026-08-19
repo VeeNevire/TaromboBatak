@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StorePersonRequest;
 use App\Http\Requests\UpdatePersonRequest;
+use App\Models\FamilyTree;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
@@ -87,8 +88,12 @@ class PersonController extends Controller
             'person' => null,
             'margas' => $isStaff ? $this->margaOptions() : $this->margaOptionsForUser($user),
             'nameSuggestions' => $this->nameSuggestions(),
+            'fatherSuggestions' => $this->fatherSuggestions(
+                margaId: $isStaff ? null : $user->marga_id,
+            ),
             'lockedMarga' => $isStaff ? null : $this->lockedMarga($user),
             'lineage' => $this->createLineage($user, $isStaff),
+            'familyTrees' => $this->familyTrees($user),
         ]);
     }
 
@@ -142,9 +147,11 @@ class PersonController extends Controller
         $validated = $request->validated();
         $validated['children'] = $request->input('children', []);
         $validated['ownChildren'] = $request->input('ownChildren', []);
+        $validated['removed_child_ids'] = $request->input('removed_child_ids', []);
+        $validated['removed_own_child_ids'] = $request->input('removed_own_child_ids', []);
 
         if ($user->isStaff()) {
-            app(FamilyEntryService::class)->save($validated);
+            app(FamilyEntryService::class)->save($validated, createdBy: $user->id);
         } else {
             abort_unless($user->marga_id, 403, 'Akun Anda belum memiliki marga.');
 
@@ -169,6 +176,7 @@ class PersonController extends Controller
             'person' => $this->familyPayload($person),
             'margas' => $this->margaOptions(),
             'nameSuggestions' => $this->nameSuggestions(),
+            'fatherSuggestions' => $this->fatherSuggestions($person),
         ]);
     }
 
@@ -188,6 +196,10 @@ class PersonController extends Controller
             'person' => $this->familyPayload($person),
             'margas' => $isStaff ? $this->margaOptions() : $this->margaOptionsForUser($user),
             'nameSuggestions' => $this->nameSuggestions(),
+            'fatherSuggestions' => $this->fatherSuggestions(
+                $person,
+                $isStaff ? null : $user->marga_id,
+            ),
             'lockedMarga' => $isStaff ? null : $this->lockedMarga($user),
         ]);
     }
@@ -219,6 +231,38 @@ class PersonController extends Controller
                 'alias' => $person->alias,
                 'marga' => $person->marga?->name ?? 'Batak',
                 'birthOrder' => $person->birth_order,
+            ],
+        ]);
+    }
+
+    /**
+     * Open one account-owned family tree from its history card.
+     */
+    public function showFamilyTree(Request $request, FamilyTree $familyTree): Response
+    {
+        abort_unless(
+            $request->user()->isStaff() || $familyTree->user_id === $request->user()->id,
+            403,
+            'Anda tidak memiliki akses ke silsilah ini.',
+        );
+
+        $root = $familyTree->rootPerson()->with('marga')->firstOrFail();
+        $service = app(TaromboTreeService::class);
+
+        return Inertia::render('people/silsilah', [
+            'people' => $service->rows(
+                Person::query()
+                    ->whereHas('familyTrees', fn ($query) => $query->whereKey($familyTree->id))
+                    ->orderBy('id'),
+                $familyTree->id,
+            ),
+            'centerPersonId' => (string) $root->id,
+            'person' => [
+                'id' => (string) $root->id,
+                'name' => $root->name,
+                'alias' => $root->alias,
+                'marga' => $root->marga?->name ?? 'Batak',
+                'birthOrder' => $root->birth_order,
             ],
         ]);
     }
@@ -358,6 +402,8 @@ class PersonController extends Controller
         $validated = $request->validated();
         $validated['children'] = $request->input('children', []);
         $validated['ownChildren'] = $request->input('ownChildren', []);
+        $validated['removed_child_ids'] = $request->input('removed_child_ids', []);
+        $validated['removed_own_child_ids'] = $request->input('removed_own_child_ids', []);
         $validated['id'] = $person->id;
 
         if (! $isStaff) {
@@ -369,7 +415,7 @@ class PersonController extends Controller
                 createdBy: $user->id,
             );
         } else {
-            app(FamilyEntryService::class)->save($validated);
+            app(FamilyEntryService::class)->save($validated, createdBy: $user->id);
         }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Jejak keluarga berhasil diperbarui.')]);
@@ -427,6 +473,12 @@ class PersonController extends Controller
             ->sortBy(fn (Person $row) => array_search($row->id, $lineageIds))
             ->values();
 
+        $ownChildrenRows = $person->children()->orderBy('birth_order')->get();
+
+        $descendantMap = $this->descendantMap(
+            $siblings->pluck('id')->merge($ownChildrenRows->pluck('id'))->all(),
+        );
+
         return [
             'id' => $person->id,
             'name' => $person->name,
@@ -451,6 +503,7 @@ class PersonController extends Controller
                     ? [
                         'id' => $person->father->id,
                         'name' => $person->father->name,
+                        'alias' => $person->father->alias,
                         'marga_id' => $person->father->marga_id,
                         'marga' => $person->father->marga?->name,
                         'chain' => $person->father->chain,
@@ -462,6 +515,7 @@ class PersonController extends Controller
                 ? [
                     'id' => $person->mother->id,
                     'name' => $person->mother->name,
+                    'alias' => $person->mother->alias,
                     'marga_id' => $person->mother->marga_id,
                     'marga' => $person->mother->marga?->name,
                     'birth_year' => $person->mother->birth_year,
@@ -493,6 +547,7 @@ class PersonController extends Controller
                 ->map(fn (Person $sibling) => [
                     'id' => $sibling->id,
                     'name' => $sibling->name,
+                    'alias' => $sibling->alias,
                     'gender' => $sibling->gender,
                     'spouse' => $sibling->spouse,
                     'spouse_marga' => $sibling->spouse_marga,
@@ -501,15 +556,16 @@ class PersonController extends Controller
                     'birth_order' => $sibling->birth_order,
                     'chain' => $sibling->chain,
                     'pending' => (bool) $sibling->pending_father,
+                    'descendant_count' => $descendantMap[$sibling->id]['count'] ?? 0,
+                    'descendant_names' => $descendantMap[$sibling->id]['names'] ?? [],
                 ])
                 ->values()
                 ->all(),
-            'ownChildren' => $person->children()
-                ->orderBy('birth_order')
-                ->get()
+            'ownChildren' => $ownChildrenRows
                 ->map(fn (Person $child) => [
                     'id' => $child->id,
                     'name' => $child->name,
+                    'alias' => $child->alias,
                     'gender' => $child->gender,
                     'spouse' => $child->spouse,
                     'spouse_marga' => $child->spouse_marga,
@@ -519,10 +575,74 @@ class PersonController extends Controller
                     'birth_order' => $child->birth_order,
                     'chain' => $child->chain,
                     'pending' => (bool) $child->pending_father,
+                    'descendant_count' => $descendantMap[$child->id]['count'] ?? 0,
+                    'descendant_names' => $descendantMap[$child->id]['names'] ?? [],
                 ])
                 ->values()
                 ->all(),
         ];
+    }
+
+    /**
+     * Map person ids to their patrilineal descendant count and a bounded list
+     * of descendant names (used to preview what a delete would cascade).
+     *
+     * @param  array<int, int>  $ids
+     * @return array<int, array{count: int, names: array<int, string>}>
+     */
+    protected function descendantMap(array $ids): array
+    {
+        $ids = array_values(array_unique(array_filter($ids, fn ($id) => $id !== null)));
+
+        if ($ids === []) {
+            return [];
+        }
+
+        $byId = Person::query()->whereIn('id', $ids)->get()->keyBy('id');
+        $map = [];
+
+        foreach ($ids as $id) {
+            $person = $byId->get($id);
+
+            if ($person === null) {
+                $map[$id] = ['count' => 0, 'names' => []];
+
+                continue;
+            }
+
+            $descendants = $this->descendantsOf($person);
+
+            $map[$id] = [
+                'count' => $descendants->count(),
+                'names' => $descendants->take(50)->pluck('name')->values()->all(),
+            ];
+        }
+
+        return $map;
+    }
+
+    /**
+     * All patrilineal descendants of a person, ordered by birth order.
+     *
+     * @return \Illuminate\Support\Collection<int, Person>
+     */
+    protected function descendantsOf(Person $person): \Illuminate\Support\Collection
+    {
+        $result = collect();
+        $queue = [$person->id];
+
+        while ($queue !== []) {
+            $children = Person::query()
+                ->whereIn('father_id', $queue)
+                ->orderBy('birth_order')
+                ->orderBy('id')
+                ->get();
+
+            $result = $result->merge($children);
+            $queue = $children->pluck('id')->all();
+        }
+
+        return $result;
     }
 
     /**
@@ -544,6 +664,33 @@ class PersonController extends Controller
     }
 
     /**
+     * Male people eligible to become the selected person's father.
+     * Legacy fathers without a recorded gender remain selectable.
+     *
+     * @return array<int, string>
+     */
+    protected function fatherSuggestions(?Person $person = null, ?int $margaId = null): array
+    {
+        $names = Person::query()
+            ->when($margaId !== null, fn ($query) => $query->where('marga_id', $margaId))
+            ->where('gender', 'L')
+            ->when($person !== null, fn ($query) => $query->whereNotIn('id', $person->ineligibleFatherIds()))
+            ->whereNotNull('name')
+            ->where('name', '!=', 'N/A')
+            ->pluck('name');
+
+        if ($person?->father !== null && ! $person->father->isNa()) {
+            $names->push($person->father->name);
+        }
+
+        return $names
+            ->unique(fn (string $name) => mb_strtolower(trim($name)))
+            ->sort(SORT_NATURAL | SORT_FLAG_CASE)
+            ->values()
+            ->all();
+    }
+
+    /**
      * Marga options for the form select.
      *
      * @return array<int, array{id: int, name: string}>
@@ -557,6 +704,30 @@ class PersonController extends Controller
                 'id' => $marga->id,
                 'name' => $marga->name,
             ])
+            ->all();
+    }
+
+    /**
+     * Family trees previously created by the signed-in account.
+     *
+     * @return array<int, array{id: int, root_person_id: int, root_name: string, updated_at: string}>
+     */
+    protected function familyTrees(User $user): array
+    {
+        return FamilyTree::query()
+            ->whereBelongsTo($user)
+            ->whereNotNull('root_person_id')
+            ->with('rootPerson:id,name')
+            ->latest('updated_at')
+            ->get(['id', 'user_id', 'root_person_id', 'updated_at'])
+            ->filter(fn (FamilyTree $tree) => $tree->rootPerson !== null)
+            ->map(fn (FamilyTree $tree) => [
+                'id' => $tree->id,
+                'root_person_id' => $tree->root_person_id,
+                'root_name' => $tree->rootPerson->name,
+                'updated_at' => $tree->updated_at->toISOString(),
+            ])
+            ->values()
             ->all();
     }
 

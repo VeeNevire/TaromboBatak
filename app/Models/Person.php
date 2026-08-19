@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection as SupportCollection;
@@ -37,6 +38,7 @@ use Illuminate\Support\Collection as SupportCollection;
  * @property-read Person|null $father
  * @property-read Person|null $mother
  * @property-read User|null $creator
+ * @property-read Collection<int, FamilyTree> $familyTrees
  * @property-read Collection<int, Person> $children
  * @property-read Collection<int, Person> $siblings
  */
@@ -60,6 +62,14 @@ class Person extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * @return BelongsToMany<FamilyTree, $this>
+     */
+    public function familyTrees(): BelongsToMany
+    {
+        return $this->belongsToMany(FamilyTree::class);
     }
 
     /**
@@ -173,5 +183,48 @@ class Person extends Model
         }
 
         return $chain->reverse()->values();
+    }
+
+    /**
+     * People who cannot be selected as this person's father: the person
+     * themself, their siblings, and every patrilineal descendant.
+     *
+     * @return array<int, int>
+     */
+    public function ineligibleFatherIds(): array
+    {
+        $ids = [$this->id];
+
+        if ($this->father_id !== null) {
+            $ids = array_merge(
+                $ids,
+                self::query()
+                    ->where('father_id', $this->father_id)
+                    ->whereKeyNot($this->id)
+                    ->pluck('id')
+                    ->all(),
+            );
+        }
+
+        $queue = [$this->id];
+        $seen = [$this->id => true];
+
+        while ($queue !== []) {
+            $children = self::query()
+                ->whereIn('father_id', $queue)
+                ->pluck('id')
+                ->reject(fn (int $id) => isset($seen[$id]))
+                ->values()
+                ->all();
+
+            foreach ($children as $childId) {
+                $seen[$childId] = true;
+            }
+
+            $ids = array_merge($ids, $children);
+            $queue = $children;
+        }
+
+        return array_values(array_unique($ids));
     }
 }

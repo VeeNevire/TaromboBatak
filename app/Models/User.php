@@ -6,8 +6,10 @@ namespace App\Models;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -27,6 +29,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Marga|null $marga
+ * @property-read Collection<int, FamilyTree> $familyTrees
  */
 #[Fillable(['name', 'email', 'password', 'role', 'marga_id'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
@@ -65,6 +68,14 @@ class User extends Authenticatable
     public function marga(): BelongsTo
     {
         return $this->belongsTo(Marga::class);
+    }
+
+    /**
+     * @return HasMany<FamilyTree, $this>
+     */
+    public function familyTrees(): HasMany
+    {
+        return $this->hasMany(FamilyTree::class);
     }
 
     /**

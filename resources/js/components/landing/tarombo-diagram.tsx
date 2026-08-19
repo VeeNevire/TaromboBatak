@@ -1,9 +1,19 @@
 import { ReactFlow, ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import type { NodeMouseHandler } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { ArrowLeft, Search, SlidersHorizontal } from 'lucide-react';
+import {
+    ArrowLeft,
+    Focus,
+    Minus,
+    Plus,
+    Search,
+    SlidersHorizontal,
+} from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { edgeTypes, nodeTypes } from '@/components/landing/diagram/diagram-types';
+import {
+    edgeTypes,
+    nodeTypes,
+} from '@/components/landing/diagram/diagram-types';
 import {
     buildRadialLayoutFromPerson,
     getConnectionIds,
@@ -12,7 +22,12 @@ import {
     MOCK_MARGAS,
     MOCK_TAROMBO,
 } from '@/data/tarombo-tree';
-import type { MargaInfo, SectorNodeData, TaromboNodeData, TaromboPerson } from '@/data/tarombo-tree';
+import type {
+    MargaInfo,
+    SectorNodeData,
+    TaromboNodeData,
+    TaromboPerson,
+} from '@/data/tarombo-tree';
 
 export function TaromboDiagram({
     onSelect,
@@ -78,9 +93,16 @@ function TaromboDiagramInner({
     people: TaromboPerson[];
     margas: MargaInfo[];
 }) {
-    const { fitView } = useReactFlow();
+    const { fitView, zoomIn, zoomOut } = useReactFlow();
     const layout = useMemo(
-        () => buildRadialLayoutFromPerson(people, margas, centerPersonId, context, maxDepth),
+        () =>
+            buildRadialLayoutFromPerson(
+                people,
+                margas,
+                centerPersonId,
+                context,
+                maxDepth,
+            ),
         [people, margas, centerPersonId, context, maxDepth],
     );
 
@@ -91,12 +113,41 @@ function TaromboDiagramInner({
 
         return () => cancelAnimationFrame(frame);
     }, [fitView, centerPersonId, context]);
-    const layoutPeople = useMemo(() => {
-        const layoutNodeIds = new Set(layout.nodes.filter(n => (n.data as TaromboNodeData).person).map(n => n.id));
+    const squareRef = useRef<HTMLDivElement>(null);
 
-        return people.filter(p => layoutNodeIds.has(p.id));
+    useEffect(() => {
+        const square = squareRef.current;
+
+        if (!square) {
+            return;
+        }
+
+        let frame = 0;
+
+        const observer = new ResizeObserver(() => {
+            cancelAnimationFrame(frame);
+            frame = requestAnimationFrame(() => {
+                fitView({ padding: 0.02, duration: 0 });
+            });
+        });
+
+        observer.observe(square);
+
+        return () => {
+            observer.disconnect();
+            cancelAnimationFrame(frame);
+        };
+    }, [fitView]);
+    const layoutPeople = useMemo(() => {
+        const layoutNodeIds = new Set(
+            layout.nodes
+                .filter((n) => (n.data as TaromboNodeData).person)
+                .map((n) => n.id),
+        );
+
+        return people.filter((p) => layoutNodeIds.has(p.id));
     }, [layout.nodes, people]);
-    
+
     const maxGeneration = useMemo(
         () => Math.max(1, ...layoutPeople.map((person) => person.generation)),
         [layoutPeople],
@@ -108,8 +159,8 @@ function TaromboDiagramInner({
         const container = containerRef.current;
 
         if (!container) {
-return;
-}
+            return;
+        }
 
         const handleWheel = (event: WheelEvent) => {
             if (container.contains(event.target as Node)) {
@@ -117,14 +168,23 @@ return;
             }
         };
 
-        document.addEventListener('wheel', handleWheel, { capture: true, passive: true });
+        document.addEventListener('wheel', handleWheel, {
+            capture: true,
+            passive: true,
+        });
 
-        return () => document.removeEventListener('wheel', handleWheel, { capture: true });
+        return () =>
+            document.removeEventListener('wheel', handleWheel, {
+                capture: true,
+            });
     }, []);
 
     const focusId = hoveredId ?? selectedId;
     const connection = useMemo(
-        () => (focusId ? getConnectionIds(layoutPeople, focusId) : new Set<string>()),
+        () =>
+            focusId
+                ? getConnectionIds(layoutPeople, focusId)
+                : new Set<string>(),
         [focusId, layoutPeople],
     );
 
@@ -136,7 +196,10 @@ return;
 
                 return {
                     ...node,
-                    zIndex: Boolean(person) && person.id === selectedId ? 60 : (node.zIndex ?? 1),
+                    zIndex:
+                        Boolean(person) && person.id === selectedId
+                            ? 60
+                            : (node.zIndex ?? 1),
                     data: {
                         ...base,
                         selected: Boolean(person) && person.id === selectedId,
@@ -151,7 +214,10 @@ return;
         () =>
             layout.edges.map((edge) => {
                 const hasFocus = connection.size > 0;
-                const active = hasFocus && connection.has(edge.source) && connection.has(edge.target);
+                const active =
+                    hasFocus &&
+                    connection.has(edge.source) &&
+                    connection.has(edge.target);
 
                 return {
                     ...edge,
@@ -184,93 +250,132 @@ return;
     };
 
     return (
-        <div className="relative w-full max-w-2xl" ref={containerRef}>
+        <div className="relative mx-auto w-full max-w-2xl" ref={containerRef}>
             <div className="mx-auto mb-6 flex max-w-sm items-center rounded-full border border-tb-outline-variant bg-tb-surface-bright/90 px-4 py-2.5 shadow-lg backdrop-blur-md">
-                    <Search className="mr-2 h-4 w-4 shrink-0 text-tb-outline" />
-                    <input
-                        type="text"
-                        placeholder="Cari anggota atau marga..."
-                        className="w-full border-none bg-transparent text-sm text-tb-on-surface focus:ring-0"
-                    />
+                <Search className="mr-2 h-4 w-4 shrink-0 text-tb-outline" />
+                <input
+                    type="text"
+                    placeholder="Cari anggota atau marga..."
+                    className="w-full border-none bg-transparent text-sm text-tb-on-surface focus:ring-0"
+                />
+                <button
+                    type="button"
+                    className="ml-2 text-tb-outline hover:text-tb-primary"
+                    aria-label="Filter"
+                >
+                    <SlidersHorizontal className="h-4 w-4" />
+                </button>
+            </div>
+            <div className="relative aspect-square w-full" ref={squareRef}>
+                {canGoBack && onBack && (
                     <button
                         type="button"
-                        className="ml-2 text-tb-outline hover:text-tb-primary"
-                        aria-label="Filter"
+                        onClick={onBack}
+                        className="absolute top-3 left-3 z-10 inline-flex items-center gap-1.5 rounded-full border border-tb-outline-variant bg-tb-surface-bright/95 px-3 py-1.5 text-xs font-medium text-tb-on-surface shadow-md backdrop-blur transition-colors hover:bg-tb-surface-container"
                     >
-                        <SlidersHorizontal className="h-4 w-4" />
+                        <ArrowLeft className="h-3.5 w-3.5" /> Kembali
+                    </button>
+                )}
+                <ReactFlow
+                    nodes={nodes}
+                    edges={edges}
+                    nodeTypes={nodeTypes}
+                    edgeTypes={edgeTypes}
+                    onNodeClick={handleNodeClick}
+                    onNodeMouseEnter={handleNodeMouseEnter}
+                    onNodeMouseLeave={() => setHoveredId(null)}
+                    onPaneClick={() => onPaneClick?.()}
+                    nodesDraggable={false}
+                    nodesConnectable={false}
+                    elementsSelectable={false}
+                    panOnDrag={false}
+                    panOnScroll={false}
+                    selectionOnDrag={false}
+                    zoomOnScroll={false}
+                    zoomOnPinch={false}
+                    zoomOnDoubleClick={false}
+                    fitView
+                    fitViewOptions={{ padding: 0.02 }}
+                    minZoom={0.2}
+                    maxZoom={2}
+                    proOptions={{ hideAttribution: true }}
+                    className="tarombo-flow"
+                />
+                <div className="absolute right-3 bottom-3 z-10 flex flex-col overflow-hidden rounded-lg border border-tb-outline-variant bg-tb-surface-bright/95 shadow-md backdrop-blur">
+                    <button
+                        type="button"
+                        onClick={() => zoomIn({ duration: 200 })}
+                        aria-label="Perbesar"
+                        title="Perbesar"
+                        className="inline-flex h-9 w-9 items-center justify-center text-tb-on-surface transition-colors hover:bg-tb-surface-container"
+                    >
+                        <Plus className="h-4 w-4" />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => zoomOut({ duration: 200 })}
+                        aria-label="Perkecil"
+                        title="Perkecil"
+                        className="inline-flex h-9 w-9 items-center justify-center border-y border-tb-outline-variant text-tb-on-surface transition-colors hover:bg-tb-surface-container"
+                    >
+                        <Minus className="h-4 w-4" />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() =>
+                            fitView({ padding: 0.02, duration: 300 })
+                        }
+                        aria-label="Sesuaikan tampilan"
+                        title="Sesuaikan tampilan"
+                        className="inline-flex h-9 w-9 items-center justify-center text-tb-on-surface transition-colors hover:bg-tb-surface-container"
+                    >
+                        <Focus className="h-4 w-4" />
                     </button>
                 </div>
-                <div className="relative aspect-square w-full">
-                    {canGoBack && onBack && (
-                        <button
-                            type="button"
-                            onClick={onBack}
-                            className="absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-full border border-tb-outline-variant bg-tb-surface-bright/95 px-3 py-1.5 text-xs font-medium text-tb-on-surface shadow-md backdrop-blur transition-colors hover:bg-tb-surface-container"
+            </div>
+            <div className="mt-8">
+                <p className="text-center text-[10px] font-semibold tracking-widest text-tb-outline uppercase">
+                    Legenda
+                </p>
+                <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-2.5">
+                    {Array.from({ length: maxGeneration }, (_, index) => (
+                        <span
+                            key={index}
+                            className="flex items-center gap-1.5 rounded-full bg-tb-surface-bright px-3 py-1.5 shadow-sm"
                         >
-                            <ArrowLeft className="h-3.5 w-3.5" /> Kembali
-                        </button>
-                    )}
-                    <ReactFlow
-                        nodes={nodes}
-                        edges={edges}
-                        nodeTypes={nodeTypes}
-                        edgeTypes={edgeTypes}
-                        onNodeClick={handleNodeClick}
-                        onNodeMouseEnter={handleNodeMouseEnter}
-                        onNodeMouseLeave={() => setHoveredId(null)}
-                        onPaneClick={() => onPaneClick?.()}
-                        nodesDraggable={false}
-                        nodesConnectable={false}
-                        elementsSelectable={false}
-                        panOnDrag={false}
-                        panOnScroll={false}
-                        selectionOnDrag={false}
-                        zoomOnScroll={false}
-                        zoomOnPinch={false}
-                        zoomOnDoubleClick={false}
-                        fitView
-                        fitViewOptions={{ padding: 0.02 }}
-                        minZoom={0.2}
-                        maxZoom={2}
-                        proOptions={{ hideAttribution: true }}
-                        className="tarombo-flow"
-                    />
-                </div>
-                <div className="mt-8">
-                    <p className="text-center text-[10px] font-semibold uppercase tracking-widest text-tb-outline">
-                        Legenda
-                    </p>
-                    <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-2.5">
-                        {Array.from({ length: maxGeneration }, (_, index) => (
                             <span
-                                key={index}
-                                className="flex items-center gap-1.5 rounded-full bg-tb-surface-bright px-3 py-1.5 shadow-sm"
-                            >
-                                <span
-                                    className="h-2.5 w-2.5 rounded-full"
-                                    style={{ backgroundColor: generationColors[index % generationColors.length] }}
-                                />
-                                <span className="text-[11px] font-medium text-tb-on-surface">
-                                    Gen {index + 1} ({getGenerationLabel(index + 1)})
-                                </span>
+                                className="h-2.5 w-2.5 rounded-full"
+                                style={{
+                                    backgroundColor:
+                                        generationColors[
+                                            index % generationColors.length
+                                        ],
+                                }}
+                            />
+                            <span className="text-[11px] font-medium text-tb-on-surface">
+                                Gen {index + 1} ({getGenerationLabel(index + 1)}
+                                )
                             </span>
-                        ))}
-                    </div>
-                    <div className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-2.5">
-                        {margas.map((marga) => (
-                            <span
-                                key={marga.name}
-                                className="flex items-center gap-1.5 rounded-full bg-tb-surface-bright px-3 py-1.5 shadow-sm"
-                            >
-                                <span
-                                    className="h-2.5 w-2.5 rounded-sm"
-                                    style={{ backgroundColor: marga.color }}
-                                />
-                                <span className="text-[11px] font-medium text-tb-on-surface">{marga.name}</span>
-                            </span>
-                        ))}
-                    </div>
+                        </span>
+                    ))}
                 </div>
+                <div className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-2.5">
+                    {margas.map((marga) => (
+                        <span
+                            key={marga.name}
+                            className="flex items-center gap-1.5 rounded-full bg-tb-surface-bright px-3 py-1.5 shadow-sm"
+                        >
+                            <span
+                                className="h-2.5 w-2.5 rounded-sm"
+                                style={{ backgroundColor: marga.color }}
+                            />
+                            <span className="text-[11px] font-medium text-tb-on-surface">
+                                {marga.name}
+                            </span>
+                        </span>
+                    ))}
+                </div>
+            </div>
         </div>
     );
 }
