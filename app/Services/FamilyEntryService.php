@@ -42,7 +42,7 @@ class FamilyEntryService
                 && $this->normalizeName($fatherNameMd) !== null;
             $fatherGiven = ! empty($data['father_id']) || $fatherNameGiven;
             $pending = ! $fatherGiven;
-            $focusPerson = isset($data['id']) ? Person::find($data['id']) : null;
+            $focusPerson = isset($data['id']) ? Person::query()->find((int) $data['id']) : null;
             $ineligibleFatherIds = $focusPerson?->ineligibleFatherIds() ?? [];
 
             $father = $fatherGiven
@@ -131,26 +131,27 @@ class FamilyEntryService
             ];
         });
 
-<<<<<<< HEAD
-        if ($result['fatherChanged'] && $result['focus'] !== null) {
-            app(ChainNumberingService::class)->recomputeBranch($result['focus']);
-        } elseif ($result['father'] !== null) {
-            app(ChainNumberingService::class)->recomputeFromAncestor($result['father']);
-=======
         $numbering = app(ChainNumberingService::class);
 
-        foreach ($oldFathers as $oldFather) {
-            $numbering->recomputeFromAncestor($oldFather->fresh());
-        }
+        if ($result['fatherChanged'] && $result['focus'] !== null) {
+            $numbering->recomputeBranch($result['focus']);
 
-        if ($result['father'] !== null) {
-            $numbering->recomputeFromAncestor($result['father']->fresh());
->>>>>>> origin/main
-        } elseif ($result['pending']) {
-            // Keluarga yang belum tersambung tidak berchain; recompute tiap
-            // rumpun baru sekalian membersihkan chain lama bila pernah ada.
-            foreach ($result['children'] as $child) {
-                $numbering->recomputeFromAncestor($child);
+            foreach ($oldFathers as $oldFather) {
+                $numbering->recomputeFromAncestor($oldFather->fresh());
+            }
+        } else {
+            foreach ($oldFathers as $oldFather) {
+                $numbering->recomputeFromAncestor($oldFather->fresh());
+            }
+
+            if ($result['father'] !== null) {
+                $numbering->recomputeFromAncestor($result['father']->fresh());
+            } elseif ($result['pending']) {
+                // Keluarga yang belum tersambung tidak berchain; recompute tiap
+                // rumpun baru sekalian membersihkan chain lama bila pernah ada.
+                foreach ($result['children'] as $child) {
+                    $numbering->recomputeFromAncestor($child);
+                }
             }
         }
 
@@ -166,9 +167,12 @@ class FamilyEntryService
     }
 
     /**
-<<<<<<< HEAD
      * Keep one account-owned history record for every distinct patrilineal
      * tree touched by the family form.
+     *
+     * @param  Collection<int, Person>  $children
+     * @param  Collection<int, Person>  $ownChildren
+     * @return Collection<int, FamilyTree>
      */
     protected function syncFamilyTrees(
         ?int $createdBy,
@@ -259,7 +263,9 @@ class FamilyEntryService
         }
 
         return $current;
-=======
+    }
+
+    /**
      * Ensure existing row IDs still belong to the family being edited.
      *
      * @param  array<string, mixed>  $data
@@ -413,7 +419,6 @@ class FamilyEntryService
                 'is_public' => 'Person ini masih memiliki keturunan publik dan belum dapat dibuat private.',
             ]);
         }
->>>>>>> origin/main
     }
 
     /**
@@ -428,7 +433,7 @@ class FamilyEntryService
         if (isset($data['id'])) {
             $id = (int) $data['id'];
 
-            return $children->firstWhere('id', $id);
+            return $children->firstWhere('id', $id) ?? Person::find($id);
         }
 
         $order = max(1, (int) ($data['birth_order'] ?? 1)) - 1;
@@ -441,6 +446,7 @@ class FamilyEntryService
      * Reuses an existing record with the same name to avoid duplicates.
      *
      * @param  array<string, mixed>|null  $data
+     * @param  array<int, int>  $excludedIds
      */
     protected function resolveParent(
         ?int $parentId,
@@ -452,6 +458,12 @@ class FamilyEntryService
         array $excludedIds = [],
     ): ?Person {
         if ($parentId && $forcedMargaId === null) {
+            if (in_array($parentId, $excludedIds, true)) {
+                throw ValidationException::withMessages([
+                    'father_id' => 'Relasi orang tua ini akan membentuk siklus silsilah.',
+                ]);
+            }
+
             $parent = Person::query()
                 ->whereKey($parentId)
                 ->whereNotIn('id', $excludedIds)
@@ -479,21 +491,16 @@ class FamilyEntryService
 
         $matches = Person::query()
             ->where('name', $name)
-<<<<<<< HEAD
-            ->when($forcedMargaId !== null, fn ($query) => $query->where('marga_id', $forcedMargaId))
+            ->when($margaId !== null, fn ($query) => $query->where('marga_id', $margaId))
             ->whereNotIn('id', $excludedIds)
             ->when($expectedGender !== null, fn ($query) => $query->where(
                 fn ($query) => $query
                     ->where('gender', $expectedGender)
                     ->orWhereNull('gender'),
             ))
-            ->first();
-=======
-            ->when($margaId !== null, fn ($query) => $query->where('marga_id', $margaId))
             ->limit(2)
             ->get();
         $parent = $matches->count() === 1 ? $matches->first() : null;
->>>>>>> origin/main
 
         if ($parent === null) {
             if ($excludedIds !== [] && Person::query()->whereIn('id', $excludedIds)->where('name', $name)->exists()) {
@@ -601,7 +608,6 @@ class FamilyEntryService
                 ...$focusedFields,
             ], fn ($value) => $value !== null);
 
-<<<<<<< HEAD
             $attributes['father_id'] = $fatherId;
             $attributes['mother_id'] = $motherId;
             $attributes['pending_father'] = $pending;
@@ -616,10 +622,7 @@ class FamilyEntryService
                 );
             }
 
-            $child = isset($row['id']) ? Person::find($row['id']) : null;
-=======
             $child = isset($row['id']) ? Person::find((int) $row['id']) : null;
->>>>>>> origin/main
 
             if ($child) {
                 $child->update($attributes);

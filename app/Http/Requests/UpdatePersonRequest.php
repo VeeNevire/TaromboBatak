@@ -42,7 +42,7 @@ class UpdatePersonRequest extends FormRequest
             'mother.alias' => ['nullable', 'string', 'max:255'],
             'mother.birth_year' => ['nullable', 'digits:4'],
             'mother.death_year' => ['nullable', 'digits:4'],
-            'children' => ['required', 'array', 'min:1'],
+            'children' => ['nullable', 'array'],
             'children.*.id' => ['nullable', 'exists:people,id'],
             'children.*.name' => ['nullable', 'string', 'max:255'],
             'children.*.alias' => ['nullable', 'string', 'max:255'],

@@ -93,20 +93,14 @@ class PersonController extends Controller
         return Inertia::render('people/form', [
             'person' => null,
             'margas' => $isStaff ? $this->margaOptions() : $this->margaOptionsForUser($user),
-<<<<<<< HEAD
-            'nameSuggestions' => $this->nameSuggestions(),
+            'nameSuggestions' => $this->nameSuggestions($isStaff ? null : $user->marga_id),
             'fatherSuggestions' => $this->fatherSuggestions(
                 margaId: $isStaff ? null : $user->marga_id,
             ),
             'lockedMarga' => $isStaff ? null : $this->lockedMarga($user),
             'lineage' => $this->createLineage($user, $isStaff),
             'familyTrees' => $this->familyTrees($user),
-=======
-            'nameSuggestions' => $this->nameSuggestions($isStaff ? null : $user->marga_id),
-            'lockedMarga' => $isStaff ? null : $this->lockedMarga($user),
-            'lineage' => $this->createLineage($user, $isStaff),
             'canPublish' => $isStaff,
->>>>>>> origin/main
         ]);
     }
 
@@ -192,11 +186,8 @@ class PersonController extends Controller
             'person' => $this->familyPayload($person),
             'margas' => $this->margaOptions(),
             'nameSuggestions' => $this->nameSuggestions(),
-<<<<<<< HEAD
             'fatherSuggestions' => $this->fatherSuggestions($person),
-=======
             'canPublish' => true,
->>>>>>> origin/main
         ]);
     }
 
@@ -213,15 +204,11 @@ class PersonController extends Controller
         return Inertia::render('people/form', [
             'person' => $this->familyPayload($person),
             'margas' => $isStaff ? $this->margaOptions() : $this->margaOptionsForUser($user),
-<<<<<<< HEAD
-            'nameSuggestions' => $this->nameSuggestions(),
+            'nameSuggestions' => $this->nameSuggestions($isStaff ? null : $user->marga_id),
             'fatherSuggestions' => $this->fatherSuggestions(
                 $person,
                 $isStaff ? null : $user->marga_id,
             ),
-=======
-            'nameSuggestions' => $this->nameSuggestions($isStaff ? null : $user->marga_id),
->>>>>>> origin/main
             'lockedMarga' => $isStaff ? null : $this->lockedMarga($user),
             'canPublish' => $isStaff,
         ]);
@@ -288,7 +275,7 @@ class PersonController extends Controller
                 'id' => (string) $root->id,
                 'name' => $root->name,
                 'alias' => $root->alias,
-                'marga' => $root->marga?->name ?? 'Batak',
+                'marga' => $root->marga->name ?? 'Batak',
                 'birthOrder' => $root->birth_order,
             ],
         ]);
@@ -633,7 +620,7 @@ class PersonController extends Controller
      */
     protected function descendantMap(array $ids): array
     {
-        $ids = array_values(array_unique(array_filter($ids, fn ($id) => $id !== null)));
+        $ids = array_values(array_unique($ids));
 
         if ($ids === []) {
             return [];
