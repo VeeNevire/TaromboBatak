@@ -41,6 +41,7 @@ use Illuminate\Support\Collection as SupportCollection;
  * @property-read Person|null $mother
  * @property-read User|null $creator
  * @property-read Collection<int, FamilyTree> $familyTrees
+ * @property-read Collection<int, FamilyTreeNode> $familyTreeNodes
  * @property-read Collection<int, Person> $children
  * @property-read Collection<int, Person> $siblings
  */
@@ -72,6 +73,14 @@ class Person extends Model
     public function familyTrees(): BelongsToMany
     {
         return $this->belongsToMany(FamilyTree::class);
+    }
+
+    /**
+     * @return HasMany<FamilyTreeNode, $this>
+     */
+    public function familyTreeNodes(): HasMany
+    {
+        return $this->hasMany(FamilyTreeNode::class);
     }
 
     /**

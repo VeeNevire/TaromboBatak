@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\FamilyTree;
+use App\Models\FamilyTreeNode;
 use App\Models\Marga;
 use App\Models\Person;
 use Illuminate\Database\Eloquent\Builder;
@@ -9,6 +11,50 @@ use Illuminate\Support\Collection;
 
 class TaromboTreeService
 {
+    /**
+     * Build a diagram payload from relationships belonging to one tree version.
+     * Person records provide identity data; nodes provide contextual genealogy.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function rowsForFamilyTree(FamilyTree $familyTree): array
+    {
+        return $familyTree->nodes()
+            ->with([
+                'person.marga',
+                'fatherNode',
+                'children.person',
+            ])
+            ->orderBy('id')
+            ->get()
+            ->map(fn (FamilyTreeNode $node) => [
+                'id' => (string) $node->person_id,
+                'name' => $node->person->name,
+                'alias' => $node->person->alias,
+                'marga' => $node->person->marga->name ?? 'Batak',
+                'parentId' => $node->pending_father || $node->fatherNode === null
+                    ? null
+                    : (string) $node->fatherNode->person_id,
+                'birthYear' => $node->person->birth_year,
+                'birthOrder' => $node->birth_order,
+                'chain' => $node->chain,
+                'pending' => $node->pending_father,
+                'gender' => $node->person->gender,
+                'spouse' => $node->person->spouse,
+                'image' => $node->person->image,
+                'bio' => $node->person->bio,
+                'childrenNames' => $node->children
+                    ->sortBy('birth_order')
+                    ->map(fn (FamilyTreeNode $child) => $child->person->birth_year
+                        ? $child->person->name.' ('.$child->person->birth_year.')'
+                        : $child->person->name)
+                    ->values()
+                    ->all(),
+            ])
+            ->values()
+            ->all();
+    }
+
     /**
      * Build the rows needed by the radial tarombo diagram.
      *

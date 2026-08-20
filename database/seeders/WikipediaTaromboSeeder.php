@@ -2,6 +2,8 @@
 
 namespace Database\Seeders;
 
+use App\Models\FamilyTree;
+use App\Models\FamilyTreeNode;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
@@ -90,24 +92,30 @@ class WikipediaTaromboSeeder extends Seeder
 
         $rows = array_merge($rows, $this->additionalPeople());
 
-        DB::transaction(function () use ($rows) {
+        $owner = User::query()->where('role', 'admin')->oldest('id')->first();
+
+        if ($owner === null) {
+            throw new \RuntimeException('WikipediaTaromboSeeder membutuhkan sedikitnya satu akun admin.');
+        }
+
+        DB::transaction(function () use ($owner, $rows) {
             $this->resetPeople();
             $margaIds = $this->upsertMargas($rows);
-            $this->upsertPeople($rows, $margaIds);
+            $this->upsertPeople($rows, $margaIds, $owner->id);
             $this->assignChains();
+            $this->createFamilyTree($owner);
             $this->cleanupOrphanMargas(array_values($margaIds));
         });
     }
 
     /**
-     * Remove every existing person. FK checks are toggled so the
-     * self-referencing father_id link does not block the bulk delete.
+     * Remove prior trees before people so foreign keys cleanly cascade their
+     * memberships and version nodes on both MySQL and SQLite.
      */
     protected function resetPeople(): void
     {
-        DB::statement('SET FOREIGN_KEY_CHECKS = 0');
+        FamilyTree::query()->delete();
         Person::query()->delete();
-        DB::statement('SET FOREIGN_KEY_CHECKS = 1');
     }
 
     /**
@@ -147,7 +155,7 @@ class WikipediaTaromboSeeder extends Seeder
      * @param  array<int, array<string, mixed>>  $rows
      * @param  array<string, int>  $margaIds
      */
-    protected function upsertPeople(array $rows, array $margaIds): void
+    protected function upsertPeople(array $rows, array $margaIds, int $createdBy): void
     {
         $idMap = [];
         $orderByParent = [];
@@ -176,6 +184,7 @@ class WikipediaTaromboSeeder extends Seeder
                 'death_year' => $row['deathYear'] ?? null,
                 'image' => $row['image'] ?? null,
                 'bio' => $row['bio'] ?? null,
+                'created_by' => $createdBy,
                 'is_public' => true,
             ]);
 
@@ -253,6 +262,47 @@ class WikipediaTaromboSeeder extends Seeder
     protected function assignChains(): void
     {
         app(ChainNumberingService::class)->recomputeAll();
+    }
+
+    /**
+     * Store the seeded global structure as the canonical Wikipedia version.
+     */
+    protected function createFamilyTree(User $owner): void
+    {
+        $root = Person::query()->whereNull('father_id')->orderBy('id')->firstOrFail();
+        $people = Person::query()->orderBy('id')->get();
+        $tree = FamilyTree::create([
+            'user_id' => $owner->id,
+            'root_person_id' => $root->id,
+            'name' => 'Wikipedia Tarombo',
+            'source_name' => 'Wikipedia',
+            'source_url' => 'https://id.wikipedia.org/',
+            'is_primary' => true,
+        ]);
+
+        $tree->people()->sync($people->pluck('id')->all());
+        $nodeIds = [];
+
+        foreach ($people as $person) {
+            $node = FamilyTreeNode::create([
+                'family_tree_id' => $tree->id,
+                'person_id' => $person->id,
+                'birth_order' => $person->birth_order,
+                'sibling_count' => $person->sibling_count,
+                'chain' => $person->chain,
+                'pending_father' => $person->pending_father,
+            ]);
+            $nodeIds[$person->id] = $node->id;
+        }
+
+        foreach ($people as $person) {
+            FamilyTreeNode::query()
+                ->whereKey($nodeIds[$person->id])
+                ->update([
+                    'father_node_id' => $person->father_id === null ? null : $nodeIds[$person->father_id] ?? null,
+                    'mother_node_id' => $person->mother_id === null ? null : $nodeIds[$person->mother_id] ?? null,
+                ]);
+        }
     }
 
     /**

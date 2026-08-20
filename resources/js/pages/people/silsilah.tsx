@@ -1,10 +1,11 @@
 import { Head, Link } from '@inertiajs/react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Copy, Pencil } from 'lucide-react';
 import { useState } from 'react';
 import { DescendantsTree } from '@/components/people/descendants-tree';
 import { buildTaromboPeople } from '@/data/tarombo-tree';
 import type { TaromboPersonRow } from '@/data/tarombo-tree';
 import { dashboard } from '@/routes';
+import familyTrees from '@/routes/family-trees';
 import people from '@/routes/people';
 
 type Props = {
@@ -16,6 +17,10 @@ type Props = {
         alias: string | null;
         marga: string;
         birthOrder: number | null;
+    };
+    familyTree?: {
+        id: number;
+        name: string;
     };
 };
 
@@ -58,7 +63,7 @@ export default function PersonSilsilah(props: Props) {
 
             <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
                 <div className="flex flex-col gap-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-3">
                         <Link
                             href={people.index()}
                             className="flex w-fit items-center gap-1.5 text-sm text-tb-on-surface-variant transition-colors hover:text-tb-primary"
@@ -66,6 +71,28 @@ export default function PersonSilsilah(props: Props) {
                             <ArrowLeft className="size-4" /> Kembali ke Data
                             Anggota
                         </Link>
+                        {props.familyTree && (
+                            <div className="flex items-center gap-2">
+                                <Link
+                                    href={familyTrees.duplicate(
+                                        props.familyTree.id,
+                                    )}
+                                    method="post"
+                                    as="button"
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-tb-outline-variant px-3 py-1.5 text-sm font-medium text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
+                                >
+                                    <Copy className="size-3.5" /> Buat Versi
+                                    Alternatif
+                                </Link>
+                                <Link
+                                    href={familyTrees.edit(props.familyTree.id)}
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-tb-outline-variant px-3 py-1.5 text-sm font-medium text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
+                                >
+                                    <Pencil className="size-3.5" /> Ubah
+                                    Struktur
+                                </Link>
+                            </div>
+                        )}
                     </div>
                     <div style={{ color: FOREST }} className="text-center">
                         <p

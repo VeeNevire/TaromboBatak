@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StorePersonRequest;
+use App\Http\Requests\UpdateFamilyTreeStructureRequest;
 use App\Http\Requests\UpdatePersonRequest;
 use App\Models\FamilyTree;
 use App\Models\Marga;
@@ -10,6 +11,8 @@ use App\Models\Person;
 use App\Models\User;
 use App\Services\ChainNumberingService;
 use App\Services\FamilyEntryService;
+use App\Services\FamilyTreeStructureService;
+use App\Services\FamilyTreeVersionService;
 use App\Services\TaromboTreeService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
@@ -178,7 +181,7 @@ class PersonController extends Controller
     /**
      * Show the family entry (jejak keluarga) reached from the Info button.
      */
-    public function show(Person $person): Response
+    public function show(Request $request, Person $person): Response
     {
         Gate::authorize('view', $person);
 
@@ -187,6 +190,7 @@ class PersonController extends Controller
             'margas' => $this->margaOptions(),
             'nameSuggestions' => $this->nameSuggestions(),
             'fatherSuggestions' => $this->fatherSuggestions($person),
+            'familyTrees' => $this->familyTrees($request->user(), $person),
             'canPublish' => true,
         ]);
     }
@@ -230,9 +234,35 @@ class PersonController extends Controller
      * Show the silsilah of a person as an interactive descendant tree that
      * can be re-rooted by clicking any person in the tree.
      */
-    public function silsilah(Person $person): Response
+    public function silsilah(Request $request, Person $person): Response|RedirectResponse
     {
         Gate::authorize('view', $person);
+
+        $familyTrees = FamilyTree::query()
+            ->whereHas('nodes', fn ($query) => $query->where('person_id', $person->id))
+            ->when(! $request->user()->isStaff(), fn ($query) => $query->where('user_id', $request->user()->id))
+            ->with('rootPerson:id,name')
+            ->latest('updated_at')
+            ->get();
+
+        if ($familyTrees->count() === 1) {
+            return to_route('family-trees.show', $familyTrees->first());
+        }
+
+        if ($familyTrees->isNotEmpty()) {
+            return Inertia::render('people/tree-selector', [
+                'person' => [
+                    'id' => $person->id,
+                    'name' => $person->name,
+                ],
+                'familyTrees' => $familyTrees->map(fn (FamilyTree $tree) => [
+                    'id' => $tree->id,
+                    'name' => $tree->name ?? $this->familyTreeRootName($tree) ?? 'Silsilah',
+                    'rootName' => $this->familyTreeRootName($tree),
+                    'updatedAt' => $tree->updated_at->toISOString(),
+                ])->all(),
+            ]);
+        }
 
         $service = app(TaromboTreeService::class);
 
@@ -261,24 +291,101 @@ class PersonController extends Controller
         );
 
         $root = $familyTree->rootPerson()->with('marga')->firstOrFail();
+        $rootNode = $familyTree->nodes()->where('person_id', $root->id)->firstOrFail();
         $service = app(TaromboTreeService::class);
 
         return Inertia::render('people/silsilah', [
-            'people' => $service->rows(
-                Person::query()
-                    ->whereHas('familyTrees', fn ($query) => $query->whereKey($familyTree->id))
-                    ->orderBy('id'),
-                $familyTree->id,
-            ),
+            'people' => $service->rowsForFamilyTree($familyTree),
             'centerPersonId' => (string) $root->id,
+            'familyTree' => [
+                'id' => $familyTree->id,
+                'name' => $familyTree->name ?? $root->name,
+            ],
             'person' => [
                 'id' => (string) $root->id,
                 'name' => $root->name,
                 'alias' => $root->alias,
                 'marga' => $root->marga->name ?? 'Batak',
-                'birthOrder' => $root->birth_order,
+                'birthOrder' => $rootNode->birth_order,
             ],
         ]);
+    }
+
+    /**
+     * Create an editable alternative that starts with the source version's
+     * people and contextual links, while retaining independent relationships.
+     */
+    public function duplicateFamilyTree(Request $request, FamilyTree $familyTree): RedirectResponse
+    {
+        abort_unless(
+            $request->user()->isStaff() || $familyTree->user_id === $request->user()->id,
+            403,
+            'Anda tidak memiliki akses ke silsilah ini.',
+        );
+
+        $rootName = $familyTree->rootPerson()->value('name') ?? 'Silsilah';
+        $name = ($familyTree->name ?? $rootName).' - Versi alternatif';
+        $copy = app(FamilyTreeVersionService::class)->duplicate($familyTree, $request->user(), $name);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Versi alternatif berhasil dibuat.')]);
+
+        return to_route('family-trees.show', $copy);
+    }
+
+    /**
+     * Edit parent links and sibling order inside one selected tree version.
+     */
+    public function editFamilyTree(Request $request, FamilyTree $familyTree): Response
+    {
+        $this->authorizeFamilyTree($request, $familyTree);
+
+        $nodes = $familyTree->nodes()
+            ->with('person:id,name,gender')
+            ->orderBy('chain')
+            ->orderBy('id')
+            ->get();
+
+        $rootName = $familyTree->rootPerson()->value('name') ?? 'Silsilah';
+
+        return Inertia::render('people/tree-editor', [
+            'familyTree' => [
+                'id' => $familyTree->id,
+                'name' => $familyTree->name ?? $rootName,
+                'sourceName' => $familyTree->source_name,
+            ],
+            'entries' => $nodes->map(fn ($node) => [
+                'id' => $node->id,
+                'personId' => $node->person_id,
+                'name' => $node->person->name,
+                'gender' => $node->person->gender,
+                'fatherNodeId' => $node->father_node_id,
+                'birthOrder' => $node->birth_order,
+                'chain' => $node->chain,
+            ])->all(),
+        ]);
+    }
+
+    /**
+     * Persist structural changes only in the selected version.
+     */
+    public function updateFamilyTree(UpdateFamilyTreeStructureRequest $request, FamilyTree $familyTree): RedirectResponse
+    {
+        $this->authorizeFamilyTree($request, $familyTree);
+
+        app(FamilyTreeStructureService::class)->update($familyTree, $request->validated('entries'));
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Struktur versi silsilah berhasil diperbarui.')]);
+
+        return to_route('family-trees.show', $familyTree);
+    }
+
+    protected function authorizeFamilyTree(Request $request, FamilyTree $familyTree): void
+    {
+        abort_unless(
+            $request->user()->isStaff() || $familyTree->user_id === $request->user()->id,
+            403,
+            'Anda tidak memiliki akses ke silsilah ini.',
+        );
     }
 
     /**
@@ -738,25 +845,34 @@ class PersonController extends Controller
     /**
      * Family trees previously created by the signed-in account.
      *
-     * @return array<int, array{id: int, root_person_id: int, root_name: string, updated_at: string}>
+     * @return array<int, array{id: int, root_person_id: int, root_name: string, name: string|null, source_name: string|null, is_primary: bool, updated_at: string}>
      */
-    protected function familyTrees(User $user): array
+    protected function familyTrees(User $user, ?Person $focus = null): array
     {
         return FamilyTree::query()
             ->whereBelongsTo($user)
             ->whereNotNull('root_person_id')
+            ->when($focus !== null, fn ($query) => $query->where('root_person_id', $focus->id))
             ->with('rootPerson:id,name')
             ->latest('updated_at')
-            ->get(['id', 'user_id', 'root_person_id', 'updated_at'])
+            ->get(['id', 'user_id', 'root_person_id', 'name', 'source_name', 'is_primary', 'updated_at'])
             ->filter(fn (FamilyTree $tree) => $tree->rootPerson !== null)
             ->map(fn (FamilyTree $tree) => [
                 'id' => $tree->id,
                 'root_person_id' => $tree->root_person_id,
                 'root_name' => $tree->rootPerson->name,
+                'name' => $tree->name,
+                'source_name' => $tree->source_name,
+                'is_primary' => $tree->is_primary,
                 'updated_at' => $tree->updated_at->toISOString(),
             ])
             ->values()
             ->all();
+    }
+
+    protected function familyTreeRootName(FamilyTree $tree): ?string
+    {
+        return $tree->root_person_id === null ? null : $tree->rootPerson->name;
     }
 
     /**
