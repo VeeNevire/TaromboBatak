@@ -88,8 +88,6 @@ jobs:
             chown -R www-data:www-data storage bootstrap/cache
 
             echo "Restart PHP & Nginx"
-            sudo systemctl restart php8.3-fpm # SESUAIKAN
+            sudo systemctl restart php8.3-fpm 
             sudo systemctl reload nginx
 
-            echo "Restart Horizon"
-            sudo supervisorctl restart horizon:*
