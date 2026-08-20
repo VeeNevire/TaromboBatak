@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\FamilyTree;
+use App\Models\FamilyTreeNode;
 use App\Models\Marga;
 use App\Models\Person;
 use Illuminate\Support\Collection;
@@ -186,21 +187,18 @@ class FamilyEntryService
             return new Collection;
         }
 
-        $root = $this->topmostAncestor($father ?? $focus);
-        $trees = $focus->familyTrees()->get();
-
-        if ($trees->isEmpty()) {
-            $tree = $father?->familyTrees()->where('user_id', $createdBy)->first()
-                ?? FamilyTree::query()
-                    ->where('user_id', $createdBy)
-                    ->where('root_person_id', $root->id)
-                    ->first()
-                ?? FamilyTree::create([
-                    'user_id' => $createdBy,
-                    'root_person_id' => $root->id,
-                ]);
-            $trees->push($tree);
-        }
+        // Each focus person owns a separate family history. Ancestors remain
+        // members for context, but do not define this family's identity.
+        $tree = FamilyTree::query()
+            ->where('user_id', $createdBy)
+            ->where('root_person_id', $focus->id)
+            ->whereNull('based_on_id')
+            ->first()
+            ?? FamilyTree::create([
+                'user_id' => $createdBy,
+                'root_person_id' => $focus->id,
+                'name' => 'Keluarga '.$focus->name,
+            ]);
 
         $memberIds = $children
             ->merge($ownChildren)
@@ -222,47 +220,52 @@ class FamilyEntryService
             $current = $current->father()->first();
         }
 
-        $normalizedTrees = new Collection;
-
-        foreach ($trees as $tree) {
-            $existing = FamilyTree::query()
-                ->where('user_id', $tree->user_id)
-                ->where('root_person_id', $root->id)
-                ->whereKeyNot($tree->id)
-                ->first();
-
-            if ($existing !== null) {
-                $existing->people()->syncWithoutDetaching($tree->people()->pluck('people.id'));
-                $tree->delete();
-                $tree = $existing;
-            } else {
-                $tree->update(['root_person_id' => $root->id]);
-            }
-
-            $tree->people()->syncWithoutDetaching(array_values(array_unique($memberIds)));
-            $normalizedTrees->put($tree->id, $tree);
+        if ($tree->name === null) {
+            $tree->update(['name' => 'Keluarga '.$focus->name]);
         }
 
-        return $normalizedTrees->values();
+        $tree->people()->syncWithoutDetaching(array_values(array_unique($memberIds)));
+        $this->syncLegacyNodes($tree);
+
+        return new Collection([$tree]);
     }
 
-    protected function topmostAncestor(Person $person): Person
+    /**
+     * New entries still originate in the legacy family form. Mirror its
+     * relationships into the initial version so they can later be copied and
+     * edited independently without changing shared Person records.
+     */
+    protected function syncLegacyNodes(FamilyTree $tree): void
     {
-        $current = $person;
-        $seen = [];
+        $people = $tree->people()->get();
+        $memberIds = $people->pluck('id')->flip();
 
-        while ($current->father_id !== null && ! isset($seen[$current->id])) {
-            $seen[$current->id] = true;
-            $father = $current->father()->first();
-
-            if ($father === null) {
-                break;
-            }
-
-            $current = $father;
+        foreach ($people as $person) {
+            FamilyTreeNode::query()->updateOrCreate(
+                ['family_tree_id' => $tree->id, 'person_id' => $person->id],
+                [
+                    'birth_order' => $person->birth_order,
+                    'sibling_count' => $person->sibling_count,
+                    'chain' => $person->chain,
+                    'pending_father' => $person->pending_father,
+                ],
+            );
         }
 
-        return $current;
+        $nodes = $tree->nodes()->pluck('id', 'person_id');
+
+        foreach ($people as $person) {
+            FamilyTreeNode::query()
+                ->whereKey($nodes[$person->id])
+                ->update([
+                    'father_node_id' => $person->father_id !== null && $memberIds->has($person->father_id)
+                        ? $nodes[$person->father_id]
+                        : null,
+                    'mother_node_id' => $person->mother_id !== null && $memberIds->has($person->mother_id)
+                        ? $nodes[$person->mother_id]
+                        : null,
+                ]);
+        }
     }
 
     /**

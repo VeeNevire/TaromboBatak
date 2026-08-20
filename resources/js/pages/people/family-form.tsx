@@ -4,6 +4,7 @@ import {
     ChevronDown,
     ChevronRight,
     ChevronUp,
+    Copy,
     Eye,
     Pencil,
     Plus,
@@ -32,6 +33,12 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NameCombobox } from '@/components/ui/name-combobox';
@@ -43,6 +50,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import familyTreeRoutes from '@/routes/family-trees';
 import people from '@/routes/people';
 
 export type ChildRow = {
@@ -143,6 +151,57 @@ type Props = {
 
 const VALUE_NONE = 'none';
 const NEW_MARGA_VALUE = '__new__';
+
+function FamilyTreeVersionAction({
+    entries,
+}: {
+    entries: FamilyTreeHistoryEntry[];
+}) {
+    if (entries.length === 0) {
+        return null;
+    }
+
+    if (entries.length === 1) {
+        return (
+            <Link
+                href={familyTreeRoutes.duplicate(entries[0].id)}
+                method="post"
+                as="button"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-tb-outline-variant px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
+            >
+                <Copy className="size-3.5" /> Buat Versi Alternatif
+            </Link>
+        );
+    }
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <button
+                    type="button"
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-tb-outline-variant px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
+                >
+                    <Copy className="size-3.5" /> Buat Versi Alternatif
+                    <ChevronDown className="size-3.5" />
+                </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-64">
+                {entries.map((entry) => (
+                    <DropdownMenuItem key={entry.id} asChild>
+                        <Link
+                            href={familyTreeRoutes.duplicate(entry.id)}
+                            method="post"
+                            as="button"
+                            className="w-full text-left"
+                        >
+                            Buat dari {entry.name ?? entry.root_name}
+                        </Link>
+                    </DropdownMenuItem>
+                ))}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+}
 
 function isNameFilled(name: string): boolean {
     return name.trim() !== '' && name.trim().toUpperCase() !== 'N/A';
@@ -1421,8 +1480,8 @@ export default function FamilyForm({
                         selectedChild
                             ? 'min-w-[1240px]'
                             : person
-                              ? 'max-w-4xl'
-                              : 'w-full max-w-none min-w-[1328px]',
+                              ? 'min-w-[1920px]'
+                              : 'min-w-[1920px]',
                     )}
                 >
                     <div
@@ -1431,20 +1490,29 @@ export default function FamilyForm({
                             selectedChild
                                 ? 'lg:grid-cols-[1fr_320px_320px]'
                                 : person
-                                  ? 'lg:grid-cols-[1fr_320px]'
-                                  : 'grid-cols-[minmax(640px,1fr)_320px_320px]',
+                                  ? 'lg:grid-cols-[minmax(640px,1fr)_360px_minmax(640px,1fr)]'
+                                  : 'grid-cols-[minmax(640px,1fr)_360px_minmax(640px,1fr)]',
                         )}
                     >
                         <div className="grid gap-6">
                             <Card className="border-tb-outline-variant bg-tb-surface-bright">
                                 <CardHeader>
-                                    <CardTitle className="font-display text-lg text-tb-on-surface">
-                                        Informasi Pribadi
-                                    </CardTitle>
-                                    <CardDescription>
-                                        Data dasar anggota yang sedang dicatat
-                                        dalam jejak keluarga.
-                                    </CardDescription>
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div>
+                                            <CardTitle className="font-display text-lg text-tb-on-surface">
+                                                Informasi Pribadi
+                                            </CardTitle>
+                                            <CardDescription>
+                                                Data dasar anggota yang sedang
+                                                dicatat dalam jejak keluarga.
+                                            </CardDescription>
+                                        </div>
+                                        {person && (
+                                            <FamilyTreeVersionAction
+                                                entries={familyTrees}
+                                            />
+                                        )}
+                                    </div>
                                 </CardHeader>
                                 <CardContent className="grid gap-5">
                                     <div className="grid gap-1.5">
@@ -1668,10 +1736,13 @@ export default function FamilyForm({
                             </Card>
                         </div>
                         {person ? (
-                            <SilsilahListCard
-                                lineage={person.lineage}
-                                selfId={person.id}
-                            />
+                            <>
+                                <SilsilahListCard
+                                    lineage={person.lineage}
+                                    selfId={person.id}
+                                />
+                                <FamilyTreeHistoryCard entries={familyTrees} />
+                            </>
                         ) : (
                             <>
                                 <MargaLineageCard

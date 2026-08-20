@@ -1,5 +1,12 @@
 import { Link } from '@inertiajs/react';
-import { ArrowUpRight, Clock3, TreePine } from 'lucide-react';
+import {
+    ArrowUpRight,
+    Clock3,
+    Copy,
+    Crown,
+    Pencil,
+    TreePine,
+} from 'lucide-react';
 import {
     Card,
     CardContent,
@@ -13,6 +20,9 @@ export type FamilyTreeHistoryEntry = {
     id: number;
     root_person_id: number;
     root_name: string;
+    name: string | null;
+    source_name: string | null;
+    is_primary: boolean;
     updated_at: string;
 };
 
@@ -57,30 +67,85 @@ export function FamilyTreeHistoryCard({
                         </p>
                     </div>
                 ) : (
-                    <ol className="grid gap-2">
+                    <ol className="grid gap-3">
                         {entries.map((entry, index) => (
-                            <li key={entry.id}>
-                                <Link
-                                    href={familyTrees.show(entry.id)}
-                                    className="group flex items-center gap-3 rounded-xl border border-tb-outline-variant bg-tb-surface-container/35 p-3 transition-colors hover:border-tb-primary/50 hover:bg-tb-primary/5"
-                                >
-                                    <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-tb-surface-bright text-xs font-bold text-tb-on-surface-variant ring-1 ring-tb-outline-variant">
-                                        {index + 1}
-                                    </span>
-                                    <span className="min-w-0 flex-1">
-                                        <span className="block truncate text-sm font-semibold text-tb-on-surface group-hover:text-tb-primary">
-                                            {entry.root_name}
+                            <li
+                                key={entry.id}
+                                className="rounded-xl border border-tb-outline-variant bg-tb-surface-container/35 p-4"
+                            >
+                                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                    <Link
+                                        href={familyTrees.show(entry.id)}
+                                        className="group flex min-w-0 items-start gap-3"
+                                    >
+                                        <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-tb-surface-bright text-sm font-bold text-tb-on-surface-variant ring-1 ring-tb-outline-variant">
+                                            {index + 1}
                                         </span>
-                                        <span className="mt-1 flex items-center gap-1 text-[11px] text-tb-on-surface-variant">
-                                            <Clock3 className="size-3" />
-                                            Waktu Update:{' '}
-                                            {dateFormatter.format(
-                                                new Date(entry.updated_at),
+                                        <span className="min-w-0 flex-1">
+                                            <span className="flex flex-wrap items-center gap-2">
+                                                <span className="truncate text-sm font-semibold text-tb-on-surface group-hover:text-tb-primary">
+                                                    {entry.name ??
+                                                        `Silsilah ${entry.root_name}`}
+                                                </span>
+                                                {entry.is_primary && (
+                                                    <span className="inline-flex items-center gap-1 rounded-full bg-tb-primary/10 px-2 py-0.5 text-[10px] font-bold tracking-wide text-tb-primary uppercase">
+                                                        <Crown className="size-3" />
+                                                        Versi Utama
+                                                    </span>
+                                                )}
+                                            </span>
+                                            <span className="mt-1 block text-xs text-tb-on-surface-variant">
+                                                Akar: {entry.root_name}
+                                            </span>
+                                            <span className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-tb-on-surface-variant">
+                                                <Clock3 className="size-3" />
+                                                <span>
+                                                    {entry.source_name ??
+                                                        'Sumber belum dicatat'}
+                                                </span>
+                                                <span className="text-tb-outline">
+                                                    ·
+                                                </span>
+                                                <span>
+                                                    Diperbarui{' '}
+                                                    {dateFormatter.format(
+                                                        new Date(
+                                                            entry.updated_at,
+                                                        ),
+                                                    )}
+                                                </span>
+                                            </span>
+                                        </span>
+                                        <ArrowUpRight className="mt-0.5 size-4 shrink-0 text-tb-outline transition-colors group-hover:text-tb-primary" />
+                                    </Link>
+                                    <div className="flex flex-wrap gap-2 sm:justify-end">
+                                        <Link
+                                            href={familyTrees.show(entry.id)}
+                                            className="text-tb-on-primary inline-flex items-center gap-1.5 rounded-lg bg-tb-primary px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-90"
+                                        >
+                                            <TreePine className="size-3.5" />{' '}
+                                            Buka
+                                        </Link>
+                                        <Link
+                                            href={familyTrees.duplicate(
+                                                entry.id,
                                             )}
-                                        </span>
-                                    </span>
-                                    <ArrowUpRight className="size-4 shrink-0 text-tb-outline transition-colors group-hover:text-tb-primary" />
-                                </Link>
+                                            method="post"
+                                            as="button"
+                                            className="inline-flex items-center gap-1.5 rounded-lg border border-tb-outline-variant px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
+                                        >
+                                            <Copy className="size-3.5" /> Versi
+                                            Alternatif
+                                        </Link>
+                                        <Link
+                                            href={familyTrees.edit(entry.id)}
+                                            className="inline-flex items-center gap-1.5 rounded-lg border border-tb-outline-variant px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
+                                        >
+                                            <Pencil className="size-3.5" /> Ubah
+                                            Struktur
+                                        </Link>
+                                    </div>
+                                </div>
                             </li>
                         ))}
                     </ol>

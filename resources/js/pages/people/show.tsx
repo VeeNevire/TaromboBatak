@@ -1,5 +1,6 @@
 import { Head, Link } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
+import type { FamilyTreeHistoryEntry } from '@/components/people/family-tree-history-card';
 import { Button } from '@/components/ui/button';
 import FamilyForm from '@/pages/people/family-form';
 import type { FamilyData } from '@/pages/people/family-form';
@@ -11,6 +12,7 @@ type Props = {
     margas: { id: number; name: string }[];
     nameSuggestions: string[];
     fatherSuggestions: string[];
+    familyTrees: FamilyTreeHistoryEntry[];
     canPublish: boolean;
 };
 
@@ -19,6 +21,7 @@ export default function PersonShow({
     margas,
     nameSuggestions,
     fatherSuggestions,
+    familyTrees,
     canPublish,
 }: Props) {
     return (
@@ -54,6 +57,7 @@ export default function PersonShow({
                     margas={margas}
                     nameSuggestions={nameSuggestions}
                     fatherSuggestions={fatherSuggestions}
+                    familyTrees={familyTrees}
                     canPublish={canPublish}
                 />
             </div>

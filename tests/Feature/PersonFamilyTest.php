@@ -84,6 +84,7 @@ test('the show route exposes the whole family sheet', function () {
         ->assertInertia(fn (Assert $page) => $page
             ->component('people/show')
             ->where('person.id', $focused->id)
+            ->has('familyTrees')
             ->has('person.children', 2)
             ->has('person.father', fn (Assert $parent) => $parent
                 ->where('name', $father->name)
@@ -659,8 +660,9 @@ test('the create form lists each family tree created by the signed in account', 
         ->assertInertia(fn (Assert $page) => $page
             ->component('people/form')
             ->has('familyTrees', 2)
-            ->where('familyTrees.0.root_name', 'Ayah Kakek Tunggul')
-            ->where('familyTrees.1.root_name', 'Si Raja Batak')
+            ->where('familyTrees.0.root_name', 'Anak Kedua')
+            ->where('familyTrees.1.root_name', 'Anak Pertama')
+            ->where('familyTrees.0.name', 'Keluarga Anak Kedua')
             ->where('familyTrees.0.updated_at', '2026-08-19T10:00:00.000000Z')
             ->missing('familyTrees.2'));
 });
@@ -721,7 +723,7 @@ test('an account can open its family tree without exposing unrelated trees', fun
         ->assertInertia(fn (Assert $page) => $page
             ->component('people/silsilah')
             ->has('people', 2)
-            ->where('person.name', 'Root Milik Saya'));
+            ->where('person.name', 'Anak'));
 });
 
 test('the create form suggests only male people as fathers', function () {

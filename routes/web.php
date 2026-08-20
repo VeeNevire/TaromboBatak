@@ -49,6 +49,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('people/{person}', [PersonController::class, 'update'])->name('people.update');
 
     Route::get('family-trees/{familyTree}', [PersonController::class, 'showFamilyTree'])->name('family-trees.show');
+    Route::post('family-trees/{familyTree}/duplicate', [PersonController::class, 'duplicateFamilyTree'])->name('family-trees.duplicate');
+    Route::get('family-trees/{familyTree}/edit', [PersonController::class, 'editFamilyTree'])->name('family-trees.edit');
+    Route::put('family-trees/{familyTree}', [PersonController::class, 'updateFamilyTree'])->name('family-trees.update');
 });
 
 Route::middleware(['auth', 'verified', 'role.staff'])->group(function () {
