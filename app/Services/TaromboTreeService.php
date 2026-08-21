@@ -17,22 +17,36 @@ class TaromboTreeService
      *
      * @return array<int, array<string, mixed>>
      */
-    public function rowsForFamilyTree(FamilyTree $familyTree): array
+    public function rowsForFamilyTree(FamilyTree $familyTree, ?int $margaId = null): array
     {
-        return $familyTree->nodes()
+        $nodes = $familyTree->nodes()
+            ->when($margaId !== null, fn (Builder $query) => $query->whereHas(
+                'person',
+                fn (Builder $person) => $person->where('marga_id', $margaId),
+            ))
             ->with([
                 'person.marga',
                 'fatherNode',
-                'children.person',
+                'children' => fn ($query) => $query
+                    ->when($margaId !== null, fn ($children) => $children->whereHas(
+                        'person',
+                        fn ($person) => $person->where('marga_id', $margaId),
+                    ))
+                    ->with('person'),
             ])
             ->orderBy('id')
-            ->get()
+            ->get();
+        $includedPersonIds = $nodes->pluck('person_id')->flip();
+
+        return $nodes
             ->map(fn (FamilyTreeNode $node) => [
                 'id' => (string) $node->person_id,
                 'name' => $node->person->name,
                 'alias' => $node->person->alias,
                 'marga' => $node->person->marga->name ?? 'Batak',
-                'parentId' => $node->pending_father || $node->fatherNode === null
+                'parentId' => $node->pending_father
+                    || $node->fatherNode === null
+                    || ! $includedPersonIds->has($node->fatherNode->person_id)
                     ? null
                     : (string) $node->fatherNode->person_id,
                 'birthYear' => $node->person->birth_year,

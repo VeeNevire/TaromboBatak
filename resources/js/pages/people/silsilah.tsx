@@ -22,6 +22,7 @@ type Props = {
         id: number;
         name: string;
     };
+    canEditFamilyTree?: boolean;
 };
 
 const FOREST = '#2F4538';
@@ -71,28 +72,31 @@ export default function PersonSilsilah(props: Props) {
                             <ArrowLeft className="size-4" /> Kembali ke Data
                             Anggota
                         </Link>
-                        {props.familyTree && (
-                            <div className="flex items-center gap-2">
-                                <Link
-                                    href={familyTrees.duplicate(
-                                        props.familyTree.id,
-                                    )}
-                                    method="post"
-                                    as="button"
-                                    className="inline-flex items-center gap-1.5 rounded-lg border border-tb-outline-variant px-3 py-1.5 text-sm font-medium text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
-                                >
-                                    <Copy className="size-3.5" /> Buat Versi
-                                    Alternatif
-                                </Link>
-                                <Link
-                                    href={familyTrees.edit(props.familyTree.id)}
-                                    className="inline-flex items-center gap-1.5 rounded-lg border border-tb-outline-variant px-3 py-1.5 text-sm font-medium text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
-                                >
-                                    <Pencil className="size-3.5" /> Ubah
-                                    Struktur
-                                </Link>
-                            </div>
-                        )}
+                        {props.familyTree &&
+                            props.canEditFamilyTree !== false && (
+                                <div className="flex items-center gap-2">
+                                    <Link
+                                        href={familyTrees.duplicate(
+                                            props.familyTree.id,
+                                        )}
+                                        method="post"
+                                        as="button"
+                                        className="inline-flex items-center gap-1.5 rounded-lg border border-tb-outline-variant px-3 py-1.5 text-sm font-medium text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
+                                    >
+                                        <Copy className="size-3.5" /> Buat Versi
+                                        Alternatif
+                                    </Link>
+                                    <Link
+                                        href={familyTrees.edit(
+                                            props.familyTree.id,
+                                        )}
+                                        className="inline-flex items-center gap-1.5 rounded-lg border border-tb-outline-variant px-3 py-1.5 text-sm font-medium text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
+                                    >
+                                        <Pencil className="size-3.5" /> Ubah
+                                        Struktur
+                                    </Link>
+                                </div>
+                            )}
                     </div>
                     <div style={{ color: FOREST }} className="text-center">
                         <p

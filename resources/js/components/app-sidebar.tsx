@@ -3,6 +3,7 @@ import {
     BookOpen,
     CalendarDays,
     LayoutGrid,
+    MessageCircle,
     Shapes,
     ShieldCheck,
     TreePine,
@@ -21,6 +22,7 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import contacts from '@/routes/contacts';
 import events from '@/routes/events';
 import marga from '@/routes/marga';
 import people from '@/routes/people';
@@ -48,6 +50,15 @@ export function AppSidebar() {
                     href: tarombo.index(),
                     icon: TreePine,
                 },
+                ...(!isAdmin
+                    ? [
+                          {
+                              title: 'Daftar Kontak',
+                              href: contacts.index(),
+                              icon: MessageCircle,
+                          },
+                      ]
+                    : []),
             ],
         },
         ...(isStaff

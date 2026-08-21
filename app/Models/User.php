@@ -62,6 +62,15 @@ class User extends Authenticatable
         return $this->isAdmin() || $this->isSubAdmin();
     }
 
+    public function canChatWith(User $contact): bool
+    {
+        return ! $this->isAdmin()
+            && ! $contact->isAdmin()
+            && $this->id !== $contact->id
+            && $this->marga_id !== null
+            && $this->marga_id === $contact->marga_id;
+    }
+
     /**
      * @return BelongsTo<Marga, $this>
      */

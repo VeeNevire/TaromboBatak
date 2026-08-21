@@ -35,7 +35,15 @@ class PersonController extends Controller
 
         $people = Person::query()
             ->with(['marga', 'father'])
-            ->when(! $isStaff, fn ($query) => $query->where('marga_id', $user->marga_id))
+            ->when(
+                ! $isStaff,
+                fn ($query) => $query
+                    ->where('marga_id', $user->marga_id)
+                    ->whereHas(
+                        'familyTrees',
+                        fn ($familyTrees) => $familyTrees->where('family_trees.user_id', $user->id),
+                    ),
+            )
             ->when($request->filled('search'), function ($query) use ($request) {
                 $query->where(function ($query) use ($request) {
                     $query->where('name', 'like', '%'.$request->string('search').'%')
@@ -116,12 +124,19 @@ class PersonController extends Controller
     protected function createLineage(User $user, bool $isStaff): array
     {
         return Person::query()
-            ->whereNull('father_id')
             ->with([
                 'marga',
-                'children' => fn ($query) => $query->orderBy('birth_order'),
+                'children' => fn ($query) => $query
+                    ->when(! $isStaff, fn ($childQuery) => $childQuery->where('marga_id', $user->marga_id))
+                    ->orderBy('birth_order'),
             ])
-            ->when(! $isStaff && $user->marga_id !== null, fn ($query) => $query->where('marga_id', $user->marga_id))
+            ->when($isStaff, fn ($query) => $query->whereNull('father_id'))
+            ->when(! $isStaff && $user->marga_id !== null, fn ($query) => $query
+                ->where('marga_id', $user->marga_id)
+                ->whereDoesntHave(
+                    'father',
+                    fn ($father) => $father->where('marga_id', $user->marga_id),
+                ))
             ->orderByRaw('chain IS NULL')
             ->orderByRaw('CAST(chain AS UNSIGNED)')
             ->orderBy('name')
@@ -183,15 +198,18 @@ class PersonController extends Controller
      */
     public function show(Request $request, Person $person): Response
     {
+        $user = $request->user();
         Gate::authorize('view', $person);
 
         return Inertia::render('people/show', [
-            'person' => $this->familyPayload($person),
+            'person' => $this->familyPayload($person, $user->isStaff() ? null : $user->marga_id),
             'margas' => $this->margaOptions(),
             'nameSuggestions' => $this->nameSuggestions(),
             'fatherSuggestions' => $this->fatherSuggestions($person),
-            'familyTrees' => $this->familyTrees($request->user(), $person),
-            'canPublish' => true,
+            'familyTrees' => $this->familyTrees($user),
+            'versionTrees' => $this->familyTrees($user, $person),
+            'canPublish' => $user->isStaff(),
+            'readOnly' => ! $user->isStaff(),
         ]);
     }
 
@@ -206,7 +224,7 @@ class PersonController extends Controller
         Gate::authorize('update', $person);
 
         return Inertia::render('people/form', [
-            'person' => $this->familyPayload($person),
+            'person' => $this->familyPayload($person, $isStaff ? null : $user->marga_id),
             'margas' => $isStaff ? $this->margaOptions() : $this->margaOptionsForUser($user),
             'nameSuggestions' => $this->nameSuggestions($isStaff ? null : $user->marga_id),
             'fatherSuggestions' => $this->fatherSuggestions(
@@ -214,6 +232,8 @@ class PersonController extends Controller
                 $isStaff ? null : $user->marga_id,
             ),
             'lockedMarga' => $isStaff ? null : $this->lockedMarga($user),
+            'familyTrees' => $this->familyTrees($user),
+            'versionTrees' => $this->familyTrees($user, $person),
             'canPublish' => $isStaff,
         ]);
     }
@@ -284,31 +304,47 @@ class PersonController extends Controller
      */
     public function showFamilyTree(Request $request, FamilyTree $familyTree): Response
     {
+        $user = $request->user();
+        $canEdit = $user->isStaff() || $familyTree->user_id === $user->id;
+
         abort_unless(
-            $request->user()->isStaff() || $familyTree->user_id === $request->user()->id,
+            $canEdit || $this->familyTreeMatchesUserMarga($familyTree, $user),
             403,
             'Anda tidak memiliki akses ke silsilah ini.',
         );
 
-        $root = $familyTree->rootPerson()->with('marga')->firstOrFail();
-        $rootNode = $familyTree->nodes()->where('person_id', $root->id)->firstOrFail();
         $service = app(TaromboTreeService::class);
+        $rows = $service->rowsForFamilyTree($familyTree, $user->isStaff() ? null : $user->marga_id);
+        $rootRow = collect($rows)->firstWhere('id', (string) $familyTree->root_person_id)
+            ?? collect($rows)->firstWhere('parentId', null)
+            ?? collect($rows)->first();
+        abort_if($rootRow === null, 404);
+        $root = Person::query()->with('marga')->findOrFail((int) $rootRow['id']);
 
         return Inertia::render('people/silsilah', [
-            'people' => $service->rowsForFamilyTree($familyTree),
+            'people' => $rows,
             'centerPersonId' => (string) $root->id,
             'familyTree' => [
                 'id' => $familyTree->id,
                 'name' => $familyTree->name ?? $root->name,
             ],
+            'canEditFamilyTree' => $canEdit,
             'person' => [
                 'id' => (string) $root->id,
                 'name' => $root->name,
                 'alias' => $root->alias,
                 'marga' => $root->marga->name ?? 'Batak',
-                'birthOrder' => $rootNode->birth_order,
+                'birthOrder' => $rootRow['birthOrder'],
             ],
         ]);
+    }
+
+    protected function familyTreeMatchesUserMarga(FamilyTree $familyTree, User $user): bool
+    {
+        return $user->marga_id !== null
+            && $familyTree->nodes()
+                ->whereHas('person', fn ($query) => $query->where('marga_id', $user->marga_id))
+                ->exists();
     }
 
     /**
@@ -574,7 +610,7 @@ class PersonController extends Controller
      *
      * @return array<string, mixed>
      */
-    protected function familyPayload(Person $person): array
+    protected function familyPayload(Person $person, ?int $margaId = null): array
     {
         if ($person->pending_father) {
             $siblings = collect([$person]);
@@ -583,6 +619,7 @@ class PersonController extends Controller
             $siblings = $person->father_id !== null
                 ? Person::query()
                     ->where('father_id', $person->father_id)
+                    ->when($margaId !== null, fn ($query) => $query->where('marga_id', $margaId))
                     ->where(fn ($query) => $query
                         ->where('pending_father', false)
                         ->orWhere('id', $person->id))
@@ -599,15 +636,29 @@ class PersonController extends Controller
 
         $lineage = Person::query()
             ->whereIn('id', $lineageIds)
+            ->when($margaId !== null, fn ($query) => $query->where('marga_id', $margaId))
             ->with([
                 'marga',
-                'children' => fn ($query) => $query->orderBy('birth_order'),
+                'children' => fn ($query) => $query
+                    ->when($margaId !== null, fn ($childQuery) => $childQuery->where('marga_id', $margaId))
+                    ->orderBy('birth_order'),
             ])
             ->get()
             ->sortBy(fn (Person $row) => array_search($row->id, $lineageIds))
             ->values();
 
-        $ownChildrenRows = $person->children()->orderBy('birth_order')->get();
+        $ownChildrenRows = $person->children()
+            ->when($margaId !== null, fn ($query) => $query->where('marga_id', $margaId))
+            ->orderBy('birth_order')
+            ->get();
+
+        $father = ! $person->pending_father
+            && ($margaId === null || $person->father?->marga_id === $margaId)
+                ? $person->father
+                : null;
+        $mother = $margaId === null || $person->mother?->marga_id === $margaId
+            ? $person->mother
+            : null;
 
         $descendantMap = $this->descendantMap(
             $siblings->pluck('id')->merge($ownChildrenRows->pluck('id'))->all(),
@@ -619,8 +670,8 @@ class PersonController extends Controller
             'gender' => $person->gender,
             'alias' => $person->alias,
             'marga_id' => $person->marga_id,
-            'father_id' => $person->pending_father ? null : $person->father_id,
-            'mother_id' => $person->mother_id,
+            'father_id' => $father?->id,
+            'mother_id' => $mother?->id,
             'birth_order' => $person->birth_order,
             'sibling_count' => $person->sibling_count,
             'chain' => $person->chain,
@@ -632,29 +683,27 @@ class PersonController extends Controller
             'bio' => $person->bio,
             'spouse' => $person->spouse,
             'spouse_marga' => $person->spouse_marga,
-            'father' => $person->pending_father
-                ? null
-                : ($person->father
-                    ? [
-                        'id' => $person->father->id,
-                        'name' => $person->father->name,
-                        'alias' => $person->father->alias,
-                        'marga_id' => $person->father->marga_id,
-                        'marga' => $person->father->marga?->name,
-                        'chain' => $person->father->chain,
-                        'birth_year' => $person->father->birth_year,
-                        'death_year' => $person->father->death_year,
-                    ]
-                    : null),
-            'mother' => $person->mother
+            'father' => $father
                 ? [
-                    'id' => $person->mother->id,
-                    'name' => $person->mother->name,
-                    'alias' => $person->mother->alias,
-                    'marga_id' => $person->mother->marga_id,
-                    'marga' => $person->mother->marga?->name,
-                    'birth_year' => $person->mother->birth_year,
-                    'death_year' => $person->mother->death_year,
+                    'id' => $father->id,
+                    'name' => $father->name,
+                    'alias' => $father->alias,
+                    'marga_id' => $father->marga_id,
+                    'marga' => $father->marga?->name,
+                    'chain' => $father->chain,
+                    'birth_year' => $father->birth_year,
+                    'death_year' => $father->death_year,
+                ]
+                : null,
+            'mother' => $mother
+                ? [
+                    'id' => $mother->id,
+                    'name' => $mother->name,
+                    'alias' => $mother->alias,
+                    'marga_id' => $mother->marga_id,
+                    'marga' => $mother->marga?->name,
+                    'birth_year' => $mother->birth_year,
+                    'death_year' => $mother->death_year,
                 ]
                 : null,
             'lineage' => $lineage
@@ -814,7 +863,11 @@ class PersonController extends Controller
             ->where('name', '!=', 'N/A')
             ->pluck('name');
 
-        if ($person?->father !== null && ! $person->father->isNa()) {
+        if (
+            $person?->father !== null
+            && ! $person->father->isNa()
+            && ($margaId === null || $person->father->marga_id === $margaId)
+        ) {
             $names->push($person->father->name);
         }
 
@@ -850,7 +903,7 @@ class PersonController extends Controller
     protected function familyTrees(User $user, ?Person $focus = null): array
     {
         return FamilyTree::query()
-            ->whereBelongsTo($user)
+            ->when(! $user->isAdmin(), fn ($query) => $query->whereBelongsTo($user))
             ->whereNotNull('root_person_id')
             ->when($focus !== null, fn ($query) => $query->where('root_person_id', $focus->id))
             ->with('rootPerson:id,name')

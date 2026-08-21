@@ -8,7 +8,7 @@ export type TreeNode = {
     margaColor?: string | null;
     birthYear?: string | null;
     birthOrder?: number | null;
-    chain?: string | null;
+    displayNumber?: number;
     image?: string | null;
     pending?: boolean;
 };
@@ -87,16 +87,17 @@ export function NodeCard({
                     color: highlighted ? FOREST : INK,
                 }}
             >
-                {node.chain ? (
-                    <span className="block text-[9px] font-semibold tracking-wide text-[#5B6A61] uppercase">
-                        No. {node.chain}
-                    </span>
-                ) : node.pending ? (
+                {node.pending ? (
                     <span className="block text-[9px] font-semibold tracking-wide text-[#B8934A] uppercase">
                         —
                     </span>
                 ) : null}
-                <span className="block break-words">{node.name}</span>
+                <span className="block break-words">
+                    {node.displayNumber != null
+                        ? `${node.displayNumber}. `
+                        : ''}
+                    {node.name}
+                </span>
                 {badge ? (
                     <span
                         className="mt-0.5 block rounded-full px-1.5 py-px text-[9px] font-semibold"

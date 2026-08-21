@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\FamilyTree;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
@@ -9,14 +10,20 @@ test('guests are redirected to login when visiting the people index', function (
     $this->get(route('people.index'))->assertRedirect(route('login'));
 });
 
-test('non-admin users can only see people from their own marga', function () {
+test('regular users only see their own marga inside their family trees', function () {
     $sitorus = Marga::factory()->create(['name' => 'Sitorus']);
     $hutasoit = Marga::factory()->create(['name' => 'Hutasoit']);
 
-    Person::factory()->create(['name' => 'Ompu Sitorus', 'marga_id' => $sitorus->id]);
-    Person::factory()->create(['name' => 'Ompu Hutasoit', 'marga_id' => $hutasoit->id]);
+    $ownPerson = Person::factory()->create(['name' => 'Ompu Sitorus', 'marga_id' => $sitorus->id]);
+    $contextPerson = Person::factory()->create(['name' => 'Ompu Hutasoit', 'marga_id' => $hutasoit->id]);
 
     $user = User::factory()->withMarga($sitorus->id)->create();
+    $tree = FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $ownPerson->id,
+        'name' => 'Keluarga Sitorus',
+    ]);
+    $tree->people()->attach([$ownPerson->id, $contextPerson->id]);
 
     $this->actingAs($user)
         ->get(route('people.index'))
@@ -27,6 +34,35 @@ test('non-admin users can only see people from their own marga', function () {
             ->has('people.data.0', fn (Assert $person) => $person
                 ->where('name', 'Ompu Sitorus')
                 ->etc()));
+
+    $this->actingAs($user)
+        ->get(route('people.show', $contextPerson))
+        ->assertForbidden();
+});
+
+test('a regular user sees their first marga member as the lineage boundary root', function () {
+    $userMarga = Marga::factory()->create(['name' => 'Simare']);
+    $otherMarga = Marga::factory()->create(['name' => 'Situmorang']);
+    $user = User::factory()->withMarga($userMarga->id)->create();
+    $outsideFather = Person::factory()->create([
+        'name' => 'Raja Situmorang',
+        'marga_id' => $otherMarga->id,
+    ]);
+    $boundary = Person::factory()->create([
+        'name' => 'Parsaoran Simare',
+        'marga_id' => $userMarga->id,
+        'father_id' => $outsideFather->id,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('people.create'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('margas', 1)
+            ->where('margas.0.name', 'Simare')
+            ->has('lineage', 1)
+            ->where('lineage.0.id', $boundary->id)
+            ->where('lineage.0.marga', 'Simare'));
 });
 
 test('regular users without a marga cannot create or edit family data', function () {
@@ -86,6 +122,130 @@ test('authenticated users can view the admin tarombo page', function () {
     $this->actingAs($user)
         ->get(route('tarombo.index'))
         ->assertOk();
+});
+
+test('unverified users with a marga can view and create their family data', function () {
+    $marga = Marga::factory()->create();
+    $user = User::factory()->withMarga($marga->id)->create([
+        'email_verified_at' => null,
+    ]);
+    $person = Person::factory()->create(['marga_id' => $marga->id]);
+    $tree = FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $person->id,
+        'name' => 'Keluarga Rehan',
+    ]);
+    $tree->people()->attach($person->id);
+
+    $this->actingAs($user)
+        ->get(route('people.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('canManage', false)
+            ->where('hasMarga', true)
+            ->has('people.data', 1));
+
+    $this->actingAs($user)
+        ->get(route('people.create'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('people/form')
+            ->where('canPublish', false));
+});
+
+test('regular users can submit a family entry without publishing it', function () {
+    $marga = Marga::factory()->create();
+    $user = User::factory()->withMarga($marga->id)->create([
+        'email_verified_at' => null,
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('people.store'), [
+            'name' => 'Keluarga Rehan',
+            'marga_id' => $marga->id,
+            'birth_order' => 1,
+            'sibling_count' => 1,
+            'children' => [['name' => 'Keluarga Rehan']],
+        ])
+        ->assertRedirect(route('people.index'));
+
+    $this->assertDatabaseHas('people', [
+        'name' => 'Keluarga Rehan',
+        'marga_id' => $marga->id,
+        'created_by' => $user->id,
+        'is_public' => false,
+    ]);
+});
+
+test('regular users cannot open another person detail route', function () {
+    $marga = Marga::factory()->create();
+    $user = User::factory()->withMarga($marga->id)->create([
+        'email_verified_at' => null,
+    ]);
+    $person = Person::factory()->create(['marga_id' => $marga->id]);
+
+    $this->actingAs($user)
+        ->get(route('people.show', $person))
+        ->assertForbidden();
+});
+
+test('regular users can open a family member detail page as read-only', function () {
+    $marga = Marga::factory()->create();
+    $otherMarga = Marga::factory()->create();
+    $user = User::factory()->withMarga($marga->id)->create([
+        'email_verified_at' => null,
+    ]);
+    $outsideAncestor = Person::factory()->create(['marga_id' => $otherMarga->id]);
+    $boundary = Person::factory()->create([
+        'marga_id' => $marga->id,
+        'father_id' => $outsideAncestor->id,
+    ]);
+    $person = Person::factory()->create([
+        'marga_id' => $marga->id,
+        'father_id' => $boundary->id,
+    ]);
+    $tree = FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $person->id,
+        'name' => 'Keluarga User',
+    ]);
+    $tree->people()->attach([$outsideAncestor->id, $boundary->id, $person->id]);
+
+    $this->actingAs($user)
+        ->get(route('people.show', $person))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('people/show')
+            ->where('readOnly', true)
+            ->has('person.lineage', 2)
+            ->where('person.lineage.0.marga', $marga->name)
+            ->where('person.lineage.1.marga', $marga->name));
+});
+
+test('authenticated users can open the tarombo full screen page', function () {
+    $user = User::factory()->create();
+
+    foreach (['diagram', 'tree'] as $view) {
+        $this->actingAs($user)
+            ->get(route('tarombo.fullscreen', ['view' => $view]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('tarombo/fullscreen')
+                ->where('view', $view));
+    }
+});
+
+test('the tarombo full screen page rejects unknown views', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->get(route('tarombo.fullscreen', ['view' => 'invalid']))
+        ->assertNotFound();
+});
+
+test('guests are redirected to login when visiting the tarombo full screen page', function () {
+    $this->get(route('tarombo.fullscreen', ['view' => 'diagram']))
+        ->assertRedirect(route('login'));
 });
 
 test('admin users see all people and can manage them', function () {

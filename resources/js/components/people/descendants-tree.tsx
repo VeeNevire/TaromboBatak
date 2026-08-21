@@ -11,7 +11,7 @@ type Props = {
     highlightId?: string | null;
 };
 
-function toNode(person: TaromboPerson): TreeNode {
+function toNode(person: TaromboPerson, displayNumber?: number): TreeNode {
     return {
         id: person.id,
         name: person.name,
@@ -19,7 +19,7 @@ function toNode(person: TaromboPerson): TreeNode {
         marga: person.marga,
         birthYear: person.birthYear,
         birthOrder: person.birthOrder,
-        chain: person.chain,
+        displayNumber,
         image: person.image,
         pending: person.pending,
     };
@@ -30,6 +30,7 @@ function TreeBranch({
     childrenOf,
     centerId,
     highlightId,
+    numberById,
     collapsed,
     onToggle,
     onSelect,
@@ -38,6 +39,7 @@ function TreeBranch({
     childrenOf: Map<string, TaromboPerson[]>;
     centerId: string;
     highlightId?: string | null;
+    numberById: Map<string, number>;
     collapsed: Set<string>;
     onToggle: (id: string) => void;
     onSelect?: (id: string) => void;
@@ -56,7 +58,7 @@ function TreeBranch({
                 className="cursor-pointer rounded-lg transition-transform duration-200 hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B8934A]"
             >
                 <NodeCard
-                    node={toNode(person)}
+                    node={toNode(person, numberById.get(person.id))}
                     highlighted={isCenter || isHighlighted}
                     badge={
                         isCenter
@@ -90,6 +92,7 @@ function TreeBranch({
                             childrenOf={childrenOf}
                             centerId={centerId}
                             highlightId={highlightId}
+                            numberById={numberById}
                             collapsed={collapsed}
                             onToggle={onToggle}
                             onSelect={onSelect}
@@ -126,6 +129,32 @@ export function DescendantsTree({
     }, [people]);
 
     const center = people.find((person) => person.id === centerId) ?? people[0];
+    const numberById = useMemo(() => {
+        const numbers = new Map<string, number>();
+
+        if (!center) {
+            return numbers;
+        }
+
+        const visited = new Set<string>();
+
+        const walk = (id: string, depth: number) => {
+            if (visited.has(id)) {
+                return;
+            }
+
+            visited.add(id);
+            numbers.set(id, depth);
+
+            for (const child of childrenOf.get(id) ?? []) {
+                walk(child.id, depth + 1);
+            }
+        };
+
+        walk(center.id, 1);
+
+        return numbers;
+    }, [center, childrenOf]);
 
     const [collapsed, setCollapsed] = useState<Set<string>>(() => {
         const initial = new Set<string>();
@@ -181,6 +210,7 @@ export function DescendantsTree({
                     childrenOf={childrenOf}
                     centerId={centerId}
                     highlightId={highlightId}
+                    numberById={numberById}
                     collapsed={collapsed}
                     onToggle={handleToggle}
                     onSelect={onSelect}

@@ -18,6 +18,35 @@ class TaromboController extends Controller
      */
     public function index(Request $request): Response
     {
+        [$people, $margas] = $this->treeData($request);
+
+        return Inertia::render('tarombo/index', [
+            'people' => $people,
+            'margas' => $margas,
+        ]);
+    }
+
+    /**
+     * Show a single tarombo view without the dashboard layout (full screen).
+     */
+    public function fullscreen(Request $request, string $view): Response
+    {
+        [$people, $margas] = $this->treeData($request);
+
+        return Inertia::render('tarombo/fullscreen', [
+            'people' => $people,
+            'margas' => $margas,
+            'view' => $view,
+        ]);
+    }
+
+    /**
+     * Build the scoped tarombo rows and marga legend for the current user.
+     *
+     * @return array{0: mixed, 1: mixed}
+     */
+    private function treeData(Request $request): array
+    {
         $user = $request->user();
         $isStaff = $user->isStaff();
         $service = app(TaromboTreeService::class);
@@ -28,12 +57,7 @@ class TaromboController extends Controller
                 ->orderBy('id'),
         );
 
-        $margas = $service->margas($isStaff ? null : $user->marga_id);
-
-        return Inertia::render('tarombo/index', [
-            'people' => $rows,
-            'margas' => $margas,
-        ]);
+        return [$rows, $service->margas($isStaff ? null : $user->marga_id)];
     }
 
     /**
