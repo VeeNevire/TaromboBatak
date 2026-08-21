@@ -14,13 +14,17 @@ class PersonPolicy
 
     public function view(User $user, Person $person): bool
     {
-        return $user->isStaff();
+        return $user->isStaff()
+            || ($person->marga_id === $user->marga_id
+                && $person->familyTrees()->where('family_trees.user_id', $user->id)->exists());
     }
 
     public function update(User $user, Person $person): bool
     {
         return $user->isStaff()
-            || ($person->created_by !== null && $person->created_by === $user->id);
+            || ($person->marga_id === $user->marga_id
+                && $person->created_by !== null
+                && $person->created_by === $user->id);
     }
 
     public function delete(User $user, Person $person): bool

@@ -1,4 +1,5 @@
 import { createInertiaApp } from '@inertiajs/react';
+import { configureEcho } from '@laravel/echo-react';
 import { MotionConfig } from 'framer-motion';
 import type { ComponentType, ReactNode } from 'react';
 import { Toaster } from '@/components/ui/sonner';
@@ -8,6 +9,9 @@ import AppDashboardLayout from '@/layouts/app/app-dashboard-layout';
 import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
+configureEcho({
+    broadcaster: 'reverb',
+});
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
@@ -23,6 +27,7 @@ function baseLayout(
         case name === 'welcome':
         case name === 'home':
         case name === 'tarombo/public':
+        case name === 'tarombo/fullscreen':
         case name === 'marga/public':
         case name === 'budaya/index':
         case name === 'cerita/index':

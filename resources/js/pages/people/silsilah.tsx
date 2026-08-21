@@ -22,6 +22,7 @@ type Props = {
         id: number;
         name: string;
     };
+    canEditFamilyTree?: boolean;
 };
 
 const FOREST = '#2F4538';
@@ -71,7 +72,7 @@ export default function PersonSilsilah(props: Props) {
                             <ArrowLeft className="size-4" /> Kembali ke Data
                             Anggota
                         </Link>
-                        {props.familyTree && (
+                        {props.familyTree && props.canEditFamilyTree !== false && (
                             <div className="flex items-center gap-2">
                                 <Link
                                     href={familyTrees.duplicate(

@@ -234,6 +234,12 @@ function TaromboDiagramInner({
             return;
         }
 
+        if (data.person.id === centerPersonId) {
+            onSelect(data.person);
+
+            return;
+        }
+
         if (data.person.id === selectedId) {
             onPaneClick?.();
         } else {

@@ -2,6 +2,7 @@
 
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeNode;
+use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
 use App\Services\FamilyTreeVersionService;
@@ -96,6 +97,71 @@ test('a family tree page reads parentage from its own version nodes', function (
             ->where('people.2.parentId', (string) $rajaLontung->id)
             ->where('people.2.birthOrder', 2)
             ->where('people.2.chain', '1-2'));
+});
+
+test('a user can view an admin family tree from their marga without edit actions', function () {
+    $marga = Marga::factory()->create();
+    $otherMarga = Marga::factory()->create();
+    $admin = User::factory()->asAdmin()->create();
+    $user = User::factory()->withMarga($marga->id)->create();
+    $outsideRoot = Person::factory()->create(['marga_id' => $otherMarga->id]);
+    $visibleRoot = Person::factory()->create([
+        'marga_id' => $marga->id,
+        'father_id' => $outsideRoot->id,
+    ]);
+    $tree = FamilyTree::create([
+        'user_id' => $admin->id,
+        'root_person_id' => $outsideRoot->id,
+        'name' => 'Silsilah Admin',
+    ]);
+    $outsideNode = FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $outsideRoot->id,
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $visibleRoot->id,
+        'father_node_id' => $outsideNode->id,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('family-trees.show', $tree))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('people/silsilah')
+            ->where('canEditFamilyTree', false)
+            ->has('people', 1)
+            ->where('people.0.id', (string) $visibleRoot->id)
+            ->where('people.0.parentId', null)
+            ->where('person.id', (string) $visibleRoot->id));
+
+    $this->actingAs($user)
+        ->get(route('family-trees.edit', $tree))
+        ->assertForbidden();
+
+    $this->actingAs($user)
+        ->post(route('family-trees.duplicate', $tree))
+        ->assertForbidden();
+});
+
+test('a user cannot view an admin family tree from another marga', function () {
+    $admin = User::factory()->asAdmin()->create();
+    $userMarga = Marga::factory()->create();
+    $otherMarga = Marga::factory()->create();
+    $user = User::factory()->withMarga($userMarga->id)->create();
+    $root = Person::factory()->create(['marga_id' => $otherMarga->id]);
+    $tree = FamilyTree::create([
+        'user_id' => $admin->id,
+        'root_person_id' => $root->id,
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $root->id,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('family-trees.show', $tree))
+        ->assertForbidden();
 });
 
 test('a person silsilah link opens the only matching family tree version', function () {

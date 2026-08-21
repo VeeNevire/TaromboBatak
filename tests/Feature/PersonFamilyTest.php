@@ -667,6 +667,66 @@ test('the create form lists each family tree created by the signed in account', 
             ->missing('familyTrees.2'));
 });
 
+test('the admin family tree card lists all trees while version actions stay focused', function () {
+    $admin = User::factory()->asAdmin()->create();
+    $user = User::factory()->create();
+    $focus = Person::factory()->create(['name' => 'Fokus Admin']);
+    $otherRoot = Person::factory()->create(['name' => 'Akar Lain']);
+
+    FamilyTree::create([
+        'user_id' => $admin->id,
+        'root_person_id' => $focus->id,
+        'name' => 'Versi Admin',
+    ]);
+    FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $focus->id,
+        'name' => 'Versi User',
+    ]);
+    FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $otherRoot->id,
+        'name' => 'Pohon Lain',
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('people.create'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('familyTrees', 3));
+
+    $this->actingAs($admin)
+        ->get(route('people.edit', $focus))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('familyTrees', 3)
+            ->has('versionTrees', 2)
+            ->where('versionTrees', fn ($trees) => collect($trees)
+                ->every(fn (array $tree) => $tree['root_person_id'] === $focus->id)));
+});
+
+test('the sub-admin family tree card only lists trees owned by that account', function () {
+    $subAdmin = User::factory()->asSubAdmin()->create();
+    $otherUser = User::factory()->create();
+    $ownRoot = Person::factory()->create();
+    $otherRoot = Person::factory()->create();
+    $ownTree = FamilyTree::create([
+        'user_id' => $subAdmin->id,
+        'root_person_id' => $ownRoot->id,
+    ]);
+    FamilyTree::create([
+        'user_id' => $otherUser->id,
+        'root_person_id' => $otherRoot->id,
+    ]);
+
+    $this->actingAs($subAdmin)
+        ->get(route('people.create'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('familyTrees', 1)
+            ->where('familyTrees.0.id', $ownTree->id));
+});
+
 test('updating a member refreshes its family tree without creating another item', function () {
     $marga = Marga::factory()->create(['name' => 'Sitorus']);
     $user = User::factory()->withMarga($marga->id)->create();
