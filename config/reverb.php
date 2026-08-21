@@ -1,5 +1,8 @@
 <?php
 
+$allowedOrigins = env('REVERB_ALLOWED_ORIGINS', env('APP_URL', 'http://localhost'));
+$allowedOrigins = is_string($allowedOrigins) ? $allowedOrigins : 'http://localhost';
+
 return [
 
     /*
@@ -84,7 +87,7 @@ return [
                 ],
                 'allowed_origins' => array_map(
                     'trim',
-                    explode(',', env('REVERB_ALLOWED_ORIGINS', env('APP_URL', 'http://localhost'))),
+                    explode(',', $allowedOrigins),
                 ),
                 'ping_interval' => env('REVERB_APP_PING_INTERVAL', 60),
                 'activity_timeout' => env('REVERB_APP_ACTIVITY_TIMEOUT', 30),

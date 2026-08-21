@@ -1,9 +1,6 @@
 import { Head } from '@inertiajs/react';
 import { TaromboExplorer } from '@/components/tarombo/tarombo-explorer';
-import type {
-    MargaInfo,
-    TaromboPersonRow,
-} from '@/data/tarombo-tree';
+import type { MargaInfo, TaromboPersonRow } from '@/data/tarombo-tree';
 import { dashboard } from '@/routes';
 import tarombo from '@/routes/tarombo';
 

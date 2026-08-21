@@ -1,5 +1,12 @@
 import { Link } from '@inertiajs/react';
-import { ArrowLeft, ExternalLink, Maximize2, Minimize2, Minus, Plus } from 'lucide-react';
+import {
+    ArrowLeft,
+    ExternalLink,
+    Maximize2,
+    Minimize2,
+    Minus,
+    Plus,
+} from 'lucide-react';
 import { useState } from 'react';
 import { TaromboDiagram } from '@/components/landing/tarombo-diagram';
 import { DescendantsTree } from '@/components/people/descendants-tree';
