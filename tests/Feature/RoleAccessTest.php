@@ -36,8 +36,10 @@ test('regular users only see their own marga inside their family trees', functio
                 ->etc()));
 
     $this->actingAs($user)
+        ->from(route('people.index'))
         ->get(route('people.show', $contextPerson))
-        ->assertForbidden();
+        ->assertRedirect(route('people.index'))
+        ->assertSessionHas('inertia.flash_data.toast.type', 'error');
 });
 
 test('a regular user sees their first marga member as the lineage boundary root', function () {
@@ -69,8 +71,12 @@ test('regular users without a marga cannot create or edit family data', function
     $user = User::factory()->create();
     $person = Person::factory()->create();
 
-    $this->actingAs($user)->get(route('people.create'))->assertForbidden();
-    $this->actingAs($user)->get(route('people.edit', $person))->assertForbidden();
+    $this->actingAs($user)->get(route('people.create'))
+        ->assertRedirect()
+        ->assertSessionHas('inertia.flash_data.toast.type', 'error');
+    $this->actingAs($user)->get(route('people.edit', $person))
+        ->assertRedirect()
+        ->assertSessionHas('inertia.flash_data.toast.type', 'error');
     $this->actingAs($user)->get(route('marga.index'))->assertForbidden();
     $this->actingAs($user)->delete(route('people.destroy', $person))->assertForbidden();
 });
@@ -177,16 +183,47 @@ test('regular users can submit a family entry without publishing it', function (
     ]);
 });
 
-test('regular users cannot open another person detail route', function () {
+test('regular users can view and edit any person inside their marga', function () {
     $marga = Marga::factory()->create();
-    $user = User::factory()->withMarga($marga->id)->create([
-        'email_verified_at' => null,
+    $creator = User::factory()->withMarga($marga->id)->create();
+    $other = User::factory()->withMarga($marga->id)->create();
+    $person = Person::factory()->create([
+        'name' => 'Ompu Sitorus',
+        'marga_id' => $marga->id,
+        'created_by' => $creator->id,
     ]);
-    $person = Person::factory()->create(['marga_id' => $marga->id]);
+
+    $this->actingAs($other)
+        ->get(route('people.show', $person))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('people/show')
+            ->where('readOnly', true));
+
+    $this->actingAs($other)
+        ->get(route('people.edit', $person))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('people/form'));
+});
+
+test('regular users cannot open people outside their marga', function () {
+    $marga = Marga::factory()->create();
+    $otherMarga = Marga::factory()->create();
+    $user = User::factory()->withMarga($marga->id)->create();
+    $person = Person::factory()->create(['marga_id' => $otherMarga->id]);
 
     $this->actingAs($user)
+        ->from(route('people.index'))
         ->get(route('people.show', $person))
-        ->assertForbidden();
+        ->assertRedirect(route('people.index'))
+        ->assertSessionHas('inertia.flash_data.toast.type', 'error');
+
+    $this->actingAs($user)
+        ->from(route('people.index'))
+        ->put(route('people.update', $person), ['name' => 'Diubah'])
+        ->assertRedirect(route('people.index'))
+        ->assertSessionHas('inertia.flash_data.toast.type', 'error');
 });
 
 test('regular users can open a family member detail page as read-only', function () {

@@ -7,6 +7,7 @@ use App\Models\Message;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -23,6 +24,42 @@ class ContactController extends Controller
         abort_unless($request->user()?->canChatWith($contact), 403);
 
         return $this->render($request, $contact);
+    }
+
+    /**
+     * Incremental JSON feed for the silent fallback poller. Deliberately
+     * outside Inertia so polling never touches the page router (and can
+     * never disturb typing, focus, or scroll).
+     */
+    public function messages(Request $request, User $contact): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        abort_unless($user->canChatWith($contact), 403);
+
+        $conversation = Conversation::between($user, $contact)->first();
+
+        if ($conversation === null) {
+            return response()->json(['messages' => []]);
+        }
+
+        // Percakapan sedang terbuka: pesan masuk dianggap sudah dibaca.
+        $conversation->messages()
+            ->where('sender_id', '!=', $user->id)
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        $afterId = (int) $request->query('after_id', 0);
+
+        $messages = $conversation->messages()
+            ->when($afterId > 0, fn (Builder $query) => $query->where('id', '>', $afterId))
+            ->orderBy('id')
+            ->limit(200)
+            ->get()
+            ->map(fn (Message $message) => $this->messagePayload($message, $user));
+
+        return response()->json(['messages' => $messages]);
     }
 
     private function render(Request $request, ?User $selectedContact = null): Response

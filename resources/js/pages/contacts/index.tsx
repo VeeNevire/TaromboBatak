@@ -36,13 +36,14 @@ type ChatMessage = {
     is_mine: boolean;
 };
 
-type IncomingMessage = {
-    id: number;
-    conversation_id: number;
-    sender_id: number;
+type PendingMessage = {
+    uid: string;
     body: string;
-    created_at: string | null;
+    sent_at: string;
+    contact_id: number;
 };
+
+type ChatViewMessage = Omit<ChatMessage, 'id'> & { id: number | string };
 
 type Props = {
     contacts: Contact[];
@@ -57,64 +58,242 @@ export default function ContactsIndex({
 }: Props) {
     const { auth } = usePage().props;
     const [search, setSearch] = useState('');
-    const [incomingMessages, setIncomingMessages] = useState<IncomingMessage[]>(
+    const [extraMessages, setExtraMessages] = useState<ChatMessage[]>([]);
+    const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>(
         [],
     );
     const deferredSearch = useDeferredValue(search.trim().toLocaleLowerCase());
     const connectionStatus = useConnectionStatus();
     const messageEndRef = useRef<HTMLDivElement>(null);
+    const messageContainerRef = useRef<HTMLDivElement>(null);
+    const prevContactIdRef = useRef<number | null | undefined>(undefined);
+    const contactReloadTimerRef = useRef<number | null>(null);
     const messageForm = useForm({ body: '' });
+
+    useEffect(() => {
+        return () => {
+            if (contactReloadTimerRef.current !== null) {
+                window.clearTimeout(contactReloadTimerRef.current);
+            }
+        };
+    }, []);
+
+    // Badge/preview daftar kontak diperbarui paling cepat sekali per 2 detik
+    // agar pesan beruntun tidak memicu reload partial berulang-ulang.
+    const scheduleContactsReload = () => {
+        if (contactReloadTimerRef.current !== null) {
+            return;
+        }
+
+        contactReloadTimerRef.current = window.setTimeout(() => {
+            contactReloadTimerRef.current = null;
+            router.reload({ only: ['contacts'] });
+        }, 2000);
+    };
 
     const filteredContacts = contactItems.filter((contact) =>
         contact.name.toLocaleLowerCase().includes(deferredSearch),
     );
     const persistedMessageIds = new Set(messages.map((message) => message.id));
-    const visibleMessages: ChatMessage[] = [
+    const visibleMessages: ChatViewMessage[] = [
         ...messages,
-        ...incomingMessages
-            .filter(
-                (message) =>
-                    message.sender_id === selectedContact?.id &&
-                    !persistedMessageIds.has(message.id),
-            )
-            .map((message) => ({
-                ...message,
+        ...extraMessages.filter(
+            (message) =>
+                !persistedMessageIds.has(message.id) &&
+                (selectedContact == null ||
+                    message.sender_id === selectedContact.id ||
+                    message.is_mine),
+        ),
+        ...pendingMessages
+            .filter((pending) => pending.contact_id === selectedContact?.id)
+            .map((pending) => ({
+                id: `pending-${pending.uid}`,
+                sender_id: auth.user.id,
+                body: pending.body,
+                created_at: pending.sent_at,
                 read_at: null,
-                is_mine: false,
+                is_mine: true,
             })),
     ];
 
-    useEcho<IncomingMessage>(
+    // ID pesan tertinggi yang sudah diketahui klien, dipakai sebagai
+    // cursor incremental untuk fetch senyap.
+    const latestMessageIdRef = useRef(0);
+
+    useEffect(() => {
+        for (const message of [...messages, ...extraMessages]) {
+            if (
+                typeof message.id === 'number' &&
+                message.id > latestMessageIdRef.current
+            ) {
+                latestMessageIdRef.current = message.id;
+            }
+        }
+    }, [messages, extraMessages]);
+
+    const ingestExternal = (
+        items: Array<{
+            id: number;
+            sender_id: number;
+            body: string;
+            created_at: string | null;
+        }>,
+    ) => {
+        if (items.length === 0) {
+            return;
+        }
+
+        setExtraMessages((current) => {
+            const knownIds = new Set(current.map((message) => message.id));
+            const additions = items
+                .filter((item) => !knownIds.has(item.id))
+                .map((item) => ({
+                    id: item.id,
+                    sender_id: item.sender_id,
+                    body: item.body,
+                    created_at: item.created_at,
+                    read_at: null,
+                    is_mine: item.sender_id === auth.user.id,
+                }));
+
+            return additions.length > 0 ? [...current, ...additions] : current;
+        });
+    };
+
+    const fetchNewMessages = async (contactId: number) => {
+        try {
+            const response = await fetch(
+                contacts.messages.index(contactId, {
+                    query: { after_id: latestMessageIdRef.current },
+                }).url,
+                { headers: { Accept: 'application/json' } },
+            );
+
+            if (!response.ok) {
+                return;
+            }
+
+            const data = (await response.json()) as {
+                messages?: Array<{
+                    id: number;
+                    sender_id: number;
+                    body: string;
+                    created_at: string | null;
+                }>;
+            };
+
+            ingestExternal(data.messages ?? []);
+        } catch {
+            // Offline: coba lagi pada siklus berikutnya.
+        }
+    };
+
+    // Cadangan saat WebSocket terputus: tarik pesan baru lewat fetch JSON
+    // murni — sengaja di luar router Inertia supaya tidak pernah memicu
+    // reload/swap halaman yang bisa mengganggu ketikan, fokus, atau scroll.
+    useEffect(() => {
+        if (connectionStatus === 'connected' || selectedContact == null) {
+            return;
+        }
+
+        const contactId = selectedContact.id;
+
+        void fetchNewMessages(contactId);
+
+        const interval = setInterval(() => {
+            void fetchNewMessages(contactId);
+        }, 4000);
+
+        return () => clearInterval(interval);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [connectionStatus, selectedContact]);
+
+    useEcho<{
+        id: number;
+        sender_id: number;
+        body: string;
+        created_at: string | null;
+    }>(
         `users.${auth.user.id}`,
         '.message.sent',
         (message) => {
-            if (message.sender_id === selectedContact?.id) {
-                setIncomingMessages((current) =>
-                    current.some((item) => item.id === message.id)
-                        ? current
-                        : [...current, message],
-                );
-            }
-
-            router.reload({ only: ['contacts'] });
+            ingestExternal([message]);
+            scheduleContactsReload();
         },
         [selectedContact?.id],
     );
 
     useEffect(() => {
-        messageEndRef.current?.scrollIntoView({ block: 'end' });
+        const container = messageContainerRef.current;
+
+        if (!container) {
+            return;
+        }
+
+        const contactChanged =
+            (selectedContact?.id ?? null) !== prevContactIdRef.current;
+
+        prevContactIdRef.current = selectedContact?.id ?? null;
+
+        // Ganti percakapan: langsung ke pesan terakhir tanpa animasi.
+        if (contactChanged) {
+            container.scrollTop = container.scrollHeight;
+
+            return;
+        }
+
+        // Pesan baru hanya menggulung saat pengguna memang berada di dekat
+        // dasar percakapan; membaca riwayat tidak boleh terganggu.
+        const distanceFromBottom =
+            container.scrollHeight - container.scrollTop - container.clientHeight;
+
+        if (distanceFromBottom < 120) {
+            messageEndRef.current?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'end',
+            });
+        }
     }, [selectedContact?.id, visibleMessages.length]);
 
     const sendMessage = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
 
-        if (!selectedContact || !messageForm.data.body.trim()) {
+        const body = messageForm.data.body.trim();
+
+        if (!selectedContact || !body) {
             return;
         }
 
+        // Optimistic: tampilkan pesan pengirim seketika, buang bila gagal.
+        const uid = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+        setPendingMessages((current) => [
+            ...current,
+            {
+                uid,
+                body,
+                sent_at: new Date().toISOString(),
+                contact_id: selectedContact.id,
+            },
+        ]);
+
         messageForm.post(contacts.messages.store(selectedContact.id).url, {
             preserveScroll: true,
-            onSuccess: () => messageForm.reset('body'),
+            // Tanpa ini Inertia me-remount halaman setelah redirect POST:
+            // state lokal (pencarian, fokus, scroll) hilang dan terasa
+            // seperti reload.
+            preserveState: true,
+            onSuccess: () => {
+                messageForm.reset('body');
+                setPendingMessages((current) =>
+                    current.filter((message) => message.uid !== uid),
+                );
+            },
+            onError: () => {
+                setPendingMessages((current) =>
+                    current.filter((message) => message.uid !== uid),
+                );
+            },
         });
     };
 
@@ -268,15 +447,24 @@ export default function ContactsIndex({
                                         role="status"
                                     >
                                         <span
-                                            className={`size-2 rounded-full ${connectionStatus === 'connected' ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                                            className={`size-2 rounded-full ${
+                                                connectionStatus === 'connected'
+                                                    ? 'bg-emerald-500'
+                                                    : connectionStatus === 'disconnected'
+                                                      ? 'bg-red-500'
+                                                      : 'bg-amber-500'
+                                            }`}
                                         />
                                         {connectionStatus === 'connected'
                                             ? 'Real-time aktif'
-                                            : 'Menghubungkan'}
+                                            : connectionStatus === 'disconnected'
+                                              ? 'Terputus — mode hemat'
+                                              : 'Menyambungkan'}
                                     </div>
                                 </header>
 
                                 <div
+                                    ref={messageContainerRef}
                                     className="min-h-0 flex-1 overflow-y-auto px-3 py-5 md:px-7"
                                     aria-live="polite"
                                 >

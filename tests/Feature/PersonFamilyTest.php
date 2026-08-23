@@ -59,6 +59,93 @@ test('a family store creates the father, mother, and all sibling rows as people'
         ->and($children[2]->name)->toBe('N/A');
 });
 
+test('a family store supports multiple wives with their own marga', function () {
+    $marga = Marga::factory()->create(['name' => 'Sitorus']);
+    $wifeMarga = Marga::factory()->create(['name' => 'Panjaitan']);
+
+    $response = $this->actingAs($this->admin)->post(route('people.store'), [
+        'name' => 'Ompu Sitorus',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'birth_order' => 1,
+        'sibling_count' => 2,
+        'father' => ['name' => 'Si Raja Batak'],
+        'mothers' => [
+            ['name' => 'Borbor', 'birth_year' => '1855'],
+            ['name' => 'Gultom', 'birth_year' => '1860', 'marga_id' => $wifeMarga->id],
+        ],
+        'children' => [
+            ['name' => 'A', 'gender' => 'L'],
+            ['name' => 'Ompu Sitorus', 'gender' => 'L'],
+        ],
+    ]);
+
+    $response->assertRedirect(route('people.index'));
+
+    $father = Person::where('name', 'Si Raja Batak')->first();
+    $firstWife = Person::where('name', 'Borbor')->first();
+    $secondWife = Person::where('name', 'Gultom')->first();
+
+    expect($firstWife)->not->toBeNull()
+        ->and($secondWife)->not->toBeNull()
+        ->and($secondWife->gender)->toBe('P')
+        ->and($secondWife->marga_id)->toBe($wifeMarga->id)
+        ->and($secondWife->chain)->toBeNull()
+        ->and(Person::where('father_id', $father->id)->get()->every(
+            fn (Person $child) => $child->mother_id === $firstWife->id,
+        ))->toBeTrue();
+});
+
+test('the family payload exposes every wife of the shared father', function () {
+    $marga = Marga::factory()->create();
+    $father = Person::factory()->create(['marga_id' => $marga->id]);
+    $ibuPertama = Person::factory()->create([
+        'name' => 'Borbor',
+        'gender' => 'P',
+        'marga_id' => null,
+    ]);
+    $ibuKedua = Person::factory()->create([
+        'name' => 'Gultom',
+        'gender' => 'P',
+        'marga_id' => Marga::factory()->create()->id,
+    ]);
+
+    $focused = Person::factory()->create([
+        'name' => 'Ompu Sitorus',
+        'marga_id' => $marga->id,
+        'father_id' => $father->id,
+        'mother_id' => $ibuKedua->id,
+        'birth_order' => 1,
+        'sibling_count' => 2,
+    ]);
+
+    Person::factory()->create([
+        'name' => 'Adik Seibu',
+        'marga_id' => $marga->id,
+        'father_id' => $father->id,
+        'mother_id' => $ibuKedua->id,
+        'birth_order' => 2,
+    ]);
+    Person::factory()->create([
+        'name' => 'Kakak Tiri',
+        'marga_id' => $marga->id,
+        'father_id' => $father->id,
+        'mother_id' => $ibuPertama->id,
+        'birth_order' => 3,
+    ]);
+
+    $this->actingAs($this->admin)
+        ->get(route('people.show', $focused))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('people/show')
+            ->where('person.mother.name', 'Gultom')
+            ->has('person.mothers', 2)
+            ->where('person.mothers.0.id', $ibuKedua->id)
+            ->where('person.mothers.1.id', $ibuPertama->id)
+            ->where('person.mothers.1.marga_id', null));
+});
+
 test('the show route exposes the whole family sheet', function () {
     $marga = Marga::factory()->create();
     $father = Person::factory()->create(['marga_id' => $marga->id]);

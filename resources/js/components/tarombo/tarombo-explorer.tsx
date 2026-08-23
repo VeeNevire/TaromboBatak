@@ -10,6 +10,7 @@ import {
 import { useState } from 'react';
 import { TaromboDiagram } from '@/components/landing/tarombo-diagram';
 import { DescendantsTree } from '@/components/people/descendants-tree';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { buildTaromboPeople } from '@/data/tarombo-tree';
@@ -19,6 +20,7 @@ import type {
     TaromboPersonRow,
 } from '@/data/tarombo-tree';
 import { cn } from '@/lib/utils';
+import peopleRoutes from '@/routes/people';
 import tarombo from '@/routes/tarombo';
 
 type FullscreenView = 'diagram' | 'tree';
@@ -194,6 +196,31 @@ export function TaromboExplorer({
         </div>
     );
 
+    const noChildrenNotice = (
+        <div className="flex flex-col items-center gap-3 pb-4">
+            <p className="text-center text-sm text-tb-on-surface-variant">
+                Belum memiliki keturunan tercatat. Klik node lagi untuk
+                kembali.
+            </p>
+            {centerPerson && (
+                <Button
+                    asChild
+                    size="sm"
+                    variant="outline"
+                    className="border-tb-outline-variant bg-tb-surface-bright text-tb-on-surface hover:bg-tb-surface-container hover:text-tb-on-surface"
+                >
+                    <Link
+                        href={peopleRoutes.show({
+                            person: Number(centerPerson.id),
+                        })}
+                    >
+                        Update Silsilah
+                    </Link>
+                </Button>
+            )}
+        </div>
+    );
+
     const renderTreeCard = (isExpanded: boolean) => (
         <div
             className={cn(
@@ -228,12 +255,7 @@ export function TaromboExplorer({
                         highlightId={selectedId}
                     />
                 </div>
-                {!hasChildren && (
-                    <p className="pb-4 text-center text-sm text-tb-on-surface-variant">
-                        Belum memiliki keturunan tercatat. Klik node lagi untuk
-                        kembali.
-                    </p>
-                )}
+                {!hasChildren && noChildrenNotice}
             </div>
             {hasChildren && (
                 <div className="absolute bottom-3 left-3 z-10">
@@ -368,13 +390,7 @@ export function TaromboExplorer({
                                                 highlightId={selectedId}
                                             />
                                         </div>
-                                        {!hasChildren && (
-                                            <p className="pb-4 text-center text-sm text-tb-on-surface-variant">
-                                                Belum memiliki keturunan
-                                                tercatat. Klik node lagi untuk
-                                                kembali.
-                                            </p>
-                                        )}
+                                        {!hasChildren && noChildrenNotice}
                                         {hasChildren && (
                                             <div className="absolute bottom-3 left-3 z-10">
                                                 {treeZoomControls}

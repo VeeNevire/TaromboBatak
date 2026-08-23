@@ -4,6 +4,7 @@ use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\EnsureUserIsStaff;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -11,6 +12,7 @@ use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -40,6 +42,28 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $exceptions->respond(function (Response $response, Throwable $exception, Request $request): Response {
             $status = $response->getStatusCode();
+
+            // Navigasi browser yang ditolak kebijakan tidak perlu menampilkan
+            // halaman error: kembalikan pengguna dengan pesan penjelasan.
+            // Middleware role staff/admin tetap memakai halaman 403 branded
+            // karena exception-nya HttpException biasa.
+            $isAuthorizationDenial = $exception instanceof AuthorizationException
+                || ($exception instanceof AccessDeniedHttpException
+                    && $exception->getPrevious() instanceof AuthorizationException);
+
+            if (
+                $status === 403
+                && $isAuthorizationDenial
+                && $request->user() !== null
+                && ! $request->expectsJson()
+            ) {
+                Inertia::flash('toast', [
+                    'type' => 'error',
+                    'message' => __('Anda tidak memiliki akses untuk membuka halaman tersebut.'),
+                ]);
+
+                return redirect()->back();
+            }
 
             $renderBranded = in_array($status, [401, 403, 404])
                 || (in_array($status, [500, 503]) && ! app()->environment('local'));

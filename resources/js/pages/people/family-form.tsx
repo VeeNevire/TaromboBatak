@@ -129,6 +129,7 @@ export type FamilyData = {
     new_marga?: string;
     father: ParentEntry | null;
     mother: ParentEntry | null;
+    mothers?: ParentEntry[] | null;
     lineage: LineageEntry[];
     children: ChildRow[];
     ownChildren?: ChildRow[];
@@ -153,6 +154,14 @@ type Props = {
 
 const VALUE_NONE = 'none';
 const NEW_MARGA_VALUE = '__new__';
+const SPOUSE_OTHER_VALUE = '__other__';
+
+type ParentKey = 'father' | number;
+
+const parentErrorPrefix = (
+    key: ParentKey,
+): 'father' | `mothers.${number}` =>
+    key === 'father' ? 'father' : `mothers.${key}`;
 
 function FamilyTreeVersionAction({
     entries,
@@ -667,6 +676,49 @@ const emptyParent = (): ParentEntry => ({
     new_marga: '',
 });
 
+function toMotherRows(person: FamilyData | null): ParentEntry[] {
+    const fromList = (entries: ParentEntry[] | null | undefined) =>
+        (entries ?? [])
+            .map((entry) => ({
+                name: entry.name ?? '',
+                alias: entry.alias ?? '',
+                birth_year: entry.birth_year ?? '',
+                death_year: entry.death_year ?? '',
+                marga_id: entry.marga_id ?? null,
+                new_marga: '',
+            }))
+            .filter((entry, index, all) =>
+                index ===
+                    all.findIndex(
+                        (other) =>
+                            other.name.trim().toUpperCase() ===
+                            entry.name.trim().toUpperCase(),
+                    ));
+
+    if (person?.mothers && person.mothers.length > 0) {
+        const rows = fromList(person.mothers);
+
+        if (rows.length > 0) {
+            return rows;
+        }
+    }
+
+    if (person?.mother && isNameFilled(person.mother.name ?? '')) {
+        return [
+            {
+                name: person.mother.name ?? '',
+                alias: person.mother.alias ?? '',
+                birth_year: person.mother.birth_year ?? '',
+                death_year: person.mother.death_year ?? '',
+                marga_id: person.mother.marga_id ?? null,
+                new_marga: '',
+            },
+        ];
+    }
+
+    return [emptyParent()];
+}
+
 function MargaField({
     value,
     newMarga,
@@ -750,6 +802,73 @@ function MargaField({
     );
 }
 
+function SpouseMargaSelect({
+    value,
+    margas,
+    onChange,
+}: {
+    value: string;
+    margas: MargaOption[];
+    onChange: (value: string) => void;
+}) {
+    const matched = margas.find((marga) => marga.name === value);
+    const isOther = value.trim() !== '' && !matched;
+    const selected = matched
+        ? String(matched.id)
+        : isOther
+          ? SPOUSE_OTHER_VALUE
+          : VALUE_NONE;
+
+    return (
+        <div className="grid gap-1.5">
+            <Select
+                value={selected}
+                onValueChange={(next) => {
+                    if (next === VALUE_NONE) {
+                        onChange('');
+
+                        return;
+                    }
+
+                    if (next === SPOUSE_OTHER_VALUE) {
+                        onChange(value);
+
+                        return;
+                    }
+
+                    onChange(
+                        margas.find((marga) => String(marga.id) === next)
+                            ?.name ?? '',
+                    );
+                }}
+            >
+                <SelectTrigger className="w-full border-tb-outline-variant bg-tb-surface-bright">
+                    <SelectValue placeholder="Pilih marga pasangan" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value={VALUE_NONE}>— Tidak ada —</SelectItem>
+                    {margas.map((marga) => (
+                        <SelectItem key={marga.id} value={String(marga.id)}>
+                            {marga.name}
+                        </SelectItem>
+                    ))}
+                    <SelectItem value={SPOUSE_OTHER_VALUE}>
+                        Lainnya…
+                    </SelectItem>
+                </SelectContent>
+            </Select>
+            {isOther && (
+                <Input
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    placeholder="Nama marga pasangan"
+                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                />
+            )}
+        </div>
+    );
+}
+
 export default function FamilyForm({
     person,
     margas,
@@ -791,16 +910,7 @@ export default function FamilyForm({
                       new_marga: '',
                   }
                 : emptyParent(),
-            mother: person?.mother
-                ? {
-                      name: person.mother.name ?? '',
-                      alias: person.mother.alias ?? '',
-                      birth_year: person.mother.birth_year ?? '',
-                      death_year: person.mother.death_year ?? '',
-                      marga_id: person.mother.marga_id ?? null,
-                      new_marga: '',
-                  }
-                : emptyParent(),
+            mothers: toMotherRows(person),
             children:
                 person?.children && person.children.length > 0
                     ? person.children.map((child) => ({
@@ -1259,23 +1369,50 @@ export default function FamilyForm({
         setRemovalConfirm(null);
     };
 
+    const parentAt = (key: ParentKey): ParentEntry =>
+        key === 'father' ? (data.father ?? emptyParent()) : data.mothers[key];
+
+    const updateParent = (key: ParentKey, patch: Partial<ParentEntry>) => {
+        if (key === 'father') {
+            setData('father', { ...data.father, ...patch } as ParentEntry);
+
+            return;
+        }
+
+        setData(
+            'mothers',
+            data.mothers.map((entry, index) =>
+                index === key ? { ...entry, ...patch } : entry,
+            ),
+        );
+    };
+
+    const addMother = () => {
+        setData('mothers', [...data.mothers, emptyParent()]);
+    };
+
+    const removeMother = (index: number) => {
+        if (data.mothers.length <= 1) {
+            return;
+        }
+
+        setData('mothers', data.mothers.filter((_, i) => i !== index));
+    };
+
     const setParentEntry = (
-        key: 'father' | 'mother',
+        key: ParentKey,
         field: 'name' | 'alias' | 'birth_year' | 'death_year',
         value: string,
     ) => {
-        setData(key, { ...data[key], [field]: value });
+        updateParent(key, { [field]: value });
     };
 
-    const setParentMarga = (
-        key: 'father' | 'mother',
-        margaId: number | null,
-    ) => {
-        setData(key, { ...data[key], marga_id: margaId });
+    const setParentMarga = (key: ParentKey, margaId: number | null) => {
+        updateParent(key, { marga_id: margaId });
     };
 
-    const setParentNewMarga = (key: 'father' | 'mother', name: string) => {
-        setData(key, { ...data[key], new_marga: name });
+    const setParentNewMarga = (key: ParentKey, name: string) => {
+        updateParent(key, { new_marga: name });
     };
 
     const submit = (e: React.FormEvent) => {
@@ -1307,20 +1444,25 @@ export default function FamilyForm({
             : null;
 
     const renderParentBlock = (
-        key: 'father' | 'mother',
+        key: ParentKey,
         label: string,
         birthPlace: string,
         deathPlace: string,
         showMarga = true,
-    ) => (
+        lockMarga = lockedMarga !== null,
+    ) => {
+        const entry = parentAt(key);
+        const errorPrefix = parentErrorPrefix(key);
+
+        return (
         <div className="space-y-4 rounded-lg border border-tb-outline-variant p-4">
             <p className="text-sm font-medium text-tb-on-surface">{label}</p>
             <div className="grid gap-1.5">
-                <Label htmlFor={`${key}-name`} className="text-tb-on-surface">
+                <Label htmlFor={`${errorPrefix}-name`} className="text-tb-on-surface">
                     Nama {label}
                 </Label>
                 <NameCombobox
-                    value={data[key].name}
+                    value={entry.name}
                     onChange={(value) => setParentEntry(key, 'name', value)}
                     suggestions={
                         key === 'father' ? fatherSuggestions : nameSuggestions
@@ -1328,24 +1470,24 @@ export default function FamilyForm({
                     placeholder={`Nama ${label.toLowerCase()}`}
                     allowNa
                 />
-                <InputError message={errors[`${key}.name`]} />
+                <InputError message={errors[`${errorPrefix}.name`]} />
                 <div className="grid gap-1.5 pt-2">
                     <Label
-                        htmlFor={`${key}-alias`}
+                        htmlFor={`${errorPrefix}-alias`}
                         className="text-tb-on-surface"
                     >
                         Alias / Gelar
                     </Label>
                     <Input
-                        id={`${key}-alias`}
-                        value={data[key].alias}
+                        id={`${errorPrefix}-alias`}
+                        value={entry.alias}
                         onChange={(e) =>
                             setParentEntry(key, 'alias', e.target.value)
                         }
                         placeholder="Tuan Sorba Dibanua"
                         className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                     />
-                    <InputError message={errors[`${key}.alias`]} />
+                    <InputError message={errors[`${errorPrefix}.alias`]} />
                 </div>
                 {key === 'father' && (
                     <div className="text-xs">
@@ -1382,22 +1524,22 @@ export default function FamilyForm({
                 <div className="grid gap-1.5">
                     <Label className="text-tb-on-surface">Marga {label}</Label>
                     <MargaField
-                        value={data[key].marga_id ?? null}
-                        newMarga={data[key].new_marga ?? ''}
+                        value={entry.marga_id ?? null}
+                        newMarga={entry.new_marga ?? ''}
                         onValue={(value) => setParentMarga(key, value)}
                         onNewMarga={(value) => setParentNewMarga(key, value)}
                         margas={margas}
                         placeholder={`Marga ${label.toLowerCase()}`}
-                        disabled={lockedMarga !== null}
+                        disabled={lockMarga}
                     />
-                    <InputError message={errors[`${key}.marga_id`]} />
+                    <InputError message={errors[`${errorPrefix}.marga_id`]} />
                 </div>
             )}
             <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-1.5">
                     <Label className="text-tb-on-surface">Tahun Lahir</Label>
                     <Input
-                        value={data[key].birth_year}
+                        value={entry.birth_year}
                         onChange={(e) =>
                             setParentEntry(key, 'birth_year', e.target.value)
                         }
@@ -1405,12 +1547,12 @@ export default function FamilyForm({
                         maxLength={4}
                         className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                     />
-                    <InputError message={errors[`${key}.birth_year`]} />
+                    <InputError message={errors[`${errorPrefix}.birth_year`]} />
                 </div>
                 <div className="grid gap-1.5">
                     <Label className="text-tb-on-surface">Tahun Wafat</Label>
                     <Input
-                        value={data[key].death_year}
+                        value={entry.death_year}
                         onChange={(e) =>
                             setParentEntry(key, 'death_year', e.target.value)
                         }
@@ -1418,11 +1560,12 @@ export default function FamilyForm({
                         maxLength={4}
                         className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                     />
-                    <InputError message={errors[`${key}.death_year`]} />
+                    <InputError message={errors[`${errorPrefix}.death_year`]} />
                 </div>
             </div>
         </div>
-    );
+        );
+    };
 
     const highlightedLineage: MargaLineageEntry[] = (lineage ?? []).map(
         (entry) => ({
@@ -1854,23 +1997,40 @@ export default function FamilyForm({
                                                     </div>
                                                     <div className="rounded-lg border border-tb-outline-variant bg-tb-surface-container/60 px-3 py-2">
                                                         <p className="text-[11px] font-medium text-tb-on-surface-variant">
-                                                            Ibu
+                                                            {data.mothers.length >
+                                                            1
+                                                                ? 'Ibu / Istri'
+                                                                : 'Ibu'}
                                                         </p>
-                                                        <p className="text-sm font-semibold text-tb-on-surface">
-                                                            {displayRowName(
-                                                                data.mother
-                                                                    ?.name,
-                                                            )}
-                                                        </p>
-                                                        <p className="text-xs text-tb-on-surface-variant">
-                                                            {margaName(
-                                                                data.mother
-                                                                    ?.marga_id ??
-                                                                    null,
-                                                                data.mother
-                                                                    ?.new_marga,
-                                                            )}
-                                                        </p>
+                                                        {data.mothers.map(
+                                                            (wife, index) => (
+                                                                <div
+                                                                    key={
+                                                                        wife.name ||
+                                                                        `istri-${index}`
+                                                                    }
+                                                                    className={
+                                                                        index ===
+                                                                        0
+                                                                            ? ''
+                                                                            : 'border-t border-tb-outline-variant pt-1.5 mt-1.5'
+                                                                    }
+                                                                >
+                                                                    <p className="text-sm font-semibold text-tb-on-surface">
+                                                                        {displayRowName(
+                                                                            wife.name,
+                                                                        )}
+                                                                    </p>
+                                                                    <p className="text-xs text-tb-on-surface-variant">
+                                                                        {margaName(
+                                                                            wife.marga_id ??
+                                                                                null,
+                                                                            wife.new_marga,
+                                                                        )}
+                                                                    </p>
+                                                                </div>
+                                                            ),
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -2054,23 +2214,22 @@ export default function FamilyForm({
                                                                     Marga
                                                                     Pasangan
                                                                 </Label>
-                                                                <Input
+                                                                <SpouseMargaSelect
                                                                     value={
                                                                         selectedChild.spouse_marga
                                                                     }
                                                                     onChange={(
-                                                                        e,
+                                                                        next,
                                                                     ) =>
                                                                         setChild(
                                                                             selectedIndex,
                                                                             'spouse_marga',
-                                                                            e
-                                                                                .target
-                                                                                .value,
+                                                                            next,
                                                                         )
                                                                     }
-                                                                    placeholder="Marga pasangan"
-                                                                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                                                    margas={
+                                                                        margas
+                                                                    }
                                                                 />
                                                             </div>
                                                         </div>
@@ -2377,20 +2536,18 @@ export default function FamilyForm({
                                                     <Label>
                                                         Marga Pasangan
                                                     </Label>
-                                                    <Input
+                                                    <SpouseMargaSelect
                                                         value={
                                                             child.spouse_marga
                                                         }
-                                                        onChange={(event) =>
+                                                        onChange={(next) =>
                                                             setOwnChild(
                                                                 index,
                                                                 'spouse_marga',
-                                                                event.target
-                                                                    .value,
+                                                                next,
                                                             )
                                                         }
-                                                        placeholder="Marga pasangan"
-                                                        className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                                        margas={margas}
                                                     />
                                                 </div>
                                             </div>
@@ -2414,8 +2571,9 @@ export default function FamilyForm({
                                     Orang Tua
                                 </CardTitle>
                                 <CardDescription>
-                                    Ayah dan ibu dari anak-anak yang dicatat di
-                                    bawah.
+                                    Ayah dan istri-istrinya dari anak-anak yang
+                                    dicatat di bawah. Anak-anak saat ini
+                                    tertaut ke Istri 1.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="grid gap-5 lg:grid-cols-2">
@@ -2425,13 +2583,48 @@ export default function FamilyForm({
                                     '1950',
                                     '2020',
                                 )}
-                                {renderParentBlock(
-                                    'mother',
-                                    'Ibu',
-                                    '1955',
-                                    '2025',
-                                    false,
-                                )}
+                                <div className="grid content-start gap-5">
+                                    {data.mothers.map((wife, index) => (
+                                        <div
+                                            key={
+                                                wife.name ||
+                                                `istri-block-${index}`
+                                            }
+                                            className="relative"
+                                        >
+                                            {data.mothers.length > 1 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        removeMother(index)
+                                                    }
+                                                    aria-label={`Hapus Istri ${index + 1}`}
+                                                    title={`Hapus Istri ${index + 1}`}
+                                                    className="absolute top-2 right-2 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full text-tb-on-surface-variant transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                                                >
+                                                    <X className="size-3.5" />
+                                                </button>
+                                            )}
+                                            {renderParentBlock(
+                                                index,
+                                                `Istri ${index + 1}`,
+                                                '1955',
+                                                '2025',
+                                                true,
+                                                false,
+                                            )}
+                                        </div>
+                                    ))}
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={addMother}
+                                        className="w-full border-dashed border-tb-outline-variant text-tb-primary hover:bg-tb-primary/5"
+                                    >
+                                        <Plus className="size-4" /> Tambah
+                                        Istri
+                                    </Button>
+                                </div>
                             </CardContent>
                         </Card>
 
@@ -2765,20 +2958,18 @@ export default function FamilyForm({
                                                         <Label>
                                                             Marga/Suku Lain
                                                         </Label>
-                                                        <Input
+                                                        <SpouseMargaSelect
                                                             value={
                                                                 child.spouse_marga
                                                             }
-                                                            onChange={(e) =>
+                                                            onChange={(next) =>
                                                                 setChild(
                                                                     index,
                                                                     'spouse_marga',
-                                                                    e.target
-                                                                        .value,
+                                                                    next,
                                                                 )
                                                             }
-                                                            placeholder="Marga pasangan"
-                                                            className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                                            margas={margas}
                                                         />
                                                     </div>
                                                     {!focused && (

@@ -15,16 +15,13 @@ class PersonPolicy
     public function view(User $user, Person $person): bool
     {
         return $user->isStaff()
-            || ($person->marga_id === $user->marga_id
-                && $person->familyTrees()->where('family_trees.user_id', $user->id)->exists());
+            || ($user->marga_id !== null
+                && $person->marga_id === $user->marga_id);
     }
 
     public function update(User $user, Person $person): bool
     {
-        return $user->isStaff()
-            || ($person->marga_id === $user->marga_id
-                && $person->created_by !== null
-                && $person->created_by === $user->id);
+        return $this->view($user, $person);
     }
 
     public function delete(User $user, Person $person): bool

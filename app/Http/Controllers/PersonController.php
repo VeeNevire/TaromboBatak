@@ -67,7 +67,7 @@ class PersonController extends Controller
                 'chain' => $person->chain,
                 'pending' => (bool) $person->pending_father,
                 'created_at' => $person->created_at?->format('d M Y'),
-                'editable' => $isStaff || ($person->created_by !== null && $person->created_by === $user->id),
+                'editable' => $user->can('update', $person),
             ]);
 
         $margas = Marga::query()
@@ -623,6 +623,7 @@ class PersonController extends Controller
                     ->where(fn ($query) => $query
                         ->where('pending_father', false)
                         ->orWhere('id', $person->id))
+                    ->with('mother.marga')
                     ->orderBy('birth_order')
                     ->get()
                 : collect([$person]);
@@ -659,6 +660,16 @@ class PersonController extends Controller
         $mother = $margaId === null || $person->mother?->marga_id === $margaId
             ? $person->mother
             : null;
+
+        $mothers = $siblings
+            ->map(fn (Person $sibling) => $sibling->mother)
+            ->filter()
+            ->unique('id')
+            ->values()
+            ->filter(
+                fn (Person $wife) => $margaId === null || $wife->marga_id === $margaId,
+            )
+            ->values();
 
         $descendantMap = $this->descendantMap(
             $siblings->pluck('id')->merge($ownChildrenRows->pluck('id'))->all(),
@@ -706,6 +717,17 @@ class PersonController extends Controller
                     'death_year' => $mother->death_year,
                 ]
                 : null,
+            'mothers' => $mothers
+                ->map(fn (Person $wife) => [
+                    'id' => $wife->id,
+                    'name' => $wife->name,
+                    'alias' => $wife->alias,
+                    'marga_id' => $wife->marga_id,
+                    'marga' => $wife->marga?->name,
+                    'birth_year' => $wife->birth_year,
+                    'death_year' => $wife->death_year,
+                ])
+                ->all(),
             'lineage' => $lineage
                 ->map(fn (Person $row) => [
                     'id' => $row->id,

@@ -56,10 +56,48 @@ test('users cannot open or message contacts outside their marga', function () {
     $this->actingAs($user)->get(route('contacts.show', $outsider))->assertForbidden();
     $this->actingAs($user)
         ->post(route('contacts.messages.store', $outsider), ['body' => 'Tidak boleh terkirim'])
-        ->assertForbidden();
+        ->assertRedirect()
+        ->assertSessionHas('inertia.flash_data.toast.type', 'error');
 
     expect(Conversation::query()->count())->toBe(0)
         ->and(Message::query()->count())->toBe(0);
+});
+
+test('the incremental messages feed returns only newer messages as json', function () {
+    $marga = Marga::factory()->create();
+    $reader = User::factory()->withMarga($marga->id)->create();
+    $sender = User::factory()->withMarga($marga->id)->create();
+
+    $conversation = Conversation::create(
+        Conversation::participantAttributes($reader, $sender),
+    );
+    $first = $conversation->messages()->create(['sender_id' => $sender->id, 'body' => 'pertama']);
+    $second = $conversation->messages()->create(['sender_id' => $sender->id, 'body' => 'kedua']);
+
+    $this->actingAs($reader)
+        ->get(route('contacts.messages.index', [
+            'contact' => $sender,
+            'after_id' => $first->id,
+        ]))
+        ->assertOk()
+        ->assertJsonCount(1, 'messages')
+        ->assertJsonPath('messages.0.id', $second->id)
+        ->assertJsonPath('messages.0.is_mine', false);
+
+    // Percakapan terbuka: pesan masuk otomatis ditandai sudah dibaca.
+    expect($second->fresh()->read_at)->not->toBeNull()
+        ->and($first->fresh()->read_at)->not->toBeNull();
+});
+
+test('the messages feed rejects contacts outside the marga', function () {
+    $marga = Marga::factory()->create();
+    $otherMarga = Marga::factory()->create();
+    $user = User::factory()->withMarga($marga->id)->create();
+    $outsider = User::factory()->withMarga($otherMarga->id)->create();
+
+    $this->actingAs($user)
+        ->get(route('contacts.messages.index', ['contact' => $outsider]))
+        ->assertForbidden();
 });
 
 test('a user can send a validated message to a contact in the same marga', function () {

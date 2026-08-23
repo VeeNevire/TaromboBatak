@@ -40,6 +40,8 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('contacts', [ContactController::class, 'index'])->name('contacts.index');
     Route::get('contacts/{contact}', [ContactController::class, 'show'])->name('contacts.show');
+    Route::get('contacts/{contact}/messages', [ContactController::class, 'messages'])
+        ->name('contacts.messages.index');
     Route::post('contacts/{contact}/messages', [MessageController::class, 'store'])
         ->middleware('throttle:60,1')
         ->name('contacts.messages.store');
