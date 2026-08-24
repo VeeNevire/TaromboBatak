@@ -425,7 +425,9 @@
     }
 
     to {
-        clip-path: circle(150% at var(--tb-theme-x, 50%) var(--tb-theme-y, 50%));
+        clip-path: circle(
+            150% at var(--tb-theme-x, 50%) var(--tb-theme-y, 50%)
+        );
     }
 }
 

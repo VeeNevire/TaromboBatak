@@ -199,8 +199,7 @@ export function TaromboExplorer({
     const noChildrenNotice = (
         <div className="flex flex-col items-center gap-3 pb-4">
             <p className="text-center text-sm text-tb-on-surface-variant">
-                Belum memiliki keturunan tercatat. Klik node lagi untuk
-                kembali.
+                Belum memiliki keturunan tercatat. Klik node lagi untuk kembali.
             </p>
             {centerPerson && (
                 <Button

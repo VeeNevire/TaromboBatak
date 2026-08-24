@@ -306,60 +306,66 @@ export default function ContactsIndex({
     // Dipanggil sekali saat percakapan dibuka (gap-fill) lalu berkala
     // hanya ketika WebSocket terputus.
     // ------------------------------------------------------------------
-    const fetchNewMessages = useCallback(async (contactId: number) => {
-        if (fetchingRef.current.has(contactId)) {
-            return;
-        }
-
-        const cursor = Math.max(
-            0,
-            ...(storeRef.current[contactId] ?? [])
-                .filter((item) => item.id !== null && item.is_mine !== undefined)
-                .map((item) => item.id as number),
-            0,
-        );
-        const knownIds = new Set(
-            (storeRef.current[contactId] ?? []).map((item) => item.key),
-        );
-
-        fetchingRef.current.add(contactId);
-
-        try {
-            const response = await fetch(
-                contacts.messages.index(contactId, {
-                    query: { after_id: cursor },
-                }).url,
-                { headers: { Accept: 'application/json' } },
-            );
-
-            if (!response.ok) {
+    const fetchNewMessages = useCallback(
+        async (contactId: number) => {
+            if (fetchingRef.current.has(contactId)) {
                 return;
             }
 
-            const data = (await response.json()) as {
-                messages?: Array<{
-                    id: number;
-                    sender_id: number;
-                    body: string;
-                    created_at: string | null;
-                    read_at: string | null;
-                    is_mine: boolean;
-                }>;
-            };
-
-            const fresh = (data.messages ?? []).filter(
-                (raw) => !knownIds.has(`m${raw.id}`),
+            const cursor = Math.max(
+                0,
+                ...(storeRef.current[contactId] ?? [])
+                    .filter(
+                        (item) =>
+                            item.id !== null && item.is_mine !== undefined,
+                    )
+                    .map((item) => item.id as number),
+                0,
+            );
+            const knownIds = new Set(
+                (storeRef.current[contactId] ?? []).map((item) => item.key),
             );
 
-            if (fresh.length > 0) {
-                mergeMessages(fresh, contactId);
+            fetchingRef.current.add(contactId);
+
+            try {
+                const response = await fetch(
+                    contacts.messages.index(contactId, {
+                        query: { after_id: cursor },
+                    }).url,
+                    { headers: { Accept: 'application/json' } },
+                );
+
+                if (!response.ok) {
+                    return;
+                }
+
+                const data = (await response.json()) as {
+                    messages?: Array<{
+                        id: number;
+                        sender_id: number;
+                        body: string;
+                        created_at: string | null;
+                        read_at: string | null;
+                        is_mine: boolean;
+                    }>;
+                };
+
+                const fresh = (data.messages ?? []).filter(
+                    (raw) => !knownIds.has(`m${raw.id}`),
+                );
+
+                if (fresh.length > 0) {
+                    mergeMessages(fresh, contactId);
+                }
+            } catch {
+                // Offline: dicoba lagi pada siklus berikutnya.
+            } finally {
+                fetchingRef.current.delete(contactId);
             }
-        } catch {
-            // Offline: dicoba lagi pada siklus berikutnya.
-        } finally {
-            fetchingRef.current.delete(contactId);
-        }
-    }, [mergeMessages]);
+        },
+        [mergeMessages],
+    );
 
     useEffect(() => {
         if (selectedContact == null) {
@@ -443,7 +449,11 @@ export default function ContactsIndex({
     // ------------------------------------------------------------------
     // Pengiriman: optimistic + konfirmasi lewat fetch senyap + retry
     // ------------------------------------------------------------------
-    const submitBody = (contactId: number, body: string, replacingUid?: string) => {
+    const submitBody = (
+        contactId: number,
+        body: string,
+        replacingUid?: string,
+    ) => {
         const uid = createUid();
 
         setStore((current) => {
@@ -691,8 +701,7 @@ export default function ContactsIndex({
                                                             </p>
                                                             {unread > 0 && (
                                                                 <Badge className="min-w-5 justify-center rounded-full bg-tb-primary px-1.5 text-[10px] text-white">
-                                                                    {unread >
-                                                                    99
+                                                                    {unread > 99
                                                                         ? '99+'
                                                                         : unread}
                                                                 </Badge>
@@ -814,7 +823,11 @@ export default function ContactsIndex({
                                                                 )}
                                                             </time>
                                                             {item.is_mine && (
-                                                                <DeliveryStatus status={item.status} />
+                                                                <DeliveryStatus
+                                                                    status={
+                                                                        item.status
+                                                                    }
+                                                                />
                                                             )}
                                                         </div>
                                                         {item.status ===
@@ -846,10 +859,8 @@ export default function ContactsIndex({
                                                     </h3>
                                                     <p className="mt-1 text-sm text-tb-on-surface-variant">
                                                         Kirim salam kepada{' '}
-                                                        {
-                                                            selectedContact.name
-                                                        }
-                                                        . Pesan ini hanya dapat
+                                                        {selectedContact.name}.
+                                                        Pesan ini hanya dapat
                                                         dibaca oleh kalian.
                                                     </p>
                                                 </div>
@@ -893,7 +904,11 @@ export default function ContactsIndex({
                                             maxLength={2000}
                                             rows={1}
                                             placeholder="Tulis pesan..."
-                                            style={{ height: '42px' } as CSSProperties}
+                                            style={
+                                                {
+                                                    height: '42px',
+                                                } as CSSProperties
+                                            }
                                             className="bg-tb-surface-container-low max-h-32 min-h-10 flex-1 resize-none overflow-hidden rounded-xl border border-tb-outline-variant px-3.5 py-2.5 text-sm text-tb-on-surface transition outline-none focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
                                         />
                                         <Button
@@ -918,7 +933,7 @@ export default function ContactsIndex({
                         ) : (
                             <div className="grid h-full place-items-center px-6">
                                 <div className="max-w-sm text-center">
-                                    <div className="grid size-18 place-items-center mx-auto rounded-full border border-tb-outline-variant bg-tb-surface-bright text-tb-primary shadow-sm">
+                                    <div className="mx-auto grid size-18 place-items-center rounded-full border border-tb-outline-variant bg-tb-surface-bright text-tb-primary shadow-sm">
                                         <Users className="size-8" />
                                     </div>
                                     <h2 className="mt-5 font-display text-xl font-bold text-tb-on-surface">

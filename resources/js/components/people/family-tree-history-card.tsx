@@ -11,6 +11,7 @@ import {
     TreePine,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import {
     Card,
     CardContent,
@@ -18,7 +19,6 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import familyTrees from '@/routes/family-trees';
@@ -83,14 +83,6 @@ export function FamilyTreeHistoryCard({
         filteredEntries.length,
     );
     const showPagination = filteredEntries.length > ITEMS_PER_PAGE;
-
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [searchQuery]);
-
-    useEffect(() => {
-        setCurrentPage((page) => Math.min(page, totalPages));
-    }, [totalPages]);
 
     const goToPage = (page: number) => {
         setCurrentPage(page);
@@ -203,9 +195,10 @@ export function FamilyTreeHistoryCard({
                                     <Input
                                         type="search"
                                         value={searchQuery}
-                                        onChange={(event) =>
-                                            setSearchQuery(event.target.value)
-                                        }
+                                        onChange={(event) => {
+                                            setSearchQuery(event.target.value);
+                                            setCurrentPage(1);
+                                        }}
                                         placeholder="Cari silsilah…"
                                         aria-label="Cari silsilah"
                                         className="border-tb-outline-variant bg-tb-surface-container/40 pl-9 text-tb-on-surface placeholder:text-tb-outline"

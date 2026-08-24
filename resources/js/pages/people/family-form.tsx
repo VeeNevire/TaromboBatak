@@ -158,9 +158,7 @@ const SPOUSE_OTHER_VALUE = '__other__';
 
 type ParentKey = 'father' | number;
 
-const parentErrorPrefix = (
-    key: ParentKey,
-): 'father' | `mothers.${number}` =>
+const parentErrorPrefix = (key: ParentKey): 'father' | `mothers.${number}` =>
     key === 'father' ? 'father' : `mothers.${key}`;
 
 function FamilyTreeVersionAction({
@@ -687,13 +685,15 @@ function toMotherRows(person: FamilyData | null): ParentEntry[] {
                 marga_id: entry.marga_id ?? null,
                 new_marga: '',
             }))
-            .filter((entry, index, all) =>
-                index ===
+            .filter(
+                (entry, index, all) =>
+                    index ===
                     all.findIndex(
                         (other) =>
                             other.name.trim().toUpperCase() ===
                             entry.name.trim().toUpperCase(),
-                    ));
+                    ),
+            );
 
     if (person?.mothers && person.mothers.length > 0) {
         const rows = fromList(person.mothers);
@@ -852,9 +852,7 @@ function SpouseMargaSelect({
                             {marga.name}
                         </SelectItem>
                     ))}
-                    <SelectItem value={SPOUSE_OTHER_VALUE}>
-                        Lainnya…
-                    </SelectItem>
+                    <SelectItem value={SPOUSE_OTHER_VALUE}>Lainnya…</SelectItem>
                 </SelectContent>
             </Select>
             {isOther && (
@@ -1396,7 +1394,10 @@ export default function FamilyForm({
             return;
         }
 
-        setData('mothers', data.mothers.filter((_, i) => i !== index));
+        setData(
+            'mothers',
+            data.mothers.filter((_, i) => i !== index),
+        );
     };
 
     const setParentEntry = (
@@ -1455,115 +1456,144 @@ export default function FamilyForm({
         const errorPrefix = parentErrorPrefix(key);
 
         return (
-        <div className="space-y-4 rounded-lg border border-tb-outline-variant p-4">
-            <p className="text-sm font-medium text-tb-on-surface">{label}</p>
-            <div className="grid gap-1.5">
-                <Label htmlFor={`${errorPrefix}-name`} className="text-tb-on-surface">
-                    Nama {label}
-                </Label>
-                <NameCombobox
-                    value={entry.name}
-                    onChange={(value) => setParentEntry(key, 'name', value)}
-                    suggestions={
-                        key === 'father' ? fatherSuggestions : nameSuggestions
-                    }
-                    placeholder={`Nama ${label.toLowerCase()}`}
-                    allowNa
-                />
-                <InputError message={errors[`${errorPrefix}.name`]} />
-                <div className="grid gap-1.5 pt-2">
+            <div className="space-y-4 rounded-lg border border-tb-outline-variant p-4">
+                <p className="text-sm font-medium text-tb-on-surface">
+                    {label}
+                </p>
+                <div className="grid gap-1.5">
                     <Label
-                        htmlFor={`${errorPrefix}-alias`}
+                        htmlFor={`${errorPrefix}-name`}
                         className="text-tb-on-surface"
                     >
-                        Alias / Gelar
+                        Nama {label}
                     </Label>
-                    <Input
-                        id={`${errorPrefix}-alias`}
-                        value={entry.alias}
-                        onChange={(e) =>
-                            setParentEntry(key, 'alias', e.target.value)
+                    <NameCombobox
+                        value={entry.name}
+                        onChange={(value) => setParentEntry(key, 'name', value)}
+                        suggestions={
+                            key === 'father'
+                                ? fatherSuggestions
+                                : nameSuggestions
                         }
-                        placeholder="Tuan Sorba Dibanua"
-                        className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                        placeholder={`Nama ${label.toLowerCase()}`}
+                        allowNa
                     />
-                    <InputError message={errors[`${errorPrefix}.alias`]} />
+                    <InputError message={errors[`${errorPrefix}.name`]} />
+                    <div className="grid gap-1.5 pt-2">
+                        <Label
+                            htmlFor={`${errorPrefix}-alias`}
+                            className="text-tb-on-surface"
+                        >
+                            Alias / Gelar
+                        </Label>
+                        <Input
+                            id={`${errorPrefix}-alias`}
+                            value={entry.alias}
+                            onChange={(e) =>
+                                setParentEntry(key, 'alias', e.target.value)
+                            }
+                            placeholder="Tuan Sorba Dibanua"
+                            className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                        />
+                        <InputError message={errors[`${errorPrefix}.alias`]} />
+                    </div>
+                    {key === 'father' && (
+                        <div className="text-xs">
+                            {fatherMatch ? (
+                                <p className="font-medium text-emerald-700">
+                                    Akan tersambung ke {fatherMatch.name}
+                                    {fatherMatch.marga
+                                        ? ` (${fatherMatch.marga})`
+                                        : ''}{' '}
+                                    — chain {predictedFatherChain}
+                                    {predictedFocusChain
+                                        ? ` → ${predictedFocusChain}`
+                                        : ''}
+                                    .
+                                </p>
+                            ) : fatherName && !isNaPlaceholder(fatherName) ? (
+                                <p className="font-medium text-amber-700">
+                                    Nama "{fatherName}" tidak ditemukan di
+                                    silsilah — akan dibuat sebagai rumpun baru
+                                    (nomor baru), bukan menyambung.
+                                </p>
+                            ) : (
+                                <p className="font-medium text-tb-on-surface-variant">
+                                    Ayah belum diisi — keluarga ini dicatat
+                                    sebagai rumpun sendiri berstatus "Belum
+                                    tersambung". Isi nama ayah yang sudah ada
+                                    untuk menyambung ke silsilahnya.
+                                </p>
+                            )}
+                        </div>
+                    )}
                 </div>
-                {key === 'father' && (
-                    <div className="text-xs">
-                        {fatherMatch ? (
-                            <p className="font-medium text-emerald-700">
-                                Akan tersambung ke {fatherMatch.name}
-                                {fatherMatch.marga
-                                    ? ` (${fatherMatch.marga})`
-                                    : ''}{' '}
-                                — chain {predictedFatherChain}
-                                {predictedFocusChain
-                                    ? ` → ${predictedFocusChain}`
-                                    : ''}
-                                .
-                            </p>
-                        ) : fatherName && !isNaPlaceholder(fatherName) ? (
-                            <p className="font-medium text-amber-700">
-                                Nama "{fatherName}" tidak ditemukan di silsilah
-                                — akan dibuat sebagai rumpun baru (nomor baru),
-                                bukan menyambung.
-                            </p>
-                        ) : (
-                            <p className="font-medium text-tb-on-surface-variant">
-                                Ayah belum diisi — keluarga ini dicatat sebagai
-                                rumpun sendiri berstatus "Belum tersambung". Isi
-                                nama ayah yang sudah ada untuk menyambung ke
-                                silsilahnya.
-                            </p>
-                        )}
+                {showMarga && (
+                    <div className="grid gap-1.5">
+                        <Label className="text-tb-on-surface">
+                            Marga {label}
+                        </Label>
+                        <MargaField
+                            value={entry.marga_id ?? null}
+                            newMarga={entry.new_marga ?? ''}
+                            onValue={(value) => setParentMarga(key, value)}
+                            onNewMarga={(value) =>
+                                setParentNewMarga(key, value)
+                            }
+                            margas={margas}
+                            placeholder={`Marga ${label.toLowerCase()}`}
+                            disabled={lockMarga}
+                        />
+                        <InputError
+                            message={errors[`${errorPrefix}.marga_id`]}
+                        />
                     </div>
                 )}
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-1.5">
+                        <Label className="text-tb-on-surface">
+                            Tahun Lahir
+                        </Label>
+                        <Input
+                            value={entry.birth_year}
+                            onChange={(e) =>
+                                setParentEntry(
+                                    key,
+                                    'birth_year',
+                                    e.target.value,
+                                )
+                            }
+                            placeholder={birthPlace}
+                            maxLength={4}
+                            className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                        />
+                        <InputError
+                            message={errors[`${errorPrefix}.birth_year`]}
+                        />
+                    </div>
+                    <div className="grid gap-1.5">
+                        <Label className="text-tb-on-surface">
+                            Tahun Wafat
+                        </Label>
+                        <Input
+                            value={entry.death_year}
+                            onChange={(e) =>
+                                setParentEntry(
+                                    key,
+                                    'death_year',
+                                    e.target.value,
+                                )
+                            }
+                            placeholder={deathPlace}
+                            maxLength={4}
+                            className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                        />
+                        <InputError
+                            message={errors[`${errorPrefix}.death_year`]}
+                        />
+                    </div>
+                </div>
             </div>
-            {showMarga && (
-                <div className="grid gap-1.5">
-                    <Label className="text-tb-on-surface">Marga {label}</Label>
-                    <MargaField
-                        value={entry.marga_id ?? null}
-                        newMarga={entry.new_marga ?? ''}
-                        onValue={(value) => setParentMarga(key, value)}
-                        onNewMarga={(value) => setParentNewMarga(key, value)}
-                        margas={margas}
-                        placeholder={`Marga ${label.toLowerCase()}`}
-                        disabled={lockMarga}
-                    />
-                    <InputError message={errors[`${errorPrefix}.marga_id`]} />
-                </div>
-            )}
-            <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-1.5">
-                    <Label className="text-tb-on-surface">Tahun Lahir</Label>
-                    <Input
-                        value={entry.birth_year}
-                        onChange={(e) =>
-                            setParentEntry(key, 'birth_year', e.target.value)
-                        }
-                        placeholder={birthPlace}
-                        maxLength={4}
-                        className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
-                    />
-                    <InputError message={errors[`${errorPrefix}.birth_year`]} />
-                </div>
-                <div className="grid gap-1.5">
-                    <Label className="text-tb-on-surface">Tahun Wafat</Label>
-                    <Input
-                        value={entry.death_year}
-                        onChange={(e) =>
-                            setParentEntry(key, 'death_year', e.target.value)
-                        }
-                        placeholder={deathPlace}
-                        maxLength={4}
-                        className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
-                    />
-                    <InputError message={errors[`${errorPrefix}.death_year`]} />
-                </div>
-            </div>
-        </div>
         );
     };
 
@@ -1997,8 +2027,8 @@ export default function FamilyForm({
                                                     </div>
                                                     <div className="rounded-lg border border-tb-outline-variant bg-tb-surface-container/60 px-3 py-2">
                                                         <p className="text-[11px] font-medium text-tb-on-surface-variant">
-                                                            {data.mothers.length >
-                                                            1
+                                                            {data.mothers
+                                                                .length > 1
                                                                 ? 'Ibu / Istri'
                                                                 : 'Ibu'}
                                                         </p>
@@ -2013,7 +2043,7 @@ export default function FamilyForm({
                                                                         index ===
                                                                         0
                                                                             ? ''
-                                                                            : 'border-t border-tb-outline-variant pt-1.5 mt-1.5'
+                                                                            : 'mt-1.5 border-t border-tb-outline-variant pt-1.5'
                                                                     }
                                                                 >
                                                                     <p className="text-sm font-semibold text-tb-on-surface">
@@ -2572,8 +2602,8 @@ export default function FamilyForm({
                                 </CardTitle>
                                 <CardDescription>
                                     Ayah dan istri-istrinya dari anak-anak yang
-                                    dicatat di bawah. Anak-anak saat ini
-                                    tertaut ke Istri 1.
+                                    dicatat di bawah. Anak-anak saat ini tertaut
+                                    ke Istri 1.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="grid gap-5 lg:grid-cols-2">
@@ -2621,8 +2651,7 @@ export default function FamilyForm({
                                         onClick={addMother}
                                         className="w-full border-dashed border-tb-outline-variant text-tb-primary hover:bg-tb-primary/5"
                                     >
-                                        <Plus className="size-4" /> Tambah
-                                        Istri
+                                        <Plus className="size-4" /> Tambah Istri
                                     </Button>
                                 </div>
                             </CardContent>
