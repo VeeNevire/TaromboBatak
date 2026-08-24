@@ -1,7 +1,7 @@
 import { Handle, Position, useStore } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import { Crown } from 'lucide-react';
-import { getInitials } from '@/data/tarombo-tree';
+import { getGenerationLabel, getInitials } from '@/data/tarombo-tree';
 import type { TaromboNodeData } from '@/data/tarombo-tree';
 import { cn } from '@/lib/utils';
 
@@ -76,6 +76,10 @@ function CenterBubble({
             <div className="mt-2 space-y-1 border-t border-tb-outline-variant pt-2">
                 <DetailRow label="Anak ke" value={person.birthOrder} />
                 <DetailRow
+                    label="Generasi"
+                    value={`Gen ${person.generation} (${getGenerationLabel(person.generation)})`}
+                />
+                <DetailRow
                     label="Jenis Kelamin"
                     value={person.gender?.toUpperCase()}
                 />
@@ -86,7 +90,8 @@ function CenterBubble({
 }
 
 export function CenterNode({ data }: NodeProps) {
-    const { person, ringColor, selected, related } = data as TaromboNodeData;
+    const { person, ringColor, selected, related, bubble } =
+        data as TaromboNodeData;
     const zoom = useStore((state) => state.transform[2]);
 
     const boxShadow = selected
@@ -123,7 +128,7 @@ export function CenterNode({ data }: NodeProps) {
                 position={Position.Bottom}
                 className="!top-1/2 !left-1/2 !h-1 !w-1 !-translate-x-1/2 !-translate-y-1/2"
             />
-            {selected && (
+            {bubble && (
                 <div
                     className="absolute bottom-full left-1/2 z-30 mb-3"
                     style={{

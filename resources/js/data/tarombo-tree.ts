@@ -66,6 +66,7 @@ export type TaromboNodeData = {
     ringColor: string;
     selected?: boolean;
     related?: boolean;
+    bubble?: boolean;
 };
 
 export type SectorNodeData = {
@@ -172,6 +173,28 @@ export function findPersonChildren(
     id: string,
 ): TaromboPerson[] {
     return people.filter((person) => person.parentId === id);
+}
+
+export function oldestOfMarga(
+    people: TaromboPerson[],
+    margaName: string,
+): TaromboPerson | undefined {
+    const members = people.filter((person) => person.marga === margaName);
+
+    if (members.length === 0) {
+        return undefined;
+    }
+
+    return [...members].sort((a, b) => {
+        if (a.generation !== b.generation) {
+            return a.generation - b.generation;
+        }
+
+        return (
+            (a.birthOrder ?? Number.POSITIVE_INFINITY) -
+            (b.birthOrder ?? Number.POSITIVE_INFINITY)
+        );
+    })[0];
 }
 
 export function buildTaromboPeople(rows: TaromboPersonRow[]): TaromboPerson[] {

@@ -20,12 +20,14 @@ use Illuminate\Support\Carbon;
  * @property string|null $source_url
  * @property int|null $based_on_id
  * @property bool $is_primary
+ * @property bool $deletion_pending
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read User $user
  * @property-read Person|null $rootPerson
  * @property-read FamilyTree|null $basedOn
  * @property-read Collection<int, FamilyTreeNode> $nodes
+ * @property-read Collection<int, FamilyTreeDeletionRequest> $deletionRequests
  */
 #[Fillable(['user_id', 'root_person_id', 'name', 'description', 'source_name', 'source_url', 'based_on_id', 'is_primary'])]
 class FamilyTree extends Model
@@ -68,6 +70,12 @@ class FamilyTree extends Model
     public function nodes(): HasMany
     {
         return $this->hasMany(FamilyTreeNode::class);
+    }
+
+    /** @return HasMany<FamilyTreeDeletionRequest, $this> */
+    public function deletionRequests(): HasMany
+    {
+        return $this->hasMany(FamilyTreeDeletionRequest::class);
     }
 
     protected function casts(): array

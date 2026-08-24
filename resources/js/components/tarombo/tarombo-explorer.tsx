@@ -6,6 +6,7 @@ import {
     Minimize2,
     Minus,
     Plus,
+    Search,
 } from 'lucide-react';
 import { useState } from 'react';
 import { TaromboDiagram } from '@/components/landing/tarombo-diagram';
@@ -32,6 +33,40 @@ type Props = {
     fullscreenView?: FullscreenView;
 };
 
+const ANCESTOR_DEPTH = 4;
+
+function ancestorPath(
+    people: TaromboPerson[],
+    personId: string,
+): TaromboPerson[] {
+    const byId = new Map(people.map((person) => [person.id, person]));
+    const selected = byId.get(personId);
+
+    if (!selected) {
+        return [];
+    }
+
+    const path = [selected];
+    const visited = new Set<string>([selected.id]);
+    let current = selected;
+
+    for (let depth = 0; depth < ANCESTOR_DEPTH; depth += 1) {
+        const parent = current.parentId
+            ? byId.get(current.parentId)
+            : undefined;
+
+        if (!parent || visited.has(parent.id)) {
+            break;
+        }
+
+        path.unshift(parent);
+        visited.add(parent.id);
+        current = parent;
+    }
+
+    return path;
+}
+
 export function TaromboExplorer({
     people: rows,
     margas,
@@ -40,9 +75,11 @@ export function TaromboExplorer({
 }: Props) {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [search, setSearch] = useState('');
+    const [searchOpen, setSearchOpen] = useState(false);
     const [history, setHistory] = useState<string[]>([]);
     const [expanded, setExpanded] = useState<'diagram' | 'tree' | null>(null);
     const [treeZoom, setTreeZoom] = useState(1);
+    const [ancestorFocusId, setAncestorFocusId] = useState<string | null>(null);
 
     const clampZoom = (value: number) =>
         Math.round(Math.min(2, Math.max(0.5, value)) * 100) / 100;
@@ -79,18 +116,50 @@ export function TaromboExplorer({
         rootPerson?.id ?? '',
     );
     const centerPerson = people.find((p) => p.id === centerPersonId);
-    const hasChildren = people.some((p) => p.parentId === centerPersonId);
+    const normalizedSearch = search.trim().toLowerCase();
+    const searchResults = normalizedSearch
+        ? people
+              .filter((person) =>
+                  person.name.toLowerCase().includes(normalizedSearch),
+              )
+              .sort((a, b) => {
+                  const aStarts = a.name
+                      .toLowerCase()
+                      .startsWith(normalizedSearch);
+                  const bStarts = b.name
+                      .toLowerCase()
+                      .startsWith(normalizedSearch);
 
-    const searchSelect = (value: string) => {
-        const person = people.find((p) =>
-            p.name.toLowerCase().includes(value.toLowerCase()),
-        );
+                  if (aStarts !== bStarts) {
+                      return aStarts ? -1 : 1;
+                  }
 
-        if (person && person.id !== centerPersonId) {
+                  return a.name.localeCompare(b.name, 'id');
+              })
+              .slice(0, 10)
+        : [];
+    const ancestorPeople = ancestorFocusId
+        ? ancestorPath(people, ancestorFocusId)
+        : [];
+    const treePeople = ancestorPeople.length > 0 ? ancestorPeople : people;
+    const treeCenterId = ancestorPeople[0]?.id ?? centerPersonId;
+    const ancestorFocusPerson = ancestorFocusId
+        ? people.find((person) => person.id === ancestorFocusId)
+        : undefined;
+    const treeHasChildren = treePeople.some(
+        (person) => person.parentId === treeCenterId,
+    );
+
+    const searchSelect = (person: TaromboPerson) => {
+        if (person.id !== centerPersonId) {
             setHistory((prev) => [...prev, centerPersonId]);
-            setSelectedId(person.id);
-            setCenterPersonId(person.id);
         }
+
+        setSelectedId(person.id);
+        setCenterPersonId(person.id);
+        setAncestorFocusId(person.id);
+        setSearch(person.name);
+        setSearchOpen(false);
     };
 
     const handleBack = () => {
@@ -102,10 +171,13 @@ export function TaromboExplorer({
         setHistory((prevHistory) => prevHistory.slice(0, -1));
         setSelectedId(prev === rootPerson?.id ? null : prev);
         setCenterPersonId(prev);
+        setAncestorFocusId(null);
         setSearch('');
     };
 
     const handlePersonSelect = (id: string) => {
+        setAncestorFocusId(null);
+
         if (id === centerPersonId) {
             handleBack();
 
@@ -191,6 +263,9 @@ export function TaromboExplorer({
                     people={people}
                     margas={margas}
                     context="descendants"
+                    allowPan={fullscreen}
+                    showScrollbars={fullscreen}
+                    initialScrollable={fullscreen}
                 />
             </div>
         </div>
@@ -236,27 +311,41 @@ export function TaromboExplorer({
                     !fullscreen && isExpanded && 'max-h-[70vh]',
                 )}
             >
-                <div className="mb-4 border-b border-tb-outline-variant pb-3 text-center">
-                    <h3 className="font-display text-lg font-bold text-tb-on-surface">
-                        Silsilah Keturunan
-                    </h3>
-                    <p className="mt-1 text-xs text-tb-on-surface-variant">
-                        Pohon vertikal dari{' '}
-                        {centerPerson?.name ?? 'Leluhur Utama'}
-                    </p>
+                <div className="mb-4 grid grid-cols-[1fr_auto_1fr] items-center border-b border-tb-outline-variant pb-3">
+                    {fullscreen ? (
+                        <Link
+                            href={tarombo.index()}
+                            className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:bg-tb-surface-container"
+                        >
+                            <ArrowLeft className="size-4" /> Kembali
+                        </Link>
+                    ) : (
+                        <span />
+                    )}
+                    <div className="min-w-0 text-center">
+                        <h3 className="font-display text-lg font-bold text-tb-on-surface">
+                            Silsilah Keturunan
+                        </h3>
+                        <p className="mt-1 max-w-64 truncate text-xs text-tb-on-surface-variant">
+                            {ancestorFocusPerson
+                                ? `Jalur ${ANCESTOR_DEPTH} tingkat leluhur dari ${ancestorFocusPerson.name}`
+                                : `Pohon vertikal dari ${centerPerson?.name ?? 'Leluhur Utama'}`}
+                        </p>
+                    </div>
+                    <span />
                 </div>
                 <div style={{ zoom: treeZoom }}>
                     <DescendantsTree
-                        key={centerPersonId}
-                        people={people}
-                        centerId={centerPersonId}
+                        key={`${treeCenterId}-${ancestorFocusId ?? 'branch'}`}
+                        people={treePeople}
+                        centerId={treeCenterId}
                         onSelect={handlePersonSelect}
                         highlightId={selectedId}
                     />
                 </div>
-                {!hasChildren && noChildrenNotice}
+                {!treeHasChildren && !ancestorFocusId && noChildrenNotice}
             </div>
-            {hasChildren && (
+            {treeHasChildren && (
                 <div className="absolute bottom-3 left-3 z-10">
                     {treeZoomControls}
                 </div>
@@ -288,7 +377,7 @@ export function TaromboExplorer({
             )}
         >
             <div className={cn('flex', fullscreen && 'items-center gap-3')}>
-                {fullscreen && backButton}
+                {fullscreen && fullscreenView === 'diagram' && backButton}
                 <div>
                     <h1 className="font-display text-2xl font-bold text-tb-on-surface md:text-3xl">
                         Pohon Tarombo
@@ -306,16 +395,74 @@ export function TaromboExplorer({
                     fullscreen && 'flex min-h-0 flex-1 flex-col',
                 )}
             >
-                <div className="mx-auto mb-4 flex max-w-md items-center gap-2">
+                <div
+                    className="relative mx-auto mb-4 w-full max-w-md"
+                    onBlur={(event) => {
+                        if (
+                            !event.currentTarget.contains(event.relatedTarget)
+                        ) {
+                            setSearchOpen(false);
+                        }
+                    }}
+                >
+                    <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-tb-on-surface-variant" />
                     <Input
                         value={search}
-                        onChange={(e) => {
-                            setSearch(e.target.value);
-                            searchSelect(e.target.value);
+                        onChange={(event) => {
+                            setSearch(event.target.value);
+                            setSearchOpen(true);
                         }}
-                        placeholder="Cari anggota..."
-                        className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                        onFocus={() => setSearchOpen(true)}
+                        onKeyDown={(event) => {
+                            if (event.key === 'Escape') {
+                                setSearchOpen(false);
+                            }
+                        }}
+                        placeholder="Cari nama anggota..."
+                        aria-label="Cari nama anggota"
+                        aria-expanded={searchOpen && normalizedSearch !== ''}
+                        aria-controls="tarombo-search-results"
+                        className="border-tb-outline-variant bg-tb-surface-bright pl-9 focus:border-tb-primary focus:ring-tb-primary/20"
                     />
+                    {searchOpen && normalizedSearch !== '' && (
+                        <div
+                            id="tarombo-search-results"
+                            role="listbox"
+                            className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-tb-outline-variant bg-tb-surface-bright p-1 shadow-lg"
+                        >
+                            {searchResults.length > 0 ? (
+                                searchResults.map((person) => (
+                                    <button
+                                        key={person.id}
+                                        type="button"
+                                        role="option"
+                                        aria-selected={
+                                            person.id === ancestorFocusId
+                                        }
+                                        onClick={() => searchSelect(person)}
+                                        className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-tb-surface-container focus-visible:bg-tb-surface-container focus-visible:outline-none"
+                                    >
+                                        <span className="min-w-0">
+                                            <span className="block truncate text-sm font-medium text-tb-on-surface">
+                                                {person.name}
+                                            </span>
+                                            <span className="block truncate text-xs text-tb-on-surface-variant">
+                                                {person.marga ||
+                                                    'Marga belum dicatat'}
+                                            </span>
+                                        </span>
+                                        <span className="shrink-0 text-[10px] font-semibold tracking-wide text-tb-primary uppercase">
+                                            Lihat leluhur
+                                        </span>
+                                    </button>
+                                ))
+                            ) : (
+                                <p className="px-3 py-4 text-center text-sm text-tb-on-surface-variant">
+                                    Nama tidak ditemukan.
+                                </p>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {fullscreen ? (
@@ -375,22 +522,24 @@ export function TaromboExplorer({
                                                 Silsilah Keturunan
                                             </h3>
                                             <p className="mt-1 text-xs text-tb-on-surface-variant">
-                                                Pohon vertikal dari{' '}
-                                                {centerPerson?.name ??
-                                                    'Leluhur Utama'}
+                                                {ancestorFocusPerson
+                                                    ? `Jalur ${ANCESTOR_DEPTH} tingkat leluhur dari ${ancestorFocusPerson.name}`
+                                                    : `Pohon vertikal dari ${centerPerson?.name ?? 'Leluhur Utama'}`}
                                             </p>
                                         </div>
                                         <div style={{ zoom: treeZoom }}>
                                             <DescendantsTree
-                                                key={centerPersonId}
-                                                people={people}
-                                                centerId={centerPersonId}
+                                                key={`${treeCenterId}-${ancestorFocusId ?? 'branch'}`}
+                                                people={treePeople}
+                                                centerId={treeCenterId}
                                                 onSelect={handlePersonSelect}
                                                 highlightId={selectedId}
                                             />
                                         </div>
-                                        {!hasChildren && noChildrenNotice}
-                                        {hasChildren && (
+                                        {!treeHasChildren &&
+                                            !ancestorFocusId &&
+                                            noChildrenNotice}
+                                        {treeHasChildren && (
                                             <div className="absolute bottom-3 left-3 z-10">
                                                 {treeZoomControls}
                                             </div>

@@ -1,7 +1,7 @@
 import { queryParams, type RouteQueryOptions, type RouteDefinition, type RouteFormDefinition, applyUrlDefaults } from './../../wayfinder'
 /**
 * @see \App\Http\Controllers\EventController::index
- * @see app/Http/Controllers/EventController.php:46
+ * @see app/Http/Controllers/EventController.php:66
  * @route '/kegiatan'
  */
 export const index = (options?: RouteQueryOptions): RouteDefinition<'get'> => ({
@@ -16,7 +16,7 @@ index.definition = {
 
 /**
 * @see \App\Http\Controllers\EventController::index
- * @see app/Http/Controllers/EventController.php:46
+ * @see app/Http/Controllers/EventController.php:66
  * @route '/kegiatan'
  */
 index.url = (options?: RouteQueryOptions) => {
@@ -25,7 +25,7 @@ index.url = (options?: RouteQueryOptions) => {
 
 /**
 * @see \App\Http\Controllers\EventController::index
- * @see app/Http/Controllers/EventController.php:46
+ * @see app/Http/Controllers/EventController.php:66
  * @route '/kegiatan'
  */
 index.get = (options?: RouteQueryOptions): RouteDefinition<'get'> => ({
@@ -34,7 +34,7 @@ index.get = (options?: RouteQueryOptions): RouteDefinition<'get'> => ({
 })
 /**
 * @see \App\Http\Controllers\EventController::index
- * @see app/Http/Controllers/EventController.php:46
+ * @see app/Http/Controllers/EventController.php:66
  * @route '/kegiatan'
  */
 index.head = (options?: RouteQueryOptions): RouteDefinition<'head'> => ({
@@ -44,7 +44,7 @@ index.head = (options?: RouteQueryOptions): RouteDefinition<'head'> => ({
 
     /**
 * @see \App\Http\Controllers\EventController::index
- * @see app/Http/Controllers/EventController.php:46
+ * @see app/Http/Controllers/EventController.php:66
  * @route '/kegiatan'
  */
     const indexForm = (options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -54,7 +54,7 @@ index.head = (options?: RouteQueryOptions): RouteDefinition<'head'> => ({
 
             /**
 * @see \App\Http\Controllers\EventController::index
- * @see app/Http/Controllers/EventController.php:46
+ * @see app/Http/Controllers/EventController.php:66
  * @route '/kegiatan'
  */
         indexForm.get = (options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -63,7 +63,7 @@ index.head = (options?: RouteQueryOptions): RouteDefinition<'head'> => ({
         })
             /**
 * @see \App\Http\Controllers\EventController::index
- * @see app/Http/Controllers/EventController.php:46
+ * @see app/Http/Controllers/EventController.php:66
  * @route '/kegiatan'
  */
         indexForm.head = (options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -79,7 +79,7 @@ index.head = (options?: RouteQueryOptions): RouteDefinition<'head'> => ({
     index.form = indexForm
 /**
 * @see \App\Http\Controllers\EventController::show
- * @see app/Http/Controllers/EventController.php:77
+ * @see app/Http/Controllers/EventController.php:97
  * @route '/kegiatan/{event}'
  */
 export const show = (args: { event: number | { id: number } } | [event: number | { id: number } ] | number | { id: number }, options?: RouteQueryOptions): RouteDefinition<'get'> => ({
@@ -94,7 +94,7 @@ show.definition = {
 
 /**
 * @see \App\Http\Controllers\EventController::show
- * @see app/Http/Controllers/EventController.php:77
+ * @see app/Http/Controllers/EventController.php:97
  * @route '/kegiatan/{event}'
  */
 show.url = (args: { event: number | { id: number } } | [event: number | { id: number } ] | number | { id: number }, options?: RouteQueryOptions) => {
@@ -127,7 +127,7 @@ show.url = (args: { event: number | { id: number } } | [event: number | { id: nu
 
 /**
 * @see \App\Http\Controllers\EventController::show
- * @see app/Http/Controllers/EventController.php:77
+ * @see app/Http/Controllers/EventController.php:97
  * @route '/kegiatan/{event}'
  */
 show.get = (args: { event: number | { id: number } } | [event: number | { id: number } ] | number | { id: number }, options?: RouteQueryOptions): RouteDefinition<'get'> => ({
@@ -136,7 +136,7 @@ show.get = (args: { event: number | { id: number } } | [event: number | { id: nu
 })
 /**
 * @see \App\Http\Controllers\EventController::show
- * @see app/Http/Controllers/EventController.php:77
+ * @see app/Http/Controllers/EventController.php:97
  * @route '/kegiatan/{event}'
  */
 show.head = (args: { event: number | { id: number } } | [event: number | { id: number } ] | number | { id: number }, options?: RouteQueryOptions): RouteDefinition<'head'> => ({
@@ -146,7 +146,7 @@ show.head = (args: { event: number | { id: number } } | [event: number | { id: n
 
     /**
 * @see \App\Http\Controllers\EventController::show
- * @see app/Http/Controllers/EventController.php:77
+ * @see app/Http/Controllers/EventController.php:97
  * @route '/kegiatan/{event}'
  */
     const showForm = (args: { event: number | { id: number } } | [event: number | { id: number } ] | number | { id: number }, options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -156,7 +156,7 @@ show.head = (args: { event: number | { id: number } } | [event: number | { id: n
 
             /**
 * @see \App\Http\Controllers\EventController::show
- * @see app/Http/Controllers/EventController.php:77
+ * @see app/Http/Controllers/EventController.php:97
  * @route '/kegiatan/{event}'
  */
         showForm.get = (args: { event: number | { id: number } } | [event: number | { id: number } ] | number | { id: number }, options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -165,7 +165,7 @@ show.head = (args: { event: number | { id: number } } | [event: number | { id: n
         })
             /**
 * @see \App\Http\Controllers\EventController::show
- * @see app/Http/Controllers/EventController.php:77
+ * @see app/Http/Controllers/EventController.php:97
  * @route '/kegiatan/{event}'
  */
         showForm.head = (args: { event: number | { id: number } } | [event: number | { id: number } ] | number | { id: number }, options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({

@@ -12,6 +12,13 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { dashboard } from '@/routes';
 import stories from '@/routes/stories';
 
@@ -21,20 +28,38 @@ type StoryFormValue = {
     description: string;
     image: string | null;
     published: boolean;
+    classification: 'umum' | 'marga';
+    marga_id: number | null;
+    status: 'pending' | 'approved' | 'rejected';
+    rejection_reason: string | null;
 };
 
 type Props = {
     story: StoryFormValue | null;
+    margas: { id: number; name: string }[];
+    lockedMarga: { id: number; name: string } | null;
+    canPublish: boolean;
+    canChooseMarga: boolean;
+    canCreateMarga: boolean;
 };
 
-export default function StoryForm({ story }: Props) {
+export default function StoryForm({
+    story,
+    margas,
+    lockedMarga,
+    canPublish,
+    canChooseMarga,
+    canCreateMarga,
+}: Props) {
     const isEdit = story !== null;
 
     const { data, setData, post, put, processing, errors } = useForm({
         title: story?.title ?? '',
         description: story?.description ?? '',
         image: story?.image ?? '',
-        published: story?.published ?? true,
+        published: story?.published ?? canPublish,
+        classification: story?.classification ?? 'umum',
+        marga_id: story?.marga_id ? String(story.marga_id) : '',
     });
 
     const submit = (e: React.FormEvent) => {
@@ -68,8 +93,9 @@ export default function StoryForm({ story }: Props) {
                             {isEdit ? 'Ubah Cerita' : 'Tambah Cerita'}
                         </h1>
                         <p className="mt-1 text-sm text-tb-on-surface-variant">
-                            Cerita akan tampil di halaman utama bila statusnya
-                            "Tampil".
+                            {canPublish
+                                ? 'Cerita yang disetujui dapat ditampilkan di halaman publik.'
+                                : 'Cerita akan ditinjau Kontributor sebelum tampil ke publik.'}
                         </p>
                     </div>
                 </div>
@@ -85,6 +111,116 @@ export default function StoryForm({ story }: Props) {
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="grid gap-5">
+                            {!canPublish && (
+                                <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
+                                    Cerita dari User Biasa akan berstatus
+                                    menunggu sampai disetujui Kontributor.
+                                </div>
+                            )}
+                            {story?.status === 'rejected' && (
+                                <div className="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-800 dark:bg-red-950 dark:text-red-100">
+                                    Cerita sebelumnya ditolak
+                                    {story.rejection_reason
+                                        ? `: ${story.rejection_reason}`
+                                        : '.'}{' '}
+                                    Simpan perubahan untuk mengajukan ulang.
+                                </div>
+                            )}
+
+                            <div className="grid gap-1.5">
+                                <Label
+                                    htmlFor="classification"
+                                    className="text-tb-on-surface"
+                                >
+                                    Klasifikasi{' '}
+                                    <span className="text-red-600">*</span>
+                                </Label>
+                                <Select
+                                    value={data.classification}
+                                    onValueChange={(value: 'umum' | 'marga') =>
+                                        setData('classification', value)
+                                    }
+                                >
+                                    <SelectTrigger
+                                        id="classification"
+                                        className="w-full border-tb-outline-variant bg-tb-surface-bright"
+                                    >
+                                        <SelectValue placeholder="Pilih klasifikasi" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="umum">
+                                            Umum
+                                        </SelectItem>
+                                        <SelectItem
+                                            value="marga"
+                                            disabled={!canCreateMarga}
+                                        >
+                                            Marga
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <InputError message={errors.classification} />
+                                <p className="text-xs text-tb-on-surface-variant">
+                                    Umum berlaku untuk seluruh komunitas. Marga
+                                    khusus untuk marga yang dipilih.
+                                </p>
+                            </div>
+
+                            {data.classification === 'marga' &&
+                                (lockedMarga ? (
+                                    <div className="grid gap-1.5">
+                                        <Label className="text-tb-on-surface">
+                                            Marga
+                                        </Label>
+                                        <div className="flex h-9 items-center rounded-md border border-tb-outline-variant bg-tb-surface-container px-3 text-sm text-tb-on-surface">
+                                            {lockedMarga.name}
+                                        </div>
+                                    </div>
+                                ) : canChooseMarga ? (
+                                    <div className="grid gap-1.5">
+                                        <Label
+                                            htmlFor="marga_id"
+                                            className="text-tb-on-surface"
+                                        >
+                                            Marga{' '}
+                                            <span className="text-red-600">
+                                                *
+                                            </span>
+                                        </Label>
+                                        <Select
+                                            value={data.marga_id}
+                                            onValueChange={(value) =>
+                                                setData('marga_id', value)
+                                            }
+                                        >
+                                            <SelectTrigger
+                                                id="marga_id"
+                                                className="w-full border-tb-outline-variant bg-tb-surface-bright"
+                                                aria-invalid={!!errors.marga_id}
+                                            >
+                                                <SelectValue placeholder="Pilih marga cerita" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {margas.map((marga) => (
+                                                    <SelectItem
+                                                        key={marga.id}
+                                                        value={String(marga.id)}
+                                                    >
+                                                        {marga.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <InputError message={errors.marga_id} />
+                                    </div>
+                                ) : (
+                                    <div className="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-800 dark:bg-red-950 dark:text-red-100">
+                                        Akun Anda belum memiliki marga. Pilih
+                                        klasifikasi Umum untuk mengajukan
+                                        cerita.
+                                    </div>
+                                ))}
+
                             <div className="grid gap-1.5">
                                 <Label
                                     htmlFor="title"
@@ -146,22 +282,27 @@ export default function StoryForm({ story }: Props) {
                                 <InputError message={errors.image} />
                             </div>
 
-                            <div className="flex items-center gap-3">
-                                <Checkbox
-                                    id="published"
-                                    checked={data.published}
-                                    onCheckedChange={(checked) =>
-                                        setData('published', checked === true)
-                                    }
-                                    className="rounded border-tb-outline-variant text-tb-primary focus:ring-tb-primary"
-                                />
-                                <Label
-                                    htmlFor="published"
-                                    className="cursor-pointer text-sm text-tb-on-surface"
-                                >
-                                    Tampilkan di halaman utama
-                                </Label>
-                            </div>
+                            {canPublish && (
+                                <div className="flex items-center gap-3">
+                                    <Checkbox
+                                        id="published"
+                                        checked={data.published}
+                                        onCheckedChange={(checked) =>
+                                            setData(
+                                                'published',
+                                                checked === true,
+                                            )
+                                        }
+                                        className="rounded border-tb-outline-variant text-tb-primary focus:ring-tb-primary"
+                                    />
+                                    <Label
+                                        htmlFor="published"
+                                        className="cursor-pointer text-sm text-tb-on-surface"
+                                    >
+                                        Tampilkan di halaman utama
+                                    </Label>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
 
@@ -175,7 +316,9 @@ export default function StoryForm({ story }: Props) {
                                 ? 'Menyimpan...'
                                 : isEdit
                                   ? 'Simpan Perubahan'
-                                  : 'Tambah Cerita'}
+                                  : canPublish
+                                    ? 'Tambah Cerita'
+                                    : 'Ajukan Cerita'}
                         </Button>
                         <Button
                             asChild

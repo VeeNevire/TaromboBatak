@@ -22,6 +22,13 @@ type StoryItem = {
     description: string;
     image: string | null;
     published: boolean;
+    classification: 'umum' | 'marga';
+    marga: string | null;
+    creator: string | null;
+    status: 'pending' | 'approved' | 'rejected';
+    rejection_reason: string | null;
+    can_edit: boolean;
+    can_delete: boolean;
     created_at: string | null;
 };
 
@@ -39,9 +46,14 @@ type Paginated = {
 type Props = {
     stories: Paginated;
     filters: { search: string };
+    canCreate: boolean;
 };
 
-export default function StoriesIndex({ stories: page, filters }: Props) {
+export default function StoriesIndex({
+    stories: page,
+    filters,
+    canCreate,
+}: Props) {
     const [search, setSearch] = useState(filters.search ?? '');
     const [toDelete, setToDelete] = useState<StoryItem | null>(null);
     const deleteForm = useForm({});
@@ -79,14 +91,16 @@ export default function StoriesIndex({ stories: page, filters }: Props) {
                             Kelola cerita yang tampil di halaman utama.
                         </p>
                     </div>
-                    <Button
-                        asChild
-                        className="rounded-full bg-tb-primary hover:bg-tb-primary-light"
-                    >
-                        <Link href={stories.create()}>
-                            <Plus className="size-4" /> Tambah Cerita
-                        </Link>
-                    </Button>
+                    {canCreate && (
+                        <Button
+                            asChild
+                            className="rounded-full bg-tb-primary hover:bg-tb-primary-light"
+                        >
+                            <Link href={stories.create()}>
+                                <Plus className="size-4" /> Tambah Cerita
+                            </Link>
+                        </Button>
+                    )}
                 </div>
 
                 <Card className="border-tb-outline-variant bg-tb-surface-bright">
@@ -110,17 +124,20 @@ export default function StoriesIndex({ stories: page, filters }: Props) {
 
                 <Card className="border-tb-outline-variant bg-tb-surface-bright">
                     <CardContent className="overflow-x-auto py-0">
-                        <table className="w-full min-w-[640px] text-sm">
+                        <table className="w-full min-w-[820px] text-sm">
                             <thead>
                                 <tr className="border-b border-tb-outline-variant text-left text-xs text-tb-on-surface-variant">
                                     <th className="px-3 py-3 font-medium">
                                         Cerita
                                     </th>
                                     <th className="px-3 py-3 font-medium">
+                                        Klasifikasi
+                                    </th>
+                                    <th className="px-3 py-3 font-medium">
                                         Status
                                     </th>
                                     <th className="px-3 py-3 font-medium">
-                                        Dibuat
+                                        Pembuat
                                     </th>
                                     <th className="px-3 py-3 text-right font-medium">
                                         Aksi
@@ -153,52 +170,84 @@ export default function StoriesIndex({ stories: page, filters }: Props) {
                                                     <p className="line-clamp-1 text-xs text-tb-on-surface-variant">
                                                         {story.description}
                                                     </p>
+                                                    {story.rejection_reason && (
+                                                        <p className="mt-1 text-xs text-red-600 dark:text-red-300">
+                                                            Alasan:{' '}
+                                                            {
+                                                                story.rejection_reason
+                                                            }
+                                                        </p>
+                                                    )}
                                                 </div>
                                             </div>
                                         </td>
                                         <td className="px-3 py-3">
-                                            {story.published ? (
+                                            <Badge variant="outline">
+                                                {story.classification === 'umum'
+                                                    ? 'Umum'
+                                                    : (story.marga ?? 'Marga')}
+                                            </Badge>
+                                        </td>
+                                        <td className="px-3 py-3">
+                                            {story.status === 'approved' ? (
                                                 <Badge className="bg-[#3e6b48] text-white">
-                                                    Tampil
+                                                    Disetujui
+                                                </Badge>
+                                            ) : story.status === 'pending' ? (
+                                                <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-200">
+                                                    Menunggu
                                                 </Badge>
                                             ) : (
-                                                <Badge
-                                                    variant="outline"
-                                                    className="border-tb-outline-variant text-tb-on-surface-variant"
-                                                >
-                                                    Disembunyikan
+                                                <Badge className="bg-red-100 text-red-800 hover:bg-red-100 dark:bg-red-950 dark:text-red-200">
+                                                    Ditolak
                                                 </Badge>
+                                            )}
+                                            {story.status === 'approved' && (
+                                                <p className="mt-1 text-xs text-tb-on-surface-variant">
+                                                    {story.published
+                                                        ? 'Tampil di publik'
+                                                        : 'Disembunyikan'}
+                                                </p>
                                             )}
                                         </td>
                                         <td className="px-3 py-3 text-tb-on-surface-variant">
-                                            {story.created_at ?? '-'}
+                                            <p>
+                                                {story.creator ?? 'Data lama'}
+                                            </p>
+                                            <p className="text-xs">
+                                                {story.created_at ?? '-'}
+                                            </p>
                                         </td>
                                         <td className="px-3 py-3">
                                             <div className="flex justify-end gap-1">
-                                                <Button
-                                                    asChild
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="size-8 text-tb-primary hover:bg-tb-surface-container"
-                                                >
-                                                    <Link
-                                                        href={stories.edit(
-                                                            story.id,
-                                                        )}
+                                                {story.can_edit && (
+                                                    <Button
+                                                        asChild
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="size-8 text-tb-primary hover:bg-tb-surface-container"
                                                     >
-                                                        <Pencil className="size-4" />
-                                                    </Link>
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="size-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
-                                                    onClick={() =>
-                                                        setToDelete(story)
-                                                    }
-                                                >
-                                                    <Trash className="size-4" />
-                                                </Button>
+                                                        <Link
+                                                            href={stories.edit(
+                                                                story.id,
+                                                            )}
+                                                        >
+                                                            <Pencil className="size-4" />
+                                                        </Link>
+                                                    </Button>
+                                                )}
+                                                {story.can_delete && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="size-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                                                        onClick={() =>
+                                                            setToDelete(story)
+                                                        }
+                                                    >
+                                                        <Trash className="size-4" />
+                                                    </Button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -206,7 +255,7 @@ export default function StoriesIndex({ stories: page, filters }: Props) {
                                 {page.data.length === 0 && (
                                     <tr>
                                         <td
-                                            colSpan={4}
+                                            colSpan={5}
                                             className="px-3 py-10 text-center text-tb-on-surface-variant"
                                         >
                                             Belum ada cerita.

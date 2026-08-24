@@ -16,7 +16,7 @@ class HomeController extends Controller
     public function index(): Response
     {
         $stories = Story::query()
-            ->where('published', true)
+            ->publiclyVisible()
             ->latest()
             ->limit(3)
             ->get()
@@ -28,7 +28,7 @@ class HomeController extends Controller
             ]);
 
         $events = Event::query()
-            ->where('published', true)
+            ->publiclyVisible()
             ->where('date', '>=', now()->toDateString())
             ->orderBy('date')
             ->limit(3)

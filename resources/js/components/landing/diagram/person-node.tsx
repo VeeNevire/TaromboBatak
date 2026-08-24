@@ -1,6 +1,6 @@
 import { Handle, Position, useStore } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
-import { getInitials } from '@/data/tarombo-tree';
+import { getGenerationLabel, getInitials } from '@/data/tarombo-tree';
 import type { TaromboNodeData } from '@/data/tarombo-tree';
 import { cn } from '@/lib/utils';
 
@@ -124,6 +124,10 @@ function PersonBubble({
             <div className="mt-2 space-y-1 border-t border-tb-outline-variant pt-2">
                 <DetailRow label="Anak ke" value={person.birthOrder} />
                 <DetailRow
+                    label="Generasi"
+                    value={`Gen ${person.generation} (${getGenerationLabel(person.generation)})`}
+                />
+                <DetailRow
                     label="Jenis Kelamin"
                     value={person.gender?.toUpperCase()}
                 />
@@ -134,7 +138,8 @@ function PersonBubble({
 }
 
 export function PersonNode({ data }: NodeProps) {
-    const { person, ringColor, selected, related } = data as TaromboNodeData;
+    const { person, ringColor, selected, related, bubble } =
+        data as TaromboNodeData;
     const zoom = useStore((state) => state.transform[2]);
 
     const avatarShadow = selected
@@ -151,7 +156,7 @@ export function PersonNode({ data }: NodeProps) {
             )}
             style={{ animationDelay: `${(person.generation - 1) * 90}ms` }}
         >
-            {selected && (
+            {bubble && (
                 <div
                     className="absolute bottom-full left-1/2 z-30 mb-3"
                     style={{

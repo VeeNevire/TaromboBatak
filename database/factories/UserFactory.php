@@ -56,6 +56,16 @@ class UserFactory extends Factory
         ]);
     }
 
+    public function asMainContributor(): static
+    {
+        return $this->state(fn () => ['role' => 'contributor_main']);
+    }
+
+    public function asContributorMember(): static
+    {
+        return $this->state(fn () => ['role' => 'contributor_member']);
+    }
+
     /**
      * Indicate that the user belongs to a marga.
      */

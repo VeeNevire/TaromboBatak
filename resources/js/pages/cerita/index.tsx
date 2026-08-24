@@ -15,6 +15,8 @@ type StoryItem = {
     title: string;
     description: string;
     image: string | null;
+    classification: 'umum' | 'marga';
+    marga: string | null;
     created_at: string | null;
 };
 
@@ -123,6 +125,11 @@ export default function CeritaIndex({ stories: page, filters }: Props) {
                                             </div>
                                         )}
                                         <div className="flex flex-1 flex-col p-6">
+                                            <span className="mb-3 w-fit rounded-full bg-tb-primary/10 px-2.5 py-1 text-xs font-medium text-tb-primary">
+                                                {story.classification === 'umum'
+                                                    ? 'Umum'
+                                                    : (story.marga ?? 'Marga')}
+                                            </span>
                                             <h3 className="mb-2 font-display text-xl font-bold transition-colors group-hover:text-tb-primary">
                                                 {story.title}
                                             </h3>

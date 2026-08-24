@@ -2,8 +2,10 @@
 
 use App\Http\Controllers\BudayaController;
 use App\Http\Controllers\ContactController;
+use App\Http\Controllers\ContributionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EventController;
+use App\Http\Controllers\FamilyTreeDeletionController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\KomunitasController;
 use App\Http\Controllers\MargaController;
@@ -18,6 +20,9 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', [HomeController::class, 'index'])->name('home');
 
 Route::get('tarombo', [TaromboController::class, 'public'])->name('tarombo.view');
+
+Route::get('tarombo/full', [TaromboController::class, 'publicFullscreen'])
+    ->name('tarombo.full');
 
 Route::get('marga', [MargaController::class, 'public'])->name('marga.view');
 
@@ -63,11 +68,14 @@ Route::middleware(['auth'])->group(function () {
     Route::get('people/{person}/edit', [PersonController::class, 'edit'])->name('people.edit');
 
     Route::put('people/{person}', [PersonController::class, 'update'])->name('people.update');
-
     Route::get('family-trees/{familyTree}', [PersonController::class, 'showFamilyTree'])->name('family-trees.show');
     Route::post('family-trees/{familyTree}/duplicate', [PersonController::class, 'duplicateFamilyTree'])->name('family-trees.duplicate');
     Route::get('family-trees/{familyTree}/edit', [PersonController::class, 'editFamilyTree'])->name('family-trees.edit');
     Route::put('family-trees/{familyTree}', [PersonController::class, 'updateFamilyTree'])->name('family-trees.update');
+    Route::delete('family-trees/{familyTree}', [FamilyTreeDeletionController::class, 'destroy'])->name('family-trees.destroy');
+
+    Route::resource('events', EventController::class)->except(['show']);
+    Route::resource('stories', StoryController::class)->except(['show']);
 });
 
 Route::middleware(['auth', 'role.staff'])->group(function () {
@@ -80,13 +88,24 @@ Route::middleware(['auth', 'role.staff'])->group(function () {
     Route::put('dashboard/marga/{marga}', [MargaController::class, 'update'])->name('marga.update');
     Route::delete('dashboard/marga/{marga}', [MargaController::class, 'destroy'])->name('marga.destroy');
 
-    Route::resource('stories', StoryController::class)->except(['show']);
-
-    Route::resource('events', EventController::class)->except(['show']);
 });
 
 Route::middleware(['auth', 'role.admin'])->group(function () {
     Route::resource('sub-admins', SubAdminController::class)->except(['show']);
+    Route::post('dashboard/contributions/contributors', [ContributionController::class, 'storeContributor'])->name('contributions.contributors.store');
+    Route::delete('dashboard/contributions/contributors/{contributor}', [ContributionController::class, 'destroyContributor'])->name('contributions.contributors.destroy');
+});
+
+Route::middleware(['auth', 'role.contributor'])->group(function () {
+    Route::get('dashboard/contributions', [ContributionController::class, 'index'])->name('contributions.index');
+    Route::post('dashboard/contributions/{contribution}/approve', [ContributionController::class, 'approve'])->name('contributions.approve');
+    Route::post('dashboard/contributions/{contribution}/reject', [ContributionController::class, 'reject'])->name('contributions.reject');
+    Route::post('events/{event}/approve', [EventController::class, 'approve'])->name('events.approve');
+    Route::post('events/{event}/reject', [EventController::class, 'reject'])->name('events.reject');
+    Route::post('stories/{story}/approve', [StoryController::class, 'approve'])->name('stories.approve');
+    Route::post('stories/{story}/reject', [StoryController::class, 'reject'])->name('stories.reject');
+    Route::post('family-tree-deletions/{deletion}/approve', [FamilyTreeDeletionController::class, 'approve'])->name('family-tree-deletions.approve');
+    Route::post('family-tree-deletions/{deletion}/reject', [FamilyTreeDeletionController::class, 'reject'])->name('family-tree-deletions.reject');
 });
 
 require __DIR__.'/settings.php';

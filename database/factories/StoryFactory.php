@@ -22,6 +22,17 @@ class StoryFactory extends Factory
             'description' => fake()->paragraph(),
             'image' => fake()->imageUrl(),
             'published' => true,
+            'classification' => Story::CLASSIFICATION_GENERAL,
+            'status' => Story::STATUS_APPROVED,
+            'review_version' => 1,
         ];
+    }
+
+    public function pending(): static
+    {
+        return $this->state(fn () => [
+            'published' => false,
+            'status' => Story::STATUS_PENDING,
+        ]);
     }
 }

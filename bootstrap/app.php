@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureUserCanReviewContributions;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\EnsureUserIsStaff;
 use App\Http\Middleware\HandleAppearance;
@@ -26,6 +27,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'role.admin' => EnsureUserIsAdmin::class,
+            'role.contributor' => EnsureUserCanReviewContributions::class,
             'role.staff' => EnsureUserIsStaff::class,
         ]);
 

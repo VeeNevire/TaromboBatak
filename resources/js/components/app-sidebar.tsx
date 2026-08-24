@@ -1,6 +1,7 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
     BookOpen,
+    BellRing,
     CalendarDays,
     LayoutGrid,
     MessageCircle,
@@ -23,6 +24,7 @@ import {
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
 import contacts from '@/routes/contacts';
+import contributions from '@/routes/contributions';
 import events from '@/routes/events';
 import marga from '@/routes/marga';
 import people from '@/routes/people';
@@ -32,9 +34,17 @@ import tarombo from '@/routes/tarombo';
 import type { NavGroup } from '@/types';
 
 export function AppSidebar() {
-    const { auth } = usePage().props;
+    const {
+        auth,
+        unreadContributionCount,
+        unreadEventCount,
+        unreadStoryCount,
+    } = usePage().props;
     const isAdmin = auth.user?.role === 'admin';
     const isStaff = isAdmin || auth.user?.role === 'subadmin';
+    const isContributor =
+        auth.user?.role === 'contributor_main' ||
+        auth.user?.role === 'contributor_member';
 
     const navGroups: NavGroup[] = [
         {
@@ -98,6 +108,16 @@ export function AppSidebar() {
                               href: people.index(),
                               icon: Users,
                           },
+                          {
+                              title: 'Event & Kegiatan',
+                              href: events.index(),
+                              icon: CalendarDays,
+                          },
+                          {
+                              title: 'Cerita Leluhur & Budaya',
+                              href: stories.index(),
+                              icon: BookOpen,
+                          },
                       ],
                   } satisfies NavGroup,
               ]),
@@ -110,6 +130,30 @@ export function AppSidebar() {
                               title: 'Sub Admin',
                               href: subAdmins.index(),
                               icon: ShieldCheck,
+                          },
+                          {
+                              title: 'Kontribusi',
+                              href: contributions.index(),
+                              icon: BellRing,
+                              badge: unreadContributionCount,
+                          },
+                      ],
+                  } satisfies NavGroup,
+              ]
+            : []),
+        ...(isContributor
+            ? [
+                  {
+                      label: 'Kontribusi',
+                      items: [
+                          {
+                              title: 'Pengajuan Kontribusi',
+                              href: contributions.index(),
+                              icon: BellRing,
+                              badge:
+                                  unreadContributionCount +
+                                  unreadEventCount +
+                                  unreadStoryCount,
                           },
                       ],
                   } satisfies NavGroup,

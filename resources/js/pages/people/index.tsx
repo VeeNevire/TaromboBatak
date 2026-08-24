@@ -1,17 +1,9 @@
-import { Head, Link, router, useForm } from '@inertiajs/react';
-import { Route, NotebookPen, Pencil, Plus, Search, Trash } from 'lucide-react';
+import { Head, Link, router } from '@inertiajs/react';
+import { Route, NotebookPen, Pencil, Plus, Search } from 'lucide-react';
 import { useState } from 'react';
 import { AppAvatar } from '@/components/app-avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import {
     Select,
@@ -67,8 +59,6 @@ export default function PeopleIndex({
     hasMarga,
 }: Props) {
     const [search, setSearch] = useState(filters.search ?? '');
-    const [toDelete, setToDelete] = useState<PersonItem | null>(null);
-    const deleteForm = useForm({});
     const showActions =
         canManage || page.data.some((person) => person.editable);
 
@@ -90,17 +80,6 @@ export default function PeopleIndex({
             },
             { preserveState: true, replace: true },
         );
-    };
-
-    const confirmDelete = () => {
-        if (!toDelete) {
-            return;
-        }
-
-        deleteForm.delete(people.destroy(toDelete.id).url, {
-            preserveScroll: true,
-            onSuccess: () => setToDelete(null),
-        });
     };
 
     return (
@@ -297,20 +276,7 @@ export default function PeopleIndex({
                                                                 </Link>
                                                             </Button>
                                                             <Button
-                                                                title="Hapus"
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="size-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
-                                                                onClick={() =>
-                                                                    setToDelete(
-                                                                        person,
-                                                                    )
-                                                                }
-                                                            >
-                                                                <Trash className="size-4" />
-                                                            </Button>
-                                                            <Button
-                                                                title="detail silsilah keluarga"
+                                                                title="Detail silsilah keluarga"
                                                                 asChild
                                                                 variant="ghost"
                                                                 size="icon"
@@ -325,6 +291,7 @@ export default function PeopleIndex({
                                                                 </Link>
                                                             </Button>
                                                             <Button
+                                                                title="Buka silsilah keluarga"
                                                                 asChild
                                                                 variant="ghost"
                                                                 size="icon"
@@ -381,41 +348,6 @@ export default function PeopleIndex({
                 </Card>
 
                 <Pagination page={page} />
-
-                <Dialog
-                    open={toDelete !== null}
-                    onOpenChange={(open) => !open && setToDelete(null)}
-                >
-                    <DialogContent className="sm:max-w-md">
-                        <DialogHeader>
-                            <DialogTitle className="text-tb-on-surface">
-                                Hapus Anggota
-                            </DialogTitle>
-                            <DialogDescription>
-                                Yakin ingin menghapus{' '}
-                                <strong>{toDelete?.name}</strong> dari silsilah?
-                                Tindakan ini tidak dapat dibatalkan.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <DialogFooter>
-                            <Button
-                                variant="outline"
-                                onClick={() => setToDelete(null)}
-                            >
-                                Batal
-                            </Button>
-                            <Button
-                                variant="destructive"
-                                onClick={confirmDelete}
-                                disabled={deleteForm.processing}
-                            >
-                                {deleteForm.processing
-                                    ? 'Menghapus...'
-                                    : 'Ya, Hapus'}
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
             </div>
         </>
     );
