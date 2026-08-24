@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\MessageRead;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
@@ -30,6 +31,9 @@ class ContactController extends Controller
      * Incremental JSON feed for the silent fallback poller. Deliberately
      * outside Inertia so polling never touches the page router (and can
      * never disturb typing, focus, or scroll).
+     *
+     * Cursors: after_id (messages newer than cursor), before_id + limit
+     * (older history page). Without cursors the latest limit is returned.
      */
     public function messages(Request $request, User $contact): JsonResponse
     {
@@ -41,25 +45,80 @@ class ContactController extends Controller
         $conversation = Conversation::between($user, $contact)->first();
 
         if ($conversation === null) {
-            return response()->json(['messages' => []]);
+            return response()->json(['messages' => [], 'has_more' => false]);
         }
 
-        // Percakapan sedang terbuka: pesan masuk dianggap sudah dibaca.
-        $conversation->messages()
-            ->where('sender_id', '!=', $user->id)
-            ->whereNull('read_at')
-            ->update(['read_at' => now()]);
+        $this->markConversationRead($conversation, $user);
 
         $afterId = (int) $request->query('after_id', 0);
+        $beforeId = (int) $request->query('before_id', 0);
+        $limit = max(1, min(200, (int) $request->query('limit', 50)));
 
-        $messages = $conversation->messages()
-            ->when($afterId > 0, fn (Builder $query) => $query->where('id', '>', $afterId))
-            ->orderBy('id')
-            ->limit(200)
-            ->get()
-            ->map(fn (Message $message) => $this->messagePayload($message, $user));
+        $query = $conversation->messages();
 
-        return response()->json(['messages' => $messages]);
+        if ($afterId > 0) {
+            $messages = $query->where('id', '>', $afterId)
+                ->orderBy('id')
+                ->limit($limit)
+                ->get();
+            $hasMore = false;
+        } elseif ($beforeId > 0) {
+            $messages = $query->where('id', '<', $beforeId)
+                ->latest('id')
+                ->limit($limit + 1)
+                ->get()
+                ->reverse()
+                ->values();
+            $hasMore = $messages->count() > $limit;
+
+            if ($hasMore) {
+                $messages = $messages->slice(1)->values();
+            }
+        } else {
+            $messages = $query->latest('id')
+                ->limit($limit)
+                ->get()
+                ->reverse()
+                ->values();
+            $hasMore = $messages->count() >= $limit;
+        }
+
+        return response()->json([
+            'messages' => $messages
+                ->map(fn (Message $message) => $this->messagePayload($message, $user)),
+            'has_more' => $hasMore,
+        ]);
+    }
+
+    /**
+     * Mark the counterpart's messages as read and notify their author in
+     * real time so the sender sees the read receipt immediately.
+     *
+     * @return array<int, int> Affected message ids.
+     */
+    private function markConversationRead(Conversation $conversation, User $reader): array
+    {
+        $affected = $conversation->messages()
+            ->where('sender_id', '!=', $reader->id)
+            ->whereNull('read_at')
+            ->pluck('id');
+
+        if ($affected->isEmpty()) {
+            return [];
+        }
+
+        $now = now();
+        Message::query()->whereIn('id', $affected)->update(['read_at' => $now]);
+
+        MessageRead::dispatch(
+            $conversation->otherParticipantId($reader->id),
+            $conversation->id,
+            $reader->id,
+            $affected->all(),
+            $now->toISOString(),
+        );
+
+        return $affected->all();
     }
 
     private function render(Request $request, ?User $selectedContact = null): Response
@@ -75,10 +134,7 @@ class ContactController extends Controller
         $selectedContact?->loadMissing('marga');
 
         if ($conversation) {
-            $conversation->messages()
-                ->where('sender_id', '!=', $user->id)
-                ->whereNull('read_at')
-                ->update(['read_at' => now()]);
+            $this->markConversationRead($conversation, $user);
         }
 
         $conversations = $this->conversationsFor($user);

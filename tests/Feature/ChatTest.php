@@ -1,5 +1,6 @@
 <?php
 
+use App\Events\MessageRead;
 use App\Events\MessageSent;
 use App\Models\Conversation;
 use App\Models\Marga;
@@ -98,6 +99,76 @@ test('the messages feed rejects contacts outside the marga', function () {
     $this->actingAs($user)
         ->get(route('contacts.messages.index', ['contact' => $outsider]))
         ->assertForbidden();
+});
+
+test('the messages feed supports history pagination with before_id', function () {
+    $marga = Marga::factory()->create();
+    $reader = User::factory()->withMarga($marga->id)->create();
+    $sender = User::factory()->withMarga($marga->id)->create();
+
+    $conversation = Conversation::create(
+        Conversation::participantAttributes($reader, $sender),
+    );
+
+    $ids = [];
+
+    foreach (range(1, 5) as $i) {
+        $ids[] = $conversation->messages()->create([
+            'sender_id' => $sender->id,
+            'body' => 'pesan '.$i,
+        ])->id;
+    }
+
+    // Cursor ke depan: hanya pesan setelah kursor.
+    $this->actingAs($reader)
+        ->get(route('contacts.messages.index', [
+            'contact' => $sender,
+            'after_id' => $ids[3],
+        ]))
+        ->assertOk()
+        ->assertJsonCount(1, 'messages')
+        ->assertJsonPath('messages.0.body', 'pesan 5');
+
+    // Halaman riwayat: dua pesan sebelum kursor, tertua disembunyikan.
+    $this->actingAs($reader)
+        ->get(route('contacts.messages.index', [
+            'contact' => $sender,
+            'before_id' => $ids[4],
+            'limit' => 2,
+        ]))
+        ->assertOk()
+        ->assertJsonPath('has_more', true)
+        ->assertJsonCount(2, 'messages')
+        ->assertJsonPath('messages.0.body', 'pesan 3')
+        ->assertJsonPath('messages.1.body', 'pesan 4');
+});
+
+test('reading the messages feed broadcasts a read receipt to the sender', function () {
+    Event::fake([MessageRead::class]);
+
+    $marga = Marga::factory()->create();
+    $reader = User::factory()->withMarga($marga->id)->create();
+    $sender = User::factory()->withMarga($marga->id)->create();
+
+    $conversation = Conversation::create(
+        Conversation::participantAttributes($reader, $sender),
+    );
+    $message = $conversation->messages()->create([
+        'sender_id' => $sender->id,
+        'body' => 'tolong dibaca',
+    ]);
+
+    $this->actingAs($reader)
+        ->get(route('contacts.messages.index', ['contact' => $sender]))
+        ->assertOk();
+
+    Event::assertDispatched(
+        MessageRead::class,
+        fn (MessageRead $event) => $event->recipientUserId === $sender->id
+            && $event->readerId === $reader->id
+            && in_array($message->id, $event->messageIds)
+            && $event->broadcastOn()[0]->name === (new PrivateChannel('users.'.$sender->id))->name,
+    );
 });
 
 test('a user can send a validated message to a contact in the same marga', function () {

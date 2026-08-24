@@ -1,14 +1,28 @@
-import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { useConnectionStatus, useEcho } from '@laravel/echo-react';
 import {
+    AlertCircle,
     ArrowLeft,
+    Check,
+    CheckCheck,
+    ChevronUp,
+    Clock,
+    Loader2,
     MessageCircle,
+    RefreshCw,
     Search,
     Send,
     ShieldCheck,
     Users,
 } from 'lucide-react';
-import { useDeferredValue, useEffect, useRef, useState } from 'react';
+import {
+    useDeferredValue,
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+} from 'react';
+import type { CSSProperties } from 'react';
 import { AppAvatar } from '@/components/app-avatar';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
@@ -27,28 +41,64 @@ type Contact = {
     unread_count: number;
 };
 
-type ChatMessage = {
-    id: number;
+type MessageStatus = 'sending' | 'sent' | 'read' | 'failed';
+
+/**
+ * Satu-satunya representasi pesan di klien. Semua jalur masuk (snapshot
+ * Inertia, broadcast Echo, fetch fallback, konfirmasi kirim) melewati
+ * mergeMessages() yang dinormalisasi: dedupe by id, sort by id, dan
+ * penggantian pesan pending menjadi persisten secara FIFO.
+ */
+type ChatItem = {
+    /** `m{id}` untuk persisten, `p{uid}` untuk milik klien. */
+    key: string;
+    /** null selama belum tersimpan di server (status sending/failed). */
+    id: number | null;
+    uid: string;
+    contact_id: number;
     sender_id: number;
     body: string;
     created_at: string | null;
     read_at: string | null;
     is_mine: boolean;
+    status: MessageStatus;
 };
 
-type PendingMessage = {
-    uid: string;
+type Store = Record<number, ChatItem[]>;
+
+type RawMessage = {
+    id: number;
+    sender_id: number;
     body: string;
-    sent_at: string;
-    contact_id: number;
+    created_at: string | null;
+    read_at?: string | null;
+    is_mine: boolean;
 };
-
-type ChatViewMessage = Omit<ChatMessage, 'id'> & { id: number | string };
 
 type Props = {
     contacts: Contact[];
     selectedContact: Contact | null;
-    messages: ChatMessage[];
+    messages: RawMessage[];
+};
+
+const createUid = () =>
+    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+/** Urutan tampil: pesan persisten naik by id; milik klien menempel di akhir. */
+const compareItems = (a: ChatItem, b: ChatItem): number => {
+    if (a.id !== null && b.id !== null) {
+        return a.id - b.id;
+    }
+
+    if (a.id !== null) {
+        return -1;
+    }
+
+    if (b.id !== null) {
+        return 1;
+    }
+
+    return a.uid < b.uid ? -1 : a.uid > b.uid ? 1 : 0;
 };
 
 export default function ContactsIndex({
@@ -57,114 +107,227 @@ export default function ContactsIndex({
     messages,
 }: Props) {
     const { auth } = usePage().props;
+
+    // ------------------------------------------------------------------
+    // Store tunggal pesan per-percakapan + metadata pendukung
+    // ------------------------------------------------------------------
+    const [store, setStore] = useState<Store>({});
+    const [unreadMap, setUnreadMap] = useState<Record<number, number>>({});
+    const [history, setHistory] = useState<
+        Record<number, { loading: boolean; hasMore: boolean }>
+    >({});
     const [search, setSearch] = useState('');
-    const [extraMessages, setExtraMessages] = useState<ChatMessage[]>([]);
-    const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>(
-        [],
-    );
+
+    const storeRef = useRef<Store>({});
+    const contactItemsRef = useRef<Contact[]>(contactItems);
+    const selectedContactIdRef = useRef<number | null>(null);
+    const messageContainerRef = useRef<HTMLDivElement>(null);
+    const messageEndRef = useRef<HTMLDivElement>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const prevContactIdRef = useRef<number | null | undefined>(undefined);
+    const fetchingRef = useRef<Set<number>>(new Set());
+
     const deferredSearch = useDeferredValue(search.trim().toLocaleLowerCase());
     const connectionStatus = useConnectionStatus();
-    const messageEndRef = useRef<HTMLDivElement>(null);
-    const messageContainerRef = useRef<HTMLDivElement>(null);
-    const prevContactIdRef = useRef<number | null | undefined>(undefined);
-    const contactReloadTimerRef = useRef<number | null>(null);
     const messageForm = useForm({ body: '' });
 
+    const conversation =
+        selectedContact != null ? (store[selectedContact.id] ?? []) : [];
+
     useEffect(() => {
-        return () => {
-            if (contactReloadTimerRef.current !== null) {
-                window.clearTimeout(contactReloadTimerRef.current);
+        storeRef.current = store;
+    }, [store]);
+
+    useEffect(() => {
+        contactItemsRef.current = contactItems;
+    }, [contactItems]);
+
+    useEffect(() => {
+        selectedContactIdRef.current = selectedContact?.id ?? null;
+    }, [selectedContact?.id]);
+
+    /**
+     * Satu pintu masuk untuk SEMUA pesan baru. Idempoten: aman dipanggil
+     * berulang dengan data yang sama dari jalur berbeda.
+     */
+    const mergeMessages = useCallback(
+        (items: RawMessage[], forcedContactId?: number) => {
+            if (items.length === 0) {
+                return;
             }
-        };
+
+            setStore((current) => {
+                let next = current;
+
+                for (const raw of items) {
+                    const contactId =
+                        forcedContactId ?? selectedContactIdRef.current;
+
+                    if (contactId == null) {
+                        continue;
+                    }
+
+                    next = upsertMessage(next, contactId, {
+                        key: `m${raw.id}`,
+                        id: raw.id,
+                        uid: `s${raw.id}`,
+                        contact_id: contactId,
+                        sender_id: raw.sender_id,
+                        body: raw.body,
+                        created_at: raw.created_at,
+                        read_at: raw.read_at ?? null,
+                        is_mine: raw.is_mine,
+                        status: raw.is_mine
+                            ? raw.read_at
+                                ? 'read'
+                                : 'sent'
+                            : 'sent',
+                    });
+                }
+
+                return next;
+            });
+        },
+        [],
+    );
+
+    /**
+     * Seed snapshot dari props Inertia (buka halaman / kunjungan penuh).
+     * Merge bersifat idempoten sehingga tidak pernah menduplikasi ataupun
+     * menghapus apa pun yang sudah ada di store.
+     */
+    useEffect(() => {
+        if (selectedContact == null || messages.length === 0) {
+            return;
+        }
+
+        mergeMessages(messages, selectedContact.id);
+    }, [messages, selectedContact, mergeMessages]);
+
+    /**
+     * Badge unread murni lokal: bertambah dari payload Echo dan nol saat
+     * percakapan dibuka. Tidak perlu di-reset manual — setiap kunjungan
+     * halaman me-remount komponen sehingga nilai segar kembali dari server,
+     * dan alur chat sendiri tidak pernah menyentuh router Inertia lagi.
+     */
+    const bumpUnread = useCallback((contactId: number) => {
+        setUnreadMap((current) => {
+            if (contactId === selectedContactIdRef.current) {
+                return current;
+            }
+
+            const base =
+                current[contactId] ??
+                contactItemsRef.current.find((item) => item.id === contactId)
+                    ?.unread_count ??
+                0;
+
+            return { ...current, [contactId]: base + 1 };
+        });
     }, []);
 
-    // Badge/preview daftar kontak diperbarui paling cepat sekali per 2 detik
-    // agar pesan beruntun tidak memicu reload partial berulang-ulang.
-    const scheduleContactsReload = () => {
-        if (contactReloadTimerRef.current !== null) {
-            return;
-        }
-
-        contactReloadTimerRef.current = window.setTimeout(() => {
-            contactReloadTimerRef.current = null;
-            router.reload({ only: ['contacts'] });
-        }, 2000);
-    };
-
-    const filteredContacts = contactItems.filter((contact) =>
-        contact.name.toLocaleLowerCase().includes(deferredSearch),
-    );
-    const persistedMessageIds = new Set(messages.map((message) => message.id));
-    const visibleMessages: ChatViewMessage[] = [
-        ...messages,
-        ...extraMessages.filter(
-            (message) =>
-                !persistedMessageIds.has(message.id) &&
-                (selectedContact == null ||
-                    message.sender_id === selectedContact.id ||
-                    message.is_mine),
-        ),
-        ...pendingMessages
-            .filter((pending) => pending.contact_id === selectedContact?.id)
-            .map((pending) => ({
-                id: `pending-${pending.uid}`,
-                sender_id: auth.user.id,
-                body: pending.body,
-                created_at: pending.sent_at,
-                read_at: null,
-                is_mine: true,
-            })),
-    ];
-
-    // ID pesan tertinggi yang sudah diketahui klien, dipakai sebagai
-    // cursor incremental untuk fetch senyap.
-    const latestMessageIdRef = useRef(0);
-
-    useEffect(() => {
-        for (const message of [...messages, ...extraMessages]) {
-            if (
-                typeof message.id === 'number' &&
-                message.id > latestMessageIdRef.current
-            ) {
-                latestMessageIdRef.current = message.id;
-            }
-        }
-    }, [messages, extraMessages]);
-
-    const ingestExternal = (
-        items: Array<{
-            id: number;
-            sender_id: number;
-            body: string;
-            created_at: string | null;
-        }>,
-    ) => {
-        if (items.length === 0) {
-            return;
-        }
-
-        setExtraMessages((current) => {
-            const knownIds = new Set(current.map((message) => message.id));
-            const additions = items
-                .filter((item) => !knownIds.has(item.id))
-                .map((item) => ({
-                    id: item.id,
-                    sender_id: item.sender_id,
-                    body: item.body,
-                    created_at: item.created_at,
+    // ------------------------------------------------------------------
+    // Jalur realtime utama: broadcast privat penerima
+    // ------------------------------------------------------------------
+    useEcho<{
+        id: number;
+        sender_id: number;
+        body: string;
+        created_at: string | null;
+    }>(
+        `users.${auth.user.id}`,
+        '.message.sent',
+        (message) => {
+            mergeMessages([
+                {
+                    id: message.id,
+                    sender_id: message.sender_id,
+                    body: message.body,
+                    created_at: message.created_at,
                     read_at: null,
-                    is_mine: item.sender_id === auth.user.id,
-                }));
+                    is_mine: false,
+                },
+            ]);
+            bumpUnread(message.sender_id);
+        },
+        [mergeMessages, bumpUnread],
+    );
 
-            return additions.length > 0 ? [...current, ...additions] : current;
-        });
-    };
+    /**
+     * Read receipt: lawan bicara membaca pesan kita.
+     */
+    useEcho<{
+        reader_id: number;
+        message_ids: number[];
+        read_at: string;
+    }>(
+        `users.${auth.user.id}`,
+        '.message.read',
+        ({ reader_id, message_ids, read_at }) => {
+            const ids = new Set(message_ids);
 
-    const fetchNewMessages = async (contactId: number) => {
+            setStore((current) => {
+                const items = current[reader_id];
+
+                if (!items) {
+                    return current;
+                }
+
+                let changed = false;
+                const nextItems: ChatItem[] = items.map((item) => {
+                    if (
+                        item.id !== null &&
+                        ids.has(item.id) &&
+                        item.is_mine &&
+                        !item.read_at
+                    ) {
+                        changed = true;
+
+                        return {
+                            ...item,
+                            read_at: read_at,
+                            status: 'read' as MessageStatus,
+                        };
+                    }
+
+                    return item;
+                });
+
+                return changed
+                    ? { ...current, [reader_id]: nextItems }
+                    : current;
+            });
+        },
+        [],
+    );
+
+    // ------------------------------------------------------------------
+    // Fallback senyap: fetch JSON murni, di luar router Inertia.
+    // Dipanggil sekali saat percakapan dibuka (gap-fill) lalu berkala
+    // hanya ketika WebSocket terputus.
+    // ------------------------------------------------------------------
+    const fetchNewMessages = useCallback(async (contactId: number) => {
+        if (fetchingRef.current.has(contactId)) {
+            return;
+        }
+
+        const cursor = Math.max(
+            0,
+            ...(storeRef.current[contactId] ?? [])
+                .filter((item) => item.id !== null && item.is_mine !== undefined)
+                .map((item) => item.id as number),
+            0,
+        );
+        const knownIds = new Set(
+            (storeRef.current[contactId] ?? []).map((item) => item.key),
+        );
+
+        fetchingRef.current.add(contactId);
+
         try {
             const response = await fetch(
                 contacts.messages.index(contactId, {
-                    query: { after_id: latestMessageIdRef.current },
+                    query: { after_id: cursor },
                 }).url,
                 { headers: { Accept: 'application/json' } },
             );
@@ -179,20 +342,27 @@ export default function ContactsIndex({
                     sender_id: number;
                     body: string;
                     created_at: string | null;
+                    read_at: string | null;
+                    is_mine: boolean;
                 }>;
             };
 
-            ingestExternal(data.messages ?? []);
-        } catch {
-            // Offline: coba lagi pada siklus berikutnya.
-        }
-    };
+            const fresh = (data.messages ?? []).filter(
+                (raw) => !knownIds.has(`m${raw.id}`),
+            );
 
-    // Cadangan saat WebSocket terputus: tarik pesan baru lewat fetch JSON
-    // murni — sengaja di luar router Inertia supaya tidak pernah memicu
-    // reload/swap halaman yang bisa mengganggu ketikan, fokus, atau scroll.
+            if (fresh.length > 0) {
+                mergeMessages(fresh, contactId);
+            }
+        } catch {
+            // Offline: dicoba lagi pada siklus berikutnya.
+        } finally {
+            fetchingRef.current.delete(contactId);
+        }
+    }, [mergeMessages]);
+
     useEffect(() => {
-        if (connectionStatus === 'connected' || selectedContact == null) {
+        if (selectedContact == null) {
             return;
         }
 
@@ -200,28 +370,162 @@ export default function ContactsIndex({
 
         void fetchNewMessages(contactId);
 
+        if (connectionStatus === 'connected') {
+            return;
+        }
+
         const interval = setInterval(() => {
             void fetchNewMessages(contactId);
         }, 4000);
 
         return () => clearInterval(interval);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [connectionStatus, selectedContact]);
+    }, [selectedContact?.id, connectionStatus, fetchNewMessages]);
 
-    useEcho<{
-        id: number;
-        sender_id: number;
-        body: string;
-        created_at: string | null;
-    }>(
-        `users.${auth.user.id}`,
-        '.message.sent',
-        (message) => {
-            ingestExternal([message]);
-            scheduleContactsReload();
+    // ------------------------------------------------------------------
+    // Muat riwayat ke belakang (pagination)
+    // ------------------------------------------------------------------
+    const loadOlderMessages = useCallback(
+        async (contactId: number) => {
+            const items = storeRef.current[contactId] ?? [];
+            const oldestId = items.reduce<number | null>((acc, item) => {
+                if (item.id === null) {
+                    return acc;
+                }
+
+                return acc === null ? item.id : Math.min(acc, item.id);
+            }, null);
+
+            if (oldestId === null) {
+                return;
+            }
+
+            setHistory((current) => ({
+                ...current,
+                [contactId]: { loading: true, hasMore: true },
+            }));
+
+            try {
+                const response = await fetch(
+                    contacts.messages.index(contactId, {
+                        query: { before_id: oldestId, limit: 30 },
+                    }).url,
+                    { headers: { Accept: 'application/json' } },
+                );
+
+                if (!response.ok) {
+                    return;
+                }
+
+                const data = (await response.json()) as {
+                    messages?: RawMessage[];
+                    has_more?: boolean;
+                };
+
+                mergeMessages(data.messages ?? [], contactId);
+                setHistory((current) => ({
+                    ...current,
+                    [contactId]: {
+                        loading: false,
+                        hasMore: data.has_more ?? false,
+                    },
+                }));
+            } catch {
+                setHistory((current) => ({
+                    ...current,
+                    [contactId]: { loading: false, hasMore: true },
+                }));
+            }
         },
-        [selectedContact?.id],
+        [mergeMessages],
     );
+
+    // ------------------------------------------------------------------
+    // Pengiriman: optimistic + konfirmasi lewat fetch senyap + retry
+    // ------------------------------------------------------------------
+    const submitBody = (contactId: number, body: string, replacingUid?: string) => {
+        const uid = createUid();
+
+        setStore((current) => {
+            const items = current[contactId] ?? [];
+            const cleaned = replacingUid
+                ? items.filter((item) => item.uid !== replacingUid)
+                : items;
+
+            return {
+                ...current,
+                [contactId]: [
+                    ...cleaned,
+                    {
+                        key: `p${uid}`,
+                        id: null,
+                        uid,
+                        contact_id: contactId,
+                        sender_id: auth.user.id,
+                        body,
+                        created_at: new Date().toISOString(),
+                        read_at: null,
+                        is_mine: true,
+                        status: 'sending',
+                    },
+                ],
+            };
+        });
+
+        messageForm.post(contacts.messages.store(contactId).url, {
+            preserveScroll: true,
+            preserveState: true,
+            onError: () => {
+                setStore((current) => ({
+                    ...current,
+                    [contactId]: (current[contactId] ?? []).map((item) =>
+                        item.uid === uid && item.id === null
+                            ? { ...item, status: 'failed' }
+                            : item,
+                    ),
+                }));
+            },
+        });
+
+        // Konfirmasi: ambil pesan persisten (berisi id) dari server lalu
+        // biarkan merge menggantikan gelembung pending secara FIFO.
+        window.setTimeout(() => void fetchNewMessages(contactId), 350);
+    };
+
+    const autoGrow = (element: HTMLTextAreaElement) => {
+        element.style.height = 'auto';
+        element.style.height = `${Math.min(element.scrollHeight, 128)}px`;
+    };
+
+    const sendMessage = (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+
+        const body = messageForm.data.body.trim();
+        const contactId = selectedContact?.id;
+
+        if (contactId == null || !body) {
+            return;
+        }
+
+        submitBody(contactId, body);
+        messageForm.reset('body');
+
+        if (textareaRef.current) {
+            textareaRef.current.style.height = '';
+        }
+    };
+
+    const retryMessage = (item: ChatItem) => {
+        if (selectedContact == null) {
+            return;
+        }
+
+        submitBody(selectedContact.id, item.body, item.uid);
+    };
+
+    const openContact = (contactId: number) => {
+        setUnreadMap((current) => ({ ...current, [contactId]: 0 }));
+    };
 
     useEffect(() => {
         const container = messageContainerRef.current;
@@ -245,7 +549,9 @@ export default function ContactsIndex({
         // Pesan baru hanya menggulung saat pengguna memang berada di dekat
         // dasar percakapan; membaca riwayat tidak boleh terganggu.
         const distanceFromBottom =
-            container.scrollHeight - container.scrollTop - container.clientHeight;
+            container.scrollHeight -
+            container.scrollTop -
+            container.clientHeight;
 
         if (distanceFromBottom < 120) {
             messageEndRef.current?.scrollIntoView({
@@ -253,49 +559,42 @@ export default function ContactsIndex({
                 block: 'end',
             });
         }
-    }, [selectedContact?.id, visibleMessages.length]);
+    }, [selectedContact?.id, conversation.length]);
 
-    const sendMessage = (event: React.FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
+    const filteredContacts = contactItems.filter((contact) =>
+        contact.name.toLocaleLowerCase().includes(deferredSearch),
+    );
 
-        const body = messageForm.data.body.trim();
+    const statusIndicator = (
+        <div
+            className="flex items-center gap-2 text-xs text-tb-on-surface-variant"
+            role="status"
+        >
+            <span
+                className={`size-2 shrink-0 rounded-full ${
+                    connectionStatus === 'connected'
+                        ? 'bg-emerald-500'
+                        : connectionStatus === 'disconnected'
+                          ? 'bg-red-500'
+                          : 'bg-amber-500'
+                }`}
+            />
+            <span className="hidden sm:inline">
+                {connectionStatus === 'connected'
+                    ? 'Real-time aktif'
+                    : connectionStatus === 'disconnected'
+                      ? 'Terputus — mode hemat'
+                      : 'Menyambungkan'}
+            </span>
+        </div>
+    );
 
-        if (!selectedContact || !body) {
-            return;
-        }
-
-        // Optimistic: tampilkan pesan pengirim seketika, buang bila gagal.
-        const uid = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-        setPendingMessages((current) => [
-            ...current,
-            {
-                uid,
-                body,
-                sent_at: new Date().toISOString(),
-                contact_id: selectedContact.id,
-            },
-        ]);
-
-        messageForm.post(contacts.messages.store(selectedContact.id).url, {
-            preserveScroll: true,
-            // Tanpa ini Inertia me-remount halaman setelah redirect POST:
-            // state lokal (pencarian, fokus, scroll) hilang dan terasa
-            // seperti reload.
-            preserveState: true,
-            onSuccess: () => {
-                messageForm.reset('body');
-                setPendingMessages((current) =>
-                    current.filter((message) => message.uid !== uid),
-                );
-            },
-            onError: () => {
-                setPendingMessages((current) =>
-                    current.filter((message) => message.uid !== uid),
-                );
-            },
-        });
-    };
+    const historyMeta =
+        selectedContact != null ? history[selectedContact.id] : undefined;
+    const showHistoryButton =
+        selectedContact != null &&
+        (conversation.length >= 50 || historyMeta?.hasMore === true) &&
+        historyMeta?.hasMore !== false;
 
     return (
         <>
@@ -340,60 +639,70 @@ export default function ContactsIndex({
                         <div className="min-h-0 flex-1 overflow-y-auto">
                             {filteredContacts.length > 0 ? (
                                 <ul className="divide-y divide-tb-outline-variant">
-                                    {filteredContacts.map((contact) => (
-                                        <li key={contact.id}>
-                                            <Link
-                                                href={contacts.show(contact.id)}
-                                                aria-current={
-                                                    selectedContact?.id ===
-                                                    contact.id
-                                                        ? 'page'
-                                                        : undefined
-                                                }
-                                                className={`flex min-h-20 items-center gap-3 border-l-3 px-4 py-3 transition-colors focus-visible:ring-2 focus-visible:ring-tb-primary focus-visible:outline-none focus-visible:ring-inset ${
-                                                    selectedContact?.id ===
-                                                    contact.id
-                                                        ? 'border-l-tb-primary bg-tb-primary/8'
-                                                        : 'hover:bg-tb-surface-container-low border-l-transparent'
-                                                }`}
-                                            >
-                                                <AppAvatar
-                                                    name={contact.name}
-                                                    color={contact.color}
-                                                    className="size-11"
-                                                />
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="flex items-baseline justify-between gap-2">
-                                                        <p className="truncate text-sm font-semibold text-tb-on-surface">
-                                                            {contact.name}
-                                                        </p>
-                                                        {contact.latest_message_at && (
-                                                            <time className="shrink-0 text-[11px] text-tb-outline">
-                                                                {formatListTime(
-                                                                    contact.latest_message_at,
-                                                                )}
-                                                            </time>
-                                                        )}
+                                    {filteredContacts.map((contact) => {
+                                        const unread =
+                                            unreadMap[contact.id] ??
+                                            contact.unread_count;
+
+                                        return (
+                                            <li key={contact.id}>
+                                                <Link
+                                                    href={contacts.show(
+                                                        contact.id,
+                                                    )}
+                                                    onClick={() =>
+                                                        openContact(contact.id)
+                                                    }
+                                                    aria-current={
+                                                        selectedContact?.id ===
+                                                        contact.id
+                                                            ? 'page'
+                                                            : undefined
+                                                    }
+                                                    className={`flex min-h-20 items-center gap-3 border-l-3 px-4 py-3 transition-colors focus-visible:ring-2 focus-visible:ring-tb-primary focus-visible:outline-none focus-visible:ring-inset ${
+                                                        selectedContact?.id ===
+                                                        contact.id
+                                                            ? 'border-l-tb-primary bg-tb-primary/8'
+                                                            : 'hover:bg-tb-surface-container-low border-l-transparent'
+                                                    }`}
+                                                >
+                                                    <AppAvatar
+                                                        name={contact.name}
+                                                        color={contact.color}
+                                                        className="size-11"
+                                                    />
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex items-baseline justify-between gap-2">
+                                                            <p className="truncate text-sm font-semibold text-tb-on-surface">
+                                                                {contact.name}
+                                                            </p>
+                                                            {contact.latest_message_at && (
+                                                                <time className="shrink-0 text-[11px] text-tb-outline">
+                                                                    {formatListTime(
+                                                                        contact.latest_message_at,
+                                                                    )}
+                                                                </time>
+                                                            )}
+                                                        </div>
+                                                        <div className="mt-1 flex items-center justify-between gap-2">
+                                                            <p className="truncate text-xs text-tb-on-surface-variant">
+                                                                {contact.latest_message ??
+                                                                    contact.role_label}
+                                                            </p>
+                                                            {unread > 0 && (
+                                                                <Badge className="min-w-5 justify-center rounded-full bg-tb-primary px-1.5 text-[10px] text-white">
+                                                                    {unread >
+                                                                    99
+                                                                        ? '99+'
+                                                                        : unread}
+                                                                </Badge>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                    <div className="mt-1 flex items-center justify-between gap-2">
-                                                        <p className="truncate text-xs text-tb-on-surface-variant">
-                                                            {contact.latest_message ??
-                                                                contact.role_label}
-                                                        </p>
-                                                        {contact.unread_count >
-                                                            0 && (
-                                                            <Badge className="min-w-5 justify-center rounded-full bg-tb-primary px-1.5 text-[10px] text-white">
-                                                                {contact.unread_count >
-                                                                99
-                                                                    ? '99+'
-                                                                    : contact.unread_count}
-                                                            </Badge>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </Link>
-                                        </li>
-                                    ))}
+                                                </Link>
+                                            </li>
+                                        );
+                                    })}
                                 </ul>
                             ) : (
                                 <ContactEmptyState
@@ -442,25 +751,7 @@ export default function ContactsIndex({
                                             </span>
                                         </div>
                                     </div>
-                                    <div
-                                        className="hidden items-center gap-2 text-xs text-tb-on-surface-variant sm:flex"
-                                        role="status"
-                                    >
-                                        <span
-                                            className={`size-2 rounded-full ${
-                                                connectionStatus === 'connected'
-                                                    ? 'bg-emerald-500'
-                                                    : connectionStatus === 'disconnected'
-                                                      ? 'bg-red-500'
-                                                      : 'bg-amber-500'
-                                            }`}
-                                        />
-                                        {connectionStatus === 'connected'
-                                            ? 'Real-time aktif'
-                                            : connectionStatus === 'disconnected'
-                                              ? 'Terputus — mode hemat'
-                                              : 'Menyambungkan'}
-                                    </div>
+                                    {statusIndicator}
                                 </header>
 
                                 <div
@@ -468,53 +759,104 @@ export default function ContactsIndex({
                                     className="min-h-0 flex-1 overflow-y-auto px-3 py-5 md:px-7"
                                     aria-live="polite"
                                 >
-                                    {visibleMessages.length > 0 ? (
-                                        <div className="mx-auto flex max-w-3xl flex-col gap-2.5">
-                                            {visibleMessages.map((message) => (
+                                    <div className="mx-auto flex max-w-3xl flex-col gap-2.5">
+                                        {showHistoryButton && (
+                                            <div className="flex justify-center pb-2">
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    disabled={
+                                                        historyMeta?.loading
+                                                    }
+                                                    onClick={() =>
+                                                        void loadOlderMessages(
+                                                            selectedContact.id,
+                                                        )
+                                                    }
+                                                    className="gap-1.5 rounded-full border-tb-outline-variant text-xs text-tb-on-surface-variant"
+                                                >
+                                                    {historyMeta?.loading ? (
+                                                        <Loader2 className="size-3.5 animate-spin" />
+                                                    ) : (
+                                                        <ChevronUp className="size-3.5" />
+                                                    )}
+                                                    Muat pesan sebelumnya
+                                                </Button>
+                                            </div>
+                                        )}
+
+                                        {conversation.length > 0 ? (
+                                            conversation.map((item) => (
                                                 <article
-                                                    key={message.id}
-                                                    className={`flex ${message.is_mine ? 'justify-end' : 'justify-start'}`}
+                                                    key={item.key}
+                                                    className={`flex ${item.is_mine ? 'justify-end' : 'justify-start'}`}
                                                 >
                                                     <div
                                                         className={`max-w-[84%] px-3.5 py-2 text-sm shadow-xs md:max-w-[70%] ${
-                                                            message.is_mine
-                                                                ? 'rounded-[1rem_1rem_0.25rem_1rem] bg-tb-primary text-white'
+                                                            item.is_mine
+                                                                ? item.status ===
+                                                                  'failed'
+                                                                    ? 'rounded-[1rem_1rem_0.25rem_1rem] border border-red-300 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950 dark:text-red-200'
+                                                                    : 'rounded-[1rem_1rem_0.25rem_1rem] bg-tb-primary text-white'
                                                                 : 'rounded-[1rem_1rem_1rem_0.25rem] border border-tb-outline-variant bg-tb-surface-bright text-tb-on-surface'
                                                         }`}
                                                     >
                                                         <p className="leading-relaxed break-words whitespace-pre-wrap">
-                                                            {message.body}
+                                                            {item.body}
                                                         </p>
-                                                        <time
-                                                            className={`mt-1 block text-right text-[10px] ${message.is_mine ? 'text-white/70' : 'text-tb-outline'}`}
+                                                        <div
+                                                            className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${item.is_mine && item.status !== 'failed' ? 'text-white/70' : 'text-tb-outline'}`}
                                                         >
-                                                            {formatMessageTime(
-                                                                message.created_at,
+                                                            <time>
+                                                                {formatMessageTime(
+                                                                    item.created_at,
+                                                                )}
+                                                            </time>
+                                                            {item.is_mine && (
+                                                                <DeliveryStatus status={item.status} />
                                                             )}
-                                                        </time>
+                                                        </div>
+                                                        {item.status ===
+                                                            'failed' && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    retryMessage(
+                                                                        item,
+                                                                    )
+                                                                }
+                                                                className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-red-700 underline-offset-2 hover:underline dark:text-red-300"
+                                                            >
+                                                                <RefreshCw className="size-3" />
+                                                                Kirim ulang
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </article>
-                                            ))}
-                                            <div ref={messageEndRef} />
-                                        </div>
-                                    ) : (
-                                        <div className="grid h-full place-items-center">
-                                            <div className="max-w-sm text-center">
-                                                <div className="mx-auto grid size-14 place-items-center rounded-full bg-tb-primary/10 text-tb-primary">
-                                                    <MessageCircle className="size-6" />
+                                            ))
+                                        ) : (
+                                            <div className="grid h-full place-items-center py-16">
+                                                <div className="max-w-sm text-center">
+                                                    <div className="mx-auto grid size-14 place-items-center rounded-full bg-tb-primary/10 text-tb-primary">
+                                                        <MessageCircle className="size-6" />
+                                                    </div>
+                                                    <h3 className="mt-4 font-display text-lg font-bold text-tb-on-surface">
+                                                        Mulai percakapan
+                                                    </h3>
+                                                    <p className="mt-1 text-sm text-tb-on-surface-variant">
+                                                        Kirim salam kepada{' '}
+                                                        {
+                                                            selectedContact.name
+                                                        }
+                                                        . Pesan ini hanya dapat
+                                                        dibaca oleh kalian.
+                                                    </p>
                                                 </div>
-                                                <h3 className="mt-4 font-display text-lg font-bold text-tb-on-surface">
-                                                    Mulai percakapan
-                                                </h3>
-                                                <p className="mt-1 text-sm text-tb-on-surface-variant">
-                                                    Kirim salam kepada{' '}
-                                                    {selectedContact.name}.
-                                                    Pesan ini hanya dapat dibaca
-                                                    oleh kalian.
-                                                </p>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
+                                        <div ref={messageEndRef} />
+                                    </div>
                                 </div>
 
                                 <form
@@ -530,13 +872,15 @@ export default function ContactsIndex({
                                         </label>
                                         <textarea
                                             id="message-body"
+                                            ref={textareaRef}
                                             value={messageForm.data.body}
-                                            onChange={(event) =>
+                                            onChange={(event) => {
                                                 messageForm.setData(
                                                     'body',
                                                     event.target.value,
-                                                )
-                                            }
+                                                );
+                                                autoGrow(event.target);
+                                            }}
                                             onKeyDown={(event) => {
                                                 if (
                                                     event.key === 'Enter' &&
@@ -549,7 +893,8 @@ export default function ContactsIndex({
                                             maxLength={2000}
                                             rows={1}
                                             placeholder="Tulis pesan..."
-                                            className="bg-tb-surface-container-low max-h-32 min-h-10 flex-1 resize-none rounded-xl border border-tb-outline-variant px-3.5 py-2.5 text-sm text-tb-on-surface transition outline-none focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
+                                            style={{ height: '42px' } as CSSProperties}
+                                            className="bg-tb-surface-container-low max-h-32 min-h-10 flex-1 resize-none overflow-hidden rounded-xl border border-tb-outline-variant px-3.5 py-2.5 text-sm text-tb-on-surface transition outline-none focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
                                         />
                                         <Button
                                             type="submit"
@@ -573,7 +918,7 @@ export default function ContactsIndex({
                         ) : (
                             <div className="grid h-full place-items-center px-6">
                                 <div className="max-w-sm text-center">
-                                    <div className="mx-auto grid size-18 place-items-center rounded-full border border-tb-outline-variant bg-tb-surface-bright text-tb-primary shadow-sm">
+                                    <div className="grid size-18 place-items-center mx-auto rounded-full border border-tb-outline-variant bg-tb-surface-bright text-tb-primary shadow-sm">
                                         <Users className="size-8" />
                                     </div>
                                     <h2 className="mt-5 font-display text-xl font-bold text-tb-on-surface">
@@ -599,6 +944,92 @@ ContactsIndex.layout = {
         { title: 'Daftar Kontak', href: contacts.index() },
     ],
 };
+
+/**
+ * Masukkan satu pesan ke store satu percakapan:
+ * - dedupe by id (persisten) / uid (milik klien),
+ * - pesan persisten milik sendiri menggantikan gelembung pending
+ *   ber-body sama secara FIFO (konfirmasi kirim),
+ * - hasil selalu terurut naik by id dengan pesan lokal di ekor.
+ */
+function upsertMessage(
+    current: Store,
+    contactId: number,
+    item: ChatItem,
+): Store {
+    const existing = current[contactId] ?? [];
+    const merged: ChatItem[] = [];
+    const seenPersisted = new Set<string>();
+
+    for (const candidate of [...existing, item]) {
+        if (candidate.id !== null) {
+            const key = `m${candidate.id}`;
+
+            if (seenPersisted.has(key)) {
+                continue;
+            }
+
+            seenPersisted.add(key);
+            merged.push(candidate);
+
+            continue;
+        }
+
+        merged.push(candidate);
+    }
+
+    // Konfirmasi FIFO: setiap pesan persisten milik sendiri mengonsumsi
+    // satu gelembung "sending" ber-body sama (tertua lebih dulu).
+    const pendingQueue = merged.filter(
+        (candidate) => candidate.id === null && candidate.status === 'sending',
+    );
+
+    for (const persisted of merged) {
+        if (persisted.id === null || !persisted.is_mine) {
+            continue;
+        }
+
+        const index = pendingQueue.findIndex(
+            (pending) => pending.body === persisted.body,
+        );
+
+        if (index === -1) {
+            continue;
+        }
+
+        const [matched] = pendingQueue.splice(index, 1);
+        const position = merged.indexOf(matched);
+
+        if (position !== -1) {
+            merged.splice(position, 1);
+        }
+    }
+
+    const ordered = [...merged].sort(compareItems);
+
+    return { ...current, [contactId]: ordered };
+}
+
+function DeliveryStatus({ status }: { status: MessageStatus }) {
+    if (status === 'sending') {
+        return <Clock className="size-3" aria-label="Mengirim" />;
+    }
+
+    if (status === 'failed') {
+        return <AlertCircle className="size-3" aria-label="Gagal terkirim" />;
+    }
+
+    if (status === 'read') {
+        return (
+            <CheckCheck
+                className="size-3.5 text-sky-300"
+                aria-label="Sudah dibaca"
+            />
+        );
+    }
+
+    return <Check className="size-3" aria-label="Terkirim" />;
+}
 
 function ContactEmptyState({ hasSearch }: { hasSearch: boolean }) {
     return (
