@@ -22,7 +22,7 @@ $allowedOrigins = collect(
 
         $host = parse_url($origin, PHP_URL_HOST);
 
-        return ($host !== null && $host !== '') ? $host : $origin;
+        return is_string($host) && $host !== '' ? $host : $origin;
     })
     ->values()
     ->all();

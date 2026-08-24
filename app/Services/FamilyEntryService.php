@@ -229,6 +229,7 @@ class FamilyEntryService
      * Keep one account-owned history record for every distinct patrilineal
      * tree touched by the family form.
      *
+     * @param  array<int, Person|null>  $mothers
      * @param  Collection<int, Person>  $children
      * @param  Collection<int, Person>  $ownChildren
      * @return Collection<int, FamilyTree>
