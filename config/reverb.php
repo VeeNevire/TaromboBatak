@@ -1,7 +1,31 @@
 <?php
 
-$allowedOrigins = env('REVERB_ALLOWED_ORIGINS', env('APP_URL', 'http://localhost'));
-$allowedOrigins = is_string($allowedOrigins) ? $allowedOrigins : 'http://localhost';
+// Reverb mencocokkan hanya bagian HOST dari header Origin (lihat
+// Pusher\Server::verifyOrigin), sehingga setiap origin yang diizinkan
+// harus dinormalkan menjadi pola hostname — bukan URL lengkap.
+$allowedOrigins = collect(
+    explode(
+        ',',
+        (string) env('REVERB_ALLOWED_ORIGINS', env('APP_URL', 'http://localhost')),
+    ),
+)
+    ->map(fn (string $origin): string => trim($origin))
+    ->filter()
+    ->map(function (string $origin): string {
+        if ($origin === '*') {
+            return '*';
+        }
+
+        if (str_starts_with($origin, '*.')) {
+            return $origin;
+        }
+
+        $host = parse_url($origin, PHP_URL_HOST);
+
+        return is_string($host) && $host !== '' ? $host : $origin;
+    })
+    ->values()
+    ->all();
 
 return [
 
@@ -85,10 +109,7 @@ return [
                     'scheme' => env('REVERB_SCHEME', 'https'),
                     'useTLS' => env('REVERB_SCHEME', 'https') === 'https',
                 ],
-                'allowed_origins' => array_map(
-                    'trim',
-                    explode(',', $allowedOrigins),
-                ),
+                'allowed_origins' => $allowedOrigins,
                 'ping_interval' => env('REVERB_APP_PING_INTERVAL', 60),
                 'activity_timeout' => env('REVERB_APP_ACTIVITY_TIMEOUT', 30),
                 'max_connections' => env('REVERB_APP_MAX_CONNECTIONS'),

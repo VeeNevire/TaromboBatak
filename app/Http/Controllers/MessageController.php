@@ -9,6 +9,7 @@ use App\Models\Message;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class MessageController extends Controller
 {
@@ -28,7 +29,13 @@ class MessageController extends Controller
             ]);
         });
 
-        MessageSent::dispatch($message);
+        try {
+            MessageSent::dispatch($message);
+        } catch (Throwable $exception) {
+            // Pesan sudah tersimpan; kegagalan broadcast tidak boleh
+            // membuat pengirim mengira pesannya gagal terkirim.
+            report($exception);
+        }
 
         return to_route('contacts.show', $contact);
     }

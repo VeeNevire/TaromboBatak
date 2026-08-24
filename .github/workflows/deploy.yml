@@ -88,6 +88,10 @@ jobs:
             chown -R www-data:www-data storage bootstrap/cache
 
             echo "Restart PHP & Nginx"
-            sudo systemctl restart php8.3-fpm 
+            sudo systemctl restart php8.3-fpm
             sudo systemctl reload nginx
 
+            echo "Restart Reverb & queue worker"
+            sudo supervisorctl restart tarombo-reverb
+            sudo supervisorctl status tarombo-reverb
+            php artisan queue:restart

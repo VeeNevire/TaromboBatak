@@ -62,15 +62,27 @@ class FamilyEntryService
                 || (bool) $focusPerson->pending_father !== $pending
             );
 
-            $mother = $this->resolveParent(
-                $data['mother_id'] ?? null,
-                $data['mother'] ?? null,
-                null,
-                $forcedMargaId,
-                $createdBy,
-            );
+            $mothers = [];
 
-            $this->validateParentLinks($data, $father, $mother);
+            foreach ($this->motherEntries($data) as $index => $entry) {
+                $mothers[] = $this->resolveParent(
+                    $index === 0 ? ($data['mother_id'] ?? null) : null,
+                    $entry,
+                    $this->resolveMargaId(
+                        $entry['marga_id'] ?? null,
+                        $entry['new_marga'] ?? null,
+                    ),
+                    $forcedMargaId,
+                    $createdBy,
+                    'P',
+                );
+            }
+
+            // Anak-anak dinautkan ke istri pertama; penugasan per anak
+            // menyusul di fase berikutnya.
+            $mother = $mothers[0] ?? null;
+
+            $this->validateParentLinks($data, $father, $mothers);
             $this->validatePublication($data, $father);
 
             $children = $this->upsertChildren(
@@ -114,7 +126,7 @@ class FamilyEntryService
             $familyTrees = $this->syncFamilyTrees(
                 $createdBy,
                 $father,
-                $mother,
+                $mothers,
                 $children,
                 $ownChildren,
                 $focus,
@@ -124,6 +136,7 @@ class FamilyEntryService
                 'father' => $father,
                 'pending' => $pending,
                 'mother' => $mother,
+                'mothers' => $mothers,
                 'children' => $children,
                 'ownChildren' => $ownChildren,
                 'focus' => $focus,
@@ -168,9 +181,55 @@ class FamilyEntryService
     }
 
     /**
+     * Normalize the submitted wife list. The legacy single "mother" payload
+     * is treated as the first wife so older clients keep working, and
+     * duplicated names inside one submission are collapsed.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<int, array<string, mixed>>
+     */
+    protected function motherEntries(array $data): array
+    {
+        $entries = [];
+
+        foreach (is_array($data['mothers'] ?? null) ? $data['mothers'] : [] as $entry) {
+            if (is_array($entry)) {
+                $entries[] = $entry;
+            }
+        }
+
+        if ($entries === [] && is_array($data['mother'] ?? null)) {
+            $entries = [$data['mother']];
+        }
+
+        $deduplicated = [];
+        $seen = [];
+
+        foreach ($entries as $entry) {
+            $name = $this->normalizeName($entry['name'] ?? null);
+
+            if ($name === null) {
+                continue;
+            }
+
+            $key = mb_strtoupper($name);
+
+            if (isset($seen[$key])) {
+                continue;
+            }
+
+            $seen[$key] = true;
+            $deduplicated[] = $entry;
+        }
+
+        return $deduplicated;
+    }
+
+    /**
      * Keep one account-owned history record for every distinct patrilineal
      * tree touched by the family form.
      *
+     * @param  array<int, Person|null>  $mothers
      * @param  Collection<int, Person>  $children
      * @param  Collection<int, Person>  $ownChildren
      * @return Collection<int, FamilyTree>
@@ -178,7 +237,7 @@ class FamilyEntryService
     protected function syncFamilyTrees(
         ?int $createdBy,
         ?Person $father,
-        ?Person $mother,
+        array $mothers,
         Collection $children,
         Collection $ownChildren,
         ?Person $focus,
@@ -203,7 +262,7 @@ class FamilyEntryService
         $memberIds = $children
             ->merge($ownChildren)
             ->push($father)
-            ->push($mother)
+            ->merge(collect($mothers)->filter())
             ->push($focus)
             ->filter()
             ->pluck('id')
@@ -345,16 +404,22 @@ class FamilyEntryService
      * Reject self-parenting and patrilineal cycles before any person is changed.
      *
      * @param  array<string, mixed>  $data
+     * @param  array<int, Person|null>  $mothers
      */
-    protected function validateParentLinks(array $data, ?Person $father, ?Person $mother): void
+    protected function validateParentLinks(array $data, ?Person $father, array $mothers): void
     {
         if (! isset($data['id'])) {
             return;
         }
 
         $focusId = (int) $data['id'];
+        $links = ['father_id' => $father];
 
-        foreach (['father_id' => $father, 'mother_id' => $mother] as $field => $parent) {
+        foreach ($mothers as $mother) {
+            $links['mother_id'] = $mother;
+        }
+
+        foreach ($links as $field => $parent) {
             if ($parent !== null && $this->parentPathContains($parent, $focusId)) {
                 throw ValidationException::withMessages([
                     $field => 'Relasi orang tua ini akan membentuk siklus silsilah.',
@@ -506,15 +571,18 @@ class FamilyEntryService
         $parent = $matches->count() === 1 ? $matches->first() : null;
 
         if ($parent === null) {
+            $label = $expectedGender === 'P' ? 'Ibu' : 'Ayah';
+            $errorField = $expectedGender === 'P' ? 'mother.name' : 'father.name';
+
             if ($excludedIds !== [] && Person::query()->whereIn('id', $excludedIds)->where('name', $name)->exists()) {
                 throw ValidationException::withMessages([
-                    'father.name' => 'Ayah tidak boleh merupakan orang itu sendiri, saudara sekandung, atau keturunannya.',
+                    'father.name' => "{$label} tidak boleh merupakan orang itu sendiri, saudara sekandung, atau keturunannya.",
                 ]);
             }
 
             if ($expectedGender !== null && Person::query()->where('name', $name)->whereNotNull('gender')->where('gender', '!=', $expectedGender)->exists()) {
                 throw ValidationException::withMessages([
-                    'father.name' => 'Ayah harus dipilih dari anggota laki-laki.',
+                    $errorField => "{$label} harus dipilih dari anggota ".($expectedGender === 'P' ? 'perempuan' : 'laki-laki').'.',
                 ]);
             }
 
