@@ -16,8 +16,19 @@ use Illuminate\Support\Carbon;
  * @property string $description
  * @property string|null $image
  * @property bool $published
+ * @property int|null $created_by
+ * @property int|null $marga_id
+ * @property string $classification
+ * @property string $status
+ * @property int $review_version
+ * @property int|null $reviewed_by
+ * @property Carbon|null $reviewed_at
+ * @property string|null $rejection_reason
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property-read User|null $creator
+ * @property-read Marga|null $marga
+ * @property-read User|null $reviewer
  */
 #[Fillable([
     'created_by',
@@ -48,21 +59,28 @@ class Story extends Model
 
     public const STATUS_REJECTED = 'rejected';
 
+    /** @return BelongsTo<User, $this> */
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    /** @return BelongsTo<Marga, $this> */
     public function marga(): BelongsTo
     {
         return $this->belongsTo(Marga::class);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');
     }
 
+    /**
+     * @param  Builder<Story>  $query
+     * @return Builder<Story>
+     */
     public function scopePubliclyVisible(Builder $query): Builder
     {
         return $query

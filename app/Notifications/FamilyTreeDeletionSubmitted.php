@@ -12,19 +12,21 @@ class FamilyTreeDeletionSubmitted extends Notification
 
     public function __construct(public FamilyTreeDeletionRequest $deletion) {}
 
+    /** @return array<int, string> */
     public function via(object $notifiable): array
     {
         return ['database'];
     }
 
+    /** @return array<string, mixed> */
     public function toDatabase(object $notifiable): array
     {
         return [
             'family_tree_deletion_request_id' => $this->deletion->id,
             'tree_name' => $this->deletion->tree_name,
             'root_name' => $this->deletion->root_name,
-            'requester_name' => $this->deletion->requester?->name,
-            'message' => ($this->deletion->requester?->name ?? 'User').' mengajukan penghapusan '.$this->deletion->tree_name.'.',
+            'requester_name' => $this->deletion->requester->name,
+            'message' => $this->deletion->requester->name.' mengajukan penghapusan '.$this->deletion->tree_name.'.',
         ];
     }
 }

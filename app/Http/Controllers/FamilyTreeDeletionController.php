@@ -45,7 +45,7 @@ class FamilyTreeDeletionController extends Controller
                 'requester_id' => $user->id,
                 'marga_id' => $tree->rootPerson?->marga_id,
                 'tree_name' => $tree->name ?? 'Silsilah '.$tree->rootPerson?->name,
-                'root_name' => $tree->rootPerson?->name ?? 'Tanpa akar',
+                'root_name' => $tree->rootPerson->name ?? 'Tanpa akar',
                 'marga_name' => $tree->rootPerson?->marga?->name,
             ]);
             $deletion->load('requester');

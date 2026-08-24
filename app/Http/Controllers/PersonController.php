@@ -1032,7 +1032,7 @@ class PersonController extends Controller
             $node = $father;
         }
 
-        return $node?->person?->name ?? $tree->rootPerson?->name;
+        return $node?->person?->name ?? $tree->rootPerson->name;
     }
 
     /**

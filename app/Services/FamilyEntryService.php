@@ -299,7 +299,7 @@ class FamilyEntryService
             $entries = [$data['mother']];
         }
 
-        return array_values($entries);
+        return $entries;
     }
 
     /**
@@ -703,6 +703,7 @@ class FamilyEntryService
     /**
      * @param  array<int, array<string, mixed>>  $rows
      * @param  array<string, mixed>  $data
+     * @param  array<int, Person|null>  $mothers
      * @return Collection<int, Person>
      */
     protected function upsertChildren(
@@ -721,7 +722,7 @@ class FamilyEntryService
     ): Collection {
         $children = new Collection;
 
-        foreach (array_values($rows) as $index => $row) {
+        foreach ($rows as $index => $row) {
             $childMotherId = $motherId;
             $availableMothers = array_values(array_filter($mothers));
 

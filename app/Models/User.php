@@ -30,6 +30,9 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read Marga|null $marga
  * @property-read Collection<int, FamilyTree> $familyTrees
+ * @property-read Collection<int, ContributionRequest> $contributionRequests
+ * @property-read Collection<int, Event> $events
+ * @property-read Collection<int, Story> $stories
  */
 #[Fillable(['name', 'email', 'password', 'role', 'marga_id'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
@@ -97,16 +100,19 @@ class User extends Authenticatable
         return $this->hasMany(FamilyTree::class);
     }
 
+    /** @return HasMany<ContributionRequest, $this> */
     public function contributionRequests(): HasMany
     {
         return $this->hasMany(ContributionRequest::class, 'requester_id');
     }
 
+    /** @return HasMany<Event, $this> */
     public function events(): HasMany
     {
         return $this->hasMany(Event::class, 'created_by');
     }
 
+    /** @return HasMany<Story, $this> */
     public function stories(): HasMany
     {
         return $this->hasMany(Story::class, 'created_by');

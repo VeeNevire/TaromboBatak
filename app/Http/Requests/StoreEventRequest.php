@@ -23,7 +23,7 @@ class StoreEventRequest extends FormRequest
             'date' => ['required', 'date'],
             'published' => ['boolean'],
             'marga_id' => [
-                Rule::requiredIf(fn () => $this->user()?->isStaff()),
+                Rule::requiredIf(fn () => $this->user()?->isStaff() ?? false),
                 'nullable',
                 'integer',
                 'exists:margas,id',

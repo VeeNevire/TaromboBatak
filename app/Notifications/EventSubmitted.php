@@ -12,18 +12,20 @@ class EventSubmitted extends Notification
 
     public function __construct(public Event $event) {}
 
+    /** @return array<int, string> */
     public function via(object $notifiable): array
     {
         return ['database'];
     }
 
+    /** @return array<string, mixed> */
     public function toDatabase(object $notifiable): array
     {
         return [
             'event_id' => $this->event->id,
             'creator_name' => $this->event->creator?->name,
             'event_title' => $this->event->title,
-            'message' => ($this->event->creator?->name ?? 'User').' mengajukan event '.$this->event->title.'.',
+            'message' => ($this->event->creator->name ?? 'User').' mengajukan event '.$this->event->title.'.',
         ];
     }
 }
