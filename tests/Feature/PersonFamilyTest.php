@@ -94,11 +94,114 @@ test('a family store supports multiple wives with their own marga', function () 
         ->and(Person::where('father_id', $father->id)->get()->every(
             fn (Person $child) => $child->mother_id === $firstWife->id,
         ))->toBeTrue();
+
+    $focus = Person::where('name', 'Ompu Sitorus')->firstOrFail();
+
+    $this->actingAs($this->admin)
+        ->get(route('people.show', $focus))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('person.mothers', 2)
+            ->where('person.mothers.0.id', $firstWife->id)
+            ->where('person.mothers.1.id', $secondWife->id));
+});
+
+test('a family store assigns each own child to a wife and saves her father', function () {
+    $marga = Marga::factory()->create(['name' => 'Sitorus']);
+    $firstWifeMarga = Marga::factory()->create(['name' => 'Panjaitan']);
+    $secondWifeMarga = Marga::factory()->create(['name' => 'Gultom']);
+
+    $this->actingAs($this->admin)->post(route('people.store'), [
+        'name' => 'Ompu Sitorus',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'birth_order' => 1,
+        'sibling_count' => 1,
+        'father' => ['name' => 'Si Raja Batak'],
+        'mothers' => [
+            [
+                'name' => 'Borbor Panjaitan',
+                'marga_id' => $firstWifeMarga->id,
+                'father_name' => 'Ompu Panjaitan',
+            ],
+            [
+                'name' => 'Borbor Gultom',
+                'marga_id' => $secondWifeMarga->id,
+                'father_name' => 'Ompu Gultom',
+            ],
+        ],
+        'children' => [
+            ['name' => 'Ompu Sitorus', 'gender' => 'L'],
+        ],
+        'ownChildren' => [
+            ['name' => 'Anak Pertama', 'gender' => 'L', 'mother_index' => 0],
+            ['name' => 'Anak Kedua', 'gender' => 'P', 'mother_index' => 1],
+        ],
+    ])->assertRedirect(route('people.index'))
+        ->assertSessionHasNoErrors();
+
+    $firstWife = Person::where('name', 'Borbor Panjaitan')->firstOrFail();
+    $secondWife = Person::where('name', 'Borbor Gultom')->firstOrFail();
+    $firstWifeFather = Person::where('name', 'Ompu Panjaitan')->firstOrFail();
+    $secondWifeFather = Person::where('name', 'Ompu Gultom')->firstOrFail();
+
+    expect($firstWife->father_id)->toBe($firstWifeFather->id)
+        ->and($firstWifeFather->marga_id)->toBe($firstWifeMarga->id)
+        ->and($secondWife->father_id)->toBe($secondWifeFather->id)
+        ->and($secondWifeFather->marga_id)->toBe($secondWifeMarga->id)
+        ->and(Person::where('name', 'Anak Pertama')->firstOrFail()->mother_id)->toBe($firstWife->id)
+        ->and(Person::where('name', 'Anak Kedua')->firstOrFail()->mother_id)->toBe($secondWife->id);
+});
+
+test('a family store automatically assigns the sole wife to own children', function () {
+    $marga = Marga::factory()->create(['name' => 'Sitorus']);
+
+    $this->actingAs($this->admin)->post(route('people.store'), [
+        'name' => 'Ompu Sitorus',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'birth_order' => 1,
+        'sibling_count' => 1,
+        'father' => ['name' => 'Si Raja Batak'],
+        'mothers' => [['name' => 'Borbor']],
+        'children' => [['name' => 'Ompu Sitorus', 'gender' => 'L']],
+        'ownChildren' => [['name' => 'Anak Tunggal', 'gender' => 'L']],
+    ])->assertRedirect(route('people.index'))
+        ->assertSessionHasNoErrors();
+
+    expect(Person::where('name', 'Anak Tunggal')->firstOrFail()->mother_id)
+        ->toBe(Person::where('name', 'Borbor')->firstOrFail()->id);
+});
+
+test('a family store requires a mother selection when there are multiple wives', function () {
+    $marga = Marga::factory()->create(['name' => 'Sitorus']);
+
+    $this->actingAs($this->admin)->post(route('people.store'), [
+        'name' => 'Ompu Sitorus',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'birth_order' => 1,
+        'sibling_count' => 1,
+        'father' => ['name' => 'Si Raja Batak'],
+        'mothers' => [
+            ['name' => 'Borbor Pertama'],
+            ['name' => 'Borbor Kedua'],
+        ],
+        'children' => [['name' => 'Ompu Sitorus', 'gender' => 'L']],
+        'ownChildren' => [['name' => 'Anak', 'gender' => 'L']],
+    ])->assertSessionHasErrors([
+        'ownChildren.0.mother_index',
+    ]);
 });
 
 test('the family payload exposes every wife of the shared father', function () {
     $marga = Marga::factory()->create();
     $father = Person::factory()->create(['marga_id' => $marga->id]);
+    $wifeFather = Person::factory()->create([
+        'name' => 'Ayah Gultom',
+        'gender' => 'L',
+        'marga_id' => Marga::factory()->create(['name' => 'Gultom'])->id,
+    ]);
     $ibuPertama = Person::factory()->create([
         'name' => 'Borbor',
         'gender' => 'P',
@@ -107,7 +210,8 @@ test('the family payload exposes every wife of the shared father', function () {
     $ibuKedua = Person::factory()->create([
         'name' => 'Gultom',
         'gender' => 'P',
-        'marga_id' => Marga::factory()->create()->id,
+        'marga_id' => $wifeFather->marga_id,
+        'father_id' => $wifeFather->id,
     ]);
 
     $focused = Person::factory()->create([
@@ -133,6 +237,13 @@ test('the family payload exposes every wife of the shared father', function () {
         'mother_id' => $ibuPertama->id,
         'birth_order' => 3,
     ]);
+    $ownChild = Person::factory()->create([
+        'name' => 'Anak Fokus',
+        'marga_id' => $marga->id,
+        'father_id' => $focused->id,
+        'mother_id' => $ibuKedua->id,
+        'birth_order' => 1,
+    ]);
 
     $this->actingAs($this->admin)
         ->get(route('people.show', $focused))
@@ -142,8 +253,12 @@ test('the family payload exposes every wife of the shared father', function () {
             ->where('person.mother.name', 'Gultom')
             ->has('person.mothers', 2)
             ->where('person.mothers.0.id', $ibuKedua->id)
+            ->where('person.mothers.0.father_name', $wifeFather->name)
+            ->where('person.mothers.0.father_marga_id', $wifeFather->marga_id)
             ->where('person.mothers.1.id', $ibuPertama->id)
-            ->where('person.mothers.1.marga_id', null));
+            ->where('person.mothers.1.marga_id', null)
+            ->where('person.ownChildren.0.id', $ownChild->id)
+            ->where('person.ownChildren.0.mother_id', $ibuKedua->id));
 });
 
 test('the show route exposes the whole family sheet', function () {
@@ -747,11 +862,35 @@ test('the create form lists each family tree created by the signed in account', 
         ->assertInertia(fn (Assert $page) => $page
             ->component('people/form')
             ->has('familyTrees', 2)
-            ->where('familyTrees.0.root_name', 'Anak Kedua')
-            ->where('familyTrees.1.root_name', 'Anak Pertama')
+            ->where('familyTrees.0.root_name', 'Ayah Kakek Tunggul')
+            ->where('familyTrees.1.root_name', 'Si Raja Batak')
             ->where('familyTrees.0.name', 'Keluarga Anak Kedua')
             ->where('familyTrees.0.updated_at', '2026-08-19T10:00:00.000000Z')
             ->missing('familyTrees.2'));
+});
+
+test('the family history card displays the topmost father node as its root', function () {
+    $marga = Marga::factory()->create(['name' => 'Silaban']);
+    $user = User::factory()->withMarga($marga->id)->create();
+
+    $this->actingAs($user)->post(route('people.store'), [
+        'name' => 'Jaya Silaban',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'birth_order' => 1,
+        'sibling_count' => 1,
+        'father' => ['name' => 'Ayah Jaya Silaban'],
+        'children' => [['name' => 'Jaya Silaban', 'gender' => 'L']],
+    ])->assertRedirect(route('people.index'));
+
+    $focus = Person::query()->where('name', 'Jaya Silaban')->firstOrFail();
+
+    $this->actingAs($user)
+        ->get(route('people.show', $focus))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('people/show')
+            ->where('familyTrees.0.root_name', 'Ayah Jaya Silaban'));
 });
 
 test('the admin family tree card lists all trees while version actions stay focused', function () {
@@ -789,7 +928,8 @@ test('the admin family tree card lists all trees while version actions stay focu
             ->has('familyTrees', 3)
             ->has('versionTrees', 2)
             ->where('versionTrees', fn ($trees) => collect($trees)
-                ->every(fn (array $tree) => $tree['root_person_id'] === $focus->id)));
+                ->every(fn (array $tree) => $tree['root_person_id'] === $focus->id
+                    && $tree['root_name'] === 'Fokus Admin')));
 });
 
 test('the sub-admin family tree card only lists trees owned by that account', function () {

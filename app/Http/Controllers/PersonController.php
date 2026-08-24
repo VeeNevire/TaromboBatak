@@ -5,10 +5,13 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StorePersonRequest;
 use App\Http\Requests\UpdateFamilyTreeStructureRequest;
 use App\Http\Requests\UpdatePersonRequest;
+use App\Models\ContributionRequest;
 use App\Models\FamilyTree;
+use App\Models\FamilyTreeDeletionRequest;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
+use App\Notifications\FatherMatchSubmitted;
 use App\Services\ChainNumberingService;
 use App\Services\FamilyEntryService;
 use App\Services\FamilyTreeStructureService;
@@ -18,6 +21,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -181,14 +185,23 @@ class PersonController extends Controller
         } else {
             abort_unless($user->marga_id !== null, 403, 'Akun Anda belum memiliki marga.');
 
-            app(FamilyEntryService::class)->save(
-                $validated,
-                forcedMargaId: $user->marga_id,
-                createdBy: $user->id,
-            );
+            $result = DB::transaction(function () use ($validated, $user) {
+                $result = app(FamilyEntryService::class)->save(
+                    $validated,
+                    forcedMargaId: $user->marga_id,
+                    createdBy: $user->id,
+                    deferExistingFatherMatch: true,
+                );
+                $this->createFatherMatchRequest($result, $user);
+
+                return $result;
+            });
         }
 
-        Inertia::flash('toast', ['type' => 'success', 'message' => __('Keluarga berhasil ditambahkan.')]);
+        $message = isset($result) && $result['matchedFather'] !== null
+            ? 'Keluarga disimpan. Pencocokan Ayah menunggu persetujuan kontributor.'
+            : __('Keluarga berhasil ditambahkan.');
+        Inertia::flash('toast', ['type' => 'success', 'message' => $message]);
 
         return to_route('people.index');
     }
@@ -261,7 +274,7 @@ class PersonController extends Controller
         $familyTrees = FamilyTree::query()
             ->whereHas('nodes', fn ($query) => $query->where('person_id', $person->id))
             ->when(! $request->user()->isStaff(), fn ($query) => $query->where('user_id', $request->user()->id))
-            ->with('rootPerson:id,name')
+            ->with(['rootPerson:id,name', 'nodes.person:id,name'])
             ->latest('updated_at')
             ->get();
 
@@ -563,18 +576,55 @@ class PersonController extends Controller
         Gate::authorize('update', $person);
 
         if (! $isStaff) {
-            app(FamilyEntryService::class)->save(
-                $validated,
-                forcedMargaId: $user->marga_id,
-                createdBy: $user->id,
-            );
+            $result = DB::transaction(function () use ($validated, $user) {
+                $result = app(FamilyEntryService::class)->save(
+                    $validated,
+                    forcedMargaId: $user->marga_id,
+                    createdBy: $user->id,
+                    deferExistingFatherMatch: true,
+                );
+                $this->createFatherMatchRequest($result, $user);
+
+                return $result;
+            });
         } else {
             app(FamilyEntryService::class)->save($validated, createdBy: $user->id);
         }
 
-        Inertia::flash('toast', ['type' => 'success', 'message' => __('Jejak keluarga berhasil diperbarui.')]);
+        $message = isset($result) && $result['matchedFather'] !== null
+            ? 'Jejak keluarga disimpan. Pencocokan Ayah menunggu persetujuan kontributor.'
+            : __('Jejak keluarga berhasil diperbarui.');
+        Inertia::flash('toast', ['type' => 'success', 'message' => $message]);
 
         return to_route('people.show', $person);
+    }
+
+    /** @param array<string, mixed> $result */
+    protected function createFatherMatchRequest(array $result, User $user): ?ContributionRequest
+    {
+        $matchedFather = $result['matchedFather'];
+
+        if (! $matchedFather instanceof Person || $result['children']->isEmpty()) {
+            return null;
+        }
+
+        $focus = $result['focus'] ?? $result['children']->first();
+        $affectedIds = $result['children']->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
+        $contribution = ContributionRequest::create([
+            'requester_id' => $user->id,
+            'matched_father_id' => $matchedFather->id,
+            'subject_person_id' => $focus->id,
+            'family_tree_id' => $result['familyTrees']->first()?->id,
+            'affected_person_ids' => $affectedIds,
+        ]);
+        $contribution->load(['requester', 'subjectPerson', 'matchedFather']);
+
+        User::query()
+            ->whereIn('role', ['contributor_main', 'contributor_member'])
+            ->where('marga_id', $matchedFather->marga_id)
+            ->each(fn (User $contributor) => $contributor->notify(new FatherMatchSubmitted($contribution)));
+
+        return $contribution;
     }
 
     /**
@@ -623,7 +673,7 @@ class PersonController extends Controller
                     ->where(fn ($query) => $query
                         ->where('pending_father', false)
                         ->orWhere('id', $person->id))
-                    ->with('mother.marga')
+                    ->with(['mother.marga', 'mother.father.marga'])
                     ->orderBy('birth_order')
                     ->get()
                 : collect([$person]);
@@ -661,14 +711,18 @@ class PersonController extends Controller
             ? $person->mother
             : null;
 
-        $mothers = $siblings
+        $inferredMothers = $siblings
             ->map(fn (Person $sibling) => $sibling->mother)
             ->filter()
             ->unique('id')
-            ->values()
-            ->filter(
-                fn (Person $wife) => $margaId === null || $wife->marga_id === $margaId,
-            )
+            ->values();
+        $persistedMothers = $father?->wives()
+            ->with(['marga', 'father.marga'])
+            ->get()
+            ?? collect();
+        $mothers = $persistedMothers
+            ->concat($inferredMothers)
+            ->unique('id')
             ->values();
 
         $descendantMap = $this->descendantMap(
@@ -726,6 +780,9 @@ class PersonController extends Controller
                     'marga' => $wife->marga?->name,
                     'birth_year' => $wife->birth_year,
                     'death_year' => $wife->death_year,
+                    'father_name' => $wife->father?->name,
+                    'father_marga_id' => $wife->father?->marga_id,
+                    'father_marga' => $wife->father?->marga?->name,
                 ])
                 ->all(),
             'lineage' => $lineage
@@ -781,6 +838,7 @@ class PersonController extends Controller
                     'birth_order' => $child->birth_order,
                     'chain' => $child->chain,
                     'pending' => (bool) $child->pending_father,
+                    'mother_id' => $child->mother_id,
                     'descendant_count' => $descendantMap[$child->id]['count'] ?? 0,
                     'descendant_names' => $descendantMap[$child->id]['names'] ?? [],
                 ])
@@ -928,26 +986,53 @@ class PersonController extends Controller
             ->when(! $user->isAdmin(), fn ($query) => $query->whereBelongsTo($user))
             ->whereNotNull('root_person_id')
             ->when($focus !== null, fn ($query) => $query->where('root_person_id', $focus->id))
-            ->with('rootPerson:id,name')
+            ->with(['rootPerson:id,name', 'nodes.person:id,name'])
+            ->withExists(['deletionRequests as deletion_pending' => fn ($query) => $query
+                ->where('status', FamilyTreeDeletionRequest::STATUS_PENDING)])
             ->latest('updated_at')
             ->get(['id', 'user_id', 'root_person_id', 'name', 'source_name', 'is_primary', 'updated_at'])
             ->filter(fn (FamilyTree $tree) => $tree->rootPerson !== null)
-            ->map(fn (FamilyTree $tree) => [
-                'id' => $tree->id,
-                'root_person_id' => $tree->root_person_id,
-                'root_name' => $tree->rootPerson->name,
-                'name' => $tree->name,
-                'source_name' => $tree->source_name,
-                'is_primary' => $tree->is_primary,
-                'updated_at' => $tree->updated_at->toISOString(),
-            ])
+            ->map(function (FamilyTree $tree) use ($user): array {
+                return [
+                    'id' => $tree->id,
+                    'root_person_id' => $tree->root_person_id,
+                    'root_name' => $this->familyTreeRootName($tree),
+                    'name' => $tree->name,
+                    'source_name' => $tree->source_name,
+                    'is_primary' => $tree->is_primary,
+                    'can_delete' => $user->isAdmin() || $tree->user_id === $user->id,
+                    'deletion_pending' => (bool) $tree->deletion_pending,
+                    'updated_at' => $tree->updated_at->toISOString(),
+                ];
+            })
             ->values()
             ->all();
     }
 
     protected function familyTreeRootName(FamilyTree $tree): ?string
     {
-        return $tree->root_person_id === null ? null : $tree->rootPerson->name;
+        if ($tree->root_person_id === null) {
+            return null;
+        }
+
+        $tree->loadMissing(['rootPerson:id,name', 'nodes.person:id,name']);
+
+        $nodesById = $tree->nodes->keyBy('id');
+        $node = $tree->nodes->firstWhere('person_id', $tree->root_person_id);
+        $visited = [];
+
+        while ($node !== null && $node->father_node_id !== null && ! isset($visited[$node->id])) {
+            $visited[$node->id] = true;
+            $father = $nodesById->get($node->father_node_id);
+
+            if ($father === null) {
+                break;
+            }
+
+            $node = $father;
+        }
+
+        return $node?->person?->name ?? $tree->rootPerson?->name;
     }
 
     /**

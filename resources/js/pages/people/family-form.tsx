@@ -73,15 +73,21 @@ export type ChildRow = {
     bio?: string | null;
     descendant_count?: number;
     descendant_names?: string[];
+    mother_id?: number | null;
+    mother_index?: number | null;
 };
 
 type ParentEntry = {
+    id?: number | null;
     name: string;
     alias: string;
     birth_year: string;
     death_year: string;
     marga_id?: number | null;
     new_marga?: string;
+    father_name?: string;
+    father_marga_id?: number | null;
+    father_marga?: string | null;
 };
 
 export type LineageChild = {
@@ -650,7 +656,7 @@ const emptyRow = (): ChildRow => ({
     new_marga: '',
 });
 
-const emptyOwnRow = (): ChildRow => ({
+const emptyOwnRow = (motherIndex: number | null = null): ChildRow => ({
     id: null,
     uid: createUid(),
     name: '',
@@ -663,6 +669,7 @@ const emptyOwnRow = (): ChildRow => ({
     birth_order: null,
     chain: null,
     pending: false,
+    mother_index: motherIndex,
 });
 
 const emptyParent = (): ParentEntry => ({
@@ -672,18 +679,23 @@ const emptyParent = (): ParentEntry => ({
     death_year: '',
     marga_id: null,
     new_marga: '',
+    father_name: '',
 });
 
 function toMotherRows(person: FamilyData | null): ParentEntry[] {
     const fromList = (entries: ParentEntry[] | null | undefined) =>
         (entries ?? [])
             .map((entry) => ({
+                id: entry.id ?? null,
                 name: entry.name ?? '',
                 alias: entry.alias ?? '',
                 birth_year: entry.birth_year ?? '',
                 death_year: entry.death_year ?? '',
                 marga_id: entry.marga_id ?? null,
                 new_marga: '',
+                father_name: entry.father_name ?? '',
+                father_marga_id: entry.father_marga_id ?? null,
+                father_marga: entry.father_marga ?? null,
             }))
             .filter(
                 (entry, index, all) =>
@@ -706,17 +718,29 @@ function toMotherRows(person: FamilyData | null): ParentEntry[] {
     if (person?.mother && isNameFilled(person.mother.name ?? '')) {
         return [
             {
+                id: person.mother.id ?? null,
                 name: person.mother.name ?? '',
                 alias: person.mother.alias ?? '',
                 birth_year: person.mother.birth_year ?? '',
                 death_year: person.mother.death_year ?? '',
                 marga_id: person.mother.marga_id ?? null,
                 new_marga: '',
+                father_name: person.mother.father_name ?? '',
+                father_marga_id: person.mother.father_marga_id ?? null,
+                father_marga: person.mother.father_marga ?? null,
             },
         ];
     }
 
     return [emptyParent()];
+}
+
+function soleMotherIndex(mothers: ParentEntry[]): number | null {
+    const indexes = mothers
+        .map((mother, index) => (isNameFilled(mother.name) ? index : -1))
+        .filter((index) => index >= 0);
+
+    return indexes.length === 1 ? indexes[0] : null;
 }
 
 function MargaField({
@@ -880,6 +904,14 @@ export default function FamilyForm({
     readOnly = false,
 }: Props) {
     const isEdit = person !== null;
+    const initialMothers = toMotherRows(person);
+    const initialMotherIndex = (motherId: number | null | undefined) => {
+        const index = initialMothers.findIndex(
+            (mother) => mother.id === motherId,
+        );
+
+        return index >= 0 ? index : soleMotherIndex(initialMothers);
+    };
 
     const { data, setData, transform, post, put, processing, errors } = useForm(
         {
@@ -908,7 +940,7 @@ export default function FamilyForm({
                       new_marga: '',
                   }
                 : emptyParent(),
-            mothers: toMotherRows(person),
+            mothers: initialMothers,
             children:
                 person?.children && person.children.length > 0
                     ? person.children.map((child) => ({
@@ -944,6 +976,8 @@ export default function FamilyForm({
                           marga: child.marga ?? null,
                           descendant_count: child.descendant_count ?? 0,
                           descendant_names: child.descendant_names ?? [],
+                          mother_id: child.mother_id ?? null,
+                          mother_index: initialMotherIndex(child.mother_id),
                       }))
                     : ([] as ChildRow[]),
             removed_child_ids: [] as number[],
@@ -982,6 +1016,9 @@ export default function FamilyForm({
             : undefined;
 
     const ownChildrenCount = data.ownChildren.length;
+    const availableMothers = data.mothers
+        .map((mother, index) => ({ mother, index }))
+        .filter(({ mother }) => isNameFilled(mother.name));
 
     const isFocusRow =
         person?.id != null
@@ -1282,8 +1319,22 @@ export default function FamilyForm({
         setData('ownChildren', next);
     };
 
+    const setOwnChildMother = (index: number, motherIndex: number | null) => {
+        setData(
+            'ownChildren',
+            data.ownChildren.map((child, childIndex) =>
+                childIndex === index
+                    ? { ...child, mother_index: motherIndex }
+                    : child,
+            ),
+        );
+    };
+
     const addOwnChild = () => {
-        setData('ownChildren', [...data.ownChildren, emptyOwnRow()]);
+        setData('ownChildren', [
+            ...data.ownChildren,
+            emptyOwnRow(soleMotherIndex(data.mothers)),
+        ]);
     };
 
     const removeOwnChild = (index: number) => {
@@ -1307,7 +1358,7 @@ export default function FamilyForm({
 
     const insertOwnChildAbove = (index: number) => {
         const next = [...data.ownChildren];
-        next.splice(index, 0, emptyRow());
+        next.splice(index, 0, emptyOwnRow(soleMotherIndex(data.mothers)));
         setData('ownChildren', next);
     };
 
@@ -1394,15 +1445,44 @@ export default function FamilyForm({
             return;
         }
 
+        const mothers = data.mothers.filter((_, i) => i !== index);
+
+        setData('mothers', mothers);
         setData(
-            'mothers',
-            data.mothers.filter((_, i) => i !== index),
+            'ownChildren',
+            data.ownChildren.map((child) => {
+                const remainingMotherIndex = soleMotherIndex(mothers);
+
+                if (remainingMotherIndex !== null) {
+                    return {
+                        ...child,
+                        mother_index: remainingMotherIndex,
+                    };
+                }
+
+                if (child.mother_index === index) {
+                    return { ...child, mother_index: null };
+                }
+
+                if (
+                    child.mother_index !== null &&
+                    child.mother_index !== undefined &&
+                    child.mother_index > index
+                ) {
+                    return {
+                        ...child,
+                        mother_index: child.mother_index - 1,
+                    };
+                }
+
+                return child;
+            }),
         );
     };
 
     const setParentEntry = (
         key: ParentKey,
-        field: 'name' | 'alias' | 'birth_year' | 'death_year',
+        field: 'name' | 'alias' | 'birth_year' | 'death_year' | 'father_name',
         value: string,
     ) => {
         updateParent(key, { [field]: value });
@@ -1549,6 +1629,31 @@ export default function FamilyForm({
                         />
                     </div>
                 )}
+                {key !== 'father' && (
+                    <div className="grid gap-1.5">
+                        <Label className="text-tb-on-surface">
+                            Nama Ayah dari Ibu
+                        </Label>
+                        <NameCombobox
+                            value={entry.father_name ?? ''}
+                            onChange={(value) =>
+                                setParentEntry(key, 'father_name', value)
+                            }
+                            suggestions={fatherSuggestions}
+                            placeholder="Nama ayah dari ibu"
+                            allowNa
+                        />
+                        <p className="text-xs text-tb-on-surface-variant">
+                            Marga Ayah dari Ibu mengikuti marga Ibu:{' '}
+                            <span className="font-medium text-tb-on-surface">
+                                {margaName(entry.marga_id, entry.new_marga)}
+                            </span>
+                        </p>
+                        <InputError
+                            message={errors[`${errorPrefix}.father_name`]}
+                        />
+                    </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-1.5">
                         <Label className="text-tb-on-surface">
@@ -1633,14 +1738,22 @@ export default function FamilyForm({
                   })),
               }
             : currentData;
+        const withSelectedMother = {
+            ...withMarga,
+            ownChildren: withMarga.ownChildren.map((child) => ({
+                ...child,
+                mother_index:
+                    soleMotherIndex(withMarga.mothers) ?? child.mother_index,
+            })),
+        };
 
-        const sorted = withMarga.children ?? [];
+        const sorted = withSelectedMother.children ?? [];
         const focusIndex =
             person?.id != null
                 ? sorted.findIndex((child) => child.id === person.id)
                 : (Number(withMarga.birth_order) || 1) - 1;
 
-        const submitData = { ...withMarga };
+        const submitData = { ...withSelectedMother };
 
         if (!canPublish) {
             delete (submitData as { is_public?: boolean }).is_public;
@@ -2338,251 +2451,416 @@ export default function FamilyForm({
                                 </div>
                             </CardHeader>
                             <CardContent className="grid gap-3">
+                                {data.ownChildren.length === 0 && (
+                                    <div className="rounded-lg border border-dashed border-tb-outline-variant bg-tb-surface-container/30 px-4 py-8 text-center">
+                                        <p className="text-sm font-medium text-tb-on-surface">
+                                            Belum ada anak yang dicatat
+                                        </p>
+                                        <p className="mt-1 text-xs text-tb-on-surface-variant">
+                                            Gunakan tombol di bawah untuk
+                                            menambahkan anak pertama.
+                                        </p>
+                                    </div>
+                                )}
                                 <AnimatePresence initial={false}>
-                                    {data.ownChildren.map((child, index) => (
-                                        <motion.div
-                                            key={
-                                                child.uid ??
-                                                child.id ??
-                                                `own-row-${index}`
-                                            }
-                                            layout
-                                            initial={{
-                                                opacity: 0,
-                                                scale: 0.97,
-                                            }}
-                                            animate={{ opacity: 1, scale: 1 }}
-                                            exit={{ opacity: 0, scale: 0.97 }}
-                                            transition={{
-                                                type: 'spring',
-                                                stiffness: 400,
-                                                damping: 35,
-                                            }}
-                                            className="grid gap-3 rounded-lg border border-tb-outline-variant bg-tb-surface-bright p-3"
-                                        >
-                                            <div className="flex items-center justify-between gap-2">
-                                                <span className="flex items-center gap-1.5">
-                                                    <span className="inline-flex w-fit items-center rounded-full bg-tb-surface-container px-2 py-0.5 text-xs font-semibold text-tb-on-surface-variant">
-                                                        Urut{' '}
-                                                        {String(
-                                                            index + 1,
-                                                        ).padStart(2, '0')}
+                                    {data.ownChildren.map((child, index) => {
+                                        const effectiveMotherIndex =
+                                            child.mother_index ??
+                                            soleMotherIndex(data.mothers);
+                                        const selectedMother =
+                                            effectiveMotherIndex !== null
+                                                ? data.mothers[
+                                                      effectiveMotherIndex
+                                                  ]
+                                                : undefined;
+
+                                        return (
+                                            <motion.div
+                                                key={
+                                                    child.uid ??
+                                                    child.id ??
+                                                    `own-row-${index}`
+                                                }
+                                                layout
+                                                initial={{
+                                                    opacity: 0,
+                                                    scale: 0.97,
+                                                }}
+                                                animate={{
+                                                    opacity: 1,
+                                                    scale: 1,
+                                                }}
+                                                exit={{
+                                                    opacity: 0,
+                                                    scale: 0.97,
+                                                }}
+                                                transition={{
+                                                    type: 'spring',
+                                                    stiffness: 400,
+                                                    damping: 35,
+                                                }}
+                                                className="grid overflow-hidden rounded-xl border border-tb-outline-variant bg-tb-surface-bright"
+                                            >
+                                                <div className="flex items-center justify-between gap-3 border-b border-tb-outline-variant bg-tb-surface-container/40 px-4 py-3">
+                                                    <span className="flex min-w-0 items-center gap-1.5">
+                                                        <span className="inline-flex w-fit shrink-0 items-center rounded-full bg-tb-surface-container px-2 py-0.5 text-xs font-semibold text-tb-on-surface-variant">
+                                                            Urut{' '}
+                                                            {String(
+                                                                index + 1,
+                                                            ).padStart(2, '0')}
+                                                        </span>
+                                                        <span className="max-w-64 truncate text-sm font-semibold text-tb-on-surface">
+                                                            {displayRowName(
+                                                                child.name,
+                                                            )}
+                                                        </span>
+                                                        {isGapRow(child) && (
+                                                            <span className="inline-flex w-fit items-center rounded-md bg-tb-surface-container px-1.5 py-0.5 text-[10px] font-semibold text-tb-on-surface-variant">
+                                                                N/A
+                                                            </span>
+                                                        )}
+                                                        {child.pending && (
+                                                            <span className="inline-flex w-fit items-center rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                                                                Belum tersambung
+                                                            </span>
+                                                        )}
                                                     </span>
-                                                    {isGapRow(child) && (
-                                                        <span className="inline-flex w-fit items-center rounded-md bg-tb-surface-container px-1.5 py-0.5 text-[10px] font-semibold text-tb-on-surface-variant">
-                                                            N/A
-                                                        </span>
-                                                    )}
-                                                    {child.pending && (
-                                                        <span className="inline-flex w-fit items-center rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
-                                                            Belum tersambung
-                                                        </span>
-                                                    )}
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            insertOwnChildAbove(
-                                                                index,
-                                                            )
-                                                        }
-                                                        aria-label="Sisipkan anak di atas"
-                                                        title="Sisipkan anak di atas"
-                                                        className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-tb-outline-variant text-tb-outline transition-colors hover:border-tb-primary hover:text-tb-primary"
-                                                    >
-                                                        <Plus className="h-3.5 w-3.5" />
-                                                    </button>
-                                                </span>
-                                                <span className="flex items-center gap-2">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            moveOwnChild(
-                                                                index,
-                                                                -1,
-                                                            )
-                                                        }
-                                                        disabled={index === 0}
-                                                        aria-label="Pindah ke atas"
-                                                        title="Pindah ke atas"
-                                                        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-tb-outline transition-colors hover:bg-tb-surface-container hover:text-tb-on-surface disabled:cursor-not-allowed disabled:opacity-30"
-                                                    >
-                                                        <ChevronUp className="h-3.5 w-3.5" />
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            moveOwnChild(
-                                                                index,
-                                                                1,
-                                                            )
-                                                        }
-                                                        disabled={
-                                                            index ===
-                                                            ownChildrenCount - 1
-                                                        }
-                                                        aria-label="Pindah ke bawah"
-                                                        title="Pindah ke bawah"
-                                                        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-tb-outline transition-colors hover:bg-tb-surface-container hover:text-tb-on-surface disabled:cursor-not-allowed disabled:opacity-30"
-                                                    >
-                                                        <ChevronDown className="h-3.5 w-3.5" />
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            requestRemoveRow(
-                                                                'ownChildren',
-                                                                index,
-                                                            )
-                                                        }
-                                                        aria-label="Hapus anak"
-                                                        title="Hapus anak"
-                                                        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-950"
-                                                    >
-                                                        <Trash2 className="h-3.5 w-3.5" />
-                                                    </button>
-                                                </span>
-                                            </div>
-                                            <div className="grid gap-3 sm:grid-cols-2">
-                                                <div className="grid gap-1.5">
-                                                    <Label>Nama</Label>
-                                                    <NameCombobox
-                                                        value={child.name}
-                                                        onChange={(value) =>
-                                                            setOwnChild(
-                                                                index,
-                                                                'name',
+                                                    <span className="flex shrink-0 items-center gap-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                insertOwnChildAbove(
+                                                                    index,
+                                                                )
+                                                            }
+                                                            aria-label="Sisipkan anak di atas"
+                                                            title="Sisipkan anak di atas"
+                                                            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-tb-outline-variant text-tb-outline transition-colors hover:border-tb-primary hover:text-tb-primary"
+                                                        >
+                                                            <Plus className="h-3.5 w-3.5" />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                moveOwnChild(
+                                                                    index,
+                                                                    -1,
+                                                                )
+                                                            }
+                                                            disabled={
+                                                                index === 0
+                                                            }
+                                                            aria-label="Pindah ke atas"
+                                                            title="Pindah ke atas"
+                                                            className="inline-flex h-6 w-6 items-center justify-center rounded-full text-tb-outline transition-colors hover:bg-tb-surface-container hover:text-tb-on-surface disabled:cursor-not-allowed disabled:opacity-30"
+                                                        >
+                                                            <ChevronUp className="h-3.5 w-3.5" />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                moveOwnChild(
+                                                                    index,
+                                                                    1,
+                                                                )
+                                                            }
+                                                            disabled={
+                                                                index ===
+                                                                ownChildrenCount -
+                                                                    1
+                                                            }
+                                                            aria-label="Pindah ke bawah"
+                                                            title="Pindah ke bawah"
+                                                            className="inline-flex h-6 w-6 items-center justify-center rounded-full text-tb-outline transition-colors hover:bg-tb-surface-container hover:text-tb-on-surface disabled:cursor-not-allowed disabled:opacity-30"
+                                                        >
+                                                            <ChevronDown className="h-3.5 w-3.5" />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                requestRemoveRow(
+                                                                    'ownChildren',
+                                                                    index,
+                                                                )
+                                                            }
+                                                            aria-label="Hapus anak"
+                                                            title="Hapus anak"
+                                                            className="inline-flex h-6 w-6 items-center justify-center rounded-full text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-950"
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </span>
+                                                </div>
+                                                <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-6">
+                                                    <div className="flex items-center gap-3 sm:col-span-2 lg:col-span-6">
+                                                        <p className="text-[11px] font-semibold tracking-[0.14em] text-tb-on-surface-variant uppercase">
+                                                            Data Anak
+                                                        </p>
+                                                        <span className="h-px flex-1 bg-tb-outline-variant" />
+                                                    </div>
+                                                    <div className="grid gap-1.5 lg:col-span-3">
+                                                        <Label>Nama</Label>
+                                                        <NameCombobox
+                                                            value={child.name}
+                                                            onChange={(value) =>
+                                                                setOwnChild(
+                                                                    index,
+                                                                    'name',
+                                                                    value,
+                                                                )
+                                                            }
+                                                            suggestions={
+                                                                nameSuggestions
+                                                            }
+                                                            placeholder="Nama anak"
+                                                        />
+                                                    </div>
+                                                    <div className="grid gap-1.5 lg:col-span-3">
+                                                        <Label>
+                                                            Alias / Gelar
+                                                        </Label>
+                                                        <Input
+                                                            value={
+                                                                child.alias ??
+                                                                ''
+                                                            }
+                                                            onChange={(e) =>
+                                                                setOwnChild(
+                                                                    index,
+                                                                    'alias',
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            placeholder="Tuan Sorba Dibanua"
+                                                            className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                                        />
+                                                    </div>
+                                                    <div className="grid gap-1.5 lg:col-span-2">
+                                                        <Label>
+                                                            Jenis Kelamin
+                                                        </Label>
+                                                        <Select
+                                                            value={
+                                                                child.gender ||
+                                                                VALUE_NONE
+                                                            }
+                                                            onValueChange={(
                                                                 value,
-                                                            )
-                                                        }
-                                                        suggestions={
-                                                            nameSuggestions
-                                                        }
-                                                        placeholder="Nama anak"
-                                                    />
-                                                </div>
-                                                <div className="grid gap-1.5">
-                                                    <Label>Alias / Gelar</Label>
-                                                    <Input
-                                                        value={
-                                                            child.alias ?? ''
-                                                        }
-                                                        onChange={(e) =>
-                                                            setOwnChild(
-                                                                index,
-                                                                'alias',
-                                                                e.target.value,
-                                                            )
-                                                        }
-                                                        placeholder="Tuan Sorba Dibanua"
-                                                        className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
-                                                    />
-                                                </div>
-                                                <div className="grid gap-1.5">
-                                                    <Label>Jenis Kelamin</Label>
-                                                    <Select
-                                                        value={
-                                                            child.gender ||
-                                                            VALUE_NONE
-                                                        }
-                                                        onValueChange={(
-                                                            value,
-                                                        ) =>
-                                                            setOwnChild(
-                                                                index,
-                                                                'gender',
-                                                                value ===
-                                                                    VALUE_NONE
-                                                                    ? ''
-                                                                    : value,
-                                                            )
-                                                        }
-                                                    >
-                                                        <SelectTrigger className="border-tb-outline-variant bg-tb-surface-bright">
-                                                            <SelectValue placeholder="Pilih" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem
-                                                                value={
-                                                                    VALUE_NONE
-                                                                }
-                                                            >
-                                                                — Pilih —
-                                                            </SelectItem>
-                                                            <SelectItem value="L">
-                                                                Laki-laki
-                                                            </SelectItem>
-                                                            <SelectItem value="P">
-                                                                Perempuan
-                                                            </SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                                <div className="grid gap-1.5">
-                                                    <Label>Marga</Label>
-                                                    <MargaField
-                                                        value={
-                                                            child.marga_id ??
-                                                            null
-                                                        }
-                                                        newMarga={
-                                                            child.new_marga ??
-                                                            ''
-                                                        }
-                                                        onValue={(value) =>
-                                                            setOwnChildMarga(
-                                                                index,
+                                                            ) =>
+                                                                setOwnChild(
+                                                                    index,
+                                                                    'gender',
+                                                                    value ===
+                                                                        VALUE_NONE
+                                                                        ? ''
+                                                                        : value,
+                                                                )
+                                                            }
+                                                        >
+                                                            <SelectTrigger className="border-tb-outline-variant bg-tb-surface-bright">
+                                                                <SelectValue placeholder="Pilih" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem
+                                                                    value={
+                                                                        VALUE_NONE
+                                                                    }
+                                                                >
+                                                                    — Pilih —
+                                                                </SelectItem>
+                                                                <SelectItem value="L">
+                                                                    Laki-laki
+                                                                </SelectItem>
+                                                                <SelectItem value="P">
+                                                                    Perempuan
+                                                                </SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                    <div className="grid gap-1.5 lg:col-span-4">
+                                                        <Label>Marga</Label>
+                                                        <MargaField
+                                                            value={
+                                                                child.marga_id ??
+                                                                null
+                                                            }
+                                                            newMarga={
+                                                                child.new_marga ??
+                                                                ''
+                                                            }
+                                                            onValue={(value) =>
+                                                                setOwnChildMarga(
+                                                                    index,
+                                                                    value,
+                                                                )
+                                                            }
+                                                            onNewMarga={(
                                                                 value,
-                                                            )
-                                                        }
-                                                        onNewMarga={(value) =>
-                                                            setOwnChildNewMarga(
-                                                                index,
+                                                            ) =>
+                                                                setOwnChildNewMarga(
+                                                                    index,
+                                                                    value,
+                                                                )
+                                                            }
+                                                            margas={margas}
+                                                            disabled={
+                                                                lockedMarga !==
+                                                                null
+                                                            }
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center gap-3 pt-1 sm:col-span-2 lg:col-span-6">
+                                                        <p className="text-[11px] font-semibold tracking-[0.14em] text-tb-on-surface-variant uppercase">
+                                                            Relasi Ibu
+                                                        </p>
+                                                        <span className="h-px flex-1 bg-tb-outline-variant" />
+                                                    </div>
+                                                    <div className="grid gap-1.5 lg:col-span-3">
+                                                        <Label>Ibu</Label>
+                                                        <Select
+                                                            value={
+                                                                effectiveMotherIndex ===
+                                                                null
+                                                                    ? VALUE_NONE
+                                                                    : String(
+                                                                          effectiveMotherIndex,
+                                                                      )
+                                                            }
+                                                            onValueChange={(
                                                                 value,
-                                                            )
-                                                        }
-                                                        margas={margas}
-                                                        disabled={
-                                                            lockedMarga !== null
-                                                        }
-                                                    />
+                                                            ) =>
+                                                                setOwnChildMother(
+                                                                    index,
+                                                                    value ===
+                                                                        VALUE_NONE
+                                                                        ? null
+                                                                        : Number(
+                                                                              value,
+                                                                          ),
+                                                                )
+                                                            }
+                                                            disabled={
+                                                                availableMothers.length <=
+                                                                1
+                                                            }
+                                                        >
+                                                            <SelectTrigger className="border-tb-outline-variant bg-tb-surface-bright">
+                                                                <SelectValue placeholder="Pilih Ibu" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {availableMothers.length >
+                                                                    1 && (
+                                                                    <SelectItem
+                                                                        value={
+                                                                            VALUE_NONE
+                                                                        }
+                                                                    >
+                                                                        — Pilih
+                                                                        Ibu —
+                                                                    </SelectItem>
+                                                                )}
+                                                                {availableMothers.map(
+                                                                    ({
+                                                                        mother,
+                                                                        index: motherIndex,
+                                                                    }) => (
+                                                                        <SelectItem
+                                                                            key={
+                                                                                mother.id ??
+                                                                                `mother-${motherIndex}`
+                                                                            }
+                                                                            value={String(
+                                                                                motherIndex,
+                                                                            )}
+                                                                        >
+                                                                            {isNameFilled(
+                                                                                mother.name,
+                                                                            )
+                                                                                ? mother.name
+                                                                                : `Istri ${motherIndex + 1}`}
+                                                                        </SelectItem>
+                                                                    ),
+                                                                )}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <InputError
+                                                            message={
+                                                                errors[
+                                                                    `ownChildren.${index}.mother_index`
+                                                                ]
+                                                            }
+                                                        />
+                                                    </div>
+                                                    <div className="grid gap-1.5 lg:col-span-3">
+                                                        <Label>
+                                                            Ayah dari Ibu
+                                                        </Label>
+                                                        <Input
+                                                            value={
+                                                                selectedMother?.father_name ??
+                                                                ''
+                                                            }
+                                                            readOnly
+                                                            placeholder="Isi pada data Ibu"
+                                                            className="border-tb-outline-variant bg-tb-surface-container/60"
+                                                        />
+                                                        {selectedMother && (
+                                                            <p className="text-xs text-tb-on-surface-variant">
+                                                                Marga:{' '}
+                                                                {margaName(
+                                                                    selectedMother.marga_id,
+                                                                    selectedMother.new_marga,
+                                                                )}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center gap-3 pt-1 sm:col-span-2 lg:col-span-6">
+                                                        <p className="text-[11px] font-semibold tracking-[0.14em] text-tb-on-surface-variant uppercase">
+                                                            Pasangan
+                                                        </p>
+                                                        <span className="h-px flex-1 bg-tb-outline-variant" />
+                                                    </div>
+                                                    <div className="grid gap-1.5 lg:col-span-3">
+                                                        <Label>
+                                                            Nama Pasangan
+                                                        </Label>
+                                                        <Input
+                                                            value={child.spouse}
+                                                            onChange={(event) =>
+                                                                setOwnChild(
+                                                                    index,
+                                                                    'spouse',
+                                                                    event.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            placeholder="Nama pasangan"
+                                                            className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                                        />
+                                                    </div>
+                                                    <div className="grid gap-1.5 lg:col-span-3">
+                                                        <Label>
+                                                            Marga Pasangan
+                                                        </Label>
+                                                        <SpouseMargaSelect
+                                                            value={
+                                                                child.spouse_marga
+                                                            }
+                                                            onChange={(next) =>
+                                                                setOwnChild(
+                                                                    index,
+                                                                    'spouse_marga',
+                                                                    next,
+                                                                )
+                                                            }
+                                                            margas={margas}
+                                                        />
+                                                    </div>
                                                 </div>
-                                                <div className="grid gap-1.5">
-                                                    <Label>Nama Pasangan</Label>
-                                                    <Input
-                                                        value={child.spouse}
-                                                        onChange={(event) =>
-                                                            setOwnChild(
-                                                                index,
-                                                                'spouse',
-                                                                event.target
-                                                                    .value,
-                                                            )
-                                                        }
-                                                        placeholder="Nama pasangan"
-                                                        className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
-                                                    />
-                                                </div>
-                                                <div className="grid gap-1.5 sm:col-span-2">
-                                                    <Label>
-                                                        Marga Pasangan
-                                                    </Label>
-                                                    <SpouseMargaSelect
-                                                        value={
-                                                            child.spouse_marga
-                                                        }
-                                                        onChange={(next) =>
-                                                            setOwnChild(
-                                                                index,
-                                                                'spouse_marga',
-                                                                next,
-                                                            )
-                                                        }
-                                                        margas={margas}
-                                                    />
-                                                </div>
-                                            </div>
-                                        </motion.div>
-                                    ))}
+                                            </motion.div>
+                                        );
+                                    })}
                                 </AnimatePresence>
                                 <Button
                                     type="button"
@@ -2602,8 +2880,8 @@ export default function FamilyForm({
                                 </CardTitle>
                                 <CardDescription>
                                     Ayah dan istri-istrinya dari anak-anak yang
-                                    dicatat di bawah. Anak-anak saat ini tertaut
-                                    ke Istri 1.
+                                    dicatat di bawah. Setiap anak dapat
+                                    ditautkan ke Ibu yang sesuai.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="grid gap-5 lg:grid-cols-2">
@@ -2617,7 +2895,7 @@ export default function FamilyForm({
                                     {data.mothers.map((wife, index) => (
                                         <div
                                             key={
-                                                wife.name ||
+                                                wife.id ??
                                                 `istri-block-${index}`
                                             }
                                             className="relative"

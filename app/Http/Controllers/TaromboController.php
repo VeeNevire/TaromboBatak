@@ -80,4 +80,20 @@ class TaromboController extends Controller
             ],
         ]);
     }
+
+    /**
+     * Show the public tarombo tree in a dedicated full-page layout.
+     */
+    public function publicFullscreen(Request $request): Response
+    {
+        $service = app(TaromboTreeService::class);
+        $tree = $service->publicRows();
+
+        return Inertia::render('tarombo/public-fullscreen', [
+            'people' => $tree['rows'],
+            'margas' => $service->margas(publicOnly: true),
+            'truncated' => $tree['truncated'],
+            'initialPersonId' => (string) $request->query('person', ''),
+        ]);
+    }
 }

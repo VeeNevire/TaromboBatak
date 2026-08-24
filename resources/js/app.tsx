@@ -28,6 +28,7 @@ function baseLayout(
         case name === 'home':
         case name === 'tarombo/public':
         case name === 'tarombo/fullscreen':
+        case name === 'tarombo/public-fullscreen':
         case name === 'marga/public':
         case name === 'budaya/index':
         case name === 'cerita/index':

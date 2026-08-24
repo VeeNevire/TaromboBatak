@@ -70,6 +70,11 @@ class FamilyTree extends Model
         return $this->hasMany(FamilyTreeNode::class);
     }
 
+    public function deletionRequests(): HasMany
+    {
+        return $this->hasMany(FamilyTreeDeletionRequest::class);
+    }
+
     protected function casts(): array
     {
         return ['is_primary' => 'boolean'];

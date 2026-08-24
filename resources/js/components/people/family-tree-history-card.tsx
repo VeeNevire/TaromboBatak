@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 import {
     ArrowLeft,
     ArrowUpRight,
@@ -8,6 +8,7 @@ import {
     Maximize2,
     Pencil,
     Search,
+    Trash2,
     TreePine,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -32,6 +33,8 @@ export type FamilyTreeHistoryEntry = {
     name: string | null;
     source_name: string | null;
     is_primary: boolean;
+    can_delete: boolean;
+    deletion_pending: boolean;
     updated_at: string;
 };
 
@@ -308,6 +311,50 @@ export function FamilyTreeHistoryCard({
                                                             <Pencil className="size-3.5" />{' '}
                                                             Ubah Struktur
                                                         </Link>
+                                                        {entry.deletion_pending ? (
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                disabled
+                                                                className="border-amber-300 bg-amber-50 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
+                                                            >
+                                                                Menunggu
+                                                                Persetujuan
+                                                            </Button>
+                                                        ) : (
+                                                            entry.can_delete && (
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    className="border-red-300 text-xs text-red-700 hover:bg-red-50 hover:text-red-800 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950"
+                                                                    onClick={() => {
+                                                                        const confirmed =
+                                                                            window.confirm(
+                                                                                `Hapus ${entry.name ?? `Silsilah ${entry.root_name}`}? Data anggota tetap tersimpan. Jika terhubung dengan akun lain, penghapusan akan menunggu persetujuan Kontributor.`,
+                                                                            );
+
+                                                                        if (
+                                                                            confirmed
+                                                                        ) {
+                                                                            router.delete(
+                                                                                familyTrees.destroy(
+                                                                                    entry.id,
+                                                                                )
+                                                                                    .url,
+                                                                                {
+                                                                                    preserveScroll: true,
+                                                                                },
+                                                                            );
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <Trash2 className="size-3.5" />
+                                                                    Hapus
+                                                                </Button>
+                                                            )
+                                                        )}
                                                     </div>
                                                 </div>
                                             </li>

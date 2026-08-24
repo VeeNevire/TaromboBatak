@@ -2,6 +2,10 @@
 
 namespace App\Http\Middleware;
 
+use App\Notifications\EventSubmitted;
+use App\Notifications\FamilyTreeDeletionSubmitted;
+use App\Notifications\FatherMatchSubmitted;
+use App\Notifications\StorySubmitted;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -41,6 +45,17 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
             ],
+            'unreadContributionCount' => fn () => $request->user()?->canReviewContributions()
+                ? $request->user()->unreadNotifications()
+                    ->whereIn('type', [FatherMatchSubmitted::class, FamilyTreeDeletionSubmitted::class])
+                    ->count()
+                : 0,
+            'unreadEventCount' => fn () => $request->user()?->canReviewContributions()
+                ? $request->user()->unreadNotifications()->where('type', EventSubmitted::class)->count()
+                : 0,
+            'unreadStoryCount' => fn () => $request->user()?->canReviewContributions()
+                ? $request->user()->unreadNotifications()->where('type', StorySubmitted::class)->count()
+                : 0,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
     }

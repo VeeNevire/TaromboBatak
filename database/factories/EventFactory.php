@@ -23,6 +23,16 @@ class EventFactory extends Factory
             'location' => fake()->city(),
             'date' => fake()->dateTimeBetween('now', '+6 months')->format('Y-m-d'),
             'published' => true,
+            'status' => Event::STATUS_APPROVED,
+            'review_version' => 1,
         ];
+    }
+
+    public function pending(): static
+    {
+        return $this->state(fn () => [
+            'published' => false,
+            'status' => Event::STATUS_PENDING,
+        ]);
     }
 }

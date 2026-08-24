@@ -12,6 +12,8 @@ type StoryDetail = {
     title: string;
     description: string;
     image: string | null;
+    classification: 'umum' | 'marga';
+    marga: string | null;
     created_at: string | null;
 };
 
@@ -39,7 +41,9 @@ export default function CeritaShow({ story }: Props) {
 
                             <div className="mt-8 inline-flex items-center gap-2 rounded-full border border-tb-primary/20 bg-tb-primary/10 px-4 py-2 text-sm font-medium text-tb-primary">
                                 <BookOpen className="h-4 w-4" />
-                                Cerita Leluhur & Budaya
+                                {story.classification === 'umum'
+                                    ? 'Cerita Umum'
+                                    : `Cerita Marga ${story.marga ?? ''}`}
                             </div>
 
                             <h1 className="mt-6 font-display text-3xl leading-tight font-bold md:text-5xl">

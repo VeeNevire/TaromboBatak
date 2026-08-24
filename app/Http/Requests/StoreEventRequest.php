@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreEventRequest extends FormRequest
 {
@@ -21,6 +22,12 @@ class StoreEventRequest extends FormRequest
             'registration_url' => ['nullable', 'url', 'max:500'],
             'date' => ['required', 'date'],
             'published' => ['boolean'],
+            'marga_id' => [
+                Rule::requiredIf(fn () => $this->user()?->isStaff()),
+                'nullable',
+                'integer',
+                'exists:margas,id',
+            ],
         ];
     }
 }

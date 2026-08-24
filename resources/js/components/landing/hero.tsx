@@ -1,5 +1,6 @@
+import { Link } from '@inertiajs/react';
 import { motion } from 'framer-motion';
-import { ArrowRight, CirclePlay } from 'lucide-react';
+import { ArrowRight, CirclePlay, Maximize2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { ProfileCard } from '@/components/landing/profile-card';
 import { TaromboDiagram } from '@/components/landing/tarombo-diagram';
@@ -8,8 +9,10 @@ import {
     findPerson,
     findPersonChildren,
     MOCK_TAROMBO,
+    oldestOfMarga,
 } from '@/data/tarombo-tree';
 import type { TaromboPerson } from '@/data/tarombo-tree';
+import tarombo from '@/routes/tarombo';
 
 const DEFAULT_PERSON_ID = 'tuan-sorimangaraja';
 
@@ -38,6 +41,28 @@ export function Hero() {
     );
 
     const handlePersonSelect = (person: TaromboPerson) => {
+        setHistory((prev) => [...prev, centerPersonId]);
+        setSelected(person);
+        setCenterPersonId(person.id);
+    };
+
+    const handleSearchSelect = (person: TaromboPerson) => {
+        if (person.id === centerPersonId) {
+            return;
+        }
+
+        setHistory((prev) => [...prev, centerPersonId]);
+        setSelected(person);
+        setCenterPersonId(person.id);
+    };
+
+    const handleMargaSelect = (margaName: string) => {
+        const person = oldestOfMarga(MOCK_TAROMBO, margaName);
+
+        if (!person || person.id === centerPersonId) {
+            return;
+        }
+
         setHistory((prev) => [...prev, centerPersonId]);
         setSelected(person);
         setCenterPersonId(person.id);
@@ -147,6 +172,20 @@ export function Hero() {
                     centerPersonId={centerPersonId}
                     context="descendants"
                     maxDepth={2}
+                    bubbleTrigger="hover"
+                    enableSearch
+                    onSearchSelect={handleSearchSelect}
+                    onMargaClick={handleMargaSelect}
+                    actionSlot={
+                        <Link
+                            href={tarombo.full({
+                                query: { person: centerPersonId },
+                            })}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-tb-outline-variant bg-tb-surface-bright px-3 py-1.5 text-xs font-medium text-tb-on-surface shadow-md transition-colors hover:bg-tb-surface-container"
+                        >
+                            <Maximize2 className="h-3.5 w-3.5" /> Full Page
+                        </Link>
+                    }
                 />
             </motion.div>
             <motion.div

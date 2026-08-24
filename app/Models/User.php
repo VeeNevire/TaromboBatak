@@ -62,6 +62,16 @@ class User extends Authenticatable
         return $this->isAdmin() || $this->isSubAdmin();
     }
 
+    public function isContributor(): bool
+    {
+        return in_array($this->role, ['contributor_main', 'contributor_member'], true);
+    }
+
+    public function canReviewContributions(): bool
+    {
+        return $this->isAdmin() || $this->isContributor();
+    }
+
     public function canChatWith(User $contact): bool
     {
         return ! $this->isAdmin()
@@ -85,6 +95,21 @@ class User extends Authenticatable
     public function familyTrees(): HasMany
     {
         return $this->hasMany(FamilyTree::class);
+    }
+
+    public function contributionRequests(): HasMany
+    {
+        return $this->hasMany(ContributionRequest::class, 'requester_id');
+    }
+
+    public function events(): HasMany
+    {
+        return $this->hasMany(Event::class, 'created_by');
+    }
+
+    public function stories(): HasMany
+    {
+        return $this->hasMany(Story::class, 'created_by');
     }
 
     /**

@@ -12,6 +12,13 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { dashboard } from '@/routes';
 import events from '@/routes/events';
 
@@ -23,13 +30,24 @@ type EventFormValue = {
     registration_url: string | null;
     date: string;
     published: boolean;
+    marga_id: number | null;
+    status: 'pending' | 'approved' | 'rejected';
+    rejection_reason: string | null;
 };
 
 type Props = {
     event: EventFormValue | null;
+    margas: { id: number; name: string }[];
+    lockedMarga: { id: number; name: string } | null;
+    canPublish: boolean;
 };
 
-export default function EventForm({ event }: Props) {
+export default function EventForm({
+    event,
+    margas,
+    lockedMarga,
+    canPublish,
+}: Props) {
     const isEdit = event !== null;
 
     const { data, setData, post, put, processing, errors } = useForm({
@@ -38,7 +56,8 @@ export default function EventForm({ event }: Props) {
         location: event?.location ?? '',
         registration_url: event?.registration_url ?? '',
         date: event?.date ?? '',
-        published: event?.published ?? true,
+        published: event?.published ?? canPublish,
+        marga_id: event?.marga_id ? String(event.marga_id) : '',
     });
 
     const submit = (e: React.FormEvent) => {
@@ -72,8 +91,9 @@ export default function EventForm({ event }: Props) {
                             {isEdit ? 'Ubah Event' : 'Tambah Event'}
                         </h1>
                         <p className="mt-1 text-sm text-tb-on-surface-variant">
-                            Event dengan status "Tampil" akan muncul di halaman
-                            utama.
+                            {canPublish
+                                ? 'Event yang disetujui dapat ditampilkan di halaman publik.'
+                                : 'Event akan dikirim ke Kontributor marga Anda untuk ditinjau.'}
                         </p>
                     </div>
                 </div>
@@ -89,6 +109,69 @@ export default function EventForm({ event }: Props) {
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="grid gap-5">
+                            {!canPublish && (
+                                <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
+                                    Event dari User Biasa berstatus menunggu dan
+                                    belum tampil ke publik sampai disetujui
+                                    Kontributor.
+                                </div>
+                            )}
+                            {event?.status === 'rejected' && (
+                                <div className="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-800 dark:bg-red-950 dark:text-red-100">
+                                    Event sebelumnya ditolak
+                                    {event.rejection_reason
+                                        ? `: ${event.rejection_reason}`
+                                        : '.'}{' '}
+                                    Simpan perubahan untuk mengajukan ulang.
+                                </div>
+                            )}
+
+                            {lockedMarga ? (
+                                <div className="grid gap-1.5">
+                                    <Label className="text-tb-on-surface">
+                                        Marga
+                                    </Label>
+                                    <div className="flex h-9 items-center rounded-md border border-tb-outline-variant bg-tb-surface-container px-3 text-sm text-tb-on-surface">
+                                        {lockedMarga.name}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="grid gap-1.5">
+                                    <Label
+                                        htmlFor="marga_id"
+                                        className="text-tb-on-surface"
+                                    >
+                                        Marga{' '}
+                                        <span className="text-red-600">*</span>
+                                    </Label>
+                                    <Select
+                                        value={data.marga_id}
+                                        onValueChange={(value) =>
+                                            setData('marga_id', value)
+                                        }
+                                    >
+                                        <SelectTrigger
+                                            id="marga_id"
+                                            className="w-full border-tb-outline-variant bg-tb-surface-bright"
+                                            aria-invalid={!!errors.marga_id}
+                                        >
+                                            <SelectValue placeholder="Pilih marga event" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {margas.map((marga) => (
+                                                <SelectItem
+                                                    key={marga.id}
+                                                    value={String(marga.id)}
+                                                >
+                                                    {marga.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <InputError message={errors.marga_id} />
+                                </div>
+                            )}
+
                             <div className="grid gap-1.5">
                                 <Label
                                     htmlFor="title"
@@ -198,22 +281,27 @@ export default function EventForm({ event }: Props) {
                                 <InputError message={errors.description} />
                             </div>
 
-                            <div className="flex items-center gap-3">
-                                <Checkbox
-                                    id="published"
-                                    checked={data.published}
-                                    onCheckedChange={(checked) =>
-                                        setData('published', checked === true)
-                                    }
-                                    className="rounded border-tb-outline-variant text-tb-primary focus:ring-tb-primary"
-                                />
-                                <Label
-                                    htmlFor="published"
-                                    className="cursor-pointer text-sm text-tb-on-surface"
-                                >
-                                    Tampilkan di halaman utama
-                                </Label>
-                            </div>
+                            {canPublish && (
+                                <div className="flex items-center gap-3">
+                                    <Checkbox
+                                        id="published"
+                                        checked={data.published}
+                                        onCheckedChange={(checked) =>
+                                            setData(
+                                                'published',
+                                                checked === true,
+                                            )
+                                        }
+                                        className="rounded border-tb-outline-variant text-tb-primary focus:ring-tb-primary"
+                                    />
+                                    <Label
+                                        htmlFor="published"
+                                        className="cursor-pointer text-sm text-tb-on-surface"
+                                    >
+                                        Tampilkan di halaman publik
+                                    </Label>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
 
@@ -227,7 +315,9 @@ export default function EventForm({ event }: Props) {
                                 ? 'Menyimpan...'
                                 : isEdit
                                   ? 'Simpan Perubahan'
-                                  : 'Tambah Event'}
+                                  : canPublish
+                                    ? 'Tambah Event'
+                                    : 'Ajukan Event'}
                         </Button>
                         <Button
                             asChild

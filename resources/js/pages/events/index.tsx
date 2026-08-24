@@ -30,6 +30,14 @@ type EventItem = {
     location: string | null;
     date: string;
     published: boolean;
+    status: 'pending' | 'approved' | 'rejected';
+    creator: string | null;
+    marga: string | null;
+    reviewer: string | null;
+    reviewed_at: string | null;
+    rejection_reason: string | null;
+    can_edit: boolean;
+    can_delete: boolean;
     created_at: string | null;
 };
 
@@ -47,9 +55,14 @@ type Paginated = {
 type Props = {
     events: Paginated;
     filters: { search: string };
+    canCreate: boolean;
 };
 
-export default function EventsIndex({ events: page, filters }: Props) {
+export default function EventsIndex({
+    events: page,
+    filters,
+    canCreate,
+}: Props) {
     const [search, setSearch] = useState(filters.search ?? '');
     const [toDelete, setToDelete] = useState<EventItem | null>(null);
     const deleteForm = useForm({});
@@ -87,14 +100,16 @@ export default function EventsIndex({ events: page, filters }: Props) {
                             Kelola event komunitas yang tampil di halaman utama.
                         </p>
                     </div>
-                    <Button
-                        asChild
-                        className="rounded-full bg-tb-primary hover:bg-tb-primary-light"
-                    >
-                        <Link href={events.create()}>
-                            <Plus className="size-4" /> Tambah Event
-                        </Link>
-                    </Button>
+                    {canCreate && (
+                        <Button
+                            asChild
+                            className="rounded-full bg-tb-primary hover:bg-tb-primary-light"
+                        >
+                            <Link href={events.create()}>
+                                <Plus className="size-4" /> Tambah Event
+                            </Link>
+                        </Button>
+                    )}
                 </div>
 
                 <Card className="border-tb-outline-variant bg-tb-surface-bright">
@@ -118,7 +133,7 @@ export default function EventsIndex({ events: page, filters }: Props) {
 
                 <Card className="border-tb-outline-variant bg-tb-surface-bright">
                     <CardContent className="overflow-x-auto py-0">
-                        <table className="w-full min-w-[640px] text-sm">
+                        <table className="w-full min-w-[880px] text-sm">
                             <thead>
                                 <tr className="border-b border-tb-outline-variant text-left text-xs text-tb-on-surface-variant">
                                     <th className="px-3 py-3 font-medium">
@@ -129,6 +144,9 @@ export default function EventsIndex({ events: page, filters }: Props) {
                                     </th>
                                     <th className="px-3 py-3 font-medium">
                                         Lokasi
+                                    </th>
+                                    <th className="px-3 py-3 font-medium">
+                                        Pembuat
                                     </th>
                                     <th className="px-3 py-3 font-medium">
                                         Status
@@ -156,6 +174,14 @@ export default function EventsIndex({ events: page, filters }: Props) {
                                                     <p className="line-clamp-1 text-xs text-tb-on-surface-variant">
                                                         {event.description}
                                                     </p>
+                                                    {event.rejection_reason && (
+                                                        <p className="mt-1 text-xs text-red-600 dark:text-red-300">
+                                                            Alasan:{' '}
+                                                            {
+                                                                event.rejection_reason
+                                                            }
+                                                        </p>
+                                                    )}
                                                 </div>
                                             </div>
                                         </td>
@@ -172,46 +198,66 @@ export default function EventsIndex({ events: page, filters }: Props) {
                                                 '-'
                                             )}
                                         </td>
+                                        <td className="px-3 py-3 text-tb-on-surface-variant">
+                                            <p>
+                                                {event.creator ?? 'Data lama'}
+                                            </p>
+                                            <p className="text-xs">
+                                                {event.marga ?? 'Tanpa marga'}
+                                            </p>
+                                        </td>
                                         <td className="px-3 py-3">
-                                            {event.published ? (
+                                            {event.status === 'approved' ? (
                                                 <Badge className="bg-[#3e6b48] text-white">
-                                                    Tampil
+                                                    Disetujui
+                                                </Badge>
+                                            ) : event.status === 'pending' ? (
+                                                <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-200">
+                                                    Menunggu
                                                 </Badge>
                                             ) : (
-                                                <Badge
-                                                    variant="outline"
-                                                    className="border-tb-outline-variant text-tb-on-surface-variant"
-                                                >
-                                                    Disembunyikan
+                                                <Badge className="bg-red-100 text-red-800 hover:bg-red-100 dark:bg-red-950 dark:text-red-200">
+                                                    Ditolak
                                                 </Badge>
+                                            )}
+                                            {event.status === 'approved' && (
+                                                <p className="mt-1 text-xs text-tb-on-surface-variant">
+                                                    {event.published
+                                                        ? 'Tampil di publik'
+                                                        : 'Disembunyikan'}
+                                                </p>
                                             )}
                                         </td>
                                         <td className="px-3 py-3">
                                             <div className="flex justify-end gap-1">
-                                                <Button
-                                                    asChild
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="size-8 text-tb-primary hover:bg-tb-surface-container"
-                                                >
-                                                    <Link
-                                                        href={events.edit(
-                                                            event.id,
-                                                        )}
+                                                {event.can_edit && (
+                                                    <Button
+                                                        asChild
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="size-8 text-tb-primary hover:bg-tb-surface-container"
                                                     >
-                                                        <Pencil className="size-4" />
-                                                    </Link>
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="size-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
-                                                    onClick={() =>
-                                                        setToDelete(event)
-                                                    }
-                                                >
-                                                    <Trash className="size-4" />
-                                                </Button>
+                                                        <Link
+                                                            href={events.edit(
+                                                                event.id,
+                                                            )}
+                                                        >
+                                                            <Pencil className="size-4" />
+                                                        </Link>
+                                                    </Button>
+                                                )}
+                                                {event.can_delete && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="size-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                                                        onClick={() =>
+                                                            setToDelete(event)
+                                                        }
+                                                    >
+                                                        <Trash className="size-4" />
+                                                    </Button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -219,7 +265,7 @@ export default function EventsIndex({ events: page, filters }: Props) {
                                 {page.data.length === 0 && (
                                     <tr>
                                         <td
-                                            colSpan={5}
+                                            colSpan={6}
                                             className="px-3 py-10 text-center text-tb-on-surface-variant"
                                         >
                                             Belum ada event.

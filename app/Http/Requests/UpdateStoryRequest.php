@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateStoryRequest extends FormRequest
 {
@@ -19,6 +20,13 @@ class UpdateStoryRequest extends FormRequest
             'description' => ['required', 'string'],
             'image' => ['nullable', 'url'],
             'published' => ['boolean'],
+            'classification' => ['required', Rule::in(['umum', 'marga'])],
+            'marga_id' => [
+                Rule::requiredIf(fn () => $this->user()?->isStaff() && $this->input('classification') === 'marga'),
+                'nullable',
+                'integer',
+                'exists:margas,id',
+            ],
         ];
     }
 }

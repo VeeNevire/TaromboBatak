@@ -44,6 +44,7 @@ use Illuminate\Support\Collection as SupportCollection;
  * @property-read Collection<int, FamilyTreeNode> $familyTreeNodes
  * @property-read Collection<int, Person> $children
  * @property-read Collection<int, Person> $siblings
+ * @property-read Collection<int, Person> $wives
  */
 #[Fillable(['name', 'gender', 'alias', 'marga_id', 'created_by', 'father_id', 'mother_id', 'birth_order', 'sibling_count', 'chain', 'birth_year', 'death_year', 'image', 'bio', 'spouse', 'spouse_marga', 'pending_father', 'is_public'])]
 class Person extends Model
@@ -105,6 +106,16 @@ class Person extends Model
     public function children(): HasMany
     {
         return $this->hasMany(Person::class, 'father_id');
+    }
+
+    /**
+     * @return BelongsToMany<Person, $this>
+     */
+    public function wives(): BelongsToMany
+    {
+        return $this->belongsToMany(Person::class, 'person_wife', 'husband_id', 'wife_id')
+            ->withPivot('position')
+            ->orderByPivot('position');
     }
 
     /**

@@ -12,6 +12,11 @@ use Illuminate\Validation\ValidationException;
 
 class FamilyEntryService
 {
+    public function syncTreeNodes(FamilyTree $tree): void
+    {
+        $this->syncLegacyNodes($tree);
+    }
+
     /**
      * Persist a whole family entry (father, mother, and all sibling rows)
      * inside a single transaction, then recompute the chain numbers for the
@@ -23,13 +28,17 @@ class FamilyEntryService
      *                                   creation is disabled.
      * @param  int|null  $createdBy  User id stamped on newly created records
      *                               so their owner can edit them later.
-     * @return array{father: Person|null, mother: Person|null, children: Collection<int, Person>}
+     * @return array{father: Person|null, matchedFather: Person|null, mother: Person|null, children: Collection<int, Person>}
      */
-    public function save(array $data, ?int $forcedMargaId = null, ?int $createdBy = null): array
-    {
+    public function save(
+        array $data,
+        ?int $forcedMargaId = null,
+        ?int $createdBy = null,
+        bool $deferExistingFatherMatch = false,
+    ): array {
         $oldFathers = $this->validateExistingRows($data);
 
-        $result = DB::transaction(function () use ($data, $forcedMargaId, $createdBy) {
+        $result = DB::transaction(function () use ($data, $forcedMargaId, $createdBy, $deferExistingFatherMatch) {
             $fatherMargaId = $forcedMargaId
                 ?? $this->resolveMargaId(
                     ($data['father'] ?? [])['marga_id'] ?? null,
@@ -46,7 +55,12 @@ class FamilyEntryService
             $focusPerson = isset($data['id']) ? Person::query()->find((int) $data['id']) : null;
             $ineligibleFatherIds = $focusPerson?->ineligibleFatherIds() ?? [];
 
-            $father = $fatherGiven
+            $matchedFather = $deferExistingFatherMatch && $fatherGiven
+                ? $this->findExistingFatherMatch($data, $fatherMargaId, $ineligibleFatherIds)
+                : null;
+            $pending = ! $fatherGiven || $matchedFather !== null;
+
+            $father = $fatherGiven && $matchedFather === null
                 ? $this->resolveParent(
                     $data['father_id'] ?? null,
                     $data['father'] ?? null,
@@ -65,21 +79,57 @@ class FamilyEntryService
             $mothers = [];
 
             foreach ($this->motherEntries($data) as $index => $entry) {
-                $mothers[] = $this->resolveParent(
-                    $index === 0 ? ($data['mother_id'] ?? null) : null,
+                $motherMargaId = $this->resolveMargaId(
+                    $entry['marga_id'] ?? null,
+                    $entry['new_marga'] ?? null,
+                );
+                $resolvedMother = $this->resolveParent(
+                    $entry['id'] ?? ($index === 0 ? ($data['mother_id'] ?? null) : null),
                     $entry,
-                    $this->resolveMargaId(
-                        $entry['marga_id'] ?? null,
-                        $entry['new_marga'] ?? null,
-                    ),
+                    $motherMargaId,
                     $forcedMargaId,
                     $createdBy,
                     'P',
                 );
+
+                if ($resolvedMother !== null && $this->normalizeName($entry['father_name'] ?? null) !== null) {
+                    $motherFather = $this->resolveParent(
+                        null,
+                        ['name' => $entry['father_name']],
+                        $motherMargaId,
+                        null,
+                        $createdBy,
+                        'L',
+                        $resolvedMother->ineligibleFatherIds(),
+                    );
+
+                    if ($motherFather !== null && $resolvedMother->father_id !== $motherFather->id) {
+                        $resolvedMother->update([
+                            'father_id' => $motherFather->id,
+                            'pending_father' => false,
+                        ]);
+                    }
+                }
+
+                $mothers[] = $resolvedMother;
             }
 
-            // Anak-anak dinautkan ke istri pertama; penugasan per anak
-            // menyusul di fase berikutnya.
+            if ($father !== null) {
+                $wifeLinks = [];
+
+                foreach ($mothers as $resolvedMother) {
+                    if ($resolvedMother !== null && ! isset($wifeLinks[$resolvedMother->id])) {
+                        $wifeLinks[$resolvedMother->id] = [
+                            'position' => count($wifeLinks) + 1,
+                        ];
+                    }
+                }
+
+                $father->wives()->sync($wifeLinks);
+            }
+
+            // Sibling focus tetap memakai istri pertama untuk kompatibilitas
+            // form lama; anak fokus memilih Ibu masing-masing di bawah.
             $mother = $mothers[0] ?? null;
 
             $this->validateParentLinks($data, $father, $mothers);
@@ -113,6 +163,7 @@ class FamilyEntryService
                 $forcedMargaId,
                 $createdBy,
                 false,
+                $mothers,
             );
 
             $this->deleteRemoved(
@@ -134,6 +185,7 @@ class FamilyEntryService
 
             return [
                 'father' => $father,
+                'matchedFather' => $matchedFather,
                 'pending' => $pending,
                 'mother' => $mother,
                 'mothers' => $mothers,
@@ -181,9 +233,54 @@ class FamilyEntryService
     }
 
     /**
+     * @param  array<string, mixed>  $data
+     * @param  array<int, int>  $excludedIds
+     */
+    protected function findExistingFatherMatch(array $data, ?int $margaId, array $excludedIds): ?Person
+    {
+        if (! empty($data['father_id'])) {
+            $father = Person::query()
+                ->whereKey((int) $data['father_id'])
+                ->whereNotIn('id', $excludedIds)
+                ->when($margaId !== null, fn ($query) => $query->where('marga_id', $margaId))
+                ->first();
+
+            if ($father === null && in_array((int) $data['father_id'], $excludedIds, true)) {
+                throw ValidationException::withMessages([
+                    'father_id' => 'Relasi orang tua ini akan membentuk siklus silsilah.',
+                ]);
+            }
+
+            return $father;
+        }
+
+        $name = $this->normalizeName(data_get($data, 'father.name'));
+
+        if ($name === null) {
+            return null;
+        }
+
+        $matches = Person::query()
+            ->where('name', $name)
+            ->where(fn ($query) => $query->where('gender', 'L')->orWhereNull('gender'))
+            ->when($margaId !== null, fn ($query) => $query->where('marga_id', $margaId))
+            ->whereNotIn('id', $excludedIds)
+            ->limit(2)
+            ->get();
+
+        if ($matches->count() > 1) {
+            throw ValidationException::withMessages([
+                'father.name' => 'Terdapat lebih dari satu data Ayah dengan nama dan marga yang sama.',
+            ]);
+        }
+
+        return $matches->first();
+    }
+
+    /**
      * Normalize the submitted wife list. The legacy single "mother" payload
      * is treated as the first wife so older clients keep working, and
-     * duplicated names inside one submission are collapsed.
+     * array order is retained because child rows refer to wives by index.
      *
      * @param  array<string, mixed>  $data
      * @return array<int, array<string, mixed>>
@@ -202,27 +299,7 @@ class FamilyEntryService
             $entries = [$data['mother']];
         }
 
-        $deduplicated = [];
-        $seen = [];
-
-        foreach ($entries as $entry) {
-            $name = $this->normalizeName($entry['name'] ?? null);
-
-            if ($name === null) {
-                continue;
-            }
-
-            $key = mb_strtoupper($name);
-
-            if (isset($seen[$key])) {
-                continue;
-            }
-
-            $seen[$key] = true;
-            $deduplicated[] = $entry;
-        }
-
-        return $deduplicated;
+        return array_values($entries);
     }
 
     /**
@@ -640,10 +717,37 @@ class FamilyEntryService
         ?int $forcedMargaId = null,
         ?int $createdBy = null,
         bool $pending = false,
+        array $mothers = [],
     ): Collection {
         $children = new Collection;
 
         foreach (array_values($rows) as $index => $row) {
+            $childMotherId = $motherId;
+            $availableMothers = array_values(array_filter($mothers));
+
+            if (($row['mother_index'] ?? null) === null) {
+                if (count($availableMothers) === 1) {
+                    $childMotherId = $availableMothers[0]->id;
+                } elseif (count($availableMothers) > 1) {
+                    throw ValidationException::withMessages([
+                        "ownChildren.$index.mother_index" => 'Pilih Ibu untuk anak ini.',
+                    ]);
+                }
+            }
+
+            if (array_key_exists('mother_index', $row) && $row['mother_index'] !== null) {
+                $motherIndex = (int) $row['mother_index'];
+                $selectedMother = $mothers[$motherIndex] ?? null;
+
+                if ($selectedMother === null) {
+                    throw ValidationException::withMessages([
+                        "ownChildren.$index.mother_index" => 'Ibu yang dipilih tidak tersedia.',
+                    ]);
+                }
+
+                $childMotherId = $selectedMother->id;
+            }
+
             $isFocus = isset($data['id'])
                 ? isset($row['id']) && (int) $row['id'] === (int) $data['id']
                 : $focusOrder !== null && (int) $focusOrder === $index + 1;
@@ -672,7 +776,7 @@ class FamilyEntryService
                 'spouse_marga' => $row['spouse_marga'] ?? null,
                 'marga_id' => $childMargaId,
                 'father_id' => $fatherId,
-                'mother_id' => $motherId,
+                'mother_id' => $childMotherId,
                 'birth_order' => $index + 1,
                 'sibling_count' => $siblingCount,
                 'pending_father' => $pending,
@@ -680,7 +784,7 @@ class FamilyEntryService
             ], fn ($value) => $value !== null);
 
             $attributes['father_id'] = $fatherId;
-            $attributes['mother_id'] = $motherId;
+            $attributes['mother_id'] = $childMotherId;
             $attributes['pending_father'] = $pending;
 
             if ($preserveSiblingPaths && isset($row['id']) && ! $isFocus) {
