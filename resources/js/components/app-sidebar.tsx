@@ -5,6 +5,7 @@ import {
     CalendarDays,
     LayoutGrid,
     MessageCircle,
+    Newspaper,
     Shapes,
     ShieldCheck,
     TreePine,
@@ -27,6 +28,7 @@ import contacts from '@/routes/contacts';
 import contributions from '@/routes/contributions';
 import events from '@/routes/events';
 import marga from '@/routes/marga';
+import newsFeed from '@/routes/news-feed';
 import people from '@/routes/people';
 import stories from '@/routes/stories';
 import subAdmins from '@/routes/sub-admins';
@@ -54,6 +56,11 @@ export function AppSidebar() {
                     title: 'Beranda',
                     href: dashboard(),
                     icon: LayoutGrid,
+                },
+                {
+                    title: 'News Feed',
+                    href: newsFeed.index(),
+                    icon: Newspaper,
                 },
                 {
                     title: 'Pohon Tarombo',

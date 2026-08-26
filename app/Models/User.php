@@ -33,6 +33,8 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, ContributionRequest> $contributionRequests
  * @property-read Collection<int, Event> $events
  * @property-read Collection<int, Story> $stories
+ * @property-read Collection<int, FeedPost> $feedPosts
+ * @property-read Collection<int, FeedComment> $feedComments
  */
 #[Fillable(['name', 'email', 'password', 'role', 'marga_id'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
@@ -116,6 +118,18 @@ class User extends Authenticatable
     public function stories(): HasMany
     {
         return $this->hasMany(Story::class, 'created_by');
+    }
+
+    /** @return HasMany<FeedPost, $this> */
+    public function feedPosts(): HasMany
+    {
+        return $this->hasMany(FeedPost::class);
+    }
+
+    /** @return HasMany<FeedComment, $this> */
+    public function feedComments(): HasMany
+    {
+        return $this->hasMany(FeedComment::class);
     }
 
     /**

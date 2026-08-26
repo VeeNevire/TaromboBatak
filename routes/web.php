@@ -6,10 +6,13 @@ use App\Http\Controllers\ContributionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\FamilyTreeDeletionController;
+use App\Http\Controllers\FeedCommentController;
+use App\Http\Controllers\FeedPostController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\KomunitasController;
 use App\Http\Controllers\MargaController;
 use App\Http\Controllers\MessageController;
+use App\Http\Controllers\NewsFeedController;
 use App\Http\Controllers\PersonController;
 use App\Http\Controllers\StoryController;
 use App\Http\Controllers\SubAdminController;
@@ -42,6 +45,15 @@ Route::get('tentang', [TentangController::class, 'index'])->name('tentang.view')
 
 Route::middleware(['auth'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    Route::get('dashboard/news-feed', [NewsFeedController::class, 'index'])
+        ->name('news-feed.index');
+    Route::post('dashboard/news-feed/statuses', [FeedPostController::class, 'store'])
+        ->middleware('throttle:20,1')
+        ->name('news-feed.posts.store');
+    Route::post('dashboard/news-feed/statuses/{feedPost}/comments', [FeedCommentController::class, 'store'])
+        ->middleware('throttle:60,1')
+        ->name('news-feed.posts.comments.store');
 
     Route::get('contacts', [ContactController::class, 'index'])->name('contacts.index');
     Route::get('contacts/{contact}', [ContactController::class, 'show'])->name('contacts.show');
