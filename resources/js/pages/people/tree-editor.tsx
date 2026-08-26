@@ -103,7 +103,7 @@ export default function TreeEditor({ familyTree, entries }: Props) {
 
     return (
         <>
-            <Head title={`Ubah ${familyTree.name}`} />
+            <Head title={`Jejak Keluarga - ${familyTree.name}`} />
             <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                     <div>
@@ -114,14 +114,14 @@ export default function TreeEditor({ familyTree, entries }: Props) {
                             <ArrowLeft className="size-4" /> Kembali ke silsilah
                         </Link>
                         <p className="mt-4 text-xs font-semibold tracking-[0.16em] text-tb-primary uppercase">
-                            Versi Silsilah
+                            Jejak Keluarga · Versi Silsilah
                         </p>
                         <h1 className="font-display text-3xl text-tb-on-surface">
                             {familyTree.name}
                         </h1>
                         <p className="mt-1 text-sm text-tb-on-surface-variant">
                             {familyTree.sourceName ??
-                                'Ubah hubungan hanya pada versi ini. Biodata orang tetap bersama.'}
+                                'Edit entry dan hubungan hanya pada versi ini. Biodata orang tetap digunakan bersama.'}
                         </p>
                     </div>
                     <button
@@ -317,7 +317,7 @@ export default function TreeEditor({ familyTree, entries }: Props) {
 TreeEditor.layout = {
     breadcrumbs: [
         { title: 'Dashboard', href: dashboard() },
-        { title: 'Silsilah', href: '#' },
-        { title: 'Ubah Struktur', href: '#' },
+        { title: 'Jejak Keluarga', href: '#' },
+        { title: 'Versi Silsilah', href: '#' },
     ],
 };

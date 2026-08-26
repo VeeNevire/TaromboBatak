@@ -51,7 +51,9 @@ class PersonController extends Controller
             ->when($request->filled('search'), function ($query) use ($request) {
                 $query->where(function ($query) use ($request) {
                     $query->where('name', 'like', '%'.$request->string('search').'%')
-                        ->orWhere('alias', 'like', '%'.$request->string('search').'%');
+                        ->orWhere('alias', 'like', '%'.$request->string('search').'%')
+                        ->orWhereHas('marga', fn ($marga) => $marga
+                            ->where('name', 'like', '%'.$request->string('search').'%'));
                 });
             })
             ->when($request->filled('marga_id'), function ($query) use ($request) {
@@ -115,6 +117,7 @@ class PersonController extends Controller
             'lockedMarga' => $isStaff ? null : $this->lockedMarga($user),
             'lineage' => $this->createLineage($user, $isStaff),
             'familyTrees' => $this->familyTrees($user),
+            'approvedMargaTrees' => $this->approvedMargaTrees($user),
             'canPublish' => $isStaff,
         ]);
     }
@@ -132,8 +135,14 @@ class PersonController extends Controller
                 'marga',
                 'children' => fn ($query) => $query
                     ->when(! $isStaff, fn ($childQuery) => $childQuery->where('marga_id', $user->marga_id))
+                    ->where(fn ($childQuery) => $childQuery
+                        ->where('gender', 'L')
+                        ->orWhereNull('gender'))
                     ->orderBy('birth_order'),
             ])
+            ->where(fn ($query) => $query
+                ->where('gender', 'L')
+                ->orWhereNull('gender'))
             ->when($isStaff, fn ($query) => $query->whereNull('father_id'))
             ->when(! $isStaff && $user->marga_id !== null, fn ($query) => $query
                 ->where('marga_id', $user->marga_id)
@@ -220,6 +229,7 @@ class PersonController extends Controller
             'nameSuggestions' => $this->nameSuggestions(),
             'fatherSuggestions' => $this->fatherSuggestions($person),
             'familyTrees' => $this->familyTrees($user),
+            'approvedMargaTrees' => $this->approvedMargaTrees($user),
             'versionTrees' => $this->familyTrees($user, $person),
             'canPublish' => $user->isStaff(),
             'readOnly' => ! $user->isStaff(),
@@ -246,6 +256,7 @@ class PersonController extends Controller
             ),
             'lockedMarga' => $isStaff ? null : $this->lockedMarga($user),
             'familyTrees' => $this->familyTrees($user),
+            'approvedMargaTrees' => $this->approvedMargaTrees($user),
             'versionTrees' => $this->familyTrees($user, $person),
             'canPublish' => $isStaff,
         ]);
@@ -321,7 +332,7 @@ class PersonController extends Controller
         $canEdit = $user->isStaff() || $familyTree->user_id === $user->id;
 
         abort_unless(
-            $canEdit || $this->familyTreeMatchesUserMarga($familyTree, $user),
+            $canEdit || $this->approvedFamilyTreeMatchesUserMarga($familyTree, $user),
             403,
             'Anda tidak memiliki akses ke silsilah ini.',
         );
@@ -340,6 +351,7 @@ class PersonController extends Controller
             'familyTree' => [
                 'id' => $familyTree->id,
                 'name' => $familyTree->name ?? $root->name,
+                'rootPersonId' => $familyTree->root_person_id,
             ],
             'canEditFamilyTree' => $canEdit,
             'person' => [
@@ -352,9 +364,14 @@ class PersonController extends Controller
         ]);
     }
 
-    protected function familyTreeMatchesUserMarga(FamilyTree $familyTree, User $user): bool
+    protected function approvedFamilyTreeMatchesUserMarga(FamilyTree $familyTree, User $user): bool
     {
         return $user->marga_id !== null
+            && $familyTree->contributionRequests()
+                ->where('status', ContributionRequest::STATUS_APPROVED)
+                ->whereHas('matchedFather', fn ($query) => $query
+                    ->where('marga_id', $user->marga_id))
+                ->exists()
             && $familyTree->nodes()
                 ->whereHas('person', fn ($query) => $query->where('marga_id', $user->marga_id))
                 ->exists();
@@ -688,10 +705,16 @@ class PersonController extends Controller
         $lineage = Person::query()
             ->whereIn('id', $lineageIds)
             ->when($margaId !== null, fn ($query) => $query->where('marga_id', $margaId))
+            ->where(fn ($query) => $query
+                ->where('gender', 'L')
+                ->orWhereNull('gender'))
             ->with([
                 'marga',
                 'children' => fn ($query) => $query
                     ->when($margaId !== null, fn ($childQuery) => $childQuery->where('marga_id', $margaId))
+                    ->where(fn ($childQuery) => $childQuery
+                        ->where('gender', 'L')
+                        ->orWhereNull('gender'))
                     ->orderBy('birth_order'),
             ])
             ->get()
@@ -992,21 +1015,55 @@ class PersonController extends Controller
             ->latest('updated_at')
             ->get(['id', 'user_id', 'root_person_id', 'name', 'source_name', 'is_primary', 'updated_at'])
             ->filter(fn (FamilyTree $tree) => $tree->rootPerson !== null)
-            ->map(function (FamilyTree $tree) use ($user): array {
-                return [
-                    'id' => $tree->id,
-                    'root_person_id' => $tree->root_person_id,
-                    'root_name' => $this->familyTreeRootName($tree),
-                    'name' => $tree->name,
-                    'source_name' => $tree->source_name,
-                    'is_primary' => $tree->is_primary,
-                    'can_delete' => $user->isAdmin() || $tree->user_id === $user->id,
-                    'deletion_pending' => (bool) $tree->deletion_pending,
-                    'updated_at' => $tree->updated_at->toISOString(),
-                ];
-            })
+            ->map(fn (FamilyTree $tree): array => $this->familyTreeHistoryEntry($tree, $user))
             ->values()
             ->all();
+    }
+
+    /**
+     * Approved family trees visible to accounts from the same marga.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function approvedMargaTrees(User $user): array
+    {
+        if ($user->marga_id === null) {
+            return [];
+        }
+
+        return FamilyTree::query()
+            ->whereNotNull('root_person_id')
+            ->whereHas('contributionRequests', fn ($query) => $query
+                ->where('status', ContributionRequest::STATUS_APPROVED)
+                ->whereHas('matchedFather', fn ($father) => $father
+                    ->where('marga_id', $user->marga_id)))
+            ->whereHas('nodes.person', fn ($query) => $query
+                ->where('marga_id', $user->marga_id))
+            ->with(['rootPerson:id,name', 'nodes.person:id,name'])
+            ->withExists(['deletionRequests as deletion_pending' => fn ($query) => $query
+                ->where('status', FamilyTreeDeletionRequest::STATUS_PENDING)])
+            ->latest('updated_at')
+            ->get(['id', 'user_id', 'root_person_id', 'name', 'source_name', 'is_primary', 'updated_at'])
+            ->filter(fn (FamilyTree $tree) => $tree->rootPerson !== null)
+            ->map(fn (FamilyTree $tree): array => $this->familyTreeHistoryEntry($tree, $user))
+            ->values()
+            ->all();
+    }
+
+    /** @return array<string, mixed> */
+    protected function familyTreeHistoryEntry(FamilyTree $tree, User $user): array
+    {
+        return [
+            'id' => $tree->id,
+            'root_person_id' => $tree->root_person_id,
+            'root_name' => $this->familyTreeRootName($tree),
+            'name' => $tree->name,
+            'source_name' => $tree->source_name,
+            'is_primary' => $tree->is_primary,
+            'can_delete' => $user->isAdmin() || $tree->user_id === $user->id,
+            'deletion_pending' => (bool) $tree->deletion_pending,
+            'updated_at' => $tree->updated_at->toISOString(),
+        ];
     }
 
     protected function familyTreeRootName(FamilyTree $tree): ?string

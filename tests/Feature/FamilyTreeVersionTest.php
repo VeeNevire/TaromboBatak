@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ContributionRequest;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeNode;
 use App\Models\Marga;
@@ -94,6 +95,7 @@ test('a family tree page reads parentage from its own version nodes', function (
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('people/silsilah')
+            ->where('familyTree.rootPersonId', $rajaLontung->id)
             ->where('people.2.parentId', (string) $rajaLontung->id)
             ->where('people.2.birthOrder', 2)
             ->where('people.2.chain', '1-2'));
@@ -123,6 +125,12 @@ test('a user can view an admin family tree from their marga without edit actions
         'person_id' => $visibleRoot->id,
         'father_node_id' => $outsideNode->id,
     ]);
+    ContributionRequest::factory()->approved()->create([
+        'requester_id' => $admin->id,
+        'matched_father_id' => $visibleRoot->id,
+        'subject_person_id' => $visibleRoot->id,
+        'family_tree_id' => $tree->id,
+    ]);
 
     $this->actingAs($user)
         ->get(route('family-trees.show', $tree))
@@ -141,6 +149,22 @@ test('a user can view an admin family tree from their marga without edit actions
 
     $this->actingAs($user)
         ->post(route('family-trees.duplicate', $tree))
+        ->assertForbidden();
+});
+
+test('a user cannot view an unapproved family tree owned by another account', function () {
+    $marga = Marga::factory()->create();
+    $owner = User::factory()->withMarga($marga->id)->create();
+    $viewer = User::factory()->withMarga($marga->id)->create();
+    $root = Person::factory()->create(['marga_id' => $marga->id]);
+    $tree = FamilyTree::create([
+        'user_id' => $owner->id,
+        'root_person_id' => $root->id,
+    ]);
+    FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $root->id]);
+
+    $this->actingAs($viewer)
+        ->get(route('family-trees.show', $tree))
         ->assertForbidden();
 });
 
@@ -258,4 +282,33 @@ test('updating an alternative tree relationship does not alter its source tree',
     expect($alternativeChild->fresh()->father_node_id)->toBe($alternativeRoot->id)
         ->and($alternativeChild->fresh()->chain)->toBe('1-2')
         ->and($source->nodes()->where('person_id', $child->id)->value('father_node_id'))->toBe($intermediateNode->id);
+});
+
+test('opening a selected version shows its jejak keluarga entries without creating a copy', function () {
+    $user = User::factory()->create();
+    $root = Person::factory()->create(['name' => 'Raja Lontung']);
+    $tree = FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $root->id,
+        'name' => 'Versi Pilihan',
+    ]);
+    $node = FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $root->id,
+        'chain' => '1',
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('family-trees.edit', $tree))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('people/tree-editor')
+            ->where('familyTree.id', $tree->id)
+            ->where('familyTree.name', 'Versi Pilihan')
+            ->has('entries', 1)
+            ->where('entries.0.id', $node->id)
+            ->where('entries.0.personId', $root->id));
+
+    expect(FamilyTree::query()->count())->toBe(1)
+        ->and(FamilyTree::query()->whereNotNull('based_on_id')->count())->toBe(0);
 });

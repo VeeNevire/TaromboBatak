@@ -27,6 +27,7 @@ use Illuminate\Support\Carbon;
  * @property-read Person|null $rootPerson
  * @property-read FamilyTree|null $basedOn
  * @property-read Collection<int, FamilyTreeNode> $nodes
+ * @property-read Collection<int, ContributionRequest> $contributionRequests
  * @property-read Collection<int, FamilyTreeDeletionRequest> $deletionRequests
  */
 #[Fillable(['user_id', 'root_person_id', 'name', 'description', 'source_name', 'source_url', 'based_on_id', 'is_primary'])]
@@ -70,6 +71,12 @@ class FamilyTree extends Model
     public function nodes(): HasMany
     {
         return $this->hasMany(FamilyTreeNode::class);
+    }
+
+    /** @return HasMany<ContributionRequest, $this> */
+    public function contributionRequests(): HasMany
+    {
+        return $this->hasMany(ContributionRequest::class);
     }
 
     /** @return HasMany<FamilyTreeDeletionRequest, $this> */

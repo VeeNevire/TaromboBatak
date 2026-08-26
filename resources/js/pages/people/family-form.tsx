@@ -6,6 +6,7 @@ import {
     ChevronUp,
     Copy,
     Eye,
+    Layers3,
     Pencil,
     Plus,
     Trash2,
@@ -152,6 +153,7 @@ type Props = {
     lockedMarga?: { id: number; name: string } | null;
     lineage?: MargaLineageEntry[];
     familyTrees?: FamilyTreeHistoryEntry[];
+    approvedMargaTrees?: FamilyTreeHistoryEntry[];
     versionTrees?: FamilyTreeHistoryEntry[];
     initialFatherName?: string;
     canPublish?: boolean;
@@ -169,22 +171,42 @@ const parentErrorPrefix = (key: ParentKey): 'father' | `mothers.${number}` =>
 
 function FamilyTreeVersionAction({
     entries,
+    iconOnly = false,
+    mode = 'duplicate',
 }: {
     entries: FamilyTreeHistoryEntry[];
+    iconOnly?: boolean;
+    mode?: 'duplicate' | 'open';
 }) {
     if (entries.length === 0) {
         return null;
     }
 
+    const isOpenMode = mode === 'open';
+    const Icon = isOpenMode ? Layers3 : Copy;
+    const actionLabel = isOpenMode ? 'Versi Silsilah' : 'Salin Versi';
+    const actionHref = (entry: FamilyTreeHistoryEntry) =>
+        isOpenMode
+            ? people.edit(entry.root_person_id)
+            : familyTreeRoutes.duplicate(entry.id);
+
     if (entries.length === 1) {
         return (
             <Link
-                href={familyTreeRoutes.duplicate(entries[0].id)}
-                method="post"
-                as="button"
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-tb-outline-variant px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
+                href={actionHref(entries[0])}
+                method={isOpenMode ? 'get' : 'post'}
+                as={isOpenMode ? 'a' : 'button'}
+                aria-label={iconOnly ? actionLabel : undefined}
+                title={iconOnly ? actionLabel : undefined}
+                className={cn(
+                    'inline-flex shrink-0 items-center justify-center rounded-lg border border-tb-outline-variant text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary',
+                    iconOnly
+                        ? 'size-6 text-tb-outline opacity-70 hover:bg-tb-primary/10 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none'
+                        : 'gap-1.5 px-3 py-2 text-xs font-semibold',
+                )}
             >
-                <Copy className="size-3.5" /> Buat Versi Alternatif
+                <Icon className="size-3.5" />
+                {!iconOnly && ` ${actionLabel}`}
             </Link>
         );
     }
@@ -194,22 +216,35 @@ function FamilyTreeVersionAction({
             <DropdownMenuTrigger asChild>
                 <button
                     type="button"
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-tb-outline-variant px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
+                    aria-label={iconOnly ? actionLabel : undefined}
+                    title={iconOnly ? actionLabel : undefined}
+                    className={cn(
+                        'inline-flex shrink-0 items-center justify-center rounded-lg border border-tb-outline-variant text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary',
+                        iconOnly
+                            ? 'size-6 text-tb-outline opacity-70 hover:bg-tb-primary/10 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none'
+                            : 'gap-1.5 px-3 py-2 text-xs font-semibold',
+                    )}
                 >
-                    <Copy className="size-3.5" /> Buat Versi Alternatif
-                    <ChevronDown className="size-3.5" />
+                    <Icon className="size-3.5" />
+                    {!iconOnly && (
+                        <>
+                            {' '}
+                            {actionLabel}
+                            <ChevronDown className="size-3.5" />
+                        </>
+                    )}
                 </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-64">
                 {entries.map((entry) => (
                     <DropdownMenuItem key={entry.id} asChild>
                         <Link
-                            href={familyTreeRoutes.duplicate(entry.id)}
-                            method="post"
-                            as="button"
+                            href={actionHref(entry)}
+                            method={isOpenMode ? 'get' : 'post'}
+                            as={isOpenMode ? 'a' : 'button'}
                             className="w-full text-left"
                         >
-                            Buat dari {entry.name ?? entry.root_name}
+                            {entry.name ?? entry.root_name}
                         </Link>
                     </DropdownMenuItem>
                 ))}
@@ -247,9 +282,11 @@ function isGapRow(row: ChildRow): boolean {
 function SilsilahListCard({
     lineage,
     selfId,
+    familyTrees,
 }: {
     lineage: LineageEntry[];
     selfId?: number | null;
+    familyTrees: FamilyTreeHistoryEntry[];
 }) {
     const [expanded, setExpanded] = useState<Set<number>>(() => {
         const selfIndex = lineage.findIndex((entry) => entry.is_self);
@@ -294,6 +331,9 @@ function SilsilahListCard({
                         {lineage.map((entry) => {
                             const isOpen = expanded.has(entry.id);
                             const count = entry.children.length;
+                            const entryTrees = familyTrees.filter(
+                                (tree) => tree.root_person_id === entry.id,
+                            );
 
                             return (
                                 <li
@@ -322,14 +362,14 @@ function SilsilahListCard({
                                                 <ChevronRight className="h-4 w-4" />
                                             )}
                                         </button>
-                                        <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-tb-surface-container px-1 text-xs font-bold text-tb-on-surface-variant">
-                                            {entry.chain ?? '—'}
-                                        </span>
                                         <div className="min-w-0 flex-1">
-                                            <div className="flex items-center gap-1.5">
+                                            <span className="inline-flex min-h-6 max-w-full min-w-6 items-center justify-center overflow-x-auto rounded-full bg-tb-surface-container px-2 py-1 text-center text-xs leading-tight font-bold whitespace-nowrap text-tb-on-surface-variant">
+                                                {entry.chain ?? '—'}
+                                            </span>
+                                            <div className="mt-1 flex items-start gap-1.5">
                                                 <Link
                                                     href={people.show(entry.id)}
-                                                    className="min-w-0 flex-1 truncate text-sm font-semibold text-tb-on-surface hover:text-tb-primary"
+                                                    className="min-w-0 flex-1 text-sm leading-snug font-semibold break-words whitespace-normal text-tb-on-surface hover:text-tb-primary"
                                                 >
                                                     {displayRowName(entry.name)}
                                                 </Link>
@@ -339,12 +379,16 @@ function SilsilahListCard({
                                                     </span>
                                                 )}
                                             </div>
-                                            <p className="mt-0.5 truncate text-xs text-tb-on-surface-variant">
+                                            <p className="mt-0.5 text-xs break-words text-tb-on-surface-variant">
                                                 {entry.marga || 'Tanpa marga'}
                                                 {count > 0 &&
                                                     ` · ${count} anak`}
                                             </p>
                                         </div>
+                                        <FamilyTreeVersionAction
+                                            entries={entryTrees}
+                                            iconOnly
+                                        />
                                         <Link
                                             href={people.edit(entry.id)}
                                             aria-label={`Ubah ${entry.name}`}
@@ -371,6 +415,12 @@ function SilsilahListCard({
                                                             const isSelf =
                                                                 child.id ===
                                                                 selfId;
+                                                            const childTrees =
+                                                                familyTrees.filter(
+                                                                    (tree) =>
+                                                                        tree.root_person_id ===
+                                                                        child.id,
+                                                                );
 
                                                             return (
                                                                 <li
@@ -383,32 +433,40 @@ function SilsilahListCard({
                                                                             href={people.show(
                                                                                 child.id,
                                                                             )}
-                                                                            className="flex min-w-0 flex-1 items-center gap-2 rounded-md"
+                                                                            className="flex min-w-0 flex-1 flex-col items-start rounded-md"
                                                                         >
-                                                                            <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-tb-surface-container px-1 text-[10px] font-semibold text-tb-on-surface-variant">
+                                                                            <span className="inline-flex min-h-5 max-w-full min-w-5 items-center justify-center overflow-x-auto rounded-full bg-tb-surface-container px-1.5 py-0.5 text-center text-[10px] leading-tight font-semibold whitespace-nowrap text-tb-on-surface-variant">
                                                                                 {child.chain ??
                                                                                     ''}
                                                                             </span>
-                                                                            <span
-                                                                                className={cn(
-                                                                                    'min-w-0 flex-1 truncate text-sm',
-                                                                                    filled
-                                                                                        ? 'text-tb-on-surface'
-                                                                                        : 'text-tb-on-surface-variant italic',
-                                                                                )}
-                                                                            >
-                                                                                {filled
-                                                                                    ? child.name
-                                                                                    : displayRowName(
-                                                                                          child.name,
-                                                                                      )}
-                                                                            </span>
-                                                                            {isSelf && (
-                                                                                <span className="shrink-0 text-[11px] font-medium text-tb-primary">
-                                                                                    Anda
+                                                                            <span className="mt-1 flex w-full min-w-0 items-start gap-1.5">
+                                                                                <span
+                                                                                    className={cn(
+                                                                                        'min-w-0 flex-1 text-sm leading-snug break-words whitespace-normal',
+                                                                                        filled
+                                                                                            ? 'text-tb-on-surface'
+                                                                                            : 'text-tb-on-surface-variant italic',
+                                                                                    )}
+                                                                                >
+                                                                                    {filled
+                                                                                        ? child.name
+                                                                                        : displayRowName(
+                                                                                              child.name,
+                                                                                          )}
                                                                                 </span>
-                                                                            )}
+                                                                                {isSelf && (
+                                                                                    <span className="shrink-0 text-[11px] font-medium text-tb-primary">
+                                                                                        Anda
+                                                                                    </span>
+                                                                                )}
+                                                                            </span>
                                                                         </Link>
+                                                                        <FamilyTreeVersionAction
+                                                                            entries={
+                                                                                childTrees
+                                                                            }
+                                                                            iconOnly
+                                                                        />
                                                                         <Link
                                                                             href={people.edit(
                                                                                 child.id,
@@ -441,10 +499,12 @@ function MargaLineageCard({
     entries,
     fatherChain,
     focusChain,
+    familyTrees,
 }: {
     entries: MargaLineageEntry[];
     fatherChain?: string | null;
     focusChain?: string | null;
+    familyTrees: FamilyTreeHistoryEntry[];
 }) {
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -485,6 +545,9 @@ function MargaLineageCard({
                                 (entry.children ?? []).length > 0;
                             const expandKey = `${entry.id}-${entry.chain ?? 'na'}`;
                             const isOpen = expanded.has(expandKey);
+                            const entryTrees = familyTrees.filter(
+                                (tree) => tree.root_person_id === entry.id,
+                            );
 
                             return (
                                 <li
@@ -521,14 +584,14 @@ function MargaLineageCard({
                                         ) : (
                                             <span className="size-6 shrink-0" />
                                         )}
-                                        <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-tb-surface-container px-1 text-xs font-bold text-tb-on-surface-variant">
-                                            {entry.chain ?? '—'}
-                                        </span>
                                         <div className="min-w-0 flex-1">
-                                            <div className="flex items-center gap-1.5">
+                                            <span className="inline-flex min-h-6 max-w-full min-w-6 items-center justify-center overflow-x-auto rounded-full bg-tb-surface-container px-2 py-1 text-center text-xs leading-tight font-bold whitespace-nowrap text-tb-on-surface-variant">
+                                                {entry.chain ?? '—'}
+                                            </span>
+                                            <div className="mt-1 flex items-start gap-1.5">
                                                 <Link
                                                     href={people.show(entry.id)}
-                                                    className="min-w-0 flex-1 truncate text-sm font-medium text-tb-on-surface hover:text-tb-primary"
+                                                    className="min-w-0 flex-1 text-sm leading-snug font-medium break-words whitespace-normal text-tb-on-surface hover:text-tb-primary"
                                                 >
                                                     {displayRowName(entry.name)}
                                                 </Link>
@@ -539,11 +602,15 @@ function MargaLineageCard({
                                                 )}
                                             </div>
                                             {entry.marga && (
-                                                <p className="mt-0.5 truncate text-xs text-tb-on-surface-variant">
+                                                <p className="mt-0.5 text-xs break-words text-tb-on-surface-variant">
                                                     {entry.marga}
                                                 </p>
                                             )}
                                         </div>
+                                        <FamilyTreeVersionAction
+                                            entries={entryTrees}
+                                            iconOnly
+                                        />
                                         <Link
                                             href={people.edit(entry.id)}
                                             aria-label={`Ubah ${entry.name}`}
@@ -563,39 +630,54 @@ function MargaLineageCard({
                                             ) : (
                                                 <ul className="grid gap-0.5">
                                                     {(entry.children ?? []).map(
-                                                        (child) => (
-                                                            <li
-                                                                key={`${child.id}-${child.chain ?? 'na'}`}
-                                                            >
-                                                                <div className="group flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors hover:bg-tb-surface-container/70">
-                                                                    <Link
-                                                                        href={people.show(
-                                                                            child.id,
-                                                                        )}
-                                                                        className="flex min-w-0 flex-1 items-center gap-2 rounded-md"
-                                                                    >
-                                                                        <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-tb-surface-container px-1 text-[10px] font-semibold text-tb-on-surface-variant">
-                                                                            {child.chain ??
-                                                                                ''}
-                                                                        </span>
-                                                                        <span className="min-w-0 flex-1 truncate text-sm text-tb-on-surface">
-                                                                            {displayRowName(
-                                                                                child.name,
+                                                        (child) => {
+                                                            const childTrees =
+                                                                familyTrees.filter(
+                                                                    (tree) =>
+                                                                        tree.root_person_id ===
+                                                                        child.id,
+                                                                );
+
+                                                            return (
+                                                                <li
+                                                                    key={`${child.id}-${child.chain ?? 'na'}`}
+                                                                >
+                                                                    <div className="group flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors hover:bg-tb-surface-container/70">
+                                                                        <Link
+                                                                            href={people.show(
+                                                                                child.id,
                                                                             )}
-                                                                        </span>
-                                                                    </Link>
-                                                                    <Link
-                                                                        href={people.edit(
-                                                                            child.id,
-                                                                        )}
-                                                                        aria-label={`Ubah ${child.name}`}
-                                                                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-tb-outline-variant text-tb-outline opacity-70 transition-opacity group-hover:opacity-100 hover:border-tb-primary hover:text-tb-primary"
-                                                                    >
-                                                                        <Pencil className="h-3.5 w-3.5" />
-                                                                    </Link>
-                                                                </div>
-                                                            </li>
-                                                        ),
+                                                                            className="flex min-w-0 flex-1 flex-col items-start rounded-md"
+                                                                        >
+                                                                            <span className="inline-flex min-h-5 max-w-full min-w-5 items-center justify-center overflow-x-auto rounded-full bg-tb-surface-container px-1.5 py-0.5 text-center text-[10px] leading-tight font-semibold whitespace-nowrap text-tb-on-surface-variant">
+                                                                                {child.chain ??
+                                                                                    ''}
+                                                                            </span>
+                                                                            <span className="mt-1 w-full min-w-0 text-sm leading-snug break-words whitespace-normal text-tb-on-surface">
+                                                                                {displayRowName(
+                                                                                    child.name,
+                                                                                )}
+                                                                            </span>
+                                                                        </Link>
+                                                                        <FamilyTreeVersionAction
+                                                                            entries={
+                                                                                childTrees
+                                                                            }
+                                                                            iconOnly
+                                                                        />
+                                                                        <Link
+                                                                            href={people.edit(
+                                                                                child.id,
+                                                                            )}
+                                                                            aria-label={`Ubah ${child.name}`}
+                                                                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-tb-outline-variant text-tb-outline opacity-70 transition-opacity group-hover:opacity-100 hover:border-tb-primary hover:text-tb-primary"
+                                                                        >
+                                                                            <Pencil className="h-3.5 w-3.5" />
+                                                                        </Link>
+                                                                    </div>
+                                                                </li>
+                                                            );
+                                                        },
                                                     )}
                                                 </ul>
                                             )}
@@ -899,6 +981,7 @@ export default function FamilyForm({
     lockedMarga = null,
     lineage,
     familyTrees = [],
+    approvedMargaTrees = [],
     versionTrees = [],
     canPublish = false,
     readOnly = false,
@@ -1035,6 +1118,11 @@ export default function FamilyForm({
 
         return margas.find((marga) => marga.id === margaId)?.name ?? '—';
     };
+    const activeMargaName =
+        data.new_marga.trim() ||
+        margas.find((marga) => marga.id === data.marga_id)?.name ||
+        lockedMarga?.name ||
+        null;
 
     useEffect(() => {
         if (data.children.length === 0) {
@@ -1798,6 +1886,7 @@ export default function FamilyForm({
                                                 {person && !readOnly && (
                                                     <FamilyTreeVersionAction
                                                         entries={versionTrees}
+                                                        mode="open"
                                                     />
                                                 )}
                                             </div>
@@ -2074,9 +2163,12 @@ export default function FamilyForm({
                                         <SilsilahListCard
                                             lineage={person.lineage}
                                             selfId={person.id}
+                                            familyTrees={familyTrees}
                                         />
                                         <FamilyTreeHistoryCard
                                             entries={familyTrees}
+                                            approvedEntries={approvedMargaTrees}
+                                            margaName={activeMargaName}
                                         />
                                     </>
                                 ) : (
@@ -2085,9 +2177,12 @@ export default function FamilyForm({
                                             entries={highlightedLineage}
                                             fatherChain={predictedFatherChain}
                                             focusChain={predictedFocusChain}
+                                            familyTrees={familyTrees}
                                         />
                                         <FamilyTreeHistoryCard
                                             entries={familyTrees}
+                                            approvedEntries={approvedMargaTrees}
+                                            margaName={activeMargaName}
                                         />
                                     </>
                                 )}
@@ -2583,8 +2678,18 @@ export default function FamilyForm({
                                                                     index,
                                                                 )
                                                             }
-                                                            aria-label="Hapus anak"
-                                                            title="Hapus anak"
+                                                            aria-label={
+                                                                child.id ==
+                                                                null
+                                                                    ? 'Hapus anak'
+                                                                    : 'Pisahkan anak dari silsilah'
+                                                            }
+                                                            title={
+                                                                child.id ==
+                                                                null
+                                                                    ? 'Hapus anak'
+                                                                    : 'Pisahkan anak dari silsilah'
+                                                            }
                                                             className="inline-flex h-6 w-6 items-center justify-center rounded-full text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-950"
                                                         >
                                                             <Trash2 className="h-3.5 w-3.5" />
@@ -3106,8 +3211,18 @@ export default function FamilyForm({
                                                                         index,
                                                                     )
                                                                 }
-                                                                aria-label="Hapus baris"
-                                                                title="Hapus dari silsilah"
+                                                                aria-label={
+                                                                    child.id ==
+                                                                    null
+                                                                        ? 'Hapus baris'
+                                                                        : 'Pisahkan dari silsilah'
+                                                                }
+                                                                title={
+                                                                    child.id ==
+                                                                    null
+                                                                        ? 'Hapus baris'
+                                                                        : 'Pisahkan dari silsilah'
+                                                                }
                                                                 className="inline-flex h-6 w-6 items-center justify-center rounded-full text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-950"
                                                             >
                                                                 <Trash2 className="h-3.5 w-3.5" />
@@ -3377,25 +3492,26 @@ export default function FamilyForm({
                 <DialogContent className="border-tb-outline-variant bg-tb-surface-bright sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle className="text-tb-on-surface">
-                            Hapus {removalConfirm?.row.name || 'anggota ini'}{' '}
-                            dari silsilah?
+                            Pisahkan{' '}
+                            {removalConfirm?.row.name || 'anggota ini'} dari
+                            silsilah?
                         </DialogTitle>
                         <DialogDescription className="space-y-3">
                             <p>
-                                Baris ini sudah tersimpan dan akan dihapus
-                                permanen dari database bersama seluruh
-                                keturunannya. Tindakan ini tidak dapat
-                                dibatalkan.
+                                Nama ini dan seluruh keturunannya tetap
+                                tersimpan di database. Hanya hubungan dengan
+                                orang tuanya yang diputus, sehingga menjadi
+                                pohon silsilah yang berdiri sendiri.
                             </p>
                             {(removalConfirm?.row.descendant_count ?? 0) >
                                 0 && (
-                                <div className="rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-950 dark:bg-red-950/40">
-                                    <p className="text-sm font-semibold text-red-700 dark:text-red-300">
-                                        Keturunan yang ikut terhapus (
+                                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-950 dark:bg-amber-950/40">
+                                    <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">
+                                        Keturunan yang ikut ke pohon baru (
                                         {removalConfirm?.row.descendant_count}
                                         ):
                                     </p>
-                                    <ul className="mt-1.5 max-h-40 space-y-1 overflow-y-auto text-sm text-red-700/90 dark:text-red-300/90">
+                                    <ul className="mt-1.5 max-h-40 space-y-1 overflow-y-auto text-sm text-amber-700/90 dark:text-amber-300/90">
                                         {(
                                             removalConfirm?.row
                                                 .descendant_names ?? []
@@ -3429,9 +3545,7 @@ export default function FamilyForm({
                         <Button variant="outline" onClick={cancelRemove}>
                             Batal
                         </Button>
-                        <Button variant="destructive" onClick={confirmRemove}>
-                            Ya, hapus
-                        </Button>
+                        <Button onClick={confirmRemove}>Ya, pisahkan</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

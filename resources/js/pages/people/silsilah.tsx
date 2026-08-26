@@ -21,6 +21,7 @@ type Props = {
     familyTree?: {
         id: number;
         name: string;
+        rootPersonId: number;
     };
     canEditFamilyTree?: boolean;
 };
@@ -87,9 +88,7 @@ export default function PersonSilsilah(props: Props) {
                                         Alternatif
                                     </Link>
                                     <Link
-                                        href={familyTrees.edit(
-                                            props.familyTree.id,
-                                        )}
+                                        href={`${people.edit(props.familyTree.rootPersonId).url}#daftar-silsilah`}
                                         className="inline-flex items-center gap-1.5 rounded-lg border border-tb-outline-variant px-3 py-1.5 text-sm font-medium text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
                                     >
                                         <Pencil className="size-3.5" /> Ubah

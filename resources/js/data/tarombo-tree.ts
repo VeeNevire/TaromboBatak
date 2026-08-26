@@ -36,6 +36,13 @@ export type TaromboPerson = {
     childrenNames?: string[];
 };
 
+export type TaromboAlternativeTreeRow = {
+    id: number;
+    name: string;
+    rootPersonId: string;
+    people: TaromboPersonRow[];
+};
+
 export type MargaInfo = {
     name: string;
     color: string;

@@ -11,12 +11,14 @@ import {
 import { useState } from 'react';
 import { TaromboDiagram } from '@/components/landing/tarombo-diagram';
 import { DescendantsTree } from '@/components/people/descendants-tree';
+import type { DescendantsAlternativeTree } from '@/components/people/descendants-tree';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { buildTaromboPeople } from '@/data/tarombo-tree';
 import type {
     MargaInfo,
+    TaromboAlternativeTreeRow,
     TaromboPerson,
     TaromboPersonRow,
 } from '@/data/tarombo-tree';
@@ -29,6 +31,7 @@ type FullscreenView = 'diagram' | 'tree';
 type Props = {
     people: TaromboPersonRow[];
     margas: MargaInfo[];
+    alternativeTrees: TaromboAlternativeTreeRow[];
     fullscreen?: boolean;
     fullscreenView?: FullscreenView;
 };
@@ -70,6 +73,7 @@ function ancestorPath(
 export function TaromboExplorer({
     people: rows,
     margas,
+    alternativeTrees,
     fullscreen = false,
     fullscreenView = 'diagram',
 }: Props) {
@@ -111,11 +115,22 @@ export function TaromboExplorer({
     );
 
     const people = buildTaromboPeople(rows);
+    const descendantAlternativeTrees: DescendantsAlternativeTree[] =
+        alternativeTrees.map((tree) => ({
+            id: tree.id,
+            name: tree.name,
+            rootId: tree.rootPersonId,
+            people: buildTaromboPeople(tree.people).filter(
+                (person) => person.gender === 'L' || !person.gender,
+            ),
+        }));
     const rootPerson = people.find((p) => !p.parentId) ?? people[0];
     const [centerPersonId, setCenterPersonId] = useState<string>(
         rootPerson?.id ?? '',
     );
-    const centerPerson = people.find((p) => p.id === centerPersonId);
+    const fatherPeople = people.filter(
+        (person) => person.gender === 'L' || !person.gender,
+    );
     const normalizedSearch = search.trim().toLowerCase();
     const searchResults = normalizedSearch
         ? people
@@ -139,13 +154,21 @@ export function TaromboExplorer({
               .slice(0, 10)
         : [];
     const ancestorPeople = ancestorFocusId
-        ? ancestorPath(people, ancestorFocusId)
+        ? ancestorPath(fatherPeople, ancestorFocusId)
         : [];
-    const treePeople = ancestorPeople.length > 0 ? ancestorPeople : people;
-    const treeCenterId = ancestorPeople[0]?.id ?? centerPersonId;
-    const ancestorFocusPerson = ancestorFocusId
-        ? people.find((person) => person.id === ancestorFocusId)
-        : undefined;
+    const treePeople =
+        ancestorPeople.length > 0 ? ancestorPeople : fatherPeople;
+    const treeCenterPerson =
+        fatherPeople.find(
+            (person) => person.id === (ancestorPeople[0]?.id ?? centerPersonId),
+        ) ??
+        fatherPeople.find((person) => !person.parentId) ??
+        fatherPeople[0];
+    const treeCenterId = treeCenterPerson?.id ?? '';
+    const ancestorFocusPerson =
+        ancestorFocusId && ancestorPeople.length > 0
+            ? fatherPeople.find((person) => person.id === ancestorFocusId)
+            : undefined;
     const treeHasChildren = treePeople.some(
         (person) => person.parentId === treeCenterId,
     );
@@ -276,7 +299,7 @@ export function TaromboExplorer({
             <p className="text-center text-sm text-tb-on-surface-variant">
                 Belum memiliki keturunan tercatat. Klik node lagi untuk kembali.
             </p>
-            {centerPerson && (
+            {treeCenterPerson && (
                 <Button
                     asChild
                     size="sm"
@@ -285,7 +308,7 @@ export function TaromboExplorer({
                 >
                     <Link
                         href={peopleRoutes.show({
-                            person: Number(centerPerson.id),
+                            person: Number(treeCenterPerson.id),
                         })}
                     >
                         Update Silsilah
@@ -329,7 +352,7 @@ export function TaromboExplorer({
                         <p className="mt-1 max-w-64 truncate text-xs text-tb-on-surface-variant">
                             {ancestorFocusPerson
                                 ? `Jalur ${ANCESTOR_DEPTH} tingkat leluhur dari ${ancestorFocusPerson.name}`
-                                : `Pohon vertikal dari ${centerPerson?.name ?? 'Leluhur Utama'}`}
+                                : `Pohon vertikal dari ${treeCenterPerson?.name ?? 'Leluhur Utama'}`}
                         </p>
                     </div>
                     <span />
@@ -341,6 +364,13 @@ export function TaromboExplorer({
                         centerId={treeCenterId}
                         onSelect={handlePersonSelect}
                         highlightId={selectedId}
+                        editNodes
+                        alternativeTrees={descendantAlternativeTrees}
+                        nodeIdPrefix={
+                            fullscreen
+                                ? 'tarombo-fullscreen-tree-node'
+                                : 'tarombo-desktop-tree-node'
+                        }
                     />
                 </div>
                 {!treeHasChildren && !ancestorFocusId && noChildrenNotice}
@@ -524,7 +554,7 @@ export function TaromboExplorer({
                                             <p className="mt-1 text-xs text-tb-on-surface-variant">
                                                 {ancestorFocusPerson
                                                     ? `Jalur ${ANCESTOR_DEPTH} tingkat leluhur dari ${ancestorFocusPerson.name}`
-                                                    : `Pohon vertikal dari ${centerPerson?.name ?? 'Leluhur Utama'}`}
+                                                    : `Pohon vertikal dari ${treeCenterPerson?.name ?? 'Leluhur Utama'}`}
                                             </p>
                                         </div>
                                         <div style={{ zoom: treeZoom }}>
@@ -534,6 +564,11 @@ export function TaromboExplorer({
                                                 centerId={treeCenterId}
                                                 onSelect={handlePersonSelect}
                                                 highlightId={selectedId}
+                                                editNodes
+                                                alternativeTrees={
+                                                    descendantAlternativeTrees
+                                                }
+                                                nodeIdPrefix="tarombo-mobile-tree-node"
                                             />
                                         </div>
                                         {!treeHasChildren &&
