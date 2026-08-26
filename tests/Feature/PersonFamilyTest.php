@@ -1,6 +1,8 @@
 <?php
 
+use App\Models\ContributionRequest;
 use App\Models\FamilyTree;
+use App\Models\FamilyTreeNode;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
@@ -568,7 +570,7 @@ test('changing a father path does not move or renumber his siblings', function (
         ->and($child->fresh()->chain)->toBe('2-1-1');
 });
 
-test('removing a saved sibling deletes the person and their whole descendant branch', function () {
+test('detaching a saved sibling keeps the person and their whole descendant branch', function () {
     $marga = Marga::factory()->create();
     $father = Person::factory()->create(['marga_id' => $marga->id]);
 
@@ -616,14 +618,19 @@ test('removing a saved sibling deletes the person and their whole descendant bra
         ->assertRedirect()
         ->assertSessionHasNoErrors();
 
-    expect(Person::find($sibling->id))->toBeNull()
-        ->and(Person::find($child->id))->toBeNull()
-        ->and(Person::find($grandchild->id))->toBeNull()
-        ->and(Person::find($focused->id))->not->toBeNull()
-        ->and(Person::find($father->id))->not->toBeNull();
+    expect(Person::find($sibling->id))->not->toBeNull()
+        ->and(Person::find($child->id))->not->toBeNull()
+        ->and(Person::find($grandchild->id))->not->toBeNull()
+        ->and($sibling->fresh()->father_id)->toBeNull()
+        ->and($child->fresh()->father_id)->toBe($sibling->id)
+        ->and($grandchild->fresh()->father_id)->toBe($child->id)
+        ->and($focused->fresh()->father_id)->toBe($father->id)
+        ->and($sibling->fresh()->chain)->toBe('2')
+        ->and($child->fresh()->chain)->toBe('2-1')
+        ->and($grandchild->fresh()->chain)->toBe('2-1-1');
 });
 
-test('removing a saved own child deletes the child and their descendants', function () {
+test('detaching a saved own child keeps the child and their descendants', function () {
     $marga = Marga::factory()->create();
     $focused = Person::factory()->create(['name' => 'Fokus', 'marga_id' => $marga->id]);
 
@@ -653,9 +660,12 @@ test('removing a saved own child deletes the child and their descendants', funct
         ->assertRedirect()
         ->assertSessionHasNoErrors();
 
-    expect(Person::find($anak->id))->toBeNull()
-        ->and(Person::find($cucu->id))->toBeNull()
-        ->and(Person::find($focused->id))->not->toBeNull();
+    expect(Person::find($anak->id))->not->toBeNull()
+        ->and(Person::find($cucu->id))->not->toBeNull()
+        ->and($anak->fresh()->father_id)->toBeNull()
+        ->and($cucu->fresh()->father_id)->toBe($anak->id)
+        ->and($anak->fresh()->chain)->toBe('1')
+        ->and($cucu->fresh()->chain)->toBe('1-1');
 });
 
 test('the focused person is never removed even when listed as removed', function () {
@@ -746,6 +756,81 @@ test('a non-staff user cannot delete a sibling they do not own', function () {
         ->assertInertia(fn (Assert $page) => $page->component('Error/Page'));
 
     expect(Person::find($sibling->id))->not->toBeNull();
+});
+
+test('detaching a childless sibling clears their chain and keeps mother data', function () {
+    $marga = Marga::factory()->create();
+    $mother = Person::factory()->create(['name' => 'Ibu', 'gender' => 'P', 'marga_id' => $marga->id]);
+    $father = Person::factory()->create(['marga_id' => $marga->id]);
+
+    $focused = Person::factory()->create([
+        'name' => 'Fokus',
+        'marga_id' => $marga->id,
+        'father_id' => $father->id,
+        'birth_order' => 1,
+        'sibling_count' => 2,
+    ]);
+
+    $sibling = Person::factory()->create([
+        'name' => 'Saudara',
+        'marga_id' => $marga->id,
+        'father_id' => $father->id,
+        'mother_id' => $mother->id,
+        'birth_order' => 2,
+        'chain' => '9-9',
+    ]);
+
+    $this->actingAs($this->admin)
+        ->put(route('people.update', $focused), [
+            'name' => $focused->name,
+            'marga_id' => $marga->id,
+            'birth_order' => 1,
+            'sibling_count' => 1,
+            'father' => ['name' => $father->name],
+            'children' => [
+                ['id' => $focused->id, 'name' => $focused->name, 'gender' => 'L'],
+            ],
+            'removed_child_ids' => [$sibling->id],
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect($sibling->fresh())->not->toBeNull()
+        ->and($sibling->fresh()->father_id)->toBeNull()
+        ->and($sibling->fresh()->mother_id)->toBe($mother->id)
+        ->and($sibling->fresh()->chain)->toBeNull();
+});
+
+test('a detach request for a person outside the edited family is rejected', function () {
+    $marga = Marga::factory()->create();
+    $father = Person::factory()->create(['marga_id' => $marga->id]);
+
+    $focused = Person::factory()->create([
+        'name' => 'Fokus',
+        'marga_id' => $marga->id,
+        'father_id' => $father->id,
+        'birth_order' => 1,
+    ]);
+
+    $stranger = Person::factory()->create([
+        'name' => 'Orang Lain',
+        'marga_id' => $marga->id,
+    ]);
+
+    $this->actingAs($this->admin)
+        ->put(route('people.update', $focused), [
+            'name' => $focused->name,
+            'marga_id' => $marga->id,
+            'birth_order' => 1,
+            'father' => ['name' => $father->name],
+            'children' => [
+                ['id' => $focused->id, 'name' => $focused->name, 'gender' => 'L'],
+            ],
+            'removed_child_ids' => [$stranger->id],
+        ])
+        ->assertSessionHasErrors('removed_child_ids');
+
+    expect($stranger->fresh()->father_id)->toBeNull();
 });
 
 test('a family store persists the alias for father, mother, siblings, and own children', function () {
@@ -867,6 +952,62 @@ test('the create form lists each family tree created by the signed in account', 
             ->where('familyTrees.0.name', 'Keluarga Anak Kedua')
             ->where('familyTrees.0.updated_at', '2026-08-19T10:00:00.000000Z')
             ->missing('familyTrees.2'));
+});
+
+test('the create form lists only approved family trees from the account marga', function () {
+    $marga = Marga::factory()->create(['name' => 'Simare']);
+    $otherMarga = Marga::factory()->create();
+    $viewer = User::factory()->withMarga($marga->id)->create();
+    $owner = User::factory()->withMarga($marga->id)->create();
+
+    $approvedRoot = Person::factory()->create(['name' => 'Akar Approved', 'marga_id' => $marga->id]);
+    $approvedTree = FamilyTree::create([
+        'user_id' => $owner->id,
+        'root_person_id' => $approvedRoot->id,
+        'name' => 'Silsilah Approved',
+    ]);
+    FamilyTreeNode::create(['family_tree_id' => $approvedTree->id, 'person_id' => $approvedRoot->id]);
+    ContributionRequest::factory()->approved()->create([
+        'requester_id' => $owner->id,
+        'matched_father_id' => $approvedRoot->id,
+        'subject_person_id' => $approvedRoot->id,
+        'family_tree_id' => $approvedTree->id,
+    ]);
+
+    $pendingRoot = Person::factory()->create(['name' => 'Akar Pending', 'marga_id' => $marga->id]);
+    $pendingTree = FamilyTree::create([
+        'user_id' => $owner->id,
+        'root_person_id' => $pendingRoot->id,
+        'name' => 'Silsilah Pending',
+    ]);
+    FamilyTreeNode::create(['family_tree_id' => $pendingTree->id, 'person_id' => $pendingRoot->id]);
+    ContributionRequest::factory()->create([
+        'requester_id' => $owner->id,
+        'matched_father_id' => $pendingRoot->id,
+        'subject_person_id' => $pendingRoot->id,
+        'family_tree_id' => $pendingTree->id,
+    ]);
+
+    $outsideRoot = Person::factory()->create(['marga_id' => $otherMarga->id]);
+    $outsideTree = FamilyTree::create([
+        'user_id' => $owner->id,
+        'root_person_id' => $outsideRoot->id,
+    ]);
+    FamilyTreeNode::create(['family_tree_id' => $outsideTree->id, 'person_id' => $outsideRoot->id]);
+    ContributionRequest::factory()->approved()->create([
+        'requester_id' => $owner->id,
+        'matched_father_id' => $outsideRoot->id,
+        'subject_person_id' => $outsideRoot->id,
+        'family_tree_id' => $outsideTree->id,
+    ]);
+
+    $this->actingAs($viewer)
+        ->get(route('people.create'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('approvedMargaTrees', 1)
+            ->where('approvedMargaTrees.0.id', $approvedTree->id)
+            ->where('approvedMargaTrees.0.name', 'Silsilah Approved'));
 });
 
 test('the family history card displays the topmost father node as its root', function () {

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ContributionRequest;
+use App\Models\FamilyTree;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Services\TaromboStatisticsService;
@@ -18,11 +20,12 @@ class TaromboController extends Controller
      */
     public function index(Request $request): Response
     {
-        [$people, $margas] = $this->treeData($request);
+        [$people, $margas, $alternativeTrees] = $this->treeData($request);
 
         return Inertia::render('tarombo/index', [
             'people' => $people,
             'margas' => $margas,
+            'alternativeTrees' => $alternativeTrees,
         ]);
     }
 
@@ -31,11 +34,12 @@ class TaromboController extends Controller
      */
     public function fullscreen(Request $request, string $view): Response
     {
-        [$people, $margas] = $this->treeData($request);
+        [$people, $margas, $alternativeTrees] = $this->treeData($request);
 
         return Inertia::render('tarombo/fullscreen', [
             'people' => $people,
             'margas' => $margas,
+            'alternativeTrees' => $alternativeTrees,
             'view' => $view,
         ]);
     }
@@ -43,7 +47,7 @@ class TaromboController extends Controller
     /**
      * Build the scoped tarombo rows and marga legend for the current user.
      *
-     * @return array{0: mixed, 1: mixed}
+     * @return array{0: mixed, 1: mixed, 2: mixed}
      */
     private function treeData(Request $request): array
     {
@@ -57,7 +61,71 @@ class TaromboController extends Controller
                 ->orderBy('id'),
         );
 
-        return [$rows, $service->margas($isStaff ? null : $user->marga_id)];
+        $visiblePersonIds = collect($rows)->pluck('id')->map(fn (string $id) => (int) $id);
+        $alternativeTrees = FamilyTree::query()
+            ->whereNotNull('based_on_id')
+            ->whereIn('root_person_id', $visiblePersonIds)
+            ->when(! $isStaff, fn (Builder $query) => $query->where(
+                fn (Builder $access) => $access
+                    ->whereBelongsTo($user)
+                    ->orWhereHas('contributionRequests', fn (Builder $requests) => $requests
+                        ->where('status', ContributionRequest::STATUS_APPROVED)
+                        ->whereHas('matchedFather', fn (Builder $father) => $father
+                            ->where('marga_id', $user->marga_id))),
+            ))
+            ->orderBy('root_person_id')
+            ->orderBy('created_at')
+            ->get()
+            ->map(function (FamilyTree $tree) use ($service, $isStaff, $user): ?array {
+                $people = collect($service->rowsForFamilyTree(
+                    $tree,
+                    $isStaff ? null : $user->marga_id,
+                ))
+                    ->filter(fn (array $person) => $person['gender'] === 'L' || $person['gender'] === null);
+                $rootId = (string) $tree->root_person_id;
+
+                if (! $people->contains('id', $rootId)) {
+                    return null;
+                }
+
+                $childrenByParent = $people
+                    ->filter(fn (array $person) => $person['parentId'] !== null)
+                    ->groupBy('parentId');
+                $connectedIds = collect();
+                $queue = [$rootId];
+
+                while ($queue !== []) {
+                    $personId = array_shift($queue);
+
+                    if ($connectedIds->contains($personId)) {
+                        continue;
+                    }
+
+                    $connectedIds->push($personId);
+                    array_push(
+                        $queue,
+                        ...$childrenByParent->get($personId, collect())->pluck('id'),
+                    );
+                }
+
+                $people = $people->whereIn('id', $connectedIds)->values();
+
+                return [
+                    'id' => $tree->id,
+                    'name' => $tree->name ?? 'Versi alternatif',
+                    'rootPersonId' => $rootId,
+                    'people' => $people->all(),
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+
+        return [
+            $rows,
+            $service->margas($isStaff ? null : $user->marga_id),
+            $alternativeTrees,
+        ];
     }
 
     /**

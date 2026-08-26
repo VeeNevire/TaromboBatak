@@ -13,6 +13,7 @@ type Props = {
     nameSuggestions: string[];
     fatherSuggestions: string[];
     familyTrees: FamilyTreeHistoryEntry[];
+    approvedMargaTrees: FamilyTreeHistoryEntry[];
     versionTrees: FamilyTreeHistoryEntry[];
     canPublish: boolean;
     readOnly?: boolean;
@@ -24,6 +25,7 @@ export default function PersonShow({
     nameSuggestions,
     fatherSuggestions,
     familyTrees,
+    approvedMargaTrees,
     versionTrees,
     canPublish,
     readOnly = false,
@@ -62,6 +64,7 @@ export default function PersonShow({
                     nameSuggestions={nameSuggestions}
                     fatherSuggestions={fatherSuggestions}
                     familyTrees={familyTrees}
+                    approvedMargaTrees={approvedMargaTrees}
                     versionTrees={versionTrees}
                     canPublish={canPublish}
                     readOnly={readOnly}

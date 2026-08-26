@@ -1,9 +1,25 @@
-import { Head, Link, router } from '@inertiajs/react';
-import { Route, NotebookPen, Pencil, Plus, Search } from 'lucide-react';
-import { useState } from 'react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
+import {
+    NotebookPen,
+    Pencil,
+    Plus,
+    Route,
+    Search,
+    Trash2,
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { AppAvatar } from '@/components/app-avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import {
     Select,
@@ -59,8 +75,51 @@ export default function PeopleIndex({
     hasMarga,
 }: Props) {
     const [search, setSearch] = useState(filters.search ?? '');
+    const [toDelete, setToDelete] = useState<PersonItem | null>(null);
+    const deleteForm = useForm<{ person?: string }>({});
     const showActions =
         canManage || page.data.some((person) => person.editable);
+
+    const confirmDelete = () => {
+        if (!toDelete) {
+            return;
+        }
+
+        deleteForm.delete(people.destroy(toDelete.id).url, {
+            preserveScroll: true,
+            onSuccess: () => setToDelete(null),
+            onError: () => {
+                toast.error(
+                    deleteForm.errors.person ??
+                        'Anggota gagal dihapus dari database.',
+                );
+            },
+        });
+    };
+
+    useEffect(() => {
+        if (search === filters.search) {
+            return;
+        }
+
+        const timeout = window.setTimeout(() => {
+            router.get(
+                people.index().url,
+                {
+                    search,
+                    marga_id: filters.marga_id,
+                },
+                {
+                    only: ['people', 'filters'],
+                    preserveScroll: true,
+                    preserveState: true,
+                    replace: true,
+                },
+            );
+        }, 300);
+
+        return () => window.clearTimeout(timeout);
+    }, [filters.marga_id, filters.search, search]);
 
     const applyFilter = (updates: {
         search?: string;
@@ -69,16 +128,18 @@ export default function PeopleIndex({
         router.get(
             people.index().url,
             {
-                search:
-                    updates.search !== undefined
-                        ? updates.search
-                        : filters.search,
+                search: updates.search !== undefined ? updates.search : search,
                 marga_id:
                     updates.marga_id !== undefined
                         ? updates.marga_id
                         : filters.marga_id,
             },
-            { preserveState: true, replace: true },
+            {
+                only: ['people', 'filters'],
+                preserveScroll: true,
+                preserveState: true,
+                replace: true,
+            },
         );
     };
 
@@ -129,12 +190,7 @@ export default function PeopleIndex({
                             <Input
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        applyFilter({ search });
-                                    }
-                                }}
-                                placeholder="Cari nama atau alias..."
+                                placeholder="Cari nama, alias, atau marga..."
                                 className="border-tb-outline-variant bg-tb-surface-bright pl-10 focus:border-tb-primary focus:ring-tb-primary/20"
                             />
                         </div>
@@ -307,6 +363,19 @@ export default function PeopleIndex({
                                                                     <Route className="size-4" />
                                                                 </Link>
                                                             </Button>
+                                                            <Button
+                                                                title="Hapus dari database"
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="size-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                                                                onClick={() =>
+                                                                    setToDelete(
+                                                                        person,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <Trash2 className="size-4" />
+                                                            </Button>
                                                         </>
                                                     ) : (
                                                         person.editable && (
@@ -348,6 +417,42 @@ export default function PeopleIndex({
                 </Card>
 
                 <Pagination page={page} />
+
+                <Dialog
+                    open={toDelete !== null}
+                    onOpenChange={(open) => !open && setToDelete(null)}
+                >
+                    <DialogContent className="border-tb-outline-variant bg-tb-surface-bright sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle className="text-tb-on-surface">
+                                Hapus Anggota
+                            </DialogTitle>
+                            <DialogDescription>
+                                Yakin ingin menghapus{' '}
+                                <strong>{toDelete?.name}</strong> dari database?
+                                Anggota yang masih menjadi orang tua tidak dapat
+                                dihapus.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                            <Button
+                                variant="outline"
+                                onClick={() => setToDelete(null)}
+                            >
+                                Batal
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                onClick={confirmDelete}
+                                disabled={deleteForm.processing}
+                            >
+                                {deleteForm.processing
+                                    ? 'Menghapus...'
+                                    : 'Ya, Hapus'}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div>
         </>
     );

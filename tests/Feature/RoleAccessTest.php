@@ -67,6 +67,30 @@ test('a regular user sees their first marga member as the lineage boundary root'
             ->where('lineage.0.marga', 'Simare'));
 });
 
+test('the lineage list excludes a wife while retaining her father', function () {
+    $marga = Marga::factory()->create(['name' => 'Simare']);
+    $user = User::factory()->withMarga($marga->id)->create();
+    $wifeFather = Person::factory()->create([
+        'name' => 'Ayah Istri',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+    ]);
+    Person::factory()->create([
+        'name' => 'Istri',
+        'gender' => 'P',
+        'marga_id' => $marga->id,
+        'father_id' => $wifeFather->id,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('people.create'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('lineage', 1)
+            ->where('lineage.0.id', $wifeFather->id)
+            ->has('lineage.0.children', 0));
+});
+
 test('regular users without a marga cannot create or edit family data', function () {
     $user = User::factory()->create();
     $person = Person::factory()->create();
@@ -110,6 +134,36 @@ test('admin users can access admin-only routes', function () {
     $this->actingAs($admin)
         ->get(route('marga.index'))
         ->assertOk();
+});
+
+test('people search matches aliases and marga names', function () {
+    $admin = User::factory()->asAdmin()->create();
+    $simare = Marga::factory()->create(['name' => 'Simare']);
+    $silaban = Marga::factory()->create(['name' => 'Silaban']);
+    Person::factory()->create([
+        'name' => 'Rehan',
+        'alias' => 'Raja Parhata',
+        'marga_id' => $simare->id,
+    ]);
+    Person::factory()->create([
+        'name' => 'Budi',
+        'alias' => 'Ompu Tua',
+        'marga_id' => $silaban->id,
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('people.index', ['search' => 'Parhata']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('people.data', 1)
+            ->where('people.data.0.name', 'Rehan'));
+
+    $this->actingAs($admin)
+        ->get(route('people.index', ['search' => 'Silaban']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('people.data', 1)
+            ->where('people.data.0.name', 'Budi'));
 });
 
 test('the tarombo page is publicly accessible', function () {

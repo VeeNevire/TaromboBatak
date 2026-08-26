@@ -23,6 +23,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import familyTrees from '@/routes/family-trees';
+import people from '@/routes/people';
 
 const ITEMS_PER_PAGE = 5;
 
@@ -40,8 +41,12 @@ export type FamilyTreeHistoryEntry = {
 
 export function FamilyTreeHistoryCard({
     entries,
+    approvedEntries = [],
+    margaName,
 }: {
     entries: FamilyTreeHistoryEntry[];
+    approvedEntries?: FamilyTreeHistoryEntry[];
+    margaName?: string | null;
 }) {
     const [expanded, setExpanded] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -118,6 +123,7 @@ export function FamilyTreeHistoryCard({
 
     return (
         <div
+            id="daftar-silsilah"
             role={expanded ? 'dialog' : undefined}
             aria-modal={expanded ? true : undefined}
             aria-label={expanded ? 'Daftar Silsilah' : undefined}
@@ -143,6 +149,11 @@ export function FamilyTreeHistoryCard({
                                 <CardTitle className="font-display text-lg text-tb-on-surface">
                                     Daftar Silsilah
                                 </CardTitle>
+                                {margaName && (
+                                    <p className="mt-1 font-display text-base font-semibold text-tb-primary">
+                                        Keluarga Marga {margaName}
+                                    </p>
+                                )}
                                 <CardDescription>
                                     Pohon yang pernah Anda buat, diurutkan dari
                                     pembaruan terbaru.
@@ -177,7 +188,66 @@ export function FamilyTreeHistoryCard({
                         </button>
                     </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="grid gap-6">
+                    <section className="grid gap-3">
+                        <div>
+                            <h3 className="font-display text-base font-semibold text-tb-on-surface">
+                                Daftar Silsilah Marga
+                                {margaName ? ` ${margaName}` : ''}
+                            </h3>
+                            <p className="mt-1 text-xs text-tb-on-surface-variant">
+                                Silsilah yang telah disetujui Kontributor Utama
+                                atau Kontributor Anggota.
+                            </p>
+                        </div>
+                        {approvedEntries.length === 0 ? (
+                            <div className="rounded-xl border border-dashed border-tb-outline-variant bg-tb-surface-container/40 px-4 py-5 text-center">
+                                <p className="text-sm font-medium text-tb-on-surface">
+                                    Belum ada silsilah yang disetujui
+                                </p>
+                            </div>
+                        ) : (
+                            <ol className="grid gap-3">
+                                {approvedEntries.map((entry, index) => (
+                                    <li
+                                        key={entry.id}
+                                        className="flex flex-col gap-4 rounded-xl border border-tb-outline-variant bg-tb-surface-container/35 p-4 sm:flex-row sm:items-center sm:justify-between"
+                                    >
+                                        <div className="flex min-w-0 items-start gap-3">
+                                            <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-tb-surface-bright text-sm font-bold text-tb-on-surface-variant ring-1 ring-tb-outline-variant">
+                                                {index + 1}
+                                            </span>
+                                            <div className="min-w-0">
+                                                <p className="truncate text-sm font-semibold text-tb-on-surface">
+                                                    {entry.name ??
+                                                        `Silsilah ${entry.root_name}`}
+                                                </p>
+                                                <p className="mt-1 text-xs text-tb-on-surface-variant">
+                                                    Akar: {entry.root_name}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <Link
+                                            href={familyTrees.show(entry.id)}
+                                            className="text-tb-on-primary inline-flex items-center justify-center gap-1.5 rounded-lg bg-tb-primary px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-90"
+                                        >
+                                            <TreePine className="size-3.5" />{' '}
+                                            Buka
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ol>
+                        )}
+                    </section>
+
+                    <div className="border-t border-tb-outline-variant pt-6">
+                        <h3 className="font-display text-base font-semibold text-tb-on-surface">
+                            Silsilah Milik Akun
+                        </h3>
+                        <p className="mt-1 text-xs text-tb-on-surface-variant">
+                            Silsilah yang Anda buat dan dapat Anda kelola.
+                        </p>
+                    </div>
                     <div ref={listTopRef} />
                     {entries.length === 0 ? (
                         <div className="rounded-xl border border-dashed border-tb-outline-variant bg-tb-surface-container/40 px-4 py-6 text-center">
@@ -303,8 +373,8 @@ export function FamilyTreeHistoryCard({
                                                             Versi Alternatif
                                                         </Link>
                                                         <Link
-                                                            href={familyTrees.edit(
-                                                                entry.id,
+                                                            href={people.edit(
+                                                                entry.root_person_id,
                                                             )}
                                                             className="inline-flex items-center gap-1.5 rounded-lg border border-tb-outline-variant px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
                                                         >

@@ -15,6 +15,7 @@ type Props = {
     lockedMarga?: { id: number; name: string } | null;
     lineage?: MargaLineageEntry[];
     familyTrees?: FamilyTreeHistoryEntry[];
+    approvedMargaTrees?: FamilyTreeHistoryEntry[];
     versionTrees?: FamilyTreeHistoryEntry[];
     canPublish: boolean;
 };
@@ -27,6 +28,7 @@ export default function PersonForm({
     lockedMarga,
     lineage,
     familyTrees,
+    approvedMargaTrees,
     versionTrees,
     canPublish,
 }: Props) {
@@ -69,6 +71,7 @@ export default function PersonForm({
                     lockedMarga={lockedMarga}
                     lineage={lineage}
                     familyTrees={familyTrees}
+                    approvedMargaTrees={approvedMargaTrees}
                     versionTrees={versionTrees}
                     canPublish={canPublish}
                 />
