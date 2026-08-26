@@ -6,10 +6,13 @@ import {
     ChevronUp,
     Copy,
     Eye,
+    ImageIcon,
     Layers3,
+    Link2,
     Pencil,
     Plus,
     Trash2,
+    Upload,
     X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -50,6 +53,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { getInitials } from '@/data/tarombo-tree';
 import { cn } from '@/lib/utils';
 import familyTreeRoutes from '@/routes/family-trees';
 import people from '@/routes/people';
@@ -987,6 +991,8 @@ export default function FamilyForm({
     readOnly = false,
 }: Props) {
     const isEdit = person !== null;
+    const initialImageMode: 'url' | 'upload' =
+        person?.image && !/^https?:\/\//i.test(person.image) ? 'upload' : 'url';
     const initialMothers = toMotherRows(person);
     const initialMotherIndex = (motherId: number | null | undefined) => {
         const index = initialMothers.findIndex(
@@ -996,77 +1002,84 @@ export default function FamilyForm({
         return index >= 0 ? index : soleMotherIndex(initialMothers);
     };
 
-    const { data, setData, transform, post, put, processing, errors } = useForm(
-        {
-            name: person?.name ?? '',
-            gender: person?.gender ?? '',
-            alias: person?.alias ?? '',
-            marga_id: person?.marga_id ?? lockedMarga?.id ?? null,
-            new_marga: person?.new_marga ?? '',
-            birth_order: person?.birth_order ?? 1,
-            sibling_count:
-                person?.sibling_count ??
-                Math.max(person?.children.length ?? 1, 1),
-            birth_year: person?.birth_year ?? '',
-            death_year: person?.death_year ?? '',
-            image: person?.image ?? '',
-            bio: person?.bio ?? '',
-            is_public: person?.is_public ?? false,
-            father: person?.father
-                ? {
-                      name: person.father.name ?? '',
-                      alias: person.father.alias ?? '',
-                      birth_year: person.father.birth_year ?? '',
-                      death_year: person.father.death_year ?? '',
-                      marga_id:
-                          person.father.marga_id ?? lockedMarga?.id ?? null,
+    const {
+        data,
+        setData,
+        transform,
+        post,
+        processing,
+        errors,
+        setError,
+        clearErrors,
+    } = useForm({
+        name: person?.name ?? '',
+        gender: person?.gender ?? '',
+        alias: person?.alias ?? '',
+        marga_id: person?.marga_id ?? lockedMarga?.id ?? null,
+        new_marga: person?.new_marga ?? '',
+        birth_order: person?.birth_order ?? 1,
+        sibling_count:
+            person?.sibling_count ?? Math.max(person?.children.length ?? 1, 1),
+        birth_year: person?.birth_year ?? '',
+        death_year: person?.death_year ?? '',
+        image: person?.image ?? '',
+        image_mode: initialImageMode,
+        image_file: null as File | null,
+        bio: person?.bio ?? '',
+        is_public: person?.is_public ?? false,
+        father: person?.father
+            ? {
+                  name: person.father.name ?? '',
+                  alias: person.father.alias ?? '',
+                  birth_year: person.father.birth_year ?? '',
+                  death_year: person.father.death_year ?? '',
+                  marga_id: person.father.marga_id ?? lockedMarga?.id ?? null,
+                  new_marga: '',
+              }
+            : emptyParent(),
+        mothers: initialMothers,
+        children:
+            person?.children && person.children.length > 0
+                ? person.children.map((child) => ({
+                      id: child.id ?? null,
+                      uid: createUid(),
+                      name: child.name ?? '',
+                      alias: child.alias ?? '',
+                      gender: child.gender ?? '',
+                      spouse: child.spouse ?? '',
+                      spouse_marga: child.spouse_marga ?? '',
+                      marga_id: child.marga_id ?? lockedMarga?.id ?? null,
                       new_marga: '',
-                  }
-                : emptyParent(),
-            mothers: initialMothers,
-            children:
-                person?.children && person.children.length > 0
-                    ? person.children.map((child) => ({
-                          id: child.id ?? null,
-                          uid: createUid(),
-                          name: child.name ?? '',
-                          alias: child.alias ?? '',
-                          gender: child.gender ?? '',
-                          spouse: child.spouse ?? '',
-                          spouse_marga: child.spouse_marga ?? '',
-                          marga_id: child.marga_id ?? lockedMarga?.id ?? null,
-                          new_marga: '',
-                          pending: child.pending ?? false,
-                          descendant_count: child.descendant_count ?? 0,
-                          descendant_names: child.descendant_names ?? [],
-                      }))
-                    : [emptyRow()],
-            ownChildren:
-                person?.ownChildren && person.ownChildren.length > 0
-                    ? person.ownChildren.map((child) => ({
-                          id: child.id ?? null,
-                          uid: createUid(),
-                          name: child.name ?? '',
-                          alias: child.alias ?? '',
-                          gender: child.gender ?? '',
-                          spouse: child.spouse ?? '',
-                          spouse_marga: child.spouse_marga ?? '',
-                          marga_id: child.marga_id ?? lockedMarga?.id ?? null,
-                          new_marga: '',
-                          pending: child.pending ?? false,
-                          birth_order: child.birth_order ?? null,
-                          chain: child.chain ?? null,
-                          marga: child.marga ?? null,
-                          descendant_count: child.descendant_count ?? 0,
-                          descendant_names: child.descendant_names ?? [],
-                          mother_id: child.mother_id ?? null,
-                          mother_index: initialMotherIndex(child.mother_id),
-                      }))
-                    : ([] as ChildRow[]),
-            removed_child_ids: [] as number[],
-            removed_own_child_ids: [] as number[],
-        },
-    );
+                      pending: child.pending ?? false,
+                      descendant_count: child.descendant_count ?? 0,
+                      descendant_names: child.descendant_names ?? [],
+                  }))
+                : [emptyRow()],
+        ownChildren:
+            person?.ownChildren && person.ownChildren.length > 0
+                ? person.ownChildren.map((child) => ({
+                      id: child.id ?? null,
+                      uid: createUid(),
+                      name: child.name ?? '',
+                      alias: child.alias ?? '',
+                      gender: child.gender ?? '',
+                      spouse: child.spouse ?? '',
+                      spouse_marga: child.spouse_marga ?? '',
+                      marga_id: child.marga_id ?? lockedMarga?.id ?? null,
+                      new_marga: '',
+                      pending: child.pending ?? false,
+                      birth_order: child.birth_order ?? null,
+                      chain: child.chain ?? null,
+                      marga: child.marga ?? null,
+                      descendant_count: child.descendant_count ?? 0,
+                      descendant_names: child.descendant_names ?? [],
+                      mother_id: child.mother_id ?? null,
+                      mother_index: initialMotherIndex(child.mother_id),
+                  }))
+                : ([] as ChildRow[]),
+        removed_child_ids: [] as number[],
+        removed_own_child_ids: [] as number[],
+    });
 
     const birthOrder = Number(data.birth_order) || 1;
     const siblingCount = Number(data.sibling_count) || 1;
@@ -1084,6 +1097,54 @@ export default function FamilyForm({
         row: ChildRow;
     } | null>(null);
     const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+    const [imageStatus, setImageStatus] = useState<
+        'idle' | 'loading' | 'valid' | 'invalid'
+    >(person?.image ? 'loading' : 'idle');
+    const [filePreview, setFilePreview] = useState<string | null>(null);
+
+    useEffect(
+        () => () => {
+            if (filePreview) {
+                URL.revokeObjectURL(filePreview);
+            }
+        },
+        [filePreview],
+    );
+
+    const imagePreview =
+        data.image_mode === 'upload'
+            ? (filePreview ?? person?.image ?? '')
+            : data.image.trim();
+
+    const selectImageMode = (mode: 'url' | 'upload') => {
+        setData('image_mode', mode);
+        clearErrors('image', 'image_file');
+
+        if (mode === 'url') {
+            setData('image_file', null);
+            setFilePreview(null);
+        }
+
+        if (mode === 'url' && data.image && !/^https?:\/\//i.test(data.image)) {
+            setData('image', '');
+            setImageStatus('idle');
+
+            return;
+        }
+
+        const preview =
+            mode === 'upload'
+                ? (filePreview ?? person?.image ?? '')
+                : data.image.trim();
+        setImageStatus(preview ? 'loading' : 'idle');
+    };
+
+    const handleImageFile = (file: File | null) => {
+        setData('image_file', file);
+        setFilePreview(file ? URL.createObjectURL(file) : null);
+        clearErrors('image_file');
+        setImageStatus(file ? 'loading' : person?.image ? 'loading' : 'idle');
+    };
 
     const selectRow = (index: number) => {
         setSelectedIndex(selectedIndex === index ? null : index);
@@ -1587,10 +1648,40 @@ export default function FamilyForm({
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
 
+        if (
+            data.image_mode === 'url' &&
+            data.image.trim() &&
+            imageStatus !== 'valid'
+        ) {
+            setError(
+                'image',
+                imageStatus === 'invalid'
+                    ? 'URL tidak terhubung ke gambar yang dapat ditampilkan.'
+                    : 'Tunggu sampai pemeriksaan URL foto selesai.',
+            );
+
+            return;
+        }
+
+        if (
+            data.image_mode === 'upload' &&
+            data.image_file &&
+            imageStatus !== 'valid'
+        ) {
+            setError(
+                'image_file',
+                'File belum dapat ditampilkan sebagai gambar.',
+            );
+
+            return;
+        }
+
         if (isEdit && person?.id) {
-            put(people.update(person.id).url);
+            post(people.update.form(person.id).action, {
+                forceFormData: true,
+            });
         } else {
-            post(people.store().url);
+            post(people.store.form().action, { forceFormData: true });
         }
     };
 
@@ -1841,7 +1932,13 @@ export default function FamilyForm({
                 ? sorted.findIndex((child) => child.id === person.id)
                 : (Number(withMarga.birth_order) || 1) - 1;
 
-        const submitData = { ...withSelectedMother };
+        const submitData = {
+            ...withSelectedMother,
+            image:
+                withSelectedMother.image_mode === 'url'
+                    ? withSelectedMother.image.trim() || null
+                    : null,
+        };
 
         if (!canPublish) {
             delete (submitData as { is_public?: boolean }).is_public;
@@ -2065,29 +2162,172 @@ export default function FamilyForm({
                                                 </div>
                                             </div>
 
-                                            <div className="grid gap-1.5">
-                                                <Label
-                                                    htmlFor="image"
-                                                    className="text-tb-on-surface"
-                                                >
-                                                    URL Foto
+                                            <div className="grid gap-2">
+                                                <Label className="text-tb-on-surface">
+                                                    Foto
                                                 </Label>
-                                                <Input
-                                                    id="image"
-                                                    type="url"
-                                                    value={data.image}
-                                                    onChange={(e) =>
-                                                        setData(
-                                                            'image',
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    placeholder="https://..."
-                                                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
-                                                />
-                                                <InputError
-                                                    message={errors.image}
-                                                />
+                                                <div className="flex flex-wrap gap-2">
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant={
+                                                            data.image_mode ===
+                                                            'url'
+                                                                ? 'default'
+                                                                : 'outline'
+                                                        }
+                                                        onClick={() =>
+                                                            selectImageMode(
+                                                                'url',
+                                                            )
+                                                        }
+                                                    >
+                                                        <Link2 className="size-4" />
+                                                        Gunakan URL
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant={
+                                                            data.image_mode ===
+                                                            'upload'
+                                                                ? 'default'
+                                                                : 'outline'
+                                                        }
+                                                        onClick={() =>
+                                                            selectImageMode(
+                                                                'upload',
+                                                            )
+                                                        }
+                                                    >
+                                                        <Upload className="size-4" />
+                                                        Unggah File
+                                                    </Button>
+                                                </div>
+
+                                                <div className="grid items-start gap-3 rounded-xl border border-tb-outline-variant bg-tb-surface-container/30 p-3 sm:grid-cols-[80px_1fr]">
+                                                    <div className="flex size-20 items-center justify-center overflow-hidden rounded-xl border border-tb-outline-variant bg-tb-surface-bright text-sm font-bold text-tb-on-surface-variant">
+                                                        {imagePreview &&
+                                                        imageStatus !==
+                                                            'invalid' ? (
+                                                            <img
+                                                                key={
+                                                                    imagePreview
+                                                                }
+                                                                src={
+                                                                    imagePreview
+                                                                }
+                                                                alt={`Pratinjau ${data.name || 'anggota'}`}
+                                                                className="size-full object-cover"
+                                                                onLoad={() => {
+                                                                    setImageStatus(
+                                                                        'valid',
+                                                                    );
+                                                                    clearErrors(
+                                                                        'image',
+                                                                        'image_file',
+                                                                    );
+                                                                }}
+                                                                onError={() =>
+                                                                    setImageStatus(
+                                                                        'invalid',
+                                                                    )
+                                                                }
+                                                            />
+                                                        ) : data.name.trim() ? (
+                                                            getInitials(
+                                                                data.name,
+                                                            )
+                                                        ) : (
+                                                            <ImageIcon className="size-5" />
+                                                        )}
+                                                    </div>
+
+                                                    <div className="grid min-w-0 gap-2">
+                                                        {data.image_mode ===
+                                                        'url' ? (
+                                                            <Input
+                                                                id="image"
+                                                                type="url"
+                                                                value={
+                                                                    data.image
+                                                                }
+                                                                onChange={(
+                                                                    e,
+                                                                ) => {
+                                                                    setData(
+                                                                        'image',
+                                                                        e.target
+                                                                            .value,
+                                                                    );
+                                                                    clearErrors(
+                                                                        'image',
+                                                                    );
+                                                                    setImageStatus(
+                                                                        e.target.value.trim()
+                                                                            ? 'loading'
+                                                                            : 'idle',
+                                                                    );
+                                                                }}
+                                                                placeholder="https://contoh.com/foto.jpg"
+                                                                className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                                            />
+                                                        ) : (
+                                                            <Input
+                                                                id="image_file"
+                                                                type="file"
+                                                                accept="image/jpeg,image/png,image/webp"
+                                                                onChange={(e) =>
+                                                                    handleImageFile(
+                                                                        e.target
+                                                                            .files?.[0] ??
+                                                                            null,
+                                                                    )
+                                                                }
+                                                                className="border-tb-outline-variant bg-tb-surface-bright file:mr-3 file:font-medium"
+                                                            />
+                                                        )}
+
+                                                        <p
+                                                            className={cn(
+                                                                'text-xs',
+                                                                imageStatus ===
+                                                                    'valid' &&
+                                                                    'text-emerald-600 dark:text-emerald-400',
+                                                                imageStatus ===
+                                                                    'invalid' &&
+                                                                    'text-red-600 dark:text-red-400',
+                                                                (imageStatus ===
+                                                                    'idle' ||
+                                                                    imageStatus ===
+                                                                        'loading') &&
+                                                                    'text-tb-on-surface-variant',
+                                                            )}
+                                                        >
+                                                            {imageStatus ===
+                                                            'loading'
+                                                                ? 'Memeriksa apakah foto dapat ditampilkan...'
+                                                                : imageStatus ===
+                                                                    'valid'
+                                                                  ? 'Foto berhasil ditampilkan.'
+                                                                  : imageStatus ===
+                                                                      'invalid'
+                                                                    ? 'Foto tidak dapat dimuat. Inisial akan digunakan sebagai pengganti.'
+                                                                    : data.image_mode ===
+                                                                        'upload'
+                                                                      ? 'JPG, PNG, atau WebP. Maksimal 2 MB.'
+                                                                      : 'Masukkan URL HTTP/HTTPS yang langsung menampilkan gambar.'}
+                                                        </p>
+                                                        <InputError
+                                                            message={
+                                                                data.image_mode ===
+                                                                'upload'
+                                                                    ? errors.image_file
+                                                                    : errors.image
+                                                            }
+                                                        />
+                                                    </div>
+                                                </div>
                                             </div>
 
                                             <div className="grid gap-1.5">
@@ -2679,14 +2919,12 @@ export default function FamilyForm({
                                                                 )
                                                             }
                                                             aria-label={
-                                                                child.id ==
-                                                                null
+                                                                child.id == null
                                                                     ? 'Hapus anak'
                                                                     : 'Pisahkan anak dari silsilah'
                                                             }
                                                             title={
-                                                                child.id ==
-                                                                null
+                                                                child.id == null
                                                                     ? 'Hapus anak'
                                                                     : 'Pisahkan anak dari silsilah'
                                                             }
@@ -3492,9 +3730,8 @@ export default function FamilyForm({
                 <DialogContent className="border-tb-outline-variant bg-tb-surface-bright sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle className="text-tb-on-surface">
-                            Pisahkan{' '}
-                            {removalConfirm?.row.name || 'anggota ini'} dari
-                            silsilah?
+                            Pisahkan {removalConfirm?.row.name || 'anggota ini'}{' '}
+                            dari silsilah?
                         </DialogTitle>
                         <DialogDescription className="space-y-3">
                             <p>

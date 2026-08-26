@@ -1,8 +1,9 @@
 import { Link } from '@inertiajs/react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { NodeCard } from '@/components/people/node-card';
 import type { TreeNode } from '@/components/people/node-card';
+import { PersonSummaryDialog } from '@/components/people/person-summary-dialog';
 import type { TaromboPerson } from '@/data/tarombo-tree';
 import people from '@/routes/people';
 
@@ -12,10 +13,20 @@ type Props = {
     onSelect?: (id: string) => void;
     highlightId?: string | null;
     editNodes?: boolean;
+    selectOnClick?: boolean;
     alternativeTrees?: DescendantsAlternativeTree[];
     hideRoot?: boolean;
     nodeIdPrefix?: string;
+    lineagePath?: readonly string[];
+    showProfileOnName?: boolean;
 };
+
+type LineageLine = {
+    id: string;
+    path: string;
+};
+
+const EMPTY_LINEAGE_PATH: readonly string[] = [];
 
 export type DescendantsAlternativeTree = {
     id: number;
@@ -31,7 +42,7 @@ function toNode(person: TaromboPerson, displayNumber?: number): TreeNode {
         alias: person.alias,
         marga: person.marga,
         birthYear: person.birthYear,
-        birthOrder: person.birthOrder,
+        birthOrder: person.parentId ? person.birthOrder : undefined,
         displayNumber,
         image: person.image,
         pending: person.pending,
@@ -48,6 +59,10 @@ function TreeBranch({
     onToggle,
     onSelect,
     editNodes,
+    selectOnClick,
+    showProfileOnName,
+    onOpenProfile,
+    lineageIds,
     alternativeTrees,
     nodeIdPrefix,
 }: {
@@ -60,8 +75,12 @@ function TreeBranch({
     onToggle: (id: string) => void;
     onSelect?: (id: string) => void;
     editNodes?: boolean;
+    selectOnClick?: boolean;
+    showProfileOnName?: boolean;
+    onOpenProfile: (person: TaromboPerson) => void;
     alternativeTrees: DescendantsAlternativeTree[];
     nodeIdPrefix: string;
+    lineageIds: ReadonlySet<string>;
 }) {
     const [activeAlternativeId, setActiveAlternativeId] = useState<
         number | null
@@ -81,13 +100,25 @@ function TreeBranch({
         <NodeCard
             node={toNode(person, numberById.get(person.id))}
             highlighted={isCenter || isHighlighted}
-            badge={isCenter ? undefined : `Anak ke ${person.birthOrder ?? '?'}`}
+            onAvatarClick={
+                showProfileOnName ? () => onSelect?.(person.id) : undefined
+            }
+            onNameClick={
+                showProfileOnName ? () => onOpenProfile(person) : undefined
+            }
         />
     );
 
     return (
         <li>
-            {editNodes ? (
+            {showProfileOnName ? (
+                <div
+                    id={`${nodeIdPrefix}-${person.id}`}
+                    className="inline-block rounded-lg"
+                >
+                    {card}
+                </div>
+            ) : editNodes && !selectOnClick ? (
                 <Link
                     id={`${nodeIdPrefix}-${person.id}`}
                     href={people.edit(Number(person.id))}
@@ -172,8 +203,12 @@ function TreeBranch({
                             onToggle={onToggle}
                             onSelect={onSelect}
                             editNodes={editNodes}
+                            selectOnClick={selectOnClick}
+                            showProfileOnName={showProfileOnName}
+                            onOpenProfile={onOpenProfile}
                             alternativeTrees={alternativeTrees}
                             nodeIdPrefix={nodeIdPrefix}
+                            lineageIds={lineageIds}
                         />
                     ))}
                 </ul>
@@ -225,8 +260,11 @@ function TreeBranch({
                             onSelect={onSelect}
                             highlightId={highlightId}
                             editNodes={editNodes}
+                            selectOnClick={selectOnClick}
+                            showProfileOnName={showProfileOnName}
                             hideRoot
                             nodeIdPrefix={`${nodeIdPrefix}-alternative-${activeAlternative.id}`}
+                            lineagePath={[]}
                         />
                     </div>
                 </div>
@@ -241,10 +279,20 @@ export function DescendantsTree({
     onSelect,
     highlightId,
     editNodes = false,
+    selectOnClick = false,
+    showProfileOnName = false,
     alternativeTrees = [],
     hideRoot = false,
     nodeIdPrefix = 'tree-node',
+    lineagePath = EMPTY_LINEAGE_PATH,
 }: Props) {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [profilePerson, setProfilePerson] = useState<TaromboPerson | null>(
+        null,
+    );
+    const [lineageLines, setLineageLines] = useState<LineageLine[]>([]);
+    const [overlaySize, setOverlaySize] = useState({ width: 0, height: 0 });
+    const lineageIds = useMemo(() => new Set(lineagePath), [lineagePath]);
     const childrenOf = useMemo(() => {
         const map = new Map<string, TaromboPerson[]>();
 
@@ -303,7 +351,7 @@ export function DescendantsTree({
             visited.add(id);
             const children = childrenOf.get(id) ?? [];
 
-            if (depth >= 3 && children.length > 0) {
+            if (depth >= 3 && children.length > 0 && !lineageIds.has(id)) {
                 initial.add(id);
             }
 
@@ -319,14 +367,6 @@ export function DescendantsTree({
         return initial;
     });
 
-    if (!center) {
-        return null;
-    }
-
-    const visibleRoots = hideRoot
-        ? (childrenOf.get(center.id) ?? [])
-        : [center];
-
     const handleToggle = (id: string) => {
         setCollapsed((prev) => {
             const next = new Set(prev);
@@ -341,8 +381,113 @@ export function DescendantsTree({
         });
     };
 
+    useLayoutEffect(() => {
+        const container = containerRef.current;
+
+        if (!container) {
+            return;
+        }
+
+        const updateLines = () => {
+            const containerRect = container.getBoundingClientRect();
+            const scaleX = container.offsetWidth
+                ? containerRect.width / container.offsetWidth
+                : 1;
+            const scaleY = container.offsetHeight
+                ? containerRect.height / container.offsetHeight
+                : 1;
+            const lines: LineageLine[] = [];
+
+            for (let index = 0; index < lineagePath.length - 1; index += 1) {
+                const parentId = lineagePath[index];
+                const childId = lineagePath[index + 1];
+                const parent = document.getElementById(
+                    `${nodeIdPrefix}-${parentId}`,
+                );
+                const child = document.getElementById(
+                    `${nodeIdPrefix}-${childId}`,
+                );
+
+                if (
+                    !parent ||
+                    !child ||
+                    !container.contains(parent) ||
+                    !container.contains(child)
+                ) {
+                    continue;
+                }
+
+                const parentRect = parent.getBoundingClientRect();
+                const childRect = child.getBoundingClientRect();
+                const startX =
+                    (parentRect.left +
+                        parentRect.width / 2 -
+                        containerRect.left) /
+                    scaleX;
+                const startY = (parentRect.bottom - containerRect.top) / scaleY;
+                const endX =
+                    (childRect.left +
+                        childRect.width / 2 -
+                        containerRect.left) /
+                    scaleX;
+                const endY = (childRect.top - containerRect.top) / scaleY;
+                const middleY = startY + (endY - startY) / 2;
+
+                lines.push({
+                    id: `${parentId}-${childId}`,
+                    path: `M ${startX} ${startY} V ${middleY} H ${endX} V ${endY}`,
+                });
+            }
+
+            setOverlaySize({
+                width: container.scrollWidth,
+                height: container.scrollHeight,
+            });
+            setLineageLines(lines);
+        };
+
+        const frame = window.requestAnimationFrame(updateLines);
+        const observer = new ResizeObserver(updateLines);
+        observer.observe(container);
+        window.addEventListener('resize', updateLines);
+
+        return () => {
+            window.cancelAnimationFrame(frame);
+            observer.disconnect();
+            window.removeEventListener('resize', updateLines);
+        };
+    }, [collapsed, lineagePath, nodeIdPrefix, people]);
+
+    if (!center) {
+        return null;
+    }
+
+    const visibleRoots = hideRoot
+        ? (childrenOf.get(center.id) ?? [])
+        : [center];
+
     return (
-        <div className="pb-4">
+        <div ref={containerRef} className="relative w-max min-w-full pb-4">
+            {lineageLines.length > 0 && (
+                <svg
+                    aria-hidden="true"
+                    className="pointer-events-none absolute top-0 left-0 z-10 overflow-visible"
+                    width={overlaySize.width}
+                    height={overlaySize.height}
+                >
+                    {lineageLines.map((line) => (
+                        <path
+                            key={line.id}
+                            d={line.path}
+                            fill="none"
+                            stroke="#dc2626"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                        />
+                    ))}
+                </svg>
+            )}
             {visibleRoots.length > 0 ? (
                 <ul className="tb-tree">
                     {visibleRoots.map((root) => (
@@ -357,8 +502,12 @@ export function DescendantsTree({
                             onToggle={handleToggle}
                             onSelect={onSelect}
                             editNodes={editNodes}
+                            selectOnClick={selectOnClick}
+                            showProfileOnName={showProfileOnName}
+                            onOpenProfile={setProfilePerson}
                             alternativeTrees={alternativeTrees}
                             nodeIdPrefix={nodeIdPrefix}
+                            lineageIds={lineageIds}
                         />
                     ))}
                 </ul>
@@ -366,6 +515,13 @@ export function DescendantsTree({
                 <p className="px-3 py-2 text-xs text-tb-on-surface-variant italic">
                     Versi ini belum memiliki keturunan berbeda.
                 </p>
+            )}
+            {showProfileOnName && (
+                <PersonSummaryDialog
+                    person={profilePerson}
+                    people={people}
+                    onClose={() => setProfilePerson(null)}
+                />
             )}
         </div>
     );

@@ -29,12 +29,12 @@ import {
     edgeTypes,
     nodeTypes,
 } from '@/components/landing/diagram/diagram-types';
+import { PersonImage } from '@/components/people/person-image';
 import {
     buildRadialLayoutFromPerson,
     getConnectionIds,
     getGenerationLabel,
     generationColors,
-    getInitials,
     MOCK_MARGAS,
     MOCK_TAROMBO,
 } from '@/data/tarombo-tree';
@@ -67,15 +67,11 @@ function SearchResultItem({
             className="flex w-full cursor-pointer items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-tb-surface-container"
         >
             <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-tb-surface-container text-[10px] font-bold text-tb-on-surface-variant">
-                {person.image ? (
-                    <img
-                        src={person.image}
-                        alt={person.name}
-                        className="h-full w-full object-cover"
-                    />
-                ) : (
-                    getInitials(person.name)
-                )}
+                <PersonImage
+                    src={person.image}
+                    name={person.name}
+                    className="h-full w-full object-cover"
+                />
             </span>
             <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-semibold text-tb-on-surface">

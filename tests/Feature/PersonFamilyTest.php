@@ -7,7 +7,9 @@ use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
 use App\Services\ChainNumberingService;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
@@ -1249,4 +1251,58 @@ test('a descendant cannot be submitted manually as the father', function () {
         ])
         ->assertRedirect(route('people.edit', $focus))
         ->assertSessionHasErrors('father.name');
+});
+
+test('a person photo can be uploaded and stored on the public disk', function () {
+    Storage::fake('public');
+    $marga = Marga::factory()->create();
+
+    $response = $this->actingAs($this->admin)->post(route('people.store'), [
+        'name' => 'Fokus Foto',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'birth_order' => 1,
+        'sibling_count' => 1,
+        'image_mode' => 'upload',
+        'image_file' => UploadedFile::fake()->image('foto.jpg', 400, 400),
+        'father' => ['name' => 'Ayah Foto'],
+        'children' => [[
+            'name' => 'Fokus Foto',
+            'gender' => 'L',
+            'marga_id' => $marga->id,
+        ]],
+    ]);
+
+    $response->assertRedirect(route('people.index'));
+
+    $person = Person::where('name', 'Fokus Foto')->firstOrFail();
+
+    expect($person->image)->toStartWith('/storage/people/');
+    Storage::disk('public')->assertExists(substr($person->image, strlen('/storage/')));
+});
+
+test('a person photo upload rejects non image files', function () {
+    $marga = Marga::factory()->create();
+
+    $this->actingAs($this->admin)
+        ->post(route('people.store'), [
+            'name' => 'Fokus Foto',
+            'gender' => 'L',
+            'marga_id' => $marga->id,
+            'birth_order' => 1,
+            'sibling_count' => 1,
+            'image_mode' => 'upload',
+            'image_file' => UploadedFile::fake()->create(
+                'dokumen.pdf',
+                100,
+                'application/pdf',
+            ),
+            'father' => ['name' => 'Ayah Foto'],
+            'children' => [[
+                'name' => 'Fokus Foto',
+                'gender' => 'L',
+                'marga_id' => $marga->id,
+            ]],
+        ])
+        ->assertSessionHasErrors('image_file');
 });
