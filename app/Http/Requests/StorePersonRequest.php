@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StorePersonRequest extends FormRequest
 {
@@ -25,7 +26,15 @@ class StorePersonRequest extends FormRequest
             'sibling_count' => ['nullable', 'integer', 'min:1'],
             'birth_year' => ['nullable', 'digits:4'],
             'death_year' => ['nullable', 'digits:4'],
-            'image' => ['nullable', 'url'],
+            'image_mode' => ['nullable', Rule::in(['url', 'upload'])],
+            'image' => ['nullable', 'url:http,https', 'max:2048'],
+            'image_file' => [
+                'nullable',
+                Rule::prohibitedIf($this->input('image_mode') !== 'upload'),
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:2048',
+            ],
             'bio' => ['nullable', 'string'],
             'spouse' => ['nullable', 'string', 'max:255'],
             'spouse_marga' => ['nullable', 'string', 'max:255'],

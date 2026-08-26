@@ -23,6 +23,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -184,6 +185,7 @@ class PersonController extends Controller
         Gate::authorize('create', Person::class);
 
         $validated = $request->validated();
+        $validated = $this->preparePersonImage($request, $validated);
         $validated['children'] = $request->input('children', []);
         $validated['ownChildren'] = $request->input('ownChildren', []);
         $validated['removed_child_ids'] = $request->input('removed_child_ids', []);
@@ -584,6 +586,8 @@ class PersonController extends Controller
         $isStaff = $user->isStaff();
 
         $validated = $request->validated();
+        $previousImage = $person->image;
+        $validated = $this->preparePersonImage($request, $validated);
         $validated['children'] = $request->input('children', []);
         $validated['ownChildren'] = $request->input('ownChildren', []);
         $validated['removed_child_ids'] = $request->input('removed_child_ids', []);
@@ -608,12 +612,58 @@ class PersonController extends Controller
             app(FamilyEntryService::class)->save($validated, createdBy: $user->id);
         }
 
+        if (
+            array_key_exists('image', $validated) &&
+            $validated['image'] !== $previousImage
+        ) {
+            $this->deleteStoredPersonImage($previousImage);
+        }
+
         $message = isset($result) && $result['matchedFather'] !== null
             ? 'Jejak keluarga disimpan. Pencocokan Ayah menunggu persetujuan kontributor.'
             : __('Jejak keluarga berhasil diperbarui.');
         Inertia::flash('toast', ['type' => 'success', 'message' => $message]);
 
         return to_route('people.show', $person);
+    }
+
+    /**
+     * Store an uploaded person image or keep the validated external URL.
+     *
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function preparePersonImage(Request $request, array $validated): array
+    {
+        unset($validated['image_mode'], $validated['image_file']);
+
+        if ($request->hasFile('image_file')) {
+            $path = $request->file('image_file')->store('people', 'public');
+            $validated['image'] = Storage::disk('public')->url($path);
+
+            return $validated;
+        }
+
+        if ($request->input('image_mode') === 'upload') {
+            unset($validated['image']);
+        }
+
+        return $validated;
+    }
+
+    private function deleteStoredPersonImage(?string $image): void
+    {
+        if (! $image) {
+            return;
+        }
+
+        $path = parse_url($image, PHP_URL_PATH);
+
+        if (! is_string($path) || ! str_starts_with($path, '/storage/')) {
+            return;
+        }
+
+        Storage::disk('public')->delete(substr($path, strlen('/storage/')));
     }
 
     /** @param array<string, mixed> $result */

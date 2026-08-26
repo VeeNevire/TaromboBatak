@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
-import { getInitials, getGenerationLabel } from '@/data/tarombo-tree';
+import { PersonImage } from '@/components/people/person-image';
+import { getGenerationLabel } from '@/data/tarombo-tree';
 import type { TaromboPerson } from '@/data/tarombo-tree';
 
 export function ProfileCard({
@@ -47,15 +48,11 @@ export function ProfileCard({
                 <X className="h-5 w-5" />
             </button>
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-tb-surface bg-tb-surface-container text-sm font-bold text-tb-on-surface-variant">
-                {person.image ? (
-                    <img
-                        alt={person.name}
-                        className="h-full w-full object-cover"
-                        src={person.image}
-                    />
-                ) : (
-                    getInitials(person.name)
-                )}
+                <PersonImage
+                    src={person.image}
+                    name={person.name}
+                    className="h-full w-full object-cover"
+                />
             </div>
             <div className="mb-6 text-center">
                 <p className="text-xs font-semibold tracking-wider text-tb-on-surface-variant uppercase">

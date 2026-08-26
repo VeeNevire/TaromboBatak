@@ -1,7 +1,8 @@
 import { Handle, Position, useStore } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import { Crown } from 'lucide-react';
-import { getGenerationLabel, getInitials } from '@/data/tarombo-tree';
+import { PersonImage } from '@/components/people/person-image';
+import { getGenerationLabel } from '@/data/tarombo-tree';
 import type { TaromboNodeData } from '@/data/tarombo-tree';
 import { cn } from '@/lib/utils';
 
@@ -35,17 +36,12 @@ function CenterBubble({
         <div className="w-56 rounded-xl border border-tb-outline-variant bg-tb-surface-bright p-3 shadow-xl">
             <div className="flex items-start gap-2.5">
                 <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-tb-surface-container">
-                    {person.image ? (
-                        <img
-                            src={person.image}
-                            alt={person.name}
-                            className="h-full w-full object-cover"
-                        />
-                    ) : (
-                        <span className="flex h-full w-full items-center justify-center text-xs font-bold text-tb-on-surface-variant">
-                            {getInitials(person.name)}
-                        </span>
-                    )}
+                    <PersonImage
+                        src={person.image}
+                        name={person.name}
+                        className="h-full w-full object-cover"
+                        fallbackClassName="text-xs font-bold text-tb-on-surface-variant"
+                    />
                 </div>
                 <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold text-tb-on-surface">
@@ -145,24 +141,12 @@ export function CenterNode({ data }: NodeProps) {
                 <div className="absolute -top-1 flex h-8 w-8 items-center justify-center rounded-full bg-tb-primary text-white shadow-md ring-2 ring-white">
                     <Crown className="h-4 w-4" />
                 </div>
-                {person.image ? (
-                    <img
-                        src={person.image}
-                        alt={person.name}
-                        className="h-full w-full rounded-full object-cover opacity-95"
-                    />
-                ) : (
-                    <>
-                        <p className="font-display text-[15px] leading-tight font-bold text-tb-on-surface">
-                            {person.name}
-                        </p>
-                        {person.alias && (
-                            <p className="mt-0.5 line-clamp-2 text-[8px] leading-tight text-tb-on-surface-variant italic">
-                                {person.alias}
-                            </p>
-                        )}
-                    </>
-                )}
+                <PersonImage
+                    src={person.image}
+                    name={person.name}
+                    className="h-full w-full rounded-full object-cover opacity-95"
+                    fallbackClassName="font-display text-lg font-bold text-tb-on-surface"
+                />
             </div>
         </div>
     );

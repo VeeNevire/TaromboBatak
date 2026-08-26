@@ -7,11 +7,14 @@ import {
     Minus,
     Plus,
     Search,
+    UserSearch,
+    X,
 } from 'lucide-react';
 import { useState } from 'react';
 import { TaromboDiagram } from '@/components/landing/tarombo-diagram';
 import { DescendantsTree } from '@/components/people/descendants-tree';
 import type { DescendantsAlternativeTree } from '@/components/people/descendants-tree';
+import { PersonTreePickerDialog } from '@/components/tarombo/person-tree-picker-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -37,6 +40,32 @@ type Props = {
 };
 
 const ANCESTOR_DEPTH = 4;
+
+const MY_PERSON_STORAGE_KEY = 'tarombo-my-person-id';
+
+function readStoredMyPersonId(): string | null {
+    try {
+        return window.localStorage.getItem(MY_PERSON_STORAGE_KEY);
+    } catch {
+        return null;
+    }
+}
+
+function writeStoredMyPersonId(id: string): void {
+    try {
+        window.localStorage.setItem(MY_PERSON_STORAGE_KEY, id);
+    } catch {
+        return;
+    }
+}
+
+function removeStoredMyPersonId(): void {
+    try {
+        window.localStorage.removeItem(MY_PERSON_STORAGE_KEY);
+    } catch {
+        return;
+    }
+}
 
 function ancestorPath(
     people: TaromboPerson[],
@@ -70,6 +99,47 @@ function ancestorPath(
     return path;
 }
 
+function descendantSubtree(
+    people: TaromboPerson[],
+    rootId: string,
+): TaromboPerson[] {
+    const childrenOf = new Map<string, TaromboPerson[]>();
+
+    for (const person of people) {
+        if (!person.parentId) {
+            continue;
+        }
+
+        const children = childrenOf.get(person.parentId) ?? [];
+        children.push(person);
+        childrenOf.set(person.parentId, children);
+    }
+
+    const result: TaromboPerson[] = [];
+    const queue = [rootId];
+    const visited = new Set<string>();
+
+    while (queue.length > 0) {
+        const id = queue.shift();
+
+        if (!id || visited.has(id)) {
+            continue;
+        }
+
+        const person = people.find((item) => item.id === id);
+
+        if (!person) {
+            continue;
+        }
+
+        visited.add(id);
+        result.push(person);
+        queue.push(...(childrenOf.get(id) ?? []).map((child) => child.id));
+    }
+
+    return result;
+}
+
 export function TaromboExplorer({
     people: rows,
     margas,
@@ -77,13 +147,28 @@ export function TaromboExplorer({
     fullscreen = false,
     fullscreenView = 'diagram',
 }: Props) {
-    const [selectedId, setSelectedId] = useState<string | null>(null);
+    const people = buildTaromboPeople(rows);
+    const rootPerson = people.find((p) => !p.parentId) ?? people[0];
+    const fatherPeople = people.filter(
+        (person) => person.gender === 'L' || !person.gender,
+    );
+    const storedMyId = readStoredMyPersonId();
+    const initialMyId =
+        storedMyId !== null &&
+        fatherPeople.some((person) => person.id === storedMyId)
+            ? storedMyId
+            : null;
+    const [myId, setMyId] = useState<string | null>(initialMyId);
+    const [pickerOpen, setPickerOpen] = useState(false);
+    const [selectedId, setSelectedId] = useState<string | null>(initialMyId);
     const [search, setSearch] = useState('');
     const [searchOpen, setSearchOpen] = useState(false);
     const [history, setHistory] = useState<string[]>([]);
     const [expanded, setExpanded] = useState<'diagram' | 'tree' | null>(null);
     const [treeZoom, setTreeZoom] = useState(1);
-    const [ancestorFocusId, setAncestorFocusId] = useState<string | null>(null);
+    const [ancestorFocusId, setAncestorFocusId] = useState<string | null>(
+        initialMyId,
+    );
 
     const clampZoom = (value: number) =>
         Math.round(Math.min(2, Math.max(0.5, value)) * 100) / 100;
@@ -114,7 +199,6 @@ export function TaromboExplorer({
         </div>
     );
 
-    const people = buildTaromboPeople(rows);
     const descendantAlternativeTrees: DescendantsAlternativeTree[] =
         alternativeTrees.map((tree) => ({
             id: tree.id,
@@ -124,12 +208,8 @@ export function TaromboExplorer({
                 (person) => person.gender === 'L' || !person.gender,
             ),
         }));
-    const rootPerson = people.find((p) => !p.parentId) ?? people[0];
     const [centerPersonId, setCenterPersonId] = useState<string>(
-        rootPerson?.id ?? '',
-    );
-    const fatherPeople = people.filter(
-        (person) => person.gender === 'L' || !person.gender,
+        initialMyId ?? rootPerson?.id ?? '',
     );
     const normalizedSearch = search.trim().toLowerCase();
     const searchResults = normalizedSearch
@@ -157,7 +237,10 @@ export function TaromboExplorer({
         ? ancestorPath(fatherPeople, ancestorFocusId)
         : [];
     const treePeople =
-        ancestorPeople.length > 0 ? ancestorPeople : fatherPeople;
+        ancestorPeople.length > 0
+            ? descendantSubtree(fatherPeople, ancestorPeople[0].id)
+            : fatherPeople;
+    const lineagePath = ancestorPeople.map((person) => person.id);
     const treeCenterPerson =
         fatherPeople.find(
             (person) => person.id === (ancestorPeople[0]?.id ?? centerPersonId),
@@ -172,6 +255,10 @@ export function TaromboExplorer({
     const treeHasChildren = treePeople.some(
         (person) => person.parentId === treeCenterId,
     );
+    const myPerson =
+        myId !== null
+            ? fatherPeople.find((person) => person.id === myId)
+            : undefined;
 
     const searchSelect = (person: TaromboPerson) => {
         if (person.id !== centerPersonId) {
@@ -183,6 +270,25 @@ export function TaromboExplorer({
         setAncestorFocusId(person.id);
         setSearch(person.name);
         setSearchOpen(false);
+    };
+
+    const handleIdentitySelect = (person: TaromboPerson) => {
+        writeStoredMyPersonId(person.id);
+        setMyId(person.id);
+        setPickerOpen(false);
+
+        if (person.id !== centerPersonId) {
+            setHistory((prev) => [...prev, centerPersonId]);
+        }
+
+        setSelectedId(person.id);
+        setCenterPersonId(person.id);
+        setAncestorFocusId(person.id);
+    };
+
+    const handleIdentityReset = () => {
+        removeStoredMyPersonId();
+        setMyId(null);
     };
 
     const handleBack = () => {
@@ -199,7 +305,7 @@ export function TaromboExplorer({
     };
 
     const handlePersonSelect = (id: string) => {
-        setAncestorFocusId(null);
+        setAncestorFocusId(id);
 
         if (id === centerPersonId) {
             handleBack();
@@ -365,7 +471,10 @@ export function TaromboExplorer({
                         onSelect={handlePersonSelect}
                         highlightId={selectedId}
                         editNodes
+                        selectOnClick
+                        showProfileOnName
                         alternativeTrees={descendantAlternativeTrees}
+                        lineagePath={lineagePath}
                         nodeIdPrefix={
                             fullscreen
                                 ? 'tarombo-fullscreen-tree-node'
@@ -425,6 +534,56 @@ export function TaromboExplorer({
                     fullscreen && 'flex min-h-0 flex-1 flex-col',
                 )}
             >
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <span className="text-sm font-medium text-tb-on-surface">
+                        Saya adalah:
+                    </span>
+                    {myPerson ? (
+                        <span className="inline-flex items-center gap-2 rounded-full border border-tb-outline-variant bg-tb-surface-bright px-3 py-1 text-sm font-medium text-tb-on-surface">
+                            <span
+                                aria-hidden
+                                className="size-2 shrink-0 rounded-full"
+                                style={{
+                                    backgroundColor:
+                                        margas.find(
+                                            (marga) =>
+                                                marga.name === myPerson.marga,
+                                        )?.color ?? 'var(--color-tb-primary)',
+                                }}
+                            />
+                            <span className="max-w-48 truncate">
+                                {myPerson.name}
+                            </span>
+                        </span>
+                    ) : (
+                        <span className="text-sm text-tb-on-surface-variant italic">
+                            Belum dipilih
+                        </span>
+                    )}
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setPickerOpen(true)}
+                        className="border-tb-outline-variant bg-tb-surface-bright text-tb-on-surface hover:bg-tb-surface-container hover:text-tb-on-surface"
+                    >
+                        <UserSearch className="size-4" /> Temukan Nama
+                    </Button>
+                    {myPerson && (
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={handleIdentityReset}
+                            aria-label="Hapus pilihan nama saya"
+                            title="Hapus pilihan"
+                            className="text-tb-on-surface-variant hover:text-tb-on-surface"
+                        >
+                            <X className="size-4" />
+                        </Button>
+                    )}
+                </div>
+
                 <div
                     className="relative mx-auto mb-4 w-full max-w-md"
                     onBlur={(event) => {
@@ -565,9 +724,12 @@ export function TaromboExplorer({
                                                 onSelect={handlePersonSelect}
                                                 highlightId={selectedId}
                                                 editNodes
+                                                selectOnClick
+                                                showProfileOnName
                                                 alternativeTrees={
                                                     descendantAlternativeTrees
                                                 }
+                                                lineagePath={lineagePath}
                                                 nodeIdPrefix="tarombo-mobile-tree-node"
                                             />
                                         </div>
@@ -586,6 +748,15 @@ export function TaromboExplorer({
                     </>
                 )}
             </div>
+
+            <PersonTreePickerDialog
+                open={pickerOpen}
+                onOpenChange={setPickerOpen}
+                people={fatherPeople}
+                alternativeTrees={descendantAlternativeTrees}
+                currentId={myId}
+                onSelect={handleIdentitySelect}
+            />
         </div>
     );
 }
