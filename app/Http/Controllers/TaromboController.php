@@ -10,6 +10,7 @@ use App\Services\TaromboStatisticsService;
 use App\Services\TaromboTreeService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -54,10 +55,15 @@ class TaromboController extends Controller
         $user = $request->user();
         $isStaff = $user->isStaff();
         $service = app(TaromboTreeService::class);
+        $allowedPersonIds = $isStaff
+            ? null
+            : ($user->marga_id !== null
+                ? $this->personIdsForMargaAndFemaleBranches($user->marga_id)
+                : collect());
 
         $rows = $service->rows(
             Person::query()
-                ->when(! $isStaff, fn (Builder $query) => $query->where('marga_id', $user->marga_id))
+                ->when($allowedPersonIds !== null, fn (Builder $query) => $query->whereKey($allowedPersonIds))
                 ->orderBy('id'),
         );
 
@@ -76,12 +82,15 @@ class TaromboController extends Controller
             ->orderBy('root_person_id')
             ->orderBy('created_at')
             ->get()
-            ->map(function (FamilyTree $tree) use ($service, $isStaff, $user): ?array {
-                $people = collect($service->rowsForFamilyTree(
-                    $tree,
-                    $isStaff ? null : $user->marga_id,
-                ))
-                    ->filter(fn (array $person) => $person['gender'] === 'L' || $person['gender'] === null);
+            ->map(function (FamilyTree $tree) use ($service, $allowedPersonIds): ?array {
+                $people = collect($service->rowsForFamilyTree($tree))
+                    ->when(
+                        $allowedPersonIds !== null,
+                        fn (Collection $rows) => $rows->whereIn(
+                            'id',
+                            $allowedPersonIds->map(fn (int $id) => (string) $id),
+                        ),
+                    );
                 $rootId = (string) $tree->root_person_id;
 
                 if (! $people->contains('id', $rootId)) {
@@ -126,6 +135,35 @@ class TaromboController extends Controller
             $service->margas($isStaff ? null : $user->marga_id),
             $alternativeTrees,
         ];
+    }
+
+    /** @return Collection<int, int> */
+    private function personIdsForMargaAndFemaleBranches(int $margaId): Collection
+    {
+        $visibleIds = Person::query()
+            ->where('marga_id', $margaId)
+            ->pluck('id')
+            ->map(fn (int $id) => $id);
+        $frontier = Person::query()
+            ->where('marga_id', $margaId)
+            ->where('gender', 'P')
+            ->pluck('id');
+
+        while ($frontier->isNotEmpty()) {
+            $children = Person::query()
+                ->whereIn('father_id', $frontier)
+                ->whereNotIn('id', $visibleIds)
+                ->pluck('id');
+
+            if ($children->isEmpty()) {
+                break;
+            }
+
+            $visibleIds = $visibleIds->merge($children)->unique()->values();
+            $frontier = $children;
+        }
+
+        return $visibleIds->values();
     }
 
     /**

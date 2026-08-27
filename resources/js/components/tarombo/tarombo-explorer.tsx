@@ -1,16 +1,21 @@
-import { Link } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
+import { toJpeg } from 'html-to-image';
 import {
     ArrowLeft,
     ExternalLink,
+    Images,
+    LoaderCircle,
     Maximize2,
     Minimize2,
     Minus,
     Plus,
+    Save,
     Search,
     UserSearch,
     X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { TaromboDiagram } from '@/components/landing/tarombo-diagram';
 import { DescendantsTree } from '@/components/people/descendants-tree';
 import type { DescendantsAlternativeTree } from '@/components/people/descendants-tree';
@@ -166,6 +171,9 @@ export function TaromboExplorer({
     const [history, setHistory] = useState<string[]>([]);
     const [expanded, setExpanded] = useState<'diagram' | 'tree' | null>(null);
     const [treeZoom, setTreeZoom] = useState(1);
+    const [showFemaleLineage, setShowFemaleLineage] = useState(false);
+    const [savingSnapshot, setSavingSnapshot] = useState(false);
+    const snapshotRef = useRef<HTMLDivElement>(null);
     const [ancestorFocusId, setAncestorFocusId] = useState<string | null>(
         initialMyId,
     );
@@ -199,13 +207,30 @@ export function TaromboExplorer({
         </div>
     );
 
+    const femaleLineageToggle = (
+        <label className="flex cursor-pointer items-center justify-end gap-2 text-xs font-semibold text-emerald-700 select-none dark:text-emerald-300">
+            <input
+                type="checkbox"
+                checked={showFemaleLineage}
+                onChange={(event) =>
+                    setShowFemaleLineage(event.target.checked)
+                }
+                className="size-4 rounded border-emerald-600 text-emerald-600 accent-emerald-600 focus:ring-2 focus:ring-emerald-500/30"
+            />
+            Silsilah Perempuan Ditampilkan
+        </label>
+    );
+
     const descendantAlternativeTrees: DescendantsAlternativeTree[] =
         alternativeTrees.map((tree) => ({
             id: tree.id,
             name: tree.name,
             rootId: tree.rootPersonId,
             people: buildTaromboPeople(tree.people).filter(
-                (person) => person.gender === 'L' || !person.gender,
+                (person) =>
+                    showFemaleLineage ||
+                    person.gender === 'L' ||
+                    !person.gender,
             ),
         }));
     const [centerPersonId, setCenterPersonId] = useState<string>(
@@ -233,24 +258,25 @@ export function TaromboExplorer({
               })
               .slice(0, 10)
         : [];
+    const verticalPeople = showFemaleLineage ? people : fatherPeople;
     const ancestorPeople = ancestorFocusId
-        ? ancestorPath(fatherPeople, ancestorFocusId)
+        ? ancestorPath(verticalPeople, ancestorFocusId)
         : [];
     const treePeople =
         ancestorPeople.length > 0
-            ? descendantSubtree(fatherPeople, ancestorPeople[0].id)
-            : fatherPeople;
+            ? descendantSubtree(verticalPeople, ancestorPeople[0].id)
+            : verticalPeople;
     const lineagePath = ancestorPeople.map((person) => person.id);
     const treeCenterPerson =
-        fatherPeople.find(
+        verticalPeople.find(
             (person) => person.id === (ancestorPeople[0]?.id ?? centerPersonId),
         ) ??
-        fatherPeople.find((person) => !person.parentId) ??
-        fatherPeople[0];
+        verticalPeople.find((person) => !person.parentId) ??
+        verticalPeople[0];
     const treeCenterId = treeCenterPerson?.id ?? '';
     const ancestorFocusPerson =
         ancestorFocusId && ancestorPeople.length > 0
-            ? fatherPeople.find((person) => person.id === ancestorFocusId)
+            ? verticalPeople.find((person) => person.id === ancestorFocusId)
             : undefined;
     const treeHasChildren = treePeople.some(
         (person) => person.parentId === treeCenterId,
@@ -321,6 +347,56 @@ export function TaromboExplorer({
     const handleDiagramSelect = (person: TaromboPerson) =>
         handlePersonSelect(person.id);
 
+    const handleSaveSnapshot = async () => {
+        const snapshotNode = snapshotRef.current;
+
+        if (!snapshotNode || savingSnapshot) {
+            return;
+        }
+
+        setSavingSnapshot(true);
+
+        try {
+            await document.fonts.ready;
+
+            const dataUrl = await toJpeg(snapshotNode, {
+                quality: 0.92,
+                pixelRatio: Math.min(2, window.devicePixelRatio || 1),
+                backgroundColor:
+                    window.getComputedStyle(snapshotNode).backgroundColor,
+                cacheBust: true,
+            });
+            const image = await fetch(dataUrl).then((response) =>
+                response.blob(),
+            );
+            const file = new File(
+                [image],
+                `pohon-tarombo-${fullscreenView}-${Date.now()}.jpg`,
+                { type: 'image/jpeg' },
+            );
+
+            router.post(
+                tarombo.snapshots.store(),
+                {
+                    image: file,
+                    view: fullscreenView,
+                    center_person_id: Number(centerPersonId),
+                },
+                {
+                    forceFormData: true,
+                    preserveScroll: true,
+                    onError: () => toast.error('Gambar pohon gagal disimpan.'),
+                    onFinish: () => setSavingSnapshot(false),
+                },
+            );
+        } catch {
+            setSavingSnapshot(false);
+            toast.error(
+                'Tampilan pohon gagal dibuat menjadi gambar. Coba kembali.',
+            );
+        }
+    };
+
     const backButton = (
         <Link
             href={tarombo.index()}
@@ -368,6 +444,7 @@ export function TaromboExplorer({
 
     const renderDiagramCard = (isExpanded: boolean) => (
         <div
+            ref={fullscreen ? snapshotRef : undefined}
             className={cn(
                 'relative overflow-hidden rounded-2xl border border-tb-outline-variant bg-tb-surface-bright',
                 fullscreen && 'flex min-h-0 flex-col',
@@ -426,6 +503,7 @@ export function TaromboExplorer({
 
     const renderTreeCard = (isExpanded: boolean) => (
         <div
+            ref={fullscreen ? snapshotRef : undefined}
             className={cn(
                 'relative overflow-hidden rounded-2xl border border-tb-outline-variant bg-tb-surface-bright',
                 fullscreen && 'flex min-h-0 flex-col',
@@ -461,11 +539,11 @@ export function TaromboExplorer({
                                 : `Pohon vertikal dari ${treeCenterPerson?.name ?? 'Leluhur Utama'}`}
                         </p>
                     </div>
-                    <span />
+                    <div className="flex justify-end">{femaleLineageToggle}</div>
                 </div>
                 <div style={{ zoom: treeZoom }}>
                     <DescendantsTree
-                        key={`${treeCenterId}-${ancestorFocusId ?? 'branch'}`}
+                        key={`${treeCenterId}-${ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
                         people={treePeople}
                         centerId={treeCenterId}
                         onSelect={handlePersonSelect}
@@ -475,6 +553,7 @@ export function TaromboExplorer({
                         showProfileOnName
                         alternativeTrees={descendantAlternativeTrees}
                         lineagePath={lineagePath}
+                        markFemaleLineage={showFemaleLineage}
                         nodeIdPrefix={
                             fullscreen
                                 ? 'tarombo-fullscreen-tree-node'
@@ -515,17 +594,42 @@ export function TaromboExplorer({
                 fullscreen ? 'h-dvh gap-4 md:p-4' : 'h-full flex-1',
             )}
         >
-            <div className={cn('flex', fullscreen && 'items-center gap-3')}>
-                {fullscreen && fullscreenView === 'diagram' && backButton}
-                <div>
-                    <h1 className="font-display text-2xl font-bold text-tb-on-surface md:text-3xl">
-                        Pohon Tarombo
-                    </h1>
-                    <p className="mt-1 text-sm text-tb-on-surface-variant">
-                        Visualisasi silsilah keluarga langsung dari database.
-                        Klik anggota untuk melihat detail.
-                    </p>
+            <div className="flex items-start justify-between gap-3">
+                <div className={cn('flex', fullscreen && 'items-center gap-3')}>
+                    {fullscreen && fullscreenView === 'diagram' && backButton}
+                    <div>
+                        <h1 className="font-display text-2xl font-bold text-tb-on-surface md:text-3xl">
+                            Pohon Tarombo
+                        </h1>
+                        <p className="mt-1 text-sm text-tb-on-surface-variant">
+                            Visualisasi silsilah keluarga langsung dari
+                            database. Klik anggota untuk melihat detail.
+                        </p>
+                    </div>
                 </div>
+                {fullscreen && (
+                    <div className="flex shrink-0 items-center gap-2">
+                        <Button asChild size="sm" variant="outline">
+                            <Link href={tarombo.snapshots.index()}>
+                                <Images className="size-4" /> Galeri
+                            </Link>
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            onClick={handleSaveSnapshot}
+                            disabled={savingSnapshot}
+                            className="text-tb-on-primary bg-tb-primary hover:bg-tb-primary/90"
+                        >
+                            {savingSnapshot ? (
+                                <LoaderCircle className="size-4 animate-spin" />
+                            ) : (
+                                <Save className="size-4" />
+                            )}
+                            {savingSnapshot ? 'Menyimpan...' : 'Simpan'}
+                        </Button>
+                    </div>
+                )}
             </div>
 
             <div
@@ -715,10 +819,13 @@ export function TaromboExplorer({
                                                     ? `Jalur ${ANCESTOR_DEPTH} tingkat leluhur dari ${ancestorFocusPerson.name}`
                                                     : `Pohon vertikal dari ${treeCenterPerson?.name ?? 'Leluhur Utama'}`}
                                             </p>
+                                            <div className="mt-3 flex justify-center">
+                                                {femaleLineageToggle}
+                                            </div>
                                         </div>
                                         <div style={{ zoom: treeZoom }}>
                                             <DescendantsTree
-                                                key={`${treeCenterId}-${ancestorFocusId ?? 'branch'}`}
+                                                key={`${treeCenterId}-${ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
                                                 people={treePeople}
                                                 centerId={treeCenterId}
                                                 onSelect={handlePersonSelect}
@@ -730,6 +837,9 @@ export function TaromboExplorer({
                                                     descendantAlternativeTrees
                                                 }
                                                 lineagePath={lineagePath}
+                                                markFemaleLineage={
+                                                    showFemaleLineage
+                                                }
                                                 nodeIdPrefix="tarombo-mobile-tree-node"
                                             />
                                         </div>

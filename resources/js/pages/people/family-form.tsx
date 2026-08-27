@@ -84,6 +84,11 @@ export type ChildRow = {
     mother_index?: number | null;
 };
 
+export type RelatedStoryEntry = {
+    title: string;
+    url: string;
+};
+
 type ParentEntry = {
     id?: number | null;
     name: string;
@@ -139,6 +144,7 @@ export type FamilyData = {
     death_year: string;
     image: string;
     bio: string;
+    related_stories: RelatedStoryEntry[];
     new_marga?: string;
     father: ParentEntry | null;
     mother: ParentEntry | null;
@@ -161,9 +167,24 @@ type Props = {
     familyTrees?: FamilyTreeHistoryEntry[];
     approvedMargaTrees?: FamilyTreeHistoryEntry[];
     versionTrees?: FamilyTreeHistoryEntry[];
+    shareableAccounts?: ShareableAccount[];
+    pendingTreeShares?: PendingTreeShare[];
     initialFatherName?: string;
     canPublish?: boolean;
     readOnly?: boolean;
+};
+
+export type ShareableAccount = {
+    id: number;
+    name: string;
+    email: string;
+    marga: string | null;
+};
+
+export type PendingTreeShare = {
+    id: number;
+    tree_name: string;
+    sender_name: string;
 };
 
 const VALUE_NONE = 'none';
@@ -259,6 +280,34 @@ function FamilyTreeVersionAction({
     );
 }
 
+function FamilyTreePersonControls({
+    entries,
+    personId,
+    personName,
+}: {
+    entries: FamilyTreeHistoryEntry[];
+    personId: number;
+    personName: string | null | undefined;
+}) {
+    return (
+        <div className="flex shrink-0 flex-col items-end gap-1">
+            <div className="flex items-center gap-1.5">
+                <FamilyTreeVersionAction entries={entries} iconOnly />
+                <Link
+                    href={people.edit(personId)}
+                    aria-label={`Ubah ${displayRowName(personName)}`}
+                    className="inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-tb-outline-variant text-tb-outline opacity-70 transition-opacity hover:border-tb-primary hover:text-tb-primary hover:opacity-100"
+                >
+                    <Pencil className="size-3.5" />
+                </Link>
+            </div>
+            <span className="rounded-full bg-tb-surface-container px-1.5 py-0.5 text-[10px] leading-none font-semibold whitespace-nowrap text-tb-on-surface-variant">
+                {entries.length} versi
+            </span>
+        </div>
+    );
+}
+
 function isNameFilled(name: string): boolean {
     return name.trim() !== '' && name.trim().toUpperCase() !== 'N/A';
 }
@@ -337,8 +386,8 @@ function SilsilahListCard({
                         {lineage.map((entry) => {
                             const isOpen = expanded.has(entry.id);
                             const count = entry.children.length;
-                            const entryTrees = familyTrees.filter(
-                                (tree) => tree.root_person_id === entry.id,
+                            const entryTrees = familyTrees.filter((tree) =>
+                                tree.member_person_ids.includes(entry.id),
                             );
 
                             return (
@@ -391,17 +440,11 @@ function SilsilahListCard({
                                                     ` · ${count} anak`}
                                             </p>
                                         </div>
-                                        <FamilyTreeVersionAction
+                                        <FamilyTreePersonControls
                                             entries={entryTrees}
-                                            iconOnly
+                                            personId={entry.id}
+                                            personName={entry.name}
                                         />
-                                        <Link
-                                            href={people.edit(entry.id)}
-                                            aria-label={`Ubah ${entry.name}`}
-                                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-tb-outline-variant text-tb-outline opacity-70 transition-opacity hover:border-tb-primary hover:text-tb-primary hover:opacity-100"
-                                        >
-                                            <Pencil className="h-3.5 w-3.5" />
-                                        </Link>
                                     </div>
 
                                     {isOpen && (
@@ -424,8 +467,9 @@ function SilsilahListCard({
                                                             const childTrees =
                                                                 familyTrees.filter(
                                                                     (tree) =>
-                                                                        tree.root_person_id ===
-                                                                        child.id,
+                                                                        tree.member_person_ids.includes(
+                                                                            child.id,
+                                                                        ),
                                                                 );
 
                                                             return (
@@ -467,21 +511,17 @@ function SilsilahListCard({
                                                                                 )}
                                                                             </span>
                                                                         </Link>
-                                                                        <FamilyTreeVersionAction
+                                                                        <FamilyTreePersonControls
                                                                             entries={
                                                                                 childTrees
                                                                             }
-                                                                            iconOnly
+                                                                            personId={
+                                                                                child.id
+                                                                            }
+                                                                            personName={
+                                                                                child.name
+                                                                            }
                                                                         />
-                                                                        <Link
-                                                                            href={people.edit(
-                                                                                child.id,
-                                                                            )}
-                                                                            aria-label={`Ubah ${child.name}`}
-                                                                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-tb-outline-variant text-tb-outline opacity-70 transition-opacity group-hover:opacity-100 hover:border-tb-primary hover:text-tb-primary"
-                                                                        >
-                                                                            <Pencil className="h-3.5 w-3.5" />
-                                                                        </Link>
                                                                     </div>
                                                                 </li>
                                                             );
@@ -551,8 +591,8 @@ function MargaLineageCard({
                                 (entry.children ?? []).length > 0;
                             const expandKey = `${entry.id}-${entry.chain ?? 'na'}`;
                             const isOpen = expanded.has(expandKey);
-                            const entryTrees = familyTrees.filter(
-                                (tree) => tree.root_person_id === entry.id,
+                            const entryTrees = familyTrees.filter((tree) =>
+                                tree.member_person_ids.includes(entry.id),
                             );
 
                             return (
@@ -613,17 +653,11 @@ function MargaLineageCard({
                                                 </p>
                                             )}
                                         </div>
-                                        <FamilyTreeVersionAction
+                                        <FamilyTreePersonControls
                                             entries={entryTrees}
-                                            iconOnly
+                                            personId={entry.id}
+                                            personName={entry.name}
                                         />
-                                        <Link
-                                            href={people.edit(entry.id)}
-                                            aria-label={`Ubah ${entry.name}`}
-                                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-tb-outline-variant text-tb-outline opacity-70 transition-opacity hover:border-tb-primary hover:text-tb-primary hover:opacity-100"
-                                        >
-                                            <Pencil className="h-3.5 w-3.5" />
-                                        </Link>
                                     </div>
 
                                     {isOpen && (
@@ -640,8 +674,9 @@ function MargaLineageCard({
                                                             const childTrees =
                                                                 familyTrees.filter(
                                                                     (tree) =>
-                                                                        tree.root_person_id ===
-                                                                        child.id,
+                                                                        tree.member_person_ids.includes(
+                                                                            child.id,
+                                                                        ),
                                                                 );
 
                                                             return (
@@ -665,21 +700,17 @@ function MargaLineageCard({
                                                                                 )}
                                                                             </span>
                                                                         </Link>
-                                                                        <FamilyTreeVersionAction
+                                                                        <FamilyTreePersonControls
                                                                             entries={
                                                                                 childTrees
                                                                             }
-                                                                            iconOnly
+                                                                            personId={
+                                                                                child.id
+                                                                            }
+                                                                            personName={
+                                                                                child.name
+                                                                            }
                                                                         />
-                                                                        <Link
-                                                                            href={people.edit(
-                                                                                child.id,
-                                                                            )}
-                                                                            aria-label={`Ubah ${child.name}`}
-                                                                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-tb-outline-variant text-tb-outline opacity-70 transition-opacity group-hover:opacity-100 hover:border-tb-primary hover:text-tb-primary"
-                                                                        >
-                                                                            <Pencil className="h-3.5 w-3.5" />
-                                                                        </Link>
                                                                     </div>
                                                                 </li>
                                                             );
@@ -989,6 +1020,8 @@ export default function FamilyForm({
     familyTrees = [],
     approvedMargaTrees = [],
     versionTrees = [],
+    shareableAccounts = [],
+    pendingTreeShares = [],
     canPublish = false,
     readOnly = false,
 }: Props) {
@@ -1028,6 +1061,7 @@ export default function FamilyForm({
         image_mode: initialImageMode,
         image_file: null as File | null,
         bio: person?.bio ?? '',
+        related_stories: person?.related_stories ?? [],
         is_public: person?.is_public ?? false,
         father: person?.father
             ? {
@@ -1146,6 +1180,39 @@ export default function FamilyForm({
         setFilePreview(file ? URL.createObjectURL(file) : null);
         clearErrors('image_file');
         setImageStatus(file ? 'loading' : person?.image ? 'loading' : 'idle');
+    };
+
+    const addRelatedStory = () => {
+        if (data.related_stories.length >= 10) {
+            return;
+        }
+
+        setData('related_stories', [
+            ...data.related_stories,
+            { title: '', url: '' },
+        ]);
+    };
+
+    const setRelatedStory = (
+        index: number,
+        field: keyof RelatedStoryEntry,
+        value: string,
+    ) => {
+        setData(
+            'related_stories',
+            data.related_stories.map((story, storyIndex) =>
+                storyIndex === index ? { ...story, [field]: value } : story,
+            ),
+        );
+    };
+
+    const removeRelatedStory = (index: number) => {
+        setData(
+            'related_stories',
+            data.related_stories.filter(
+                (_, storyIndex) => storyIndex !== index,
+            ),
+        );
     };
 
     const selectRow = (index: number) => {
@@ -2000,6 +2067,12 @@ export default function FamilyForm({
 
         const submitData = {
             ...withSelectedMother,
+            related_stories: withSelectedMother.related_stories
+                .filter((story) => story.title.trim() || story.url.trim())
+                .map((story) => ({
+                    title: story.title.trim(),
+                    url: story.url.trim(),
+                })),
             image:
                 withSelectedMother.image_mode === 'url'
                     ? withSelectedMother.image.trim() || null
@@ -2421,6 +2494,146 @@ export default function FamilyForm({
                                                 />
                                             </div>
 
+                                            <div className="grid gap-3 rounded-xl border border-tb-outline-variant bg-tb-surface-container/30 p-4">
+                                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                                    <div>
+                                                        <h3 className="flex items-center gap-2 text-sm font-semibold text-tb-on-surface">
+                                                            <Link2 className="size-4 text-tb-primary" />
+                                                            Daftar
+                                                            Sejarah/Cerita
+                                                            Terkait
+                                                        </h3>
+                                                        <p className="mt-1 text-xs text-tb-on-surface-variant">
+                                                            Tambahkan judul dan
+                                                            link referensi yang
+                                                            berkaitan dengan
+                                                            orang ini.
+                                                        </p>
+                                                    </div>
+                                                    {!readOnly &&
+                                                        data.related_stories
+                                                            .length < 10 && (
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={
+                                                                    addRelatedStory
+                                                                }
+                                                            >
+                                                                <Plus className="size-4" />
+                                                                Tambah Cerita
+                                                            </Button>
+                                                        )}
+                                                </div>
+
+                                                {data.related_stories.length ===
+                                                0 ? (
+                                                    <p className="rounded-lg border border-dashed border-tb-outline-variant px-3 py-4 text-center text-xs text-tb-on-surface-variant">
+                                                        Belum ada sejarah atau
+                                                        cerita terkait.
+                                                    </p>
+                                                ) : (
+                                                    <div className="grid gap-3">
+                                                        {data.related_stories.map(
+                                                            (story, index) => (
+                                                                <div
+                                                                    key={index}
+                                                                    className="grid gap-3 rounded-lg border border-tb-outline-variant bg-tb-surface-bright p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto]"
+                                                                >
+                                                                    <div className="grid gap-1.5">
+                                                                        <Label
+                                                                            htmlFor={`related-story-title-${index}`}
+                                                                        >
+                                                                            Judul
+                                                                        </Label>
+                                                                        <Input
+                                                                            id={`related-story-title-${index}`}
+                                                                            value={
+                                                                                story.title
+                                                                            }
+                                                                            onChange={(
+                                                                                event,
+                                                                            ) =>
+                                                                                setRelatedStory(
+                                                                                    index,
+                                                                                    'title',
+                                                                                    event
+                                                                                        .target
+                                                                                        .value,
+                                                                                )
+                                                                            }
+                                                                            placeholder="Contoh: Sejarah Sangkar Toba"
+                                                                        />
+                                                                        <InputError
+                                                                            message={
+                                                                                errors[
+                                                                                    `related_stories.${index}.title`
+                                                                                ]
+                                                                            }
+                                                                        />
+                                                                    </div>
+                                                                    <div className="grid gap-1.5">
+                                                                        <Label
+                                                                            htmlFor={`related-story-url-${index}`}
+                                                                        >
+                                                                            Link
+                                                                        </Label>
+                                                                        <Input
+                                                                            id={`related-story-url-${index}`}
+                                                                            type="url"
+                                                                            value={
+                                                                                story.url
+                                                                            }
+                                                                            onChange={(
+                                                                                event,
+                                                                            ) =>
+                                                                                setRelatedStory(
+                                                                                    index,
+                                                                                    'url',
+                                                                                    event
+                                                                                        .target
+                                                                                        .value,
+                                                                                )
+                                                                            }
+                                                                            placeholder="https://contoh.com/cerita"
+                                                                        />
+                                                                        <InputError
+                                                                            message={
+                                                                                errors[
+                                                                                    `related_stories.${index}.url`
+                                                                                ]
+                                                                            }
+                                                                        />
+                                                                    </div>
+                                                                    {!readOnly && (
+                                                                        <Button
+                                                                            type="button"
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            onClick={() =>
+                                                                                removeRelatedStory(
+                                                                                    index,
+                                                                                )
+                                                                            }
+                                                                            aria-label={`Hapus cerita ${index + 1}`}
+                                                                            className="self-end text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/40"
+                                                                        >
+                                                                            <Trash2 className="size-4" />
+                                                                        </Button>
+                                                                    )}
+                                                                </div>
+                                                            ),
+                                                        )}
+                                                    </div>
+                                                )}
+                                                <InputError
+                                                    message={
+                                                        errors.related_stories
+                                                    }
+                                                />
+                                            </div>
+
                                             {canPublish && (
                                                 <div className="flex items-start gap-3 rounded-lg border border-tb-outline-variant bg-tb-surface-container/40 p-4">
                                                     <Checkbox
@@ -2475,6 +2688,8 @@ export default function FamilyForm({
                                             entries={familyTrees}
                                             approvedEntries={approvedMargaTrees}
                                             margaName={activeMargaName}
+                                            shareableAccounts={shareableAccounts}
+                                            pendingTreeShares={pendingTreeShares}
                                         />
                                     </>
                                 ) : (
@@ -2489,6 +2704,8 @@ export default function FamilyForm({
                                             entries={familyTrees}
                                             approvedEntries={approvedMargaTrees}
                                             margaName={activeMargaName}
+                                            shareableAccounts={shareableAccounts}
+                                            pendingTreeShares={pendingTreeShares}
                                         />
                                     </>
                                 )}

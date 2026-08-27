@@ -33,6 +33,8 @@ class UserFactory extends Factory
             'remember_token' => Str::random(10),
             'role' => 'user',
             'marga_id' => null,
+            'province_code' => null,
+            'regency_code' => null,
         ];
     }
 

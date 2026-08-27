@@ -37,12 +37,14 @@ export function NodeCard({
     badge,
     onAvatarClick,
     onNameClick,
+    dashed = false,
 }: {
     node: TreeNode;
     highlighted?: boolean;
     badge?: string;
     onAvatarClick?: () => void;
     onNameClick?: () => void;
+    dashed?: boolean;
 }) {
     return (
         <div className="flex max-w-[170px] min-w-[110px] flex-col items-center">
@@ -67,6 +69,7 @@ export function NodeCard({
                 }}
                 className={cn(
                     'flex h-12 w-12 items-center justify-center overflow-hidden border transition-shadow',
+                    dashed && 'border-dashed',
                     highlighted ? 'rounded-xl' : 'rounded-full',
                     onAvatarClick &&
                         'cursor-pointer hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#B8934A] focus-visible:outline-none',
@@ -105,6 +108,7 @@ export function NodeCard({
                 }}
                 className={cn(
                     'mt-2 rounded-md border bg-white px-2 py-1 text-center text-[11px] leading-snug font-semibold',
+                    dashed && 'border-dashed',
                     onNameClick &&
                         'cursor-pointer hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#B8934A] focus-visible:outline-none',
                 )}

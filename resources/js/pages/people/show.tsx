@@ -4,7 +4,11 @@ import type { FamilyTreeHistoryEntry } from '@/components/people/family-tree-his
 import { Button } from '@/components/ui/button';
 import type { NameSuggestion } from '@/components/ui/name-combobox';
 import FamilyForm from '@/pages/people/family-form';
-import type { FamilyData } from '@/pages/people/family-form';
+import type {
+    FamilyData,
+    PendingTreeShare,
+    ShareableAccount,
+} from '@/pages/people/family-form';
 import { dashboard } from '@/routes';
 import people from '@/routes/people';
 
@@ -16,6 +20,8 @@ type Props = {
     familyTrees: FamilyTreeHistoryEntry[];
     approvedMargaTrees: FamilyTreeHistoryEntry[];
     versionTrees: FamilyTreeHistoryEntry[];
+    shareableAccounts: ShareableAccount[];
+    pendingTreeShares: PendingTreeShare[];
     canPublish: boolean;
     readOnly?: boolean;
 };
@@ -28,6 +34,8 @@ export default function PersonShow({
     familyTrees,
     approvedMargaTrees,
     versionTrees,
+    shareableAccounts,
+    pendingTreeShares,
     canPublish,
     readOnly = false,
 }: Props) {
@@ -67,6 +75,8 @@ export default function PersonShow({
                     familyTrees={familyTrees}
                     approvedMargaTrees={approvedMargaTrees}
                     versionTrees={versionTrees}
+                    shareableAccounts={shareableAccounts}
+                    pendingTreeShares={pendingTreeShares}
                     canPublish={canPublish}
                     readOnly={readOnly}
                 />

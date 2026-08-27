@@ -1,6 +1,6 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { User, Mail, Loader2, Shapes } from 'lucide-react';
+import { Loader2, Mail, MapPin, Shapes, User } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { BrandLogo } from '@/components/brand-logo';
 import InputError from '@/components/input-error';
@@ -21,15 +21,22 @@ import { request as passwordRequest } from '@/routes/password';
 import { store as registerStore } from '@/routes/register';
 
 type MargaOption = { id: number; name: string };
+type RegencyOption = { code: string; name: string };
+type RegionOption = {
+    code: string;
+    name: string;
+    regencies: RegencyOption[];
+};
 
 type Props = {
     canResetPassword: boolean;
     margas: MargaOption[];
+    regions: RegionOption[];
 };
 
 type FormMode = 'login' | 'register';
 
-export default function Login({ canResetPassword, margas }: Props) {
+export default function Login({ canResetPassword, margas, regions }: Props) {
     const [mode, setMode] = useState<FormMode>('login');
     const [direction, setDirection] = useState<1 | -1>(1);
 
@@ -121,6 +128,7 @@ export default function Login({ canResetPassword, margas }: Props) {
                             mode={mode}
                             direction={direction}
                             margas={margas}
+                            regions={regions}
                             canResetPassword={canResetPassword}
                         />
                     </div>
@@ -160,11 +168,13 @@ function SlideSwap({
     mode,
     direction,
     margas,
+    regions,
     canResetPassword,
 }: {
     mode: FormMode;
     direction: 1 | -1;
     margas: MargaOption[];
+    regions: RegionOption[];
     canResetPassword: boolean;
 }) {
     const boxRef = useRef<HTMLDivElement>(null);
@@ -200,7 +210,7 @@ function SlideSwap({
                     {mode === 'login' ? (
                         <LoginForm canResetPassword={canResetPassword} />
                     ) : (
-                        <RegisterForm margas={margas} />
+                        <RegisterForm margas={margas} regions={regions} />
                     )}
                 </motion.div>
             </AnimatePresence>
@@ -315,8 +325,23 @@ function LoginForm({ canResetPassword }: { canResetPassword: boolean }) {
     );
 }
 
-function RegisterForm({ margas }: { margas: MargaOption[] }) {
+function RegisterForm({
+    margas,
+    regions,
+}: {
+    margas: MargaOption[];
+    regions: RegionOption[];
+}) {
     const [margaId, setMargaId] = useState('');
+    const [provinceCode, setProvinceCode] = useState('');
+    const [regencyCode, setRegencyCode] = useState('');
+    const regencies =
+        regions.find((region) => region.code === provinceCode)?.regencies ?? [];
+
+    const selectProvince = (code: string) => {
+        setProvinceCode(code);
+        setRegencyCode('');
+    };
 
     return (
         <Form
@@ -424,6 +449,101 @@ function RegisterForm({ margas }: { margas: MargaOption[] }) {
 
                         <div className="grid gap-1.5">
                             <Label
+                                htmlFor="province"
+                                className="font-medium text-tb-on-surface"
+                            >
+                                Provinsi Domisili
+                            </Label>
+                            <div className="relative">
+                                <MapPin className="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-tb-outline" />
+                                <Select
+                                    value={provinceCode}
+                                    onValueChange={selectProvince}
+                                    required
+                                >
+                                    <SelectTrigger
+                                        id="province"
+                                        tabIndex={3}
+                                        className="w-full border-tb-outline-variant bg-tb-surface-bright pl-11 focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
+                                    >
+                                        <SelectValue placeholder="Pilih provinsi domisili" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {regions.map((region) => (
+                                            <SelectItem
+                                                key={region.code}
+                                                value={region.code}
+                                            >
+                                                {region.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <input
+                                    type="hidden"
+                                    name="province_code"
+                                    value={provinceCode}
+                                />
+                            </div>
+                            <InputError
+                                message={errors.province_code}
+                                className="text-sm text-red-600"
+                            />
+                        </div>
+
+                        <div className="grid gap-1.5">
+                            <Label
+                                htmlFor="regency"
+                                className="font-medium text-tb-on-surface"
+                            >
+                                Kabupaten/Kota Domisili
+                            </Label>
+                            <div className="relative">
+                                <MapPin className="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-tb-outline" />
+                                <Select
+                                    value={regencyCode}
+                                    onValueChange={setRegencyCode}
+                                    disabled={!provinceCode}
+                                    required
+                                >
+                                    <SelectTrigger
+                                        id="regency"
+                                        tabIndex={4}
+                                        className="w-full border-tb-outline-variant bg-tb-surface-bright pl-11 focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        <SelectValue
+                                            placeholder={
+                                                provinceCode
+                                                    ? 'Pilih kabupaten/kota domisili'
+                                                    : 'Pilih provinsi terlebih dahulu'
+                                            }
+                                        />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {regencies.map((regency) => (
+                                            <SelectItem
+                                                key={regency.code}
+                                                value={regency.code}
+                                            >
+                                                {regency.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <input
+                                    type="hidden"
+                                    name="regency_code"
+                                    value={regencyCode}
+                                />
+                            </div>
+                            <InputError
+                                message={errors.regency_code}
+                                className="text-sm text-red-600"
+                            />
+                        </div>
+
+                        <div className="grid gap-1.5">
+                            <Label
                                 htmlFor="password"
                                 className="font-medium text-tb-on-surface"
                             >
@@ -433,7 +553,7 @@ function RegisterForm({ margas }: { margas: MargaOption[] }) {
                                 id="password"
                                 name="password"
                                 required
-                                tabIndex={3}
+                                tabIndex={5}
                                 autoComplete="new-password"
                                 placeholder="Minimal 8 karakter"
                                 className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
@@ -455,7 +575,7 @@ function RegisterForm({ margas }: { margas: MargaOption[] }) {
                                 id="password_confirmation"
                                 name="password_confirmation"
                                 required
-                                tabIndex={4}
+                                tabIndex={6}
                                 autoComplete="new-password"
                                 placeholder="Ulangi kata sandi"
                                 className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"

@@ -3,6 +3,7 @@
 namespace App\Actions\Fortify;
 
 use App\Models\User;
+use App\Support\IndonesiaRegions;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -23,6 +24,12 @@ class CreateNewUser implements CreatesNewUsers
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique(User::class)],
             'password' => ['required', 'confirmed', Password::defaults()],
             'marga_id' => ['nullable', 'exists:margas,id'],
+            'province_code' => ['required', 'string', Rule::in(IndonesiaRegions::provinceCodes())],
+            'regency_code' => [
+                'required',
+                'string',
+                Rule::in(IndonesiaRegions::regencyCodesFor($input['province_code'] ?? null)),
+            ],
         ])->validate();
 
         return User::create([
@@ -30,6 +37,8 @@ class CreateNewUser implements CreatesNewUsers
             'email' => $input['email'],
             'password' => Hash::make($input['password']),
             'marga_id' => $input['marga_id'] ?? null,
+            'province_code' => $input['province_code'],
+            'regency_code' => $input['regency_code'],
         ]);
     }
 }

@@ -13,6 +13,9 @@ test('the public tarombo excludes private people and sensitive person fields', f
         'birth_year' => '1900',
         'image' => 'https://example.com/root.jpg',
         'bio' => 'Data sensitif',
+        'related_stories' => [
+            ['title' => 'Rahasia', 'url' => 'https://example.com/rahasia'],
+        ],
         'spouse' => 'Pasangan',
     ]);
     Person::factory()->public()->create([
@@ -36,6 +39,7 @@ test('the public tarombo excludes private people and sensitive person fields', f
             ->missing('people.0.birthYear')
             ->missing('people.0.image')
             ->missing('people.0.bio')
+            ->missing('people.0.relatedStories')
             ->missing('people.0.spouse')
             ->where('stats.totalPeople', 2));
 });

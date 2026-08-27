@@ -3,6 +3,7 @@
 namespace App\Concerns;
 
 use App\Models\User;
+use App\Support\IndonesiaRegions;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Validation\Rule;
 
@@ -18,6 +19,19 @@ trait ProfileValidationRules
         return [
             'name' => $this->nameRules(),
             'email' => $this->emailRules($userId),
+            'marga_id' => ['nullable', 'integer', 'exists:margas,id'],
+            'province_code' => [
+                'nullable',
+                'required_with:regency_code',
+                'string',
+                Rule::in(IndonesiaRegions::provinceCodes()),
+            ],
+            'regency_code' => [
+                'nullable',
+                'required_with:province_code',
+                'string',
+                Rule::in(IndonesiaRegions::regencyCodesFor($this->input('province_code'))),
+            ],
         ];
     }
 

@@ -847,6 +847,7 @@ class FamilyEntryService
                 'death_year' => $data['death_year'] ?? null,
                 'image' => $data['image'] ?? null,
                 'bio' => $data['bio'] ?? null,
+                'related_stories' => $data['related_stories'] ?? null,
                 'is_public' => $data['is_public'] ?? null,
             ] : [];
 

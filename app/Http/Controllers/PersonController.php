@@ -8,6 +8,7 @@ use App\Http\Requests\UpdatePersonRequest;
 use App\Models\ContributionRequest;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeDeletionRequest;
+use App\Models\FamilyTreeShare;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
@@ -119,6 +120,7 @@ class PersonController extends Controller
             'lineage' => $this->createLineage($user, $isStaff),
             'familyTrees' => $this->familyTrees($user),
             'approvedMargaTrees' => $this->approvedMargaTrees($user),
+            ...$this->familyTreeSharingPayload($user),
             'canPublish' => $isStaff,
         ]);
     }
@@ -185,6 +187,7 @@ class PersonController extends Controller
         Gate::authorize('create', Person::class);
 
         $validated = $request->validated();
+        $validated = $this->normalizeRelatedStories($validated);
         $validated = $this->preparePersonImage($request, $validated);
         $validated['children'] = $request->input('children', []);
         $validated['ownChildren'] = $request->input('ownChildren', []);
@@ -233,6 +236,7 @@ class PersonController extends Controller
             'familyTrees' => $this->familyTrees($user),
             'approvedMargaTrees' => $this->approvedMargaTrees($user),
             'versionTrees' => $this->familyTrees($user, $person),
+            ...$this->familyTreeSharingPayload($user),
             'canPublish' => $user->isStaff(),
             'readOnly' => ! $user->isStaff(),
         ]);
@@ -260,6 +264,7 @@ class PersonController extends Controller
             'familyTrees' => $this->familyTrees($user),
             'approvedMargaTrees' => $this->approvedMargaTrees($user),
             'versionTrees' => $this->familyTrees($user, $person),
+            ...$this->familyTreeSharingPayload($user),
             'canPublish' => $isStaff,
         ]);
     }
@@ -287,7 +292,7 @@ class PersonController extends Controller
         $familyTrees = FamilyTree::query()
             ->whereHas('nodes', fn ($query) => $query->where('person_id', $person->id))
             ->when(! $request->user()->isStaff(), fn ($query) => $query->where('user_id', $request->user()->id))
-            ->with(['rootPerson:id,name', 'nodes.person:id,name'])
+            ->with(['user:id,name', 'rootPerson:id,name', 'nodes.person:id,name', 'shares.recipient:id,name,email'])
             ->latest('updated_at')
             ->get();
 
@@ -334,7 +339,7 @@ class PersonController extends Controller
         $canEdit = $user->isStaff() || $familyTree->user_id === $user->id;
 
         abort_unless(
-            $canEdit || $this->approvedFamilyTreeMatchesUserMarga($familyTree, $user),
+            $user->can('view', $familyTree) || $this->approvedFamilyTreeMatchesUserMarga($familyTree, $user),
             403,
             'Anda tidak memiliki akses ke silsilah ini.',
         );
@@ -586,6 +591,7 @@ class PersonController extends Controller
         $isStaff = $user->isStaff();
 
         $validated = $request->validated();
+        $validated = $this->normalizeRelatedStories($validated);
         $previousImage = $person->image;
         $validated = $this->preparePersonImage($request, $validated);
         $validated['children'] = $request->input('children', []);
@@ -647,6 +653,33 @@ class PersonController extends Controller
         if ($request->input('image_mode') === 'upload') {
             unset($validated['image']);
         }
+
+        return $validated;
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function normalizeRelatedStories(array $validated): array
+    {
+        if (! array_key_exists('related_stories', $validated)) {
+            return $validated;
+        }
+
+        $stories = is_array($validated['related_stories'])
+            ? $validated['related_stories']
+            : [];
+
+        $validated['related_stories'] = collect($stories)
+            ->filter(fn ($story) => is_array($story)
+                && (filled($story['title'] ?? null) || filled($story['url'] ?? null)))
+            ->map(fn (array $story) => [
+                'title' => trim((string) ($story['title'] ?? '')),
+                'url' => trim((string) ($story['url'] ?? '')),
+            ])
+            ->values()
+            ->all();
 
         return $validated;
     }
@@ -819,6 +852,7 @@ class PersonController extends Controller
             'death_year' => $person->death_year,
             'image' => $person->image,
             'bio' => $person->bio,
+            'related_stories' => $person->related_stories ?? [],
             'spouse' => $person->spouse,
             'spouse_marga' => $person->spouse_marga,
             'father' => $father
@@ -1068,15 +1102,19 @@ class PersonController extends Controller
     /**
      * Family trees previously created by the signed-in account.
      *
-     * @return array<int, array{id: int, root_person_id: int, root_name: string, name: string|null, source_name: string|null, is_primary: bool, updated_at: string}>
+     * @return array<int, array<string, mixed>>
      */
     protected function familyTrees(User $user, ?Person $focus = null): array
     {
         return FamilyTree::query()
-            ->when(! $user->isAdmin(), fn ($query) => $query->whereBelongsTo($user))
+            ->when(! $user->isAdmin(), fn ($query) => $query->where(fn ($access) => $access
+                ->whereBelongsTo($user)
+                ->orWhereHas('shares', fn ($shares) => $shares
+                    ->whereBelongsTo($user, 'recipient')
+                    ->where('status', FamilyTreeShare::STATUS_ACCEPTED))))
             ->whereNotNull('root_person_id')
             ->when($focus !== null, fn ($query) => $query->where('root_person_id', $focus->id))
-            ->with(['rootPerson:id,name', 'nodes.person:id,name'])
+            ->with(['user:id,name', 'rootPerson:id,name', 'nodes.person:id,name', 'shares.recipient:id,name,email'])
             ->withExists(['deletionRequests as deletion_pending' => fn ($query) => $query
                 ->where('status', FamilyTreeDeletionRequest::STATUS_PENDING)])
             ->latest('updated_at')
@@ -1106,7 +1144,7 @@ class PersonController extends Controller
                     ->where('marga_id', $user->marga_id)))
             ->whereHas('nodes.person', fn ($query) => $query
                 ->where('marga_id', $user->marga_id))
-            ->with(['rootPerson:id,name', 'nodes.person:id,name'])
+            ->with(['user:id,name', 'rootPerson:id,name', 'nodes.person:id,name', 'shares.recipient:id,name,email'])
             ->withExists(['deletionRequests as deletion_pending' => fn ($query) => $query
                 ->where('status', FamilyTreeDeletionRequest::STATUS_PENDING)])
             ->latest('updated_at')
@@ -1120,17 +1158,69 @@ class PersonController extends Controller
     /** @return array<string, mixed> */
     protected function familyTreeHistoryEntry(FamilyTree $tree, User $user): array
     {
+        $canManage = $user->isStaff() || $tree->user_id === $user->id;
+
         return [
             'id' => $tree->id,
             'root_person_id' => $tree->root_person_id,
+            'member_person_ids' => $tree->nodes
+                ->pluck('person_id')
+                ->push($tree->root_person_id)
+                ->unique()
+                ->values()
+                ->all(),
             'root_name' => $this->familyTreeRootName($tree),
             'name' => $tree->name,
             'source_name' => $tree->source_name,
             'is_primary' => $tree->is_primary,
+            'access' => $canManage ? 'owner' : 'shared',
+            'owner_name' => $tree->user->name,
+            'can_manage' => $canManage,
+            'can_share' => $canManage,
+            'can_append' => $user->can('append', $tree),
             'can_delete' => $user->isAdmin() || $tree->user_id === $user->id,
+            'shares' => $canManage ? $tree->shares->map(fn (FamilyTreeShare $share) => [
+                'id' => $share->id,
+                'recipient_id' => $share->recipient_id,
+                'recipient_name' => $share->recipient->name,
+                'recipient_email' => $share->recipient->email,
+                'status' => $share->status,
+            ])->values()->all() : [],
             'deletion_pending' => (bool) $tree->deletion_pending,
             'updated_at' => $tree->updated_at->toISOString(),
         ];
+    }
+
+    /** @return array{shareableAccounts: array<int, array<string, mixed>>, pendingTreeShares: array<int, array<string, mixed>>} */
+    protected function familyTreeSharingPayload(User $user): array
+    {
+        $shareableAccounts = User::query()
+            ->whereKeyNot($user->id)
+            ->where('role', '!=', 'admin')
+            ->when(! $user->isStaff(), fn ($query) => $query->where('marga_id', $user->marga_id))
+            ->with('marga:id,name')
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'marga_id'])
+            ->map(fn (User $account) => [
+                'id' => $account->id,
+                'name' => $account->name,
+                'email' => $account->email,
+                'marga' => $account->marga?->name,
+            ])->all();
+
+        $pendingTreeShares = FamilyTreeShare::query()
+            ->whereBelongsTo($user, 'recipient')
+            ->where('status', FamilyTreeShare::STATUS_PENDING)
+            ->with(['sender:id,name', 'familyTree:id,user_id,root_person_id,name'])
+            ->latest()
+            ->get()
+            ->map(fn (FamilyTreeShare $share) => [
+                'id' => $share->id,
+                'tree_name' => $share->familyTree->name ?? 'Silsilah keluarga',
+                'sender_name' => $share->sender->name,
+            ])->all();
+
+        return compact('shareableAccounts', 'pendingTreeShares');
     }
 
     protected function familyTreeRootName(FamilyTree $tree): ?string

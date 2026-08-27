@@ -3,13 +3,17 @@ import {
     ArrowLeft,
     ArrowUpRight,
     Clock3,
+    Check,
     Copy,
     Crown,
     Maximize2,
     Pencil,
     Search,
+    Share2,
     Trash2,
     TreePine,
+    UserPlus,
+    X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -20,8 +24,16 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import familyTreeShares from '@/routes/family-tree-shares';
 import familyTrees from '@/routes/family-trees';
 import people from '@/routes/people';
 
@@ -30,11 +42,24 @@ const ITEMS_PER_PAGE = 5;
 export type FamilyTreeHistoryEntry = {
     id: number;
     root_person_id: number;
+    member_person_ids: number[];
     root_name: string;
     name: string | null;
     source_name: string | null;
     is_primary: boolean;
+    access: 'owner' | 'shared';
+    owner_name: string;
+    can_manage: boolean;
+    can_share: boolean;
+    can_append: boolean;
     can_delete: boolean;
+    shares: {
+        id: number;
+        recipient_id: number;
+        recipient_name: string;
+        recipient_email: string;
+        status: 'pending' | 'accepted' | 'rejected';
+    }[];
     deletion_pending: boolean;
     updated_at: string;
 };
@@ -43,14 +68,30 @@ export function FamilyTreeHistoryCard({
     entries,
     approvedEntries = [],
     margaName,
+    shareableAccounts = [],
+    pendingTreeShares = [],
 }: {
     entries: FamilyTreeHistoryEntry[];
     approvedEntries?: FamilyTreeHistoryEntry[];
     margaName?: string | null;
+    shareableAccounts?: {
+        id: number;
+        name: string;
+        email: string;
+        marga: string | null;
+    }[];
+    pendingTreeShares?: {
+        id: number;
+        tree_name: string;
+        sender_name: string;
+    }[];
 }) {
     const [expanded, setExpanded] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
+    const [shareEntry, setShareEntry] =
+        useState<FamilyTreeHistoryEntry | null>(null);
+    const [recipientId, setRecipientId] = useState('');
     const listTopRef = useRef<HTMLDivElement>(null);
     const dateFormatter = new Intl.DateTimeFormat('id-ID', {
         day: 'numeric',
@@ -189,6 +230,34 @@ export function FamilyTreeHistoryCard({
                     </div>
                 </CardHeader>
                 <CardContent className="grid gap-6">
+                    {pendingTreeShares.length > 0 && (
+                        <section className="grid gap-3 rounded-xl border border-tb-primary/25 bg-tb-primary/5 p-4">
+                            <div>
+                                <h3 className="font-display text-base font-semibold text-tb-on-surface">
+                                    Undangan Berbagi Silsilah
+                                </h3>
+                                <p className="mt-1 text-xs text-tb-on-surface-variant">
+                                    Setelah diterima, Anda hanya dapat menambah anggota baru.
+                                </p>
+                            </div>
+                            {pendingTreeShares.map((share) => (
+                                <div key={share.id} className="flex flex-col gap-3 rounded-lg border border-tb-outline-variant bg-tb-surface-bright p-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div>
+                                        <p className="text-sm font-semibold text-tb-on-surface">{share.tree_name}</p>
+                                        <p className="text-xs text-tb-on-surface-variant">Dibagikan oleh {share.sender_name}</p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Button size="sm" onClick={() => router.patch(familyTreeShares.update(share.id).url, { status: 'accepted' }, { preserveScroll: true })}>
+                                            <Check className="size-3.5" /> Terima
+                                        </Button>
+                                        <Button variant="outline" size="sm" onClick={() => router.patch(familyTreeShares.update(share.id).url, { status: 'rejected' }, { preserveScroll: true })}>
+                                            <X className="size-3.5" /> Tolak
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))}
+                        </section>
+                    )}
                     <section className="grid gap-3">
                         <div>
                             <h3 className="font-display text-base font-semibold text-tb-on-surface">
@@ -323,6 +392,13 @@ export function FamilyTreeHistoryCard({
                                                                         Utama
                                                                     </span>
                                                                 )}
+                                                                {entry.access ===
+                                                                    'shared' && (
+                                                                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-bold tracking-wide text-blue-700 uppercase dark:text-blue-300">
+                                                                        <Share2 className="size-3" />
+                                                                        Dari {entry.owner_name}
+                                                                    </span>
+                                                                )}
                                                             </span>
                                                             <span className="mt-1 block text-xs text-tb-on-surface-variant">
                                                                 Akar:{' '}
@@ -361,27 +437,40 @@ export function FamilyTreeHistoryCard({
                                                             <TreePine className="size-3.5" />{' '}
                                                             Buka
                                                         </Link>
-                                                        <Link
-                                                            href={familyTrees.duplicate(
-                                                                entry.id,
-                                                            )}
-                                                            method="post"
-                                                            as="button"
-                                                            className="inline-flex items-center gap-1.5 rounded-lg border border-tb-outline-variant px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
-                                                        >
-                                                            <Copy className="size-3.5" />{' '}
-                                                            Versi Alternatif
-                                                        </Link>
-                                                        <Link
-                                                            href={people.edit(
-                                                                entry.root_person_id,
-                                                            )}
-                                                            className="inline-flex items-center gap-1.5 rounded-lg border border-tb-outline-variant px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
-                                                        >
-                                                            <Pencil className="size-3.5" />{' '}
-                                                            Ubah Struktur
-                                                        </Link>
-                                                        {entry.deletion_pending ? (
+                                                        {entry.can_manage && (
+                                                            <Link
+                                                                href={familyTrees.duplicate(entry.id)}
+                                                                method="post"
+                                                                as="button"
+                                                                className="inline-flex items-center gap-1.5 rounded-lg border border-tb-outline-variant px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
+                                                            >
+                                                                <Copy className="size-3.5" /> Versi Alternatif
+                                                            </Link>
+                                                        )}
+                                                        {entry.can_manage && (
+                                                            <Link
+                                                                href={people.edit(entry.root_person_id)}
+                                                                className="inline-flex items-center gap-1.5 rounded-lg border border-tb-outline-variant px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
+                                                            >
+                                                                <Pencil className="size-3.5" /> Ubah Struktur
+                                                            </Link>
+                                                        )}
+                                                        {entry.can_share && (
+                                                            <Button type="button" variant="outline" size="sm" className="text-xs" onClick={() => {
+ setShareEntry(entry); setRecipientId(''); 
+}}>
+                                                                <Share2 className="size-3.5" /> Share
+                                                            </Button>
+                                                        )}
+                                                        {entry.access === 'shared' && entry.can_append && (
+                                                            <Link
+                                                                href={familyTrees.people.create(entry.id)}
+                                                                className="inline-flex items-center gap-1.5 rounded-lg border border-tb-primary px-3 py-2 text-xs font-semibold text-tb-primary transition-colors hover:bg-tb-primary/10"
+                                                            >
+                                                                <UserPlus className="size-3.5" /> Tambah Anggota
+                                                            </Link>
+                                                        )}
+                                                        {entry.can_manage && entry.deletion_pending ? (
                                                             <Button
                                                                 type="button"
                                                                 variant="outline"
@@ -392,7 +481,7 @@ export function FamilyTreeHistoryCard({
                                                                 Menunggu
                                                                 Persetujuan
                                                             </Button>
-                                                        ) : (
+                                                        ) : entry.can_manage ? (
                                                             entry.can_delete && (
                                                                 <Button
                                                                     type="button"
@@ -424,7 +513,7 @@ export function FamilyTreeHistoryCard({
                                                                     Hapus
                                                                 </Button>
                                                             )
-                                                        )}
+                                                        ) : null}
                                                     </div>
                                                 </div>
                                             </li>
@@ -472,6 +561,87 @@ export function FamilyTreeHistoryCard({
                     )}
                 </CardContent>
             </Card>
+            <Dialog
+                open={shareEntry !== null}
+                onOpenChange={(open) => !open && setShareEntry(null)}
+            >
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Bagikan Silsilah</DialogTitle>
+                        <DialogDescription>
+                            Penerima harus menyetujui undangan. Aksesnya hanya
+                            untuk menambah anggota baru, tanpa mengubah data lama.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {shareEntry && (
+                        <div className="grid gap-5">
+                            <form
+                                className="grid gap-3"
+                                onSubmit={(event) => {
+                                    event.preventDefault();
+
+                                    if (!recipientId) {
+return;
+}
+
+                                    router.post(
+                                        familyTrees.shares.store(shareEntry.id).url,
+                                        { recipient_id: Number(recipientId) },
+                                        {
+                                            preserveScroll: true,
+                                            onSuccess: () => {
+                                                setRecipientId('');
+                                                setShareEntry(null);
+                                            },
+                                        },
+                                    );
+                                }}
+                            >
+                                <label className="grid gap-1.5 text-sm font-medium text-tb-on-surface">
+                                    Pilih akun penerima
+                                    <select
+                                        value={recipientId}
+                                        onChange={(event) => setRecipientId(event.target.value)}
+                                        className="h-10 rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 text-sm text-tb-on-surface focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20 focus:outline-none"
+                                        required
+                                    >
+                                        <option value="">Pilih akun...</option>
+                                        {shareableAccounts
+                                            .filter((account) => !shareEntry.shares.some((share) => share.recipient_id === account.id && share.status !== 'rejected'))
+                                            .map((account) => (
+                                                <option key={account.id} value={account.id}>
+                                                    {account.name} — {account.email}{account.marga ? ` (${account.marga})` : ''}
+                                                </option>
+                                            ))}
+                                    </select>
+                                </label>
+                                <Button type="submit" disabled={!recipientId}>
+                                    <Share2 className="size-4" /> Kirim Undangan
+                                </Button>
+                            </form>
+
+                            <div className="grid gap-2">
+                                <p className="text-sm font-semibold text-tb-on-surface">Akun yang telah diundang</p>
+                                {shareEntry.shares.length === 0 ? (
+                                    <p className="rounded-lg border border-dashed border-tb-outline-variant p-3 text-xs text-tb-on-surface-variant">Belum ada akun yang diundang.</p>
+                                ) : (
+                                    shareEntry.shares.map((share) => (
+                                        <div key={share.id} className="flex items-center justify-between gap-3 rounded-lg border border-tb-outline-variant p-3">
+                                            <div className="min-w-0">
+                                                <p className="truncate text-sm font-medium text-tb-on-surface">{share.recipient_name}</p>
+                                                <p className="truncate text-xs text-tb-on-surface-variant">{share.recipient_email} · {share.status === 'accepted' ? 'Diterima' : share.status === 'pending' ? 'Menunggu' : 'Ditolak'}</p>
+                                            </div>
+                                            <Button type="button" variant="ghost" size="sm" className="text-red-600" onClick={() => router.delete(familyTreeShares.destroy(share.id).url, { preserveScroll: true, onSuccess: () => setShareEntry(null) })}>
+                                                Cabut
+                                            </Button>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
