@@ -1168,6 +1168,87 @@ test('the create form suggests only male people as fathers', function () {
             ->where('fatherSuggestions', ['Calon Ayah']));
 });
 
+test('name suggestions keep duplicate names distinguishable by their father', function () {
+    $firstFather = Person::factory()->create(['name' => 'Bapak Pertama', 'gender' => 'L']);
+    $secondFather = Person::factory()->create(['name' => 'Bapak Kedua', 'gender' => 'L']);
+    $first = Person::factory()->create(['name' => 'Ampunalampak', 'father_id' => $firstFather->id]);
+    $second = Person::factory()->create(['name' => 'Ampunalampak', 'father_id' => $secondFather->id]);
+
+    $this->actingAs($this->admin)
+        ->get(route('people.create'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('nameSuggestions', fn ($suggestions) => collect($suggestions)
+                ->where('name', 'Ampunalampak')
+                ->values()
+                ->contains(fn (array $row) => $row['id'] === $first->id && $row['father_name'] === 'Bapak Pertama')
+                && collect($suggestions)
+                    ->where('name', 'Ampunalampak')
+                    ->values()
+                    ->contains(fn (array $row) => $row['id'] === $second->id && $row['father_name'] === 'Bapak Kedua')));
+});
+
+test('an existing unlinked person can be selected as a child without creating a duplicate', function () {
+    $marga = Marga::factory()->create();
+    $grandfather = Person::factory()->create(['name' => 'Ompung', 'gender' => 'L', 'marga_id' => $marga->id]);
+    $focus = Person::factory()->create([
+        'name' => 'Bapak Tujuan',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'father_id' => $grandfather->id,
+        'birth_order' => 1,
+    ]);
+    $existing = Person::factory()->create([
+        'name' => 'Ampunalampak',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'father_id' => null,
+    ]);
+
+    $this->actingAs($this->admin)->put(route('people.update', $focus), [
+        'name' => $focus->name,
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'birth_order' => 1,
+        'sibling_count' => 1,
+        'father' => ['name' => $grandfather->name, 'marga_id' => $marga->id],
+        'children' => [['id' => $focus->id, 'name' => $focus->name, 'gender' => 'L']],
+        'ownChildren' => [['id' => $existing->id, 'name' => $existing->name, 'gender' => 'L']],
+    ])->assertRedirect();
+
+    expect(Person::query()->where('name', 'Ampunalampak')->count())->toBe(1)
+        ->and($existing->fresh()->father_id)->toBe($focus->id);
+});
+
+test('selecting an existing child from another father never moves its lineage automatically', function () {
+    $marga = Marga::factory()->create();
+    $firstFather = Person::factory()->create(['name' => 'Bapak Pertama', 'gender' => 'L', 'marga_id' => $marga->id]);
+    $secondFather = Person::factory()->create(['name' => 'Bapak Kedua', 'gender' => 'L', 'marga_id' => $marga->id]);
+    $existing = Person::factory()->create([
+        'name' => 'Ampunalampak',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'father_id' => $firstFather->id,
+    ]);
+
+    $this->actingAs($this->admin)
+        ->from(route('people.edit', $secondFather))
+        ->put(route('people.update', $secondFather), [
+            'name' => $secondFather->name,
+            'gender' => 'L',
+            'marga_id' => $marga->id,
+            'birth_order' => 1,
+            'sibling_count' => 1,
+            'children' => [['id' => $secondFather->id, 'name' => $secondFather->name, 'gender' => 'L']],
+            'ownChildren' => [['id' => $existing->id, 'name' => $existing->name, 'gender' => 'L']],
+        ])
+        ->assertRedirect(route('people.edit', $secondFather))
+        ->assertSessionHasErrors('ownChildren.0.id');
+
+    expect($existing->fresh()->father_id)->toBe($firstFather->id)
+        ->and(Person::query()->where('name', 'Ampunalampak')->count())->toBe(1);
+});
+
 test('father suggestions exclude the focused person siblings and descendants', function () {
     $marga = Marga::factory()->create();
     $father = Person::factory()->create([

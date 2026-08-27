@@ -2,6 +2,7 @@ import { Head, Link } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
 import type { FamilyTreeHistoryEntry } from '@/components/people/family-tree-history-card';
 import { Button } from '@/components/ui/button';
+import type { NameSuggestion } from '@/components/ui/name-combobox';
 import FamilyForm from '@/pages/people/family-form';
 import type { FamilyData } from '@/pages/people/family-form';
 import { dashboard } from '@/routes';
@@ -10,7 +11,7 @@ import people from '@/routes/people';
 type Props = {
     person: FamilyData;
     margas: { id: number; name: string }[];
-    nameSuggestions: string[];
+    nameSuggestions: NameSuggestion[];
     fatherSuggestions: string[];
     familyTrees: FamilyTreeHistoryEntry[];
     approvedMargaTrees: FamilyTreeHistoryEntry[];
