@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -22,6 +23,8 @@ use Illuminate\Support\Carbon;
  * @property string $password
  * @property string $role
  * @property int|null $marga_id
+ * @property string|null $province_code
+ * @property string|null $regency_code
  * @property string|null $two_factor_secret
  * @property string|null $two_factor_recovery_codes
  * @property Carbon|null $two_factor_confirmed_at
@@ -35,8 +38,13 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, Story> $stories
  * @property-read Collection<int, FeedPost> $feedPosts
  * @property-read Collection<int, FeedComment> $feedComments
+ * @property-read Collection<int, TaromboSnapshot> $taromboSnapshots
+ * @property-read Collection<int, FamilyTreeShare> $receivedFamilyTreeShares
+ * @property-read TelegramAccount|null $telegramAccount
+ * @property-read Collection<int, ChatGroup> $ownedChatGroups
+ * @property-read Collection<int, ChatGroupMember> $chatGroupMemberships
  */
-#[Fillable(['name', 'email', 'password', 'role', 'marga_id'])]
+#[Fillable(['name', 'email', 'password', 'role', 'marga_id', 'province_code', 'regency_code'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -86,6 +94,29 @@ class User extends Authenticatable
             && $this->marga_id === $contact->marga_id;
     }
 
+    public function canUseGroups(): bool
+    {
+        return ! $this->isAdmin() && $this->marga_id !== null;
+    }
+
+    /** @return HasOne<TelegramAccount, $this> */
+    public function telegramAccount(): HasOne
+    {
+        return $this->hasOne(TelegramAccount::class);
+    }
+
+    /** @return HasMany<ChatGroup, $this> */
+    public function ownedChatGroups(): HasMany
+    {
+        return $this->hasMany(ChatGroup::class, 'owner_id');
+    }
+
+    /** @return HasMany<ChatGroupMember, $this> */
+    public function chatGroupMemberships(): HasMany
+    {
+        return $this->hasMany(ChatGroupMember::class);
+    }
+
     /**
      * @return BelongsTo<Marga, $this>
      */
@@ -100,6 +131,12 @@ class User extends Authenticatable
     public function familyTrees(): HasMany
     {
         return $this->hasMany(FamilyTree::class);
+    }
+
+    /** @return HasMany<FamilyTreeShare, $this> */
+    public function receivedFamilyTreeShares(): HasMany
+    {
+        return $this->hasMany(FamilyTreeShare::class, 'recipient_id');
     }
 
     /** @return HasMany<ContributionRequest, $this> */
@@ -130,6 +167,12 @@ class User extends Authenticatable
     public function feedComments(): HasMany
     {
         return $this->hasMany(FeedComment::class);
+    }
+
+    /** @return HasMany<TaromboSnapshot, $this> */
+    public function taromboSnapshots(): HasMany
+    {
+        return $this->hasMany(TaromboSnapshot::class);
     }
 
     /**

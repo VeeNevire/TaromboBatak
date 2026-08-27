@@ -32,6 +32,7 @@ use Illuminate\Support\Collection as SupportCollection;
  * @property string|null $death_year
  * @property string|null $image
  * @property string|null $bio
+ * @property array<int, array{title: string, url: string}>|null $related_stories
  * @property string|null $spouse
  * @property string|null $spouse_marga
  * @property Carbon|null $created_at
@@ -46,7 +47,7 @@ use Illuminate\Support\Collection as SupportCollection;
  * @property-read Collection<int, Person> $siblings
  * @property-read Collection<int, Person> $wives
  */
-#[Fillable(['name', 'gender', 'alias', 'marga_id', 'created_by', 'father_id', 'mother_id', 'birth_order', 'sibling_count', 'chain', 'birth_year', 'death_year', 'image', 'bio', 'spouse', 'spouse_marga', 'pending_father', 'is_public'])]
+#[Fillable(['name', 'gender', 'alias', 'marga_id', 'created_by', 'father_id', 'mother_id', 'birth_order', 'sibling_count', 'chain', 'birth_year', 'death_year', 'image', 'bio', 'related_stories', 'spouse', 'spouse_marga', 'pending_father', 'is_public'])]
 class Person extends Model
 {
     /** @use HasFactory<PersonFactory> */
@@ -148,6 +149,7 @@ class Person extends Model
         return [
             'pending_father' => 'boolean',
             'is_public' => 'boolean',
+            'related_stories' => 'array',
         ];
     }
 

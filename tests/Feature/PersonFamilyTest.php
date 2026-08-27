@@ -63,6 +63,54 @@ test('a family store creates the father, mother, and all sibling rows as people'
         ->and($children[2]->name)->toBe('N/A');
 });
 
+test('related story links are stored and exposed on the person form', function () {
+    $marga = Marga::factory()->create();
+
+    $this->actingAs($this->admin)->post(route('people.store'), [
+        'name' => 'Sangkar Toba',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'birth_order' => 1,
+        'sibling_count' => 1,
+        'children' => [['name' => 'Sangkar Toba', 'gender' => 'L']],
+        'related_stories' => [
+            ['title' => 'Sejarah Sangkar Toba', 'url' => 'https://example.com/sejarah'],
+            ['title' => 'Cerita Turun-temurun', 'url' => 'https://example.com/cerita'],
+        ],
+    ])->assertRedirect(route('people.index'));
+
+    $person = Person::query()->where('name', 'Sangkar Toba')->firstOrFail();
+
+    expect($person->related_stories)->toBe([
+        ['title' => 'Sejarah Sangkar Toba', 'url' => 'https://example.com/sejarah'],
+        ['title' => 'Cerita Turun-temurun', 'url' => 'https://example.com/cerita'],
+    ]);
+
+    $this->actingAs($this->admin)
+        ->get(route('people.edit', $person))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('person.related_stories.0.title', 'Sejarah Sangkar Toba')
+            ->where('person.related_stories.1.url', 'https://example.com/cerita'));
+});
+
+test('related story entries require a valid title and http link', function () {
+    $marga = Marga::factory()->create();
+
+    $this->actingAs($this->admin)->post(route('people.store'), [
+        'name' => 'Data Cerita Tidak Valid',
+        'marga_id' => $marga->id,
+        'birth_order' => 1,
+        'sibling_count' => 1,
+        'children' => [['name' => 'Data Cerita Tidak Valid']],
+        'related_stories' => [
+            ['title' => 'Cerita', 'url' => 'javascript:alert(1)'],
+        ],
+    ])->assertSessionHasErrors('related_stories.0.url');
+
+    expect(Person::query()->where('name', 'Data Cerita Tidak Valid')->exists())->toBeFalse();
+});
+
 test('a family store supports multiple wives with their own marga', function () {
     $marga = Marga::factory()->create(['name' => 'Sitorus']);
     $wifeMarga = Marga::factory()->create(['name' => 'Panjaitan']);
@@ -1073,6 +1121,31 @@ test('the admin family tree card lists all trees while version actions stay focu
             ->where('versionTrees', fn ($trees) => collect($trees)
                 ->every(fn (array $tree) => $tree['root_person_id'] === $focus->id
                     && $tree['root_name'] === 'Fokus Admin')));
+});
+
+test('family tree entries expose every member for alternative version actions', function () {
+    $user = User::factory()->asSubAdmin()->create();
+    $root = Person::factory()->create(['name' => 'Akar Pohon']);
+    $member = Person::factory()->create(['name' => 'Anggota Pohon']);
+    $tree = FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $root->id,
+        'name' => 'Pohon Keluarga',
+    ]);
+
+    $rootNode = $tree->nodes()->create(['person_id' => $root->id]);
+    $tree->nodes()->create([
+        'person_id' => $member->id,
+        'father_node_id' => $rootNode->id,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('people.create'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('familyTrees.0.id', $tree->id)
+            ->where('familyTrees.0.member_person_ids', fn ($ids) => collect($ids)
+                ->contains($root->id) && collect($ids)->contains($member->id)));
 });
 
 test('the sub-admin family tree card only lists trees owned by that account', function () {

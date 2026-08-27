@@ -19,6 +19,7 @@ type Props = {
     nodeIdPrefix?: string;
     lineagePath?: readonly string[];
     showProfileOnName?: boolean;
+    markFemaleLineage?: boolean;
 };
 
 type LineageLine = {
@@ -63,6 +64,8 @@ function TreeBranch({
     showProfileOnName,
     onOpenProfile,
     lineageIds,
+    femaleLineage,
+    markFemaleLineage,
     alternativeTrees,
     nodeIdPrefix,
 }: {
@@ -81,6 +84,8 @@ function TreeBranch({
     alternativeTrees: DescendantsAlternativeTree[];
     nodeIdPrefix: string;
     lineageIds: ReadonlySet<string>;
+    femaleLineage: boolean;
+    markFemaleLineage: boolean;
 }) {
     const [activeAlternativeId, setActiveAlternativeId] = useState<
         number | null
@@ -106,15 +111,16 @@ function TreeBranch({
             onNameClick={
                 showProfileOnName ? () => onOpenProfile(person) : undefined
             }
+            dashed={markFemaleLineage && femaleLineage}
         />
     );
 
     return (
-        <li>
+        <li data-female-lineage={markFemaleLineage && femaleLineage}>
             {showProfileOnName ? (
                 <div
                     id={`${nodeIdPrefix}-${person.id}`}
-                    className="inline-block rounded-lg"
+                    className="relative z-20 inline-block rounded-lg"
                 >
                     {card}
                 </div>
@@ -123,7 +129,7 @@ function TreeBranch({
                     id={`${nodeIdPrefix}-${person.id}`}
                     href={people.edit(Number(person.id))}
                     aria-label={`Ubah ${person.name}`}
-                    className="inline-block cursor-pointer rounded-lg transition-transform duration-200 hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B8934A]"
+                    className="relative z-20 inline-block cursor-pointer rounded-lg transition-transform duration-200 hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B8934A]"
                 >
                     {card}
                 </Link>
@@ -132,7 +138,7 @@ function TreeBranch({
                     id={`${nodeIdPrefix}-${person.id}`}
                     type="button"
                     onClick={() => onSelect?.(person.id)}
-                    className="cursor-pointer rounded-lg transition-transform duration-200 hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B8934A]"
+                    className="relative z-20 cursor-pointer rounded-lg transition-transform duration-200 hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B8934A]"
                 >
                     {card}
                 </button>
@@ -209,6 +215,11 @@ function TreeBranch({
                             alternativeTrees={alternativeTrees}
                             nodeIdPrefix={nodeIdPrefix}
                             lineageIds={lineageIds}
+                            femaleLineage={
+                                femaleLineage ||
+                                child.gender?.toUpperCase() === 'P'
+                            }
+                            markFemaleLineage={markFemaleLineage}
                         />
                     ))}
                 </ul>
@@ -265,6 +276,7 @@ function TreeBranch({
                             hideRoot
                             nodeIdPrefix={`${nodeIdPrefix}-alternative-${activeAlternative.id}`}
                             lineagePath={[]}
+                            markFemaleLineage={markFemaleLineage}
                         />
                     </div>
                 </div>
@@ -285,6 +297,7 @@ export function DescendantsTree({
     hideRoot = false,
     nodeIdPrefix = 'tree-node',
     lineagePath = EMPTY_LINEAGE_PATH,
+    markFemaleLineage = false,
 }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [profilePerson, setProfilePerson] = useState<TaromboPerson | null>(
@@ -508,6 +521,10 @@ export function DescendantsTree({
                             alternativeTrees={alternativeTrees}
                             nodeIdPrefix={nodeIdPrefix}
                             lineageIds={lineageIds}
+                            femaleLineage={
+                                root.gender?.toUpperCase() === 'P'
+                            }
+                            markFemaleLineage={markFemaleLineage}
                         />
                     ))}
                 </ul>

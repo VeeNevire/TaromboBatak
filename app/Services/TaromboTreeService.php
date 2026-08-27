@@ -57,6 +57,7 @@ class TaromboTreeService
                 'spouse' => $node->person->spouse,
                 'image' => $node->person->image,
                 'bio' => $node->person->bio,
+                'relatedStories' => $node->person->related_stories ?? [],
                 'childrenNames' => $node->children
                     ->sortBy('birth_order')
                     ->map(fn (FamilyTreeNode $child) => $child->person->birth_year
@@ -99,6 +100,7 @@ class TaromboTreeService
                 'spouse' => $person->spouse,
                 'image' => $person->image,
                 'bio' => $person->bio,
+                'relatedStories' => $person->related_stories ?? [],
                 'childrenNames' => $person->children
                     ->sortBy('birth_year')
                     ->map(fn (Person $child) => $child->birth_year

@@ -13,6 +13,7 @@ export type TaromboPersonRow = {
     spouse?: string | null;
     image?: string | null;
     bio?: string;
+    relatedStories?: RelatedStory[];
     chain?: string | null;
     pending?: boolean;
     childrenNames?: string[];
@@ -31,9 +32,15 @@ export type TaromboPerson = {
     spouse?: string | null;
     image?: string | null;
     bio?: string;
+    relatedStories?: RelatedStory[];
     chain?: string | null;
     pending?: boolean;
     childrenNames?: string[];
+};
+
+export type RelatedStory = {
+    title: string;
+    url: string;
 };
 
 export type TaromboAlternativeTreeRow = {

@@ -1,5 +1,12 @@
 import { Link } from '@inertiajs/react';
-import { CalendarDays, GitBranch, UserRound } from 'lucide-react';
+import {
+    BookOpen,
+    CalendarDays,
+    ExternalLink,
+    GitBranch,
+    Pencil,
+    UserRound,
+} from 'lucide-react';
 import { PersonImage } from '@/components/people/person-image';
 import { Button } from '@/components/ui/button';
 import {
@@ -51,7 +58,7 @@ export function PersonSummaryDialog({
             }}
         >
             {person && (
-                <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto border-tb-outline-variant bg-tb-surface-bright sm:max-w-md">
+                <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto border-tb-outline-variant bg-tb-surface-bright sm:max-w-lg">
                     <DialogHeader className="items-center text-center sm:text-center">
                         <div className="flex size-16 items-center justify-center overflow-hidden rounded-2xl border border-tb-outline-variant bg-tb-surface-container text-sm font-bold text-tb-on-surface-variant shadow-sm">
                             <PersonImage
@@ -141,23 +148,72 @@ export function PersonSummaryDialog({
                                 </div>
                             </dl>
                         </section>
+
+                        {person.relatedStories &&
+                            person.relatedStories.length > 0 && (
+                                <section className="rounded-xl border border-tb-outline-variant bg-tb-surface-container/50 p-4">
+                                    <h3 className="mb-3 flex items-center gap-2 font-semibold text-tb-on-surface">
+                                        <BookOpen className="size-4 text-tb-primary" />
+                                        Sejarah/Cerita Terkait
+                                    </h3>
+                                    <ol className="grid gap-2">
+                                        {person.relatedStories.map(
+                                            (story, index) => (
+                                                <li
+                                                    key={`${story.url}-${index}`}
+                                                    className="rounded-lg border border-tb-outline-variant bg-tb-surface-bright"
+                                                >
+                                                    <a
+                                                        href={story.url}
+                                                        target="_blank"
+                                                        rel="noreferrer noopener"
+                                                        className="flex items-center justify-between gap-3 px-3 py-2.5 text-tb-primary transition-colors hover:bg-tb-primary/5 hover:underline"
+                                                    >
+                                                        <span className="min-w-0">
+                                                            <span className="mr-2 text-xs font-semibold text-tb-on-surface-variant">
+                                                                {index + 1}.
+                                                            </span>
+                                                            <span className="font-medium">
+                                                                {story.title}
+                                                            </span>
+                                                        </span>
+                                                        <ExternalLink className="size-4 shrink-0" />
+                                                    </a>
+                                                </li>
+                                            ),
+                                        )}
+                                    </ol>
+                                </section>
+                            )}
                     </div>
 
-                    <DialogFooter className="sm:justify-between">
+                    <DialogFooter className="gap-2 sm:justify-between">
                         <DialogClose asChild>
                             <Button type="button" variant="outline">
                                 Tutup
                             </Button>
                         </DialogClose>
-                        <Button asChild>
-                            <Link
-                                href={peopleRoutes.show({
-                                    person: Number(person.id),
-                                })}
-                            >
-                                Lihat Detail
-                            </Link>
-                        </Button>
+                        <div className="flex flex-wrap justify-end gap-2">
+                            <Button asChild variant="outline">
+                                <Link
+                                    href={peopleRoutes.show({
+                                        person: Number(person.id),
+                                    })}
+                                >
+                                    Lihat Detail
+                                </Link>
+                            </Button>
+                            <Button asChild>
+                                <Link
+                                    href={peopleRoutes.edit({
+                                        person: Number(person.id),
+                                    })}
+                                >
+                                    <Pencil className="size-4" />
+                                    Edit
+                                </Link>
+                            </Button>
+                        </div>
                     </DialogFooter>
                 </DialogContent>
             )}

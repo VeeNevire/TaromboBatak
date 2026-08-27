@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
 use App\Models\Marga;
+use App\Support\IndonesiaRegions;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -55,6 +56,7 @@ class FortifyServiceProvider extends ServiceProvider
             'margas' => Marga::query()
                 ->orderBy('name')
                 ->get(['id', 'name']),
+            'regions' => IndonesiaRegions::all(),
         ]));
 
         Fortify::resetPasswordView(fn (Request $request) => Inertia::render('auth/reset-password', [

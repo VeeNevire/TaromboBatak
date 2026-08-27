@@ -1,22 +1,30 @@
 <?php
 
 use App\Http\Controllers\BudayaController;
+use App\Http\Controllers\ChatGroupController;
+use App\Http\Controllers\ChatGroupMemberController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\ContributionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\FamilyTreeDeletionController;
+use App\Http\Controllers\FamilyTreeShareController;
 use App\Http\Controllers\FeedCommentController;
 use App\Http\Controllers\FeedPostController;
+use App\Http\Controllers\GroupMessageController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\KomunitasController;
 use App\Http\Controllers\MargaController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\NewsFeedController;
 use App\Http\Controllers\PersonController;
+use App\Http\Controllers\SharedFamilyTreePersonController;
 use App\Http\Controllers\StoryController;
 use App\Http\Controllers\SubAdminController;
 use App\Http\Controllers\TaromboController;
+use App\Http\Controllers\TaromboSnapshotController;
+use App\Http\Controllers\TelegramAnnouncementController;
+use App\Http\Controllers\TelegramGroupLinkController;
 use App\Http\Controllers\TentangController;
 use Illuminate\Support\Facades\Route;
 
@@ -63,11 +71,39 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('throttle:60,1')
         ->name('contacts.messages.store');
 
+    Route::get('groups', [ChatGroupController::class, 'index'])->name('groups.index');
+    Route::post('groups', [ChatGroupController::class, 'store'])->name('groups.store');
+    Route::get('groups/{chatGroup}', [ChatGroupController::class, 'show'])->name('groups.show');
+    Route::delete('groups/{chatGroup}', [ChatGroupController::class, 'destroy'])->name('groups.destroy');
+    Route::put('groups/{chatGroup}/members', [ChatGroupMemberController::class, 'update'])->name('groups.members.update');
+    Route::post('groups/{chatGroup}/messages', [GroupMessageController::class, 'store'])
+        ->middleware('throttle:60,1')
+        ->name('groups.messages.store');
+    Route::post('groups/{chatGroup}/telegram-link', [TelegramGroupLinkController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->name('groups.telegram-link.store');
+    Route::delete('groups/{chatGroup}/telegram-link', [TelegramGroupLinkController::class, 'destroy'])
+        ->name('groups.telegram-link.destroy');
+
+    Route::get('announcements', [TelegramAnnouncementController::class, 'index'])->name('announcements.index');
+    Route::post('announcements', [TelegramAnnouncementController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->name('announcements.store');
+
     Route::get('dashboard/tarombo', [TaromboController::class, 'index'])->name('tarombo.index');
 
     Route::get('dashboard/tarombo/full/{view}', [TaromboController::class, 'fullscreen'])
         ->where('view', 'diagram|tree')
         ->name('tarombo.fullscreen');
+    Route::get('dashboard/tarombo/snapshots', [TaromboSnapshotController::class, 'index'])
+        ->name('tarombo.snapshots.index');
+    Route::post('dashboard/tarombo/snapshots', [TaromboSnapshotController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->name('tarombo.snapshots.store');
+    Route::get('dashboard/tarombo/snapshots/{taromboSnapshot}/image', [TaromboSnapshotController::class, 'image'])
+        ->name('tarombo.snapshots.image');
+    Route::delete('dashboard/tarombo/snapshots/{taromboSnapshot}', [TaromboSnapshotController::class, 'destroy'])
+        ->name('tarombo.snapshots.destroy');
 
     Route::get('people', [PersonController::class, 'index'])->name('people.index');
 
@@ -85,6 +121,11 @@ Route::middleware(['auth'])->group(function () {
     Route::get('family-trees/{familyTree}/edit', [PersonController::class, 'editFamilyTree'])->name('family-trees.edit');
     Route::put('family-trees/{familyTree}', [PersonController::class, 'updateFamilyTree'])->name('family-trees.update');
     Route::delete('family-trees/{familyTree}', [FamilyTreeDeletionController::class, 'destroy'])->name('family-trees.destroy');
+    Route::post('family-trees/{familyTree}/shares', [FamilyTreeShareController::class, 'store'])->name('family-trees.shares.store');
+    Route::patch('family-tree-shares/{familyTreeShare}', [FamilyTreeShareController::class, 'update'])->name('family-tree-shares.update');
+    Route::delete('family-tree-shares/{familyTreeShare}', [FamilyTreeShareController::class, 'destroy'])->name('family-tree-shares.destroy');
+    Route::get('family-trees/{familyTree}/people/create', [SharedFamilyTreePersonController::class, 'create'])->name('family-trees.people.create');
+    Route::post('family-trees/{familyTree}/people', [SharedFamilyTreePersonController::class, 'store'])->name('family-trees.people.store');
 
     Route::resource('events', EventController::class)->except(['show']);
     Route::resource('stories', StoryController::class)->except(['show']);

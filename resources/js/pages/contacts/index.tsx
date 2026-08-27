@@ -9,6 +9,7 @@ import {
     Clock,
     Loader2,
     MessageCircle,
+    Megaphone,
     RefreshCw,
     Search,
     Send,
@@ -29,6 +30,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { dashboard } from '@/routes';
+import announcements from '@/routes/announcements';
 import contacts from '@/routes/contacts';
 
 type Contact = {
@@ -644,6 +646,12 @@ export default function ContactsIndex({
                                     className="bg-tb-surface-container-low border-tb-outline-variant pl-9"
                                 />
                             </div>
+                            <Button asChild variant="outline" className="mt-3 w-full">
+                                <Link href={announcements.index()}>
+                                    <Megaphone className="size-4" />
+                                    Kirim Pengumuman Telegram
+                                </Link>
+                            </Button>
                         </header>
 
                         <div className="min-h-0 flex-1 overflow-y-auto">

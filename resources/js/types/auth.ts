@@ -9,6 +9,8 @@ export type User = {
         | 'contributor_main'
         | 'contributor_member';
     marga_id: number | null;
+    province_code: string | null;
+    regency_code: string | null;
     avatar?: string;
     email_verified_at: string | null;
     created_at: string;

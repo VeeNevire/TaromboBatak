@@ -29,6 +29,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, FamilyTreeNode> $nodes
  * @property-read Collection<int, ContributionRequest> $contributionRequests
  * @property-read Collection<int, FamilyTreeDeletionRequest> $deletionRequests
+ * @property-read Collection<int, FamilyTreeShare> $shares
  */
 #[Fillable(['user_id', 'root_person_id', 'name', 'description', 'source_name', 'source_url', 'based_on_id', 'is_primary'])]
 class FamilyTree extends Model
@@ -83,6 +84,12 @@ class FamilyTree extends Model
     public function deletionRequests(): HasMany
     {
         return $this->hasMany(FamilyTreeDeletionRequest::class);
+    }
+
+    /** @return HasMany<FamilyTreeShare, $this> */
+    public function shares(): HasMany
+    {
+        return $this->hasMany(FamilyTreeShare::class);
     }
 
     protected function casts(): array

@@ -7,7 +7,7 @@ use App\Models\Person;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
-test('tarombo includes accessible male descendants from alternative tree versions', function () {
+test('tarombo includes female branches from alternative tree versions for the vertical toggle', function () {
     $marga = Marga::factory()->create();
     $admin = User::factory()->asAdmin()->create();
     $root = Person::factory()->create([
@@ -80,9 +80,52 @@ test('tarombo includes accessible male descendants from alternative tree version
             ->where('alternativeTrees.0.id', $alternative->id)
             ->where('alternativeTrees.0.name', 'Versi Alternatif')
             ->where('alternativeTrees.0.rootPersonId', (string) $root->id)
-            ->has('alternativeTrees.0.people', 2)
+            ->has('alternativeTrees.0.people', 4)
             ->where('alternativeTrees.0.people.1.id', (string) $son->id)
-            ->where('alternativeTrees.0.people.1.parentId', (string) $root->id));
+            ->where('alternativeTrees.0.people.1.parentId', (string) $root->id)
+            ->where('alternativeTrees.0.people.2.id', (string) $daughter->id)
+            ->where('alternativeTrees.0.people.2.gender', 'P')
+            ->where('alternativeTrees.0.people.3.id', (string) $disconnectedSon->id)
+            ->where('alternativeTrees.0.people.3.parentId', (string) $daughter->id));
+});
+
+test('a marga account receives descendants from its female branch without receiving unrelated margas', function () {
+    $marga = Marga::factory()->create();
+    $spouseMarga = Marga::factory()->create();
+    $viewer = User::factory()->withMarga($marga->id)->create();
+    $root = Person::factory()->create(['gender' => 'L', 'marga_id' => $marga->id]);
+    $daughter = Person::factory()->create([
+        'gender' => 'P',
+        'marga_id' => $marga->id,
+        'father_id' => $root->id,
+    ]);
+    $grandson = Person::factory()->create([
+        'gender' => 'L',
+        'marga_id' => $spouseMarga->id,
+        'father_id' => $daughter->id,
+    ]);
+    $greatGranddaughter = Person::factory()->create([
+        'gender' => 'P',
+        'marga_id' => $spouseMarga->id,
+        'father_id' => $grandson->id,
+    ]);
+    $unrelated = Person::factory()->create([
+        'gender' => 'L',
+        'marga_id' => $spouseMarga->id,
+    ]);
+
+    $this->actingAs($viewer)
+        ->get(route('tarombo.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('people', fn ($people) => collect($people)->pluck('id')->all() === [
+                (string) $root->id,
+                (string) $daughter->id,
+                (string) $grandson->id,
+                (string) $greatGranddaughter->id,
+            ]));
+
+    expect($unrelated->id)->not->toBeIn([$root->id, $daughter->id, $grandson->id, $greatGranddaughter->id]);
 });
 
 test('tarombo hides an unapproved alternative tree owned by another account', function () {
@@ -113,4 +156,25 @@ test('tarombo hides an unapproved alternative tree owned by another account', fu
         ->assertInertia(fn (Assert $page) => $page
             ->component('tarombo/index')
             ->has('alternativeTrees', 0));
+});
+
+test('authenticated tarombo rows include related story links for the vertical tree dialog', function () {
+    $admin = User::factory()->asAdmin()->create();
+    $person = Person::factory()->create([
+        'name' => 'Sangkar Toba',
+        'related_stories' => [
+            ['title' => 'Sejarah Sangkar Toba', 'url' => 'https://example.com/sejarah'],
+        ],
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('tarombo.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('people', fn ($people) => collect($people)->contains(
+                fn (array $row) => $row['id'] === (string) $person->id
+                    && $row['relatedStories'] === [
+                        ['title' => 'Sejarah Sangkar Toba', 'url' => 'https://example.com/sejarah'],
+                    ],
+            )));
 });

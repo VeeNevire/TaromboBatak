@@ -302,6 +302,11 @@
         border-left: 1px solid #a79e8c;
     }
 
+    .tb-tree li > ul {
+        position: relative;
+        z-index: 0;
+    }
+
     .tb-tree li::before,
     .tb-tree li::after {
         content: '';
@@ -340,6 +345,12 @@
 
     .tb-tree li:first-child::after {
         border-radius: 6px 0 0 0;
+    }
+
+    .tb-tree li[data-female-lineage='true']::before,
+    .tb-tree li[data-female-lineage='true']::after,
+    .tb-tree li[data-female-lineage='true'] > ul::before {
+        border-style: dashed;
     }
 }
 

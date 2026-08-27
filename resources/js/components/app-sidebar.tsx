@@ -3,8 +3,11 @@ import {
     BookOpen,
     BellRing,
     CalendarDays,
+    Images,
     LayoutGrid,
     MessageCircle,
+    MessagesSquare,
+    Megaphone,
     Newspaper,
     Shapes,
     ShieldCheck,
@@ -24,9 +27,11 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import announcements from '@/routes/announcements';
 import contacts from '@/routes/contacts';
 import contributions from '@/routes/contributions';
 import events from '@/routes/events';
+import groups from '@/routes/groups';
 import marga from '@/routes/marga';
 import newsFeed from '@/routes/news-feed';
 import people from '@/routes/people';
@@ -67,12 +72,27 @@ export function AppSidebar() {
                     href: tarombo.index(),
                     icon: TreePine,
                 },
+                {
+                    title: 'Tarombo Tersimpan',
+                    href: tarombo.snapshots.index(),
+                    icon: Images,
+                },
                 ...(!isAdmin
                     ? [
                           {
                               title: 'Daftar Kontak',
                               href: contacts.index(),
                               icon: MessageCircle,
+                          },
+                          {
+                              title: 'Grup',
+                              href: groups.index(),
+                              icon: MessagesSquare,
+                          },
+                          {
+                              title: 'Pengumuman',
+                              href: announcements.index(),
+                              icon: Megaphone,
                           },
                       ]
                     : []),

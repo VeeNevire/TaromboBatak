@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
+use App\Http\Controllers\Settings\TelegramConnectionController;
 use Illuminate\Auth\Middleware\RequirePassword;
 use Illuminate\Support\Facades\Route;
 
@@ -10,6 +11,11 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::post('settings/telegram', [TelegramConnectionController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->name('telegram-connection.store');
+    Route::delete('settings/telegram', [TelegramConnectionController::class, 'destroy'])
+        ->name('telegram-connection.destroy');
 });
 
 Route::middleware(['auth'])->group(function () {

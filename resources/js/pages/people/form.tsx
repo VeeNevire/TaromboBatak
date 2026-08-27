@@ -4,7 +4,12 @@ import type { FamilyTreeHistoryEntry } from '@/components/people/family-tree-his
 import { Button } from '@/components/ui/button';
 import type { NameSuggestion } from '@/components/ui/name-combobox';
 import FamilyForm from '@/pages/people/family-form';
-import type { FamilyData, MargaLineageEntry } from '@/pages/people/family-form';
+import type {
+    FamilyData,
+    MargaLineageEntry,
+    PendingTreeShare,
+    ShareableAccount,
+} from '@/pages/people/family-form';
 import { dashboard } from '@/routes';
 import people from '@/routes/people';
 
@@ -18,6 +23,8 @@ type Props = {
     familyTrees?: FamilyTreeHistoryEntry[];
     approvedMargaTrees?: FamilyTreeHistoryEntry[];
     versionTrees?: FamilyTreeHistoryEntry[];
+    shareableAccounts?: ShareableAccount[];
+    pendingTreeShares?: PendingTreeShare[];
     canPublish: boolean;
 };
 
@@ -31,6 +38,8 @@ export default function PersonForm({
     familyTrees,
     approvedMargaTrees,
     versionTrees,
+    shareableAccounts,
+    pendingTreeShares,
     canPublish,
 }: Props) {
     const isEdit = person !== null;
@@ -74,6 +83,8 @@ export default function PersonForm({
                     familyTrees={familyTrees}
                     approvedMargaTrees={approvedMargaTrees}
                     versionTrees={versionTrees}
+                    shareableAccounts={shareableAccounts}
+                    pendingTreeShares={pendingTreeShares}
                     canPublish={canPublish}
                 />
             </div>
