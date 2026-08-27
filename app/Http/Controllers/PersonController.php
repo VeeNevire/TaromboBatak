@@ -983,20 +983,37 @@ class PersonController extends Controller
     }
 
     /**
-     * Existing person names used for the autocomplete / reuse suggestions.
+     * Existing people used by the autocomplete. Keep the person id and
+     * father context so equal names remain distinguishable.
      *
-     * @return array<int, string>
+     * @return array<int, array{id: int, name: string, alias: string|null, gender: string|null, spouse: string|null, spouse_marga: string|null, marga_id: int|null, marga: string|null, father_id: int|null, father_name: string|null, chain: string|null}>
      */
     protected function nameSuggestions(?int $margaId = null): array
     {
         return Person::query()
+            ->with(['father:id,name', 'marga:id,name'])
             ->when($margaId !== null, fn ($query) => $query->where('marga_id', $margaId))
             ->whereNotNull('name')
             ->where('name', '!=', 'N/A')
             ->orderBy('name')
+            ->orderBy('father_id')
             ->limit(300)
-            ->distinct()
-            ->pluck('name')
+            ->get()
+            ->map(fn (Person $person) => [
+                'id' => $person->id,
+                'name' => $person->name,
+                'alias' => $person->alias,
+                'gender' => $person->gender,
+                'spouse' => $person->spouse,
+                'spouse_marga' => $person->spouse_marga,
+                'marga_id' => $person->marga_id,
+                'marga' => $person->marga?->name,
+                'father_id' => $person->father_id,
+                'father_name' => $person->father_id !== null
+                    ? $person->father->name
+                    : null,
+                'chain' => $person->chain,
+            ])
             ->all();
     }
 

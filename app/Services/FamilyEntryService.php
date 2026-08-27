@@ -36,7 +36,7 @@ class FamilyEntryService
         ?int $createdBy = null,
         bool $deferExistingFatherMatch = false,
     ): array {
-        $oldFathers = $this->validateExistingRows($data);
+        $oldFathers = $this->validateExistingRows($data, $forcedMargaId, $createdBy);
 
         $result = DB::transaction(function () use ($data, $forcedMargaId, $createdBy, $deferExistingFatherMatch) {
             $fatherMargaId = $forcedMargaId
@@ -417,7 +417,11 @@ class FamilyEntryService
      * @param  array<string, mixed>  $data
      * @return Collection<int, Person>
      */
-    protected function validateExistingRows(array $data): Collection
+    protected function validateExistingRows(
+        array $data,
+        ?int $forcedMargaId = null,
+        ?int $createdBy = null,
+    ): Collection
     {
         $focusId = isset($data['id']) ? (int) $data['id'] : null;
         $siblingRows = $data['children'] ?? [];
@@ -440,19 +444,33 @@ class FamilyEntryService
             ->map(fn ($id) => (int) $id);
 
         if ($focusId === null) {
-            if ($submittedSiblingIds->isNotEmpty() || $submittedChildIds->isNotEmpty()) {
-                throw ValidationException::withMessages([
-                    'children' => 'Data keluarga baru tidak boleh memakai ID anggota yang sudah ada.',
-                ]);
-            }
-
             if ($removedSiblingIds->isNotEmpty() || $removedChildIds->isNotEmpty()) {
                 throw ValidationException::withMessages([
                     'children' => 'Data keluarga baru belum punya anggota untuk dilepaskan.',
                 ]);
             }
 
-            return new Collection;
+            $submittedPeople = Person::query()
+                ->whereIn('id', $submittedSiblingIds->merge($submittedChildIds))
+                ->get();
+
+            if ($forcedMargaId !== null && $submittedPeople->contains(
+                fn (Person $person) => (int) $person->marga_id !== $forcedMargaId
+                    || (int) $person->created_by !== $createdBy,
+            )) {
+                throw ValidationException::withMessages([
+                    'children' => 'Anda hanya dapat memakai ulang anggota yang Anda buat sendiri pada marga ini.',
+                ]);
+            }
+
+            $submittedPeople->load('father');
+
+            return $submittedPeople
+                ->whereNotNull('father_id')
+                ->pluck('father')
+                ->filter()
+                ->unique('id')
+                ->values();
         }
 
         $focus = Person::query()->findOrFail($focusId);
@@ -470,14 +488,25 @@ class FamilyEntryService
         $errors = [];
 
         foreach ($siblingRows as $index => $row) {
-            if (isset($row['id']) && ! $allowedSiblingIds->contains((int) $row['id'])) {
+            $candidate = isset($row['id']) ? Person::query()->find((int) $row['id']) : null;
+
+            if ($candidate !== null
+                && ! $allowedSiblingIds->contains($candidate->id)
+                && ($candidate->father_id !== null
+                    || ($forcedMargaId !== null && (int) $candidate->created_by !== $createdBy))) {
                 $errors["children.$index.id"] = 'Anggota ini bukan bagian dari keluarga yang sedang diedit.';
             }
         }
 
         foreach ($childRows as $index => $row) {
-            if (isset($row['id']) && ! $allowedChildIds->contains((int) $row['id'])) {
-                $errors["ownChildren.$index.id"] = 'Anggota ini bukan anak dari person yang sedang diedit.';
+            $candidate = isset($row['id']) ? Person::query()->with('father')->find((int) $row['id']) : null;
+
+            if ($candidate !== null
+                && ! $allowedChildIds->contains($candidate->id)
+                && ($candidate->father_id !== null
+                    || ($forcedMargaId !== null && (int) $candidate->created_by !== $createdBy))) {
+                $fatherName = $candidate->father->name ?? 'orang lain';
+                $errors["ownChildren.$index.id"] = "{$candidate->name} sudah tercatat sebagai anak dari {$fatherName}. Pilih orang yang sesuai atau buat data baru.";
             }
         }
 
@@ -750,6 +779,42 @@ class FamilyEntryService
         $children = new Collection;
 
         foreach ($rows as $index => $row) {
+            $child = isset($row['id'])
+                ? Person::query()->find((int) $row['id'])
+                : null;
+            $isFocus = isset($data['id'])
+                ? isset($row['id']) && (int) $row['id'] === (int) $data['id']
+                : $focusOrder !== null && (int) $focusOrder === $index + 1;
+
+            if ($child !== null && $forcedMargaId !== null && $child->marga_id !== $forcedMargaId) {
+                abort(403, 'Anggota yang dipilih berada di luar marga akun Anda.');
+            }
+
+            if ($child !== null && $fatherId !== null) {
+                $targetFather = Person::query()->find($fatherId);
+
+                if ($child->id === $fatherId
+                    || ($targetFather !== null && $this->parentPathContains($targetFather, $child->id))) {
+                    $field = $focusOrder === null ? "ownChildren.$index.id" : "children.$index.id";
+
+                    throw ValidationException::withMessages([
+                        $field => 'Anggota ini tidak dapat dijadikan anak karena akan membentuk siklus silsilah.',
+                    ]);
+                }
+            }
+
+            if ($child !== null
+                && $child->father_id !== null
+                && $child->father_id !== $fatherId
+                && ! $preserveSiblingPaths) {
+                $field = $focusOrder === null ? "ownChildren.$index.id" : "children.$index.id";
+                $fatherName = $child->father->name ?? 'orang lain';
+
+                throw ValidationException::withMessages([
+                    $field => "{$child->name} sudah tercatat sebagai anak dari {$fatherName} dan tidak dipindahkan otomatis.",
+                ]);
+            }
+
             $childMotherId = $motherId;
             $availableMothers = array_values(array_filter($mothers));
 
@@ -775,10 +840,6 @@ class FamilyEntryService
 
                 $childMotherId = $selectedMother->id;
             }
-
-            $isFocus = isset($data['id'])
-                ? isset($row['id']) && (int) $row['id'] === (int) $data['id']
-                : $focusOrder !== null && (int) $focusOrder === $index + 1;
 
             $focusedFields = $isFocus ? [
                 'alias' => $data['alias'] ?? null,
@@ -815,7 +876,7 @@ class FamilyEntryService
             $attributes['mother_id'] = $childMotherId;
             $attributes['pending_father'] = $pending;
 
-            if ($preserveSiblingPaths && isset($row['id']) && ! $isFocus) {
+            if ($preserveSiblingPaths && $child?->father_id !== null && ! $isFocus) {
                 unset(
                     $attributes['father_id'],
                     $attributes['mother_id'],
@@ -824,8 +885,6 @@ class FamilyEntryService
                     $attributes['pending_father'],
                 );
             }
-
-            $child = isset($row['id']) ? Person::find((int) $row['id']) : null;
 
             if ($child) {
                 $child->update($attributes);

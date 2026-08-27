@@ -2,10 +2,25 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
+export type NameSuggestion = {
+    id: number;
+    name: string;
+    alias?: string | null;
+    gender?: string | null;
+    spouse?: string | null;
+    spouse_marga?: string | null;
+    marga_id?: number | null;
+    marga?: string | null;
+    father_id?: number | null;
+    father_name?: string | null;
+    chain?: string | null;
+};
+
 type NameComboboxProps = {
     value: string;
     onChange: (value: string) => void;
-    suggestions: string[];
+    suggestions: Array<string | NameSuggestion>;
+    onSelect?: (suggestion: NameSuggestion) => void;
     placeholder?: string;
     allowNa?: boolean;
     className?: string;
@@ -15,6 +30,7 @@ export function NameCombobox({
     value,
     onChange,
     suggestions,
+    onSelect,
     placeholder,
     allowNa = true,
     className,
@@ -27,14 +43,27 @@ export function NameCombobox({
     const query = value.trim().toLowerCase();
 
     const filtered = useMemo(() => {
-        const matches = suggestions.filter(
-            (name) => name.trim().toLowerCase().includes(query) && name.trim() !== value.trim(),
-        );
+        const matches = suggestions.filter((suggestion) => {
+            const name =
+                typeof suggestion === 'string'
+                    ? suggestion
+                    : suggestion.name;
+            const context =
+                typeof suggestion === 'string'
+                    ? ''
+                    : [suggestion.father_name, suggestion.marga, suggestion.chain]
+                          .filter(Boolean)
+                          .join(' ');
+
+            return `${name} ${context}`.trim().toLowerCase().includes(query);
+        });
 
         return matches.slice(0, 12);
     }, [suggestions, query, value]);
 
-    const rows = allowNa ? [...filtered, '__NA__'] : filtered;
+    const rows: Array<string | NameSuggestion> = allowNa
+        ? [...filtered, '__NA__']
+        : filtered;
 
     useEffect(() => {
         setHighlighted(-1);
@@ -48,8 +77,16 @@ export function NameCombobox({
         };
     }, []);
 
-    const choose = (name: string) => {
-        onChange(name);
+    const choose = (suggestion: string | NameSuggestion) => {
+        const name =
+            typeof suggestion === 'string' ? suggestion : suggestion.name;
+
+        onChange(name === '__NA__' ? 'N/A' : name);
+
+        if (typeof suggestion !== 'string') {
+            onSelect?.(suggestion);
+        }
+
         setOpen(false);
     };
 
@@ -66,7 +103,7 @@ export function NameCombobox({
             setHighlighted((index) => (index - 1 + rows.length) % rows.length);
         } else if (e.key === 'Enter' && highlighted >= 0) {
             e.preventDefault();
-            choose(rows[highlighted] === '__NA__' ? 'N/A' : rows[highlighted]);
+            choose(rows[highlighted]);
         } else if (e.key === 'Escape') {
             setOpen(false);
         }
@@ -93,24 +130,41 @@ export function NameCombobox({
                 <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-tb-outline-variant bg-tb-surface-bright p-1 shadow-lg">
                     {rows.map((row, index) => {
                         const isNa = row === '__NA__';
-                        const name = isNa ? 'N/A' : row;
+                        const suggestion =
+                            typeof row === 'string' ? null : row;
+                        const name = isNa
+                            ? 'N/A'
+                            : suggestion?.name ?? String(row);
+                        const context = suggestion
+                            ? suggestion.father_name
+                                ? `Anak dari ${suggestion.father_name}`
+                                : 'Belum memiliki data ayah'
+                            : null;
 
                         return (
                             <button
-                                key={index}
+                                key={suggestion?.id ?? `${name}-${index}`}
                                 type="button"
                                 onMouseDown={(e) => {
                                     e.preventDefault();
-                                    choose(name);
+                                    choose(row);
                                 }}
                                 onMouseEnter={() => setHighlighted(index)}
                                 className={cn(
-                                    'flex w-full items-center rounded px-2 py-1.5 text-left text-sm text-tb-on-surface',
+                                    'flex w-full flex-col items-start rounded px-2 py-1.5 text-left text-sm text-tb-on-surface',
                                     highlighted === index && 'bg-tb-surface-container',
                                     isNa && 'text-tb-on-surface-variant',
                                 )}
                             >
-                                {isNa ? 'N/A (belum tahu)' : name}
+                                <span>{isNa ? 'N/A (belum tahu)' : name}</span>
+                                {context && (
+                                    <span className="text-xs text-tb-on-surface-variant">
+                                        {context}
+                                        {suggestion?.chain
+                                            ? ` · Chain ${suggestion.chain}`
+                                            : ''}
+                                    </span>
+                                )}
                             </button>
                         );
                     })}

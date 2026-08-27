@@ -46,6 +46,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NameCombobox } from '@/components/ui/name-combobox';
+import type { NameSuggestion } from '@/components/ui/name-combobox';
 import {
     Select,
     SelectContent,
@@ -61,6 +62,7 @@ import people from '@/routes/people';
 export type ChildRow = {
     id?: number | null;
     uid?: string;
+    linkedFromSuggestion?: boolean;
     name: string;
     gender: string;
     spouse: string;
@@ -152,7 +154,7 @@ type MargaOption = { id: number; name: string };
 type Props = {
     person: FamilyData | null;
     margas: MargaOption[];
-    nameSuggestions: string[];
+    nameSuggestions: NameSuggestion[];
     fatherSuggestions: string[];
     lockedMarga?: { id: number; name: string } | null;
     lineage?: MargaLineageEntry[];
@@ -1343,8 +1345,40 @@ export default function FamilyForm({
         key: 'name' | 'alias' | 'gender' | 'spouse' | 'spouse_marga',
         value: string,
     ) => {
+        const next = data.children.map((child, i) => {
+            if (i !== index) {
+                return child;
+            }
+
+            return {
+                ...child,
+                ...(key === 'name' &&
+                'linkedFromSuggestion' in child &&
+                child.linkedFromSuggestion
+                    ? { id: null, linkedFromSuggestion: false }
+                    : {}),
+                [key]: value,
+            };
+        });
+
+        setData('children', next);
+    };
+
+    const selectChild = (index: number, suggestion: NameSuggestion) => {
         const next = data.children.map((child, i) =>
-            i === index ? { ...child, [key]: value } : child,
+            i === index
+                ? {
+                      ...child,
+                      id: suggestion.id,
+                      linkedFromSuggestion: child.id !== suggestion.id,
+                      name: suggestion.name,
+                      alias: suggestion.alias ?? '',
+                      gender: suggestion.gender ?? '',
+                      spouse: suggestion.spouse ?? '',
+                      spouse_marga: suggestion.spouse_marga ?? '',
+                      marga_id: suggestion.marga_id ?? child.marga_id,
+                  }
+                : child,
         );
 
         setData('children', next);
@@ -1448,9 +1482,41 @@ export default function FamilyForm({
         key: 'name' | 'alias' | 'gender' | 'spouse' | 'spouse_marga',
         value: string,
     ) => {
+        const next = data.ownChildren.map((child, i) => {
+            if (i !== index) {
+                return child;
+            }
+
+            return {
+                ...child,
+                ...(key === 'name' &&
+                'linkedFromSuggestion' in child &&
+                child.linkedFromSuggestion
+                    ? { id: null, linkedFromSuggestion: false }
+                    : {}),
+                [key]: value,
+            };
+        });
+        setData('ownChildren', next);
+    };
+
+    const selectOwnChild = (index: number, suggestion: NameSuggestion) => {
         const next = data.ownChildren.map((child, i) =>
-            i === index ? { ...child, [key]: value } : child,
+            i === index
+                ? {
+                      ...child,
+                      id: suggestion.id,
+                      linkedFromSuggestion: child.id !== suggestion.id,
+                      name: suggestion.name,
+                      alias: suggestion.alias ?? '',
+                      gender: suggestion.gender ?? '',
+                      spouse: suggestion.spouse ?? '',
+                      spouse_marga: suggestion.spouse_marga ?? '',
+                      marga_id: suggestion.marga_id ?? child.marga_id,
+                  }
+                : child,
         );
+
         setData('ownChildren', next);
     };
 
@@ -2563,6 +2629,14 @@ export default function FamilyForm({
                                                                             value,
                                                                         )
                                                                     }
+                                                                    onSelect={(
+                                                                        suggestion,
+                                                                    ) =>
+                                                                        selectChild(
+                                                                            selectedIndex,
+                                                                            suggestion,
+                                                                        )
+                                                                    }
                                                                     suggestions={
                                                                         nameSuggestions
                                                                     }
@@ -2950,6 +3024,14 @@ export default function FamilyForm({
                                                                     index,
                                                                     'name',
                                                                     value,
+                                                                )
+                                                            }
+                                                            onSelect={(
+                                                                suggestion,
+                                                            ) =>
+                                                                selectOwnChild(
+                                                                    index,
+                                                                    suggestion,
                                                                 )
                                                             }
                                                             suggestions={
@@ -3493,6 +3575,14 @@ export default function FamilyForm({
                                                                         index,
                                                                         'name',
                                                                         value,
+                                                                    )
+                                                                }
+                                                                onSelect={(
+                                                                    suggestion,
+                                                                ) =>
+                                                                    selectChild(
+                                                                        index,
+                                                                        suggestion,
                                                                     )
                                                                 }
                                                                 suggestions={
