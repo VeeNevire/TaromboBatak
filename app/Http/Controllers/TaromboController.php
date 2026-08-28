@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ContributionRequest;
 use App\Models\FamilyTree;
+use App\Models\IdentityRequest;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Services\TaromboStatisticsService;
@@ -21,12 +22,13 @@ class TaromboController extends Controller
      */
     public function index(Request $request): Response
     {
-        [$people, $margas, $alternativeTrees] = $this->treeData($request);
+        [$people, $margas, $alternativeTrees, $identity] = $this->treeData($request);
 
         return Inertia::render('tarombo/index', [
             'people' => $people,
             'margas' => $margas,
             'alternativeTrees' => $alternativeTrees,
+            'identity' => $identity,
         ]);
     }
 
@@ -35,24 +37,26 @@ class TaromboController extends Controller
      */
     public function fullscreen(Request $request, string $view): Response
     {
-        [$people, $margas, $alternativeTrees] = $this->treeData($request);
+        [$people, $margas, $alternativeTrees, $identity] = $this->treeData($request);
 
         return Inertia::render('tarombo/fullscreen', [
             'people' => $people,
             'margas' => $margas,
             'alternativeTrees' => $alternativeTrees,
             'view' => $view,
+            'identity' => $identity,
         ]);
     }
 
     /**
      * Build the scoped tarombo rows and marga legend for the current user.
      *
-     * @return array{0: mixed, 1: mixed, 2: mixed}
+     * @return array{0: mixed, 1: mixed, 2: mixed, 3: array<string, mixed>}
      */
     private function treeData(Request $request): array
     {
         $user = $request->user();
+        $user->loadMissing('currentPerson');
         $isStaff = $user->isStaff();
         $service = app(TaromboTreeService::class);
         $allowedPersonIds = $isStaff
@@ -130,10 +134,29 @@ class TaromboController extends Controller
             ->values()
             ->all();
 
+        $identityRequest = IdentityRequest::query()
+            ->with(['person:id,name', 'reviewer:id,name'])
+            ->where('requester_id', $user->id)
+            ->latest()
+            ->first();
+
         return [
             $rows,
             $service->margas($isStaff ? null : $user->marga_id),
             $alternativeTrees,
+            [
+                'currentPersonId' => $user->current_person_id !== null ? (string) $user->current_person_id : null,
+                'currentPersonName' => $user->currentPerson?->name,
+                'request' => $identityRequest ? [
+                    'id' => $identityRequest->id,
+                    'personId' => (string) $identityRequest->person_id,
+                    'personName' => $identityRequest->person->name,
+                    'status' => $identityRequest->status,
+                    'reviewer' => $identityRequest->reviewer?->name,
+                    'reviewedAt' => $identityRequest->reviewed_at?->format('d M Y H:i'),
+                    'reason' => $identityRequest->rejection_reason,
+                ] : null,
+            ],
         ];
     }
 

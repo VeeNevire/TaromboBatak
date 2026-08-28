@@ -15,6 +15,7 @@ use Illuminate\Support\Carbon;
  * @property string $title
  * @property string $description
  * @property string|null $image
+ * @property string|null $content_url
  * @property bool $published
  * @property int|null $created_by
  * @property int|null $marga_id
@@ -37,6 +38,7 @@ use Illuminate\Support\Carbon;
     'title',
     'description',
     'image',
+    'content_url',
     'published',
     'status',
     'review_version',

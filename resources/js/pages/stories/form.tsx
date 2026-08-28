@@ -1,5 +1,6 @@
 import { Head, Link, useForm } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
+import { toast } from 'sonner';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,6 +28,7 @@ type StoryFormValue = {
     title: string;
     description: string;
     image: string | null;
+    content_url: string | null;
     published: boolean;
     classification: 'umum' | 'marga';
     marga_id: number | null;
@@ -57,6 +59,7 @@ export default function StoryForm({
         title: story?.title ?? '',
         description: story?.description ?? '',
         image: story?.image ?? '',
+        content_url: story?.content_url ?? '',
         published: story?.published ?? canPublish,
         classification: story?.classification ?? 'umum',
         marga_id: story?.marga_id ? String(story.marga_id) : '',
@@ -66,9 +69,19 @@ export default function StoryForm({
         e.preventDefault();
 
         if (isEdit && story) {
-            put(stories.update(story.id).url);
+            put(stories.update(story.id).url, {
+                onError: () =>
+                    toast.error(
+                        'Cerita belum disimpan. Periksa kembali field yang ditandai.',
+                    ),
+            });
         } else {
-            post(stories.store().url);
+            post(stories.store().url, {
+                onError: () =>
+                    toast.error(
+                        'Cerita belum ditambahkan. Periksa kembali field yang ditandai.',
+                    ),
+            });
         }
     };
 
@@ -280,6 +293,30 @@ export default function StoryForm({
                                     className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                 />
                                 <InputError message={errors.image} />
+                            </div>
+
+                            <div className="grid gap-1.5">
+                                <Label
+                                    htmlFor="content_url"
+                                    className="text-tb-on-surface"
+                                >
+                                    URL Konten
+                                </Label>
+                                <Input
+                                    id="content_url"
+                                    type="url"
+                                    value={data.content_url}
+                                    onChange={(e) =>
+                                        setData('content_url', e.target.value)
+                                    }
+                                    placeholder="https://website-sumber.com/artikel"
+                                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                />
+                                <InputError message={errors.content_url} />
+                                <p className="text-xs text-tb-on-surface-variant">
+                                    Link ini akan dibuka saat pengguna memilih
+                                    “Lihat selengkapnya” di News Feed.
+                                </p>
                             </div>
 
                             {canPublish && (

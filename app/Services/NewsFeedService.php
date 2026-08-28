@@ -45,7 +45,7 @@ class NewsFeedService
             ]);
 
         $stories = Story::query()
-            ->select(['id', 'created_by', 'marga_id', 'title', 'description', 'image', 'created_at'])
+            ->select(['id', 'created_by', 'marga_id', 'title', 'description', 'image', 'content_url', 'created_at'])
             ->with(['creator:id,name', 'marga:id,name'])
             ->publiclyVisible()
             ->latest()
@@ -59,7 +59,7 @@ class NewsFeedService
                 'title' => $story->title,
                 'body' => $story->description,
                 'image' => $story->image,
-                'url' => route('cerita.show', $story),
+                'url' => $story->content_url ?: route('cerita.show', $story),
                 'meta' => $story->marga?->name,
                 'created_at' => $story->created_at?->toIso8601String(),
                 'comments' => [],

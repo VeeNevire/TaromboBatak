@@ -1,5 +1,8 @@
 import { Head } from '@inertiajs/react';
-import { TaromboExplorer } from '@/components/tarombo/tarombo-explorer';
+import {
+    TaromboExplorer,
+    type TaromboIdentity,
+} from '@/components/tarombo/tarombo-explorer';
 import type {
     MargaInfo,
     TaromboAlternativeTreeRow,
@@ -12,12 +15,14 @@ type Props = {
     people: TaromboPersonRow[];
     margas: MargaInfo[];
     alternativeTrees: TaromboAlternativeTreeRow[];
+    identity: TaromboIdentity;
 };
 
 export default function TaromboIndex({
     people,
     margas,
     alternativeTrees,
+    identity,
 }: Props) {
     return (
         <>
@@ -26,6 +31,7 @@ export default function TaromboIndex({
                 people={people}
                 margas={margas}
                 alternativeTrees={alternativeTrees}
+                identity={identity}
             />
         </>
     );

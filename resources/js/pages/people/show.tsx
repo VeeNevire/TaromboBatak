@@ -20,6 +20,7 @@ type Props = {
     familyTrees: FamilyTreeHistoryEntry[];
     approvedMargaTrees: FamilyTreeHistoryEntry[];
     versionTrees: FamilyTreeHistoryEntry[];
+    selectedVersionName?: string | null;
     shareableAccounts: ShareableAccount[];
     pendingTreeShares: PendingTreeShare[];
     canPublish: boolean;
@@ -34,6 +35,7 @@ export default function PersonShow({
     familyTrees,
     approvedMargaTrees,
     versionTrees,
+    selectedVersionName,
     shareableAccounts,
     pendingTreeShares,
     canPublish,
@@ -75,6 +77,7 @@ export default function PersonShow({
                     familyTrees={familyTrees}
                     approvedMargaTrees={approvedMargaTrees}
                     versionTrees={versionTrees}
+                    selectedVersionName={selectedVersionName}
                     shareableAccounts={shareableAccounts}
                     pendingTreeShares={pendingTreeShares}
                     canPublish={canPublish}

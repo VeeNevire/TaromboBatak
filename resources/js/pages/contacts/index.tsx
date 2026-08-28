@@ -1,4 +1,4 @@
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useConnectionStatus, useEcho } from '@laravel/echo-react';
 import {
     AlertCircle,
@@ -10,6 +10,7 @@ import {
     Loader2,
     MessageCircle,
     Megaphone,
+    Plus,
     RefreshCw,
     Search,
     Send,
@@ -29,9 +30,18 @@ import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { dashboard } from '@/routes';
 import announcements from '@/routes/announcements';
 import contacts from '@/routes/contacts';
+import contactRequests from '@/routes/contact-requests';
 
 type Contact = {
     id: number;
@@ -81,6 +91,13 @@ type Props = {
     contacts: Contact[];
     selectedContact: Contact | null;
     messages: RawMessage[];
+    availableUsers: { id: number; name: string; marga: string | null }[];
+    incomingContactRequests: {
+        id: number;
+        name: string;
+        marga: string | null;
+    }[];
+    outgoingContactRequests: number[];
 };
 
 const createUid = () =>
@@ -107,6 +124,9 @@ export default function ContactsIndex({
     contacts: contactItems,
     selectedContact,
     messages,
+    availableUsers,
+    incomingContactRequests,
+    outgoingContactRequests,
 }: Props) {
     const { auth } = usePage().props;
 
@@ -119,6 +139,11 @@ export default function ContactsIndex({
         Record<number, { loading: boolean; hasMore: boolean }>
     >({});
     const [search, setSearch] = useState('');
+    const [addContactOpen, setAddContactOpen] = useState(false);
+    const [contactSearch, setContactSearch] = useState('');
+    const [requestingContactId, setRequestingContactId] = useState<
+        number | null
+    >(null);
 
     const storeRef = useRef<Store>({});
     const contactItemsRef = useRef<Contact[]>(contactItems);
@@ -576,6 +601,27 @@ export default function ContactsIndex({
     const filteredContacts = contactItems.filter((contact) =>
         contact.name.toLocaleLowerCase().includes(deferredSearch),
     );
+    const filteredAvailableUsers = availableUsers.filter((user) =>
+        `${user.name} ${user.marga ?? ''}`
+            .toLocaleLowerCase()
+            .includes(contactSearch.toLocaleLowerCase()),
+    );
+
+    const sendContactRequest = (recipientId: number) => {
+        setRequestingContactId(recipientId);
+        router.post(
+            contactRequests.store().url,
+            { recipient_id: recipientId },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setAddContactOpen(false);
+                    setContactSearch('');
+                },
+                onFinish: () => setRequestingContactId(null),
+            },
+        );
+    };
 
     const statusIndicator = (
         <div
@@ -646,7 +692,19 @@ export default function ContactsIndex({
                                     className="bg-tb-surface-container-low border-tb-outline-variant pl-9"
                                 />
                             </div>
-                            <Button asChild variant="outline" className="mt-3 w-full">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="mt-3 w-full"
+                                onClick={() => setAddContactOpen(true)}
+                            >
+                                <Plus className="size-4" /> Tambah Kontak
+                            </Button>
+                            <Button
+                                asChild
+                                variant="outline"
+                                className="mt-3 w-full"
+                            >
                                 <Link href={announcements.index()}>
                                     <Megaphone className="size-4" />
                                     Kirim Pengumuman Telegram
@@ -957,6 +1015,156 @@ export default function ContactsIndex({
                     </section>
                 </div>
             </main>
+
+            <Dialog open={addContactOpen} onOpenChange={setAddContactOpen}>
+                <DialogContent className="border-tb-outline-variant bg-tb-surface-bright sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle className="font-display text-tb-on-surface">
+                            Tambah Kontak
+                        </DialogTitle>
+                        <DialogDescription>
+                            Cari akun dari marga lain. Pemilik akun harus
+                            menyetujui permintaan sebelum Anda dapat mengirim
+                            pesan.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4">
+                        {incomingContactRequests.length > 0 && (
+                            <div className="grid gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
+                                <p className="text-sm font-semibold text-tb-on-surface">
+                                    Permintaan masuk
+                                </p>
+                                {incomingContactRequests.map((request) => (
+                                    <div
+                                        key={request.id}
+                                        className="flex items-center justify-between gap-3 rounded-md bg-tb-surface-bright px-3 py-2"
+                                    >
+                                        <p className="min-w-0 truncate text-sm text-tb-on-surface">
+                                            {request.name}
+                                            <span className="ml-2 text-xs text-tb-on-surface-variant">
+                                                {request.marga ??
+                                                    'Marga belum dicatat'}
+                                            </span>
+                                        </p>
+                                        <div className="flex shrink-0 gap-1">
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                onClick={() =>
+                                                    router.patch(
+                                                        contactRequests.update(
+                                                            request.id,
+                                                        ).url,
+                                                        { status: 'approved' },
+                                                        {
+                                                            preserveScroll: true,
+                                                        },
+                                                    )
+                                                }
+                                            >
+                                                Terima
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() =>
+                                                    router.patch(
+                                                        contactRequests.update(
+                                                            request.id,
+                                                        ).url,
+                                                        { status: 'rejected' },
+                                                        {
+                                                            preserveScroll: true,
+                                                        },
+                                                    )
+                                                }
+                                            >
+                                                Tolak
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        <div className="relative">
+                            <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-tb-outline" />
+                            <Input
+                                value={contactSearch}
+                                onChange={(event) =>
+                                    setContactSearch(event.target.value)
+                                }
+                                placeholder="Cari nama atau marga..."
+                                className="border-tb-outline-variant pl-9"
+                            />
+                        </div>
+                        <div className="max-h-64 overflow-y-auto rounded-lg border border-tb-outline-variant">
+                            {filteredAvailableUsers.length > 0 ? (
+                                filteredAvailableUsers.map((user) => {
+                                    const isPending =
+                                        outgoingContactRequests.includes(
+                                            user.id,
+                                        );
+                                    const isContact = contactItems.some(
+                                        (contact) => contact.id === user.id,
+                                    );
+                                    return (
+                                        <div
+                                            key={user.id}
+                                            className="flex items-center justify-between gap-3 border-b border-tb-outline-variant px-3 py-2.5 last:border-b-0"
+                                        >
+                                            <div className="min-w-0">
+                                                <p className="truncate text-sm font-medium text-tb-on-surface">
+                                                    {user.name}
+                                                </p>
+                                                <p className="text-xs text-tb-on-surface-variant">
+                                                    {user.marga ??
+                                                        'Marga belum dicatat'}
+                                                </p>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                disabled={
+                                                    isPending ||
+                                                    isContact ||
+                                                    requestingContactId !== null
+                                                }
+                                                onClick={() =>
+                                                    sendContactRequest(user.id)
+                                                }
+                                            >
+                                                {isContact
+                                                    ? 'Sudah kontak'
+                                                    : isPending
+                                                      ? 'Menunggu'
+                                                      : requestingContactId ===
+                                                          user.id
+                                                        ? 'Mengirim...'
+                                                        : 'Tambah'}
+                                            </Button>
+                                        </div>
+                                    );
+                                })
+                            ) : (
+                                <p className="px-3 py-6 text-center text-sm text-tb-on-surface-variant">
+                                    Akun tidak ditemukan.
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setAddContactOpen(false)}
+                        >
+                            Tutup
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     );
 }

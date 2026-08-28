@@ -332,12 +332,23 @@ class FamilyEntryService
             return new Collection;
         }
 
-        // Each focus person owns a separate family history. Ancestors remain
-        // members for context, but do not define this family's identity.
+        // Reuse the account's existing tree when the focus person or father is
+        // already part of it. A connected family must remain one history even
+        // when it is entered from a different person in the same lineage.
+        $connectedPersonIds = collect([$focus, $father])
+            ->filter()
+            ->pluck('id')
+            ->unique()
+            ->values();
+
         $tree = FamilyTree::query()
             ->where('user_id', $createdBy)
-            ->where('root_person_id', $focus->id)
             ->whereNull('based_on_id')
+            ->where(function ($query) use ($focus, $connectedPersonIds) {
+                $query->where('root_person_id', $focus->id)
+                    ->orWhereHas('people', fn ($people) => $people->whereKey($connectedPersonIds->all()));
+            })
+            ->oldest('id')
             ->first()
             ?? FamilyTree::create([
                 'user_id' => $createdBy,

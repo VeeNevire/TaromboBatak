@@ -41,6 +41,7 @@ class PersonController extends Controller
 
         $people = Person::query()
             ->with(['marga', 'father'])
+            ->withCount('children')
             ->when(
                 ! $isStaff,
                 fn ($query) => $query
@@ -71,6 +72,7 @@ class PersonController extends Controller
                 'marga' => $person->marga?->name,
                 'marga_color' => $person->marga?->color,
                 'parent' => $person->father?->name,
+                'children_count' => $person->children_count,
                 'birth_year' => $person->birth_year,
                 'chain' => $person->chain,
                 'pending' => (bool) $person->pending_father,
@@ -227,6 +229,11 @@ class PersonController extends Controller
     {
         $user = $request->user();
         Gate::authorize('view', $person);
+        $versionTrees = $this->familyTrees($user, $person);
+        $selectedVersionName = data_get(
+            collect($versionTrees)->firstWhere('id', $request->integer('version_tree')),
+            'name',
+        );
 
         return Inertia::render('people/show', [
             'person' => $this->familyPayload($person, $user->isStaff() ? null : $user->marga_id),
@@ -235,7 +242,8 @@ class PersonController extends Controller
             'fatherSuggestions' => $this->fatherSuggestions($person),
             'familyTrees' => $this->familyTrees($user),
             'approvedMargaTrees' => $this->approvedMargaTrees($user),
-            'versionTrees' => $this->familyTrees($user, $person),
+            'versionTrees' => $versionTrees,
+            'selectedVersionName' => $selectedVersionName,
             ...$this->familyTreeSharingPayload($user),
             'canPublish' => $user->isStaff(),
             'readOnly' => ! $user->isStaff(),
@@ -251,6 +259,11 @@ class PersonController extends Controller
         $isStaff = $user->isStaff();
 
         Gate::authorize('update', $person);
+        $versionTrees = $this->familyTrees($user, $person);
+        $selectedVersionName = data_get(
+            collect($versionTrees)->firstWhere('id', $request->integer('version_tree')),
+            'name',
+        );
 
         return Inertia::render('people/form', [
             'person' => $this->familyPayload($person, $isStaff ? null : $user->marga_id),
@@ -263,7 +276,8 @@ class PersonController extends Controller
             'lockedMarga' => $isStaff ? null : $this->lockedMarga($user),
             'familyTrees' => $this->familyTrees($user),
             'approvedMargaTrees' => $this->approvedMargaTrees($user),
-            'versionTrees' => $this->familyTrees($user, $person),
+            'versionTrees' => $versionTrees,
+            'selectedVersionName' => $selectedVersionName,
             ...$this->familyTreeSharingPayload($user),
             'canPublish' => $isStaff,
         ]);
@@ -734,12 +748,20 @@ class PersonController extends Controller
     {
         Gate::authorize('delete', $person);
 
-        if (Person::query()
+        $children = Person::query()
             ->where('father_id', $person->id)
             ->orWhere('mother_id', $person->id)
-            ->exists()) {
+            ->orderBy('birth_order')
+            ->orderBy('id')
+            ->get(['id', 'name']);
+
+        if ($children->isNotEmpty()) {
+            $childNames = $children->take(5)->pluck('name')->implode(', ');
+            $remainingChildren = $children->count() - $children->take(5)->count();
+            $suffix = $remainingChildren > 0 ? " dan {$remainingChildren} lainnya" : '';
+
             throw ValidationException::withMessages([
-                'person' => 'Anggota yang masih menjadi orang tua tidak dapat dihapus.',
+                'person' => "Anggota ini masih memiliki {$children->count()} keturunan ({$childNames}{$suffix}). Hapus keturunan paling bawah terlebih dahulu.",
             ]);
         }
 

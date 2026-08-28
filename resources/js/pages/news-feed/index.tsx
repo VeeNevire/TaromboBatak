@@ -224,10 +224,14 @@ function FeedCard({ item }: { item: FeedItem }) {
                 item.url && (
                     <CardFooter className="border-t border-tb-outline-variant pt-4">
                         <Button asChild variant="outline" size="sm">
-                            <Link href={item.url}>
+                            <a
+                                href={item.url}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                            >
                                 Lihat selengkapnya
                                 <ExternalLink className="size-3.5" />
-                            </Link>
+                            </a>
                         </Button>
                     </CardFooter>
                 )

@@ -5,6 +5,7 @@ use App\Http\Controllers\AccountController;
 use App\Http\Controllers\ChatGroupController;
 use App\Http\Controllers\ChatGroupMemberController;
 use App\Http\Controllers\ContactController;
+use App\Http\Controllers\ContactRequestController;
 use App\Http\Controllers\ContributionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EventController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\FeedCommentController;
 use App\Http\Controllers\FeedPostController;
 use App\Http\Controllers\GroupMessageController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\IdentityRequestController;
 use App\Http\Controllers\KomunitasController;
 use App\Http\Controllers\MargaController;
 use App\Http\Controllers\MessageController;
@@ -71,6 +73,12 @@ Route::middleware(['auth'])->group(function () {
     Route::post('contacts/{contact}/messages', [MessageController::class, 'store'])
         ->middleware('throttle:60,1')
         ->name('contacts.messages.store');
+    Route::post('contact-requests', [ContactRequestController::class, 'store'])
+        ->name('contact-requests.store');
+    Route::patch('contact-requests/{contactRequest}', [ContactRequestController::class, 'update'])
+        ->name('contact-requests.update');
+    Route::post('identity-requests', [IdentityRequestController::class, 'store'])
+        ->name('identity-requests.store');
 
     Route::get('groups', [ChatGroupController::class, 'index'])->name('groups.index');
     Route::post('groups', [ChatGroupController::class, 'store'])->name('groups.store');
@@ -147,12 +155,15 @@ Route::middleware(['auth', 'role.staff'])->group(function () {
 Route::middleware(['auth', 'role.admin'])->group(function () {
     Route::resource('accounts', AccountController::class)->except(['show']);
     Route::resource('sub-admins', SubAdminController::class)->except(['show']);
+    Route::post('identity-requests/{identityRequest}/cancel', [IdentityRequestController::class, 'cancel'])->name('identity-requests.cancel');
     Route::post('dashboard/contributions/contributors', [ContributionController::class, 'storeContributor'])->name('contributions.contributors.store');
     Route::delete('dashboard/contributions/contributors/{contributor}', [ContributionController::class, 'destroyContributor'])->name('contributions.contributors.destroy');
 });
 
 Route::middleware(['auth', 'role.contributor'])->group(function () {
     Route::get('dashboard/contributions', [ContributionController::class, 'index'])->name('contributions.index');
+    Route::post('identity-requests/{identityRequest}/approve', [IdentityRequestController::class, 'approve'])->name('identity-requests.approve');
+    Route::post('identity-requests/{identityRequest}/reject', [IdentityRequestController::class, 'reject'])->name('identity-requests.reject');
     Route::post('dashboard/contributions/{contribution}/approve', [ContributionController::class, 'approve'])->name('contributions.approve');
     Route::post('dashboard/contributions/{contribution}/reject', [ContributionController::class, 'reject'])->name('contributions.reject');
     Route::post('events/{event}/approve', [EventController::class, 'approve'])->name('events.approve');

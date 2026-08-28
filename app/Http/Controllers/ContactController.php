@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Events\MessageRead;
+use App\Models\ContactRequest;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
@@ -138,11 +139,22 @@ class ContactController extends Controller
         }
 
         $conversations = $this->conversationsFor($user);
-        $contacts = $user->marga_id === null
-            ? collect()
-            : User::query()
+        $contacts = User::query()
                 ->with('marga')
-                ->where('marga_id', $user->marga_id)
+                ->where(function ($query) use ($user) {
+                    $query->when($user->marga_id !== null, fn ($query) => $query->where('marga_id', $user->marga_id))
+                        ->when($user->marga_id === null, fn ($query) => $query->whereRaw('1 = 0'))
+                        ->orWhereIn('id', ContactRequest::query()
+                            ->where('status', ContactRequest::STATUS_APPROVED)
+                            ->where(function ($requests) use ($user) {
+                                $requests->where('requester_id', $user->id)
+                                    ->orWhere('recipient_id', $user->id);
+                            })
+                            ->get()
+                            ->map(fn (ContactRequest $request): int => $request->requester_id === $user->id
+                                ? $request->recipient_id
+                                : $request->requester_id));
+                })
                 ->where('id', '!=', $user->id)
                 ->where('role', '!=', 'admin')
                 ->orderBy('name')
@@ -159,6 +171,32 @@ class ContactController extends Controller
 
         return Inertia::render('contacts/index', [
             'contacts' => $contacts,
+            'availableUsers' => User::query()
+                ->with('marga:id,name')
+                ->where('id', '!=', $user->id)
+                ->where('role', '!=', 'admin')
+                ->orderBy('name')
+                ->get()
+                ->map(fn (User $contact): array => [
+                    'id' => $contact->id,
+                    'name' => $contact->name,
+                    'marga' => $contact->marga?->name,
+                ]),
+            'incomingContactRequests' => ContactRequest::query()
+                ->where('recipient_id', $user->id)
+                ->where('status', ContactRequest::STATUS_PENDING)
+                ->with('requester:id,name,marga_id', 'requester.marga:id,name')
+                ->latest()
+                ->get()
+                ->map(fn (ContactRequest $request): array => [
+                    'id' => $request->id,
+                    'name' => $request->requester->name,
+                    'marga' => $request->requester->marga?->name,
+                ]),
+            'outgoingContactRequests' => ContactRequest::query()
+                ->where('requester_id', $user->id)
+                ->where('status', ContactRequest::STATUS_PENDING)
+                ->pluck('recipient_id'),
             'selectedContact' => $selectedContact
                 ? $this->contactPayload($selectedContact, $conversation)
                 : null,
