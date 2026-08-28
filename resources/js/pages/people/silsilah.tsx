@@ -1,9 +1,9 @@
 import { Head, Link } from '@inertiajs/react';
 import { ArrowLeft, Copy, Pencil } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { DescendantsTree } from '@/components/people/descendants-tree';
 import { buildTaromboPeople } from '@/data/tarombo-tree';
-import type { TaromboPersonRow } from '@/data/tarombo-tree';
+import type { TaromboPerson, TaromboPersonRow } from '@/data/tarombo-tree';
 import { dashboard } from '@/routes';
 import familyTrees from '@/routes/family-trees';
 import people from '@/routes/people';
@@ -39,6 +39,26 @@ export default function PersonSilsilah(props: Props) {
 
     const center =
         tree.find((person) => person.id === centerPersonId) ?? tree[0];
+    const lineagePath = useMemo(() => {
+        if (!center) {
+            return [];
+        }
+
+        const byId = new Map(tree.map((person) => [person.id, person]));
+        const path: string[] = [];
+        const visited = new Set<string>();
+        let current: TaromboPerson | null = center;
+
+        while (current && !visited.has(current.id)) {
+            visited.add(current.id);
+            path.push(current.id);
+            current = current.parentId
+                ? (byId.get(current.parentId) ?? null)
+                : null;
+        }
+
+        return path.reverse();
+    }, [center, tree]);
 
     const handleSelect = (id: string) => {
         if (id === centerPersonId) {
@@ -139,6 +159,9 @@ export default function PersonSilsilah(props: Props) {
                         people={tree}
                         centerId={centerPersonId}
                         onSelect={handleSelect}
+                        showProfileOnName
+                        lineagePath={lineagePath}
+                        markFemaleLineage
                     />
                 </div>
             </div>

@@ -23,6 +23,7 @@ use Illuminate\Support\Carbon;
  * @property string $password
  * @property string $role
  * @property int|null $marga_id
+ * @property int|null $current_person_id
  * @property string|null $province_code
  * @property string|null $regency_code
  * @property string|null $two_factor_secret
@@ -32,8 +33,11 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Marga|null $marga
+ * @property-read Person|null $currentPerson
  * @property-read Collection<int, FamilyTree> $familyTrees
  * @property-read Collection<int, ContributionRequest> $contributionRequests
+ * @property-read Collection<int, ContactRequest> $sentContactRequests
+ * @property-read Collection<int, ContactRequest> $receivedContactRequests
  * @property-read Collection<int, Event> $events
  * @property-read Collection<int, Story> $stories
  * @property-read Collection<int, FeedPost> $feedPosts
@@ -90,8 +94,17 @@ class User extends Authenticatable
         return ! $this->isAdmin()
             && ! $contact->isAdmin()
             && $this->id !== $contact->id
-            && $this->marga_id !== null
-            && $this->marga_id === $contact->marga_id;
+            && (($this->marga_id !== null && $this->marga_id === $contact->marga_id)
+                || ContactRequest::query()
+                    ->where('status', ContactRequest::STATUS_APPROVED)
+                    ->where(function ($query) use ($contact) {
+                        $query->where(function ($query) use ($contact) {
+                            $query->where('requester_id', $this->id)->where('recipient_id', $contact->id);
+                        })->orWhere(function ($query) use ($contact) {
+                            $query->where('requester_id', $contact->id)->where('recipient_id', $this->id);
+                        });
+                    })
+                    ->exists());
     }
 
     public function canUseGroups(): bool
@@ -125,6 +138,12 @@ class User extends Authenticatable
         return $this->belongsTo(Marga::class);
     }
 
+    /** @return BelongsTo<Person, $this> */
+    public function currentPerson(): BelongsTo
+    {
+        return $this->belongsTo(Person::class, 'current_person_id');
+    }
+
     /**
      * @return HasMany<FamilyTree, $this>
      */
@@ -143,6 +162,18 @@ class User extends Authenticatable
     public function contributionRequests(): HasMany
     {
         return $this->hasMany(ContributionRequest::class, 'requester_id');
+    }
+
+    /** @return HasMany<ContactRequest, $this> */
+    public function sentContactRequests(): HasMany
+    {
+        return $this->hasMany(ContactRequest::class, 'requester_id');
+    }
+
+    /** @return HasMany<ContactRequest, $this> */
+    public function receivedContactRequests(): HasMany
+    {
+        return $this->hasMany(ContactRequest::class, 'recipient_id');
     }
 
     /** @return HasMany<Event, $this> */

@@ -1,12 +1,5 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import {
-    NotebookPen,
-    Pencil,
-    Plus,
-    Route,
-    Search,
-    Trash2,
-} from 'lucide-react';
+import { NotebookPen, Pencil, Plus, Route, Search, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { AppAvatar } from '@/components/app-avatar';
@@ -38,6 +31,7 @@ type PersonItem = {
     marga: string | null;
     marga_color: string | null;
     parent: string | null;
+    children_count: number;
     birth_year: string | null;
     chain: string | null;
     pending: boolean;
@@ -368,11 +362,12 @@ export default function PeopleIndex({
                                                                 variant="ghost"
                                                                 size="icon"
                                                                 className="size-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
-                                                                onClick={() =>
+                                                                onClick={() => {
+                                                                    deleteForm.clearErrors();
                                                                     setToDelete(
                                                                         person,
-                                                                    )
-                                                                }
+                                                                    );
+                                                                }}
                                                             >
                                                                 <Trash2 className="size-4" />
                                                             </Button>
@@ -430,10 +425,23 @@ export default function PeopleIndex({
                             <DialogDescription>
                                 Yakin ingin menghapus{' '}
                                 <strong>{toDelete?.name}</strong> dari database?
-                                Anggota yang masih menjadi orang tua tidak dapat
-                                dihapus.
+                                {toDelete && toDelete.children_count > 0 ? (
+                                    <span className="mt-2 block font-medium text-red-700 dark:text-red-300">
+                                        Anggota ini masih memiliki{' '}
+                                        {toDelete.children_count} keturunan.
+                                        Hapus keturunan paling bawah terlebih
+                                        dahulu.
+                                    </span>
+                                ) : (
+                                    ' Anggota yang masih menjadi orang tua tidak dapat dihapus.'
+                                )}
                             </DialogDescription>
                         </DialogHeader>
+                        {deleteForm.errors.person && (
+                            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+                                {deleteForm.errors.person}
+                            </div>
+                        )}
                         <DialogFooter>
                             <Button
                                 variant="outline"

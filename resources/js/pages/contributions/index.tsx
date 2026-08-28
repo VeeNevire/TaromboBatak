@@ -35,6 +35,7 @@ import { dashboard } from '@/routes';
 import contributions from '@/routes/contributions';
 import events from '@/routes/events';
 import familyTreeDeletions from '@/routes/family-tree-deletions';
+import identityRequestRoutes from '@/routes/identity-requests';
 import stories from '@/routes/stories';
 
 type Contribution = {
@@ -45,6 +46,19 @@ type Contribution = {
     subject: string;
     matched_father: string;
     matched_father_marga: string | null;
+    reviewer: string | null;
+    reviewed_at: string | null;
+    reason: string | null;
+    created_at: string | null;
+};
+
+type IdentityApproval = {
+    id: number;
+    status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+    requester: string;
+    requester_marga: string | null;
+    person: string;
+    person_marga: string | null;
     reviewer: string | null;
     reviewed_at: string | null;
     reason: string | null;
@@ -118,6 +132,7 @@ type Props = {
     eventRequests: Paginated<EventApproval>;
     storyRequests: Paginated<StoryApproval>;
     deletionRequests: Paginated<DeletionRequest>;
+    identityRequests: Paginated<IdentityApproval>;
     contributors: Contributor[];
     margas: { id: number; name: string }[];
     canManageContributors: boolean;
@@ -129,6 +144,7 @@ export default function ContributionsIndex({
     eventRequests,
     storyRequests,
     deletionRequests,
+    identityRequests,
     contributors,
     margas,
     canManageContributors,
@@ -144,10 +160,13 @@ export default function ContributionsIndex({
     );
     const [deletionToReject, setDeletionToReject] =
         useState<DeletionRequest | null>(null);
+    const [identityToReject, setIdentityToReject] =
+        useState<IdentityApproval | null>(null);
     const rejectForm = useForm({ reason: '' });
     const eventReviewForm = useForm({ reason: '', version: 0 });
     const storyReviewForm = useForm({ reason: '', version: 0 });
     const deletionReviewForm = useForm({ reason: '' });
+    const identityReviewForm = useForm({ reason: '' });
     const contributorForm = useForm({
         name: '',
         email: '',
@@ -270,6 +289,29 @@ export default function ContributionsIndex({
         );
     };
 
+    const approveIdentity = (identity: IdentityApproval) => {
+        router.post(
+            identityRequestRoutes.approve(identity.id).url,
+            {},
+            { preserveScroll: true },
+        );
+    };
+
+    const rejectIdentity = () => {
+        if (!identityToReject) return;
+
+        identityReviewForm.post(
+            identityRequestRoutes.reject(identityToReject.id).url,
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setIdentityToReject(null);
+                    identityReviewForm.reset();
+                },
+            },
+        );
+    };
+
     const storeContributor = (event: React.FormEvent) => {
         event.preventDefault();
         contributorForm.post(contributions.contributors.store().url, {
@@ -351,6 +393,94 @@ export default function ContributionsIndex({
                 ))
             )}
             <Pagination page={requests} />
+        </div>
+    );
+
+    const identityContent = (
+        <div className="flex flex-col gap-4">
+            {identityRequests.data.length === 0 ? (
+                <Card className="border-dashed border-tb-outline-variant bg-tb-surface-bright">
+                    <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
+                        <UserRoundCog className="size-8 text-tb-on-surface-variant" />
+                        <p className="font-medium text-tb-on-surface">
+                            Belum ada log identitas
+                        </p>
+                    </CardContent>
+                </Card>
+            ) : (
+                identityRequests.data.map((identity) => (
+                    <Card
+                        key={identity.id}
+                        className="border-tb-outline-variant bg-tb-surface-bright"
+                    >
+                        <CardContent className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between">
+                            <div className="min-w-0 space-y-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <StatusBadge status={identity.status} />
+                                    <span className="text-xs text-tb-on-surface-variant">
+                                        {identity.created_at}
+                                    </span>
+                                </div>
+                                <p className="font-medium text-tb-on-surface">
+                                    {identity.requester} mengajukan identitas{' '}
+                                    <strong>{identity.person}</strong>.
+                                </p>
+                                <p className="text-sm text-tb-on-surface-variant">
+                                    Marga:{' '}
+                                    {identity.person_marga ??
+                                        identity.requester_marga ??
+                                        '-'}
+                                    {identity.reviewer &&
+                                        ` · Ditinjau ${identity.reviewer} pada ${identity.reviewed_at}`}
+                                </p>
+                                {identity.reason && (
+                                    <p className="text-sm text-red-700 dark:text-red-300">
+                                        Alasan: {identity.reason}
+                                    </p>
+                                )}
+                            </div>
+                            {identity.status === 'pending' && (
+                                <div className="flex shrink-0 gap-2">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() =>
+                                            setIdentityToReject(identity)
+                                        }
+                                    >
+                                        <X className="size-4" /> Tolak
+                                    </Button>
+                                    <Button
+                                        className="bg-tb-primary hover:bg-tb-primary-light"
+                                        onClick={() =>
+                                            approveIdentity(identity)
+                                        }
+                                    >
+                                        <Check className="size-4" /> Setujui
+                                    </Button>
+                                </div>
+                            )}
+                            {identity.status === 'approved' &&
+                                canManageContributors && (
+                                    <Button
+                                        variant="outline"
+                                        onClick={() =>
+                                            router.post(
+                                                identityRequestRoutes.cancel(
+                                                    identity.id,
+                                                ).url,
+                                                {},
+                                                { preserveScroll: true },
+                                            )
+                                        }
+                                    >
+                                        Batalkan Persetujuan
+                                    </Button>
+                                )}
+                        </CardContent>
+                    </Card>
+                ))
+            )}
+            <Pagination page={identityRequests} />
         </div>
     );
 
@@ -617,6 +747,9 @@ export default function ContributionsIndex({
                         <TabsTrigger value="requests">
                             Silsilah ({requests.total})
                         </TabsTrigger>
+                        <TabsTrigger value="identity">
+                            Identitas ({identityRequests.total})
+                        </TabsTrigger>
                         <TabsTrigger value="events">
                             Event ({eventRequests.total})
                         </TabsTrigger>
@@ -634,6 +767,9 @@ export default function ContributionsIndex({
                     </TabsList>
                     <TabsContent value="requests" className="mt-4">
                         {content}
+                    </TabsContent>
+                    <TabsContent value="identity" className="mt-4">
+                        {identityContent}
                     </TabsContent>
                     <TabsContent value="events" className="mt-4">
                         {eventContent}
@@ -925,6 +1061,56 @@ export default function ContributionsIndex({
             </Dialog>
 
             <Dialog
+                open={identityToReject !== null}
+                onOpenChange={(open) => !open && setIdentityToReject(null)}
+            >
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Tolak Pengajuan Identitas</DialogTitle>
+                        <DialogDescription>
+                            Berikan alasan agar pengguna mengetahui hasil
+                            verifikasi.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-2">
+                        <Label htmlFor="identity-reason">
+                            Alasan (opsional)
+                        </Label>
+                        <textarea
+                            id="identity-reason"
+                            value={identityReviewForm.data.reason}
+                            onChange={(event) =>
+                                identityReviewForm.setData(
+                                    'reason',
+                                    event.target.value,
+                                )
+                            }
+                            maxLength={1000}
+                            className="min-h-24 rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+                        />
+                        <InputError
+                            message={identityReviewForm.errors.reason}
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setIdentityToReject(null)}
+                        >
+                            Batal
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            disabled={identityReviewForm.processing}
+                            onClick={rejectIdentity}
+                        >
+                            Tolak Identitas
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
                 open={showContributorForm}
                 onOpenChange={setShowContributorForm}
             >
@@ -1125,11 +1311,16 @@ function Field({
     );
 }
 
-function StatusBadge({ status }: { status: Contribution['status'] }) {
+function StatusBadge({
+    status,
+}: {
+    status: Contribution['status'] | IdentityApproval['status'];
+}) {
     const labels = {
         pending: 'Menunggu',
         approved: 'Disetujui',
         rejected: 'Ditolak',
+        cancelled: 'Dibatalkan',
     };
     const styles = {
         pending:
@@ -1137,6 +1328,8 @@ function StatusBadge({ status }: { status: Contribution['status'] }) {
         approved:
             'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200',
         rejected: 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200',
+        cancelled:
+            'bg-slate-100 text-slate-800 dark:bg-slate-950 dark:text-slate-200',
     };
 
     return (

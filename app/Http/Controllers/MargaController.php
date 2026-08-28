@@ -22,7 +22,7 @@ class MargaController extends Controller
     public function index(): Response
     {
         $margas = Marga::query()
-            ->withCount(['people' => fn ($query) => $query->public()])
+            ->withCount('people')
             ->orderBy('people_count', 'desc')
             ->orderBy('name')
             ->get()

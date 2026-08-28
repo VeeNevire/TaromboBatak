@@ -7,6 +7,7 @@ use App\Http\Requests\StoreContributorRequest;
 use App\Models\ContributionRequest;
 use App\Models\Event;
 use App\Models\FamilyTreeDeletionRequest;
+use App\Models\IdentityRequest;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Models\Story;
@@ -121,6 +122,28 @@ class ContributionController extends Controller
                 'created_at' => $deletion->created_at?->format('d M Y H:i'),
             ]);
 
+        $identityRequests = IdentityRequest::query()
+            ->with(['requester.marga', 'person.marga', 'reviewer'])
+            ->when(! $user->isAdmin(), fn ($query) => $query->whereHas(
+                'person',
+                fn ($person) => $person->where('marga_id', $user->marga_id),
+            ))
+            ->latest()
+            ->paginate(15, ['*'], 'identity_page')
+            ->withQueryString()
+            ->through(fn (IdentityRequest $identity) => [
+                'id' => $identity->id,
+                'status' => $identity->status,
+                'requester' => $identity->requester->name,
+                'requester_marga' => $identity->requester->marga?->name,
+                'person' => $identity->person->name,
+                'person_marga' => $identity->person->marga?->name,
+                'reviewer' => $identity->reviewer?->name,
+                'reviewed_at' => $identity->reviewed_at?->format('d M Y H:i'),
+                'reason' => $identity->rejection_reason,
+                'created_at' => $identity->created_at?->format('d M Y H:i'),
+            ]);
+
         $contributors = $user->isAdmin()
             ? User::query()
                 ->whereIn('role', ['contributor_main', 'contributor_member'])
@@ -138,7 +161,7 @@ class ContributionController extends Controller
             : [];
 
         $requestedTab = $request->string('tab')->toString();
-        $activeTab = in_array($requestedTab, ['events', 'stories', 'deletions'], true) ? $requestedTab : 'requests';
+        $activeTab = in_array($requestedTab, ['events', 'stories', 'deletions', 'identity'], true) ? $requestedTab : 'requests';
         $notificationType = match ($activeTab) {
             'events' => EventSubmitted::class,
             'stories' => StorySubmitted::class,
@@ -154,6 +177,7 @@ class ContributionController extends Controller
             'eventRequests' => $eventRequests,
             'storyRequests' => $storyRequests,
             'deletionRequests' => $deletionRequests,
+            'identityRequests' => $identityRequests,
             'contributors' => $contributors,
             'margas' => $user->isAdmin()
                 ? Marga::query()->orderBy('name')->get(['id', 'name'])

@@ -10,6 +10,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
@@ -44,6 +45,19 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $exceptions->respond(function (Response $response, Throwable $exception, Request $request): Response {
             $status = $response->getStatusCode();
+
+            if ($status === 419 && ! $request->expectsJson()) {
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+
+                Inertia::flash('toast', [
+                    'type' => 'warning',
+                    'message' => 'Sesi Anda telah berakhir. Silakan login kembali.',
+                ]);
+
+                return to_route('login');
+            }
 
             // Navigasi browser yang ditolak kebijakan tidak perlu menampilkan
             // halaman error: kembalikan pengguna dengan pesan penjelasan.

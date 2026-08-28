@@ -32,14 +32,30 @@ import type {
 } from '@/data/tarombo-tree';
 import { cn } from '@/lib/utils';
 import peopleRoutes from '@/routes/people';
+import identityRequests from '@/routes/identity-requests';
 import tarombo from '@/routes/tarombo';
 
 type FullscreenView = 'diagram' | 'tree';
+
+export type TaromboIdentity = {
+    currentPersonId: string | null;
+    currentPersonName: string | null;
+    request: {
+        id: number;
+        personId: string;
+        personName: string;
+        status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+        reviewer: string | null;
+        reviewedAt: string | null;
+        reason: string | null;
+    } | null;
+};
 
 type Props = {
     people: TaromboPersonRow[];
     margas: MargaInfo[];
     alternativeTrees: TaromboAlternativeTreeRow[];
+    identity?: TaromboIdentity;
     fullscreen?: boolean;
     fullscreenView?: FullscreenView;
 };
@@ -53,14 +69,6 @@ function readStoredMyPersonId(): string | null {
         return window.localStorage.getItem(MY_PERSON_STORAGE_KEY);
     } catch {
         return null;
-    }
-}
-
-function writeStoredMyPersonId(id: string): void {
-    try {
-        window.localStorage.setItem(MY_PERSON_STORAGE_KEY, id);
-    } catch {
-        return;
     }
 }
 
@@ -149,6 +157,7 @@ export function TaromboExplorer({
     people: rows,
     margas,
     alternativeTrees,
+    identity,
     fullscreen = false,
     fullscreenView = 'diagram',
 }: Props) {
@@ -158,11 +167,12 @@ export function TaromboExplorer({
         (person) => person.gender === 'L' || !person.gender,
     );
     const storedMyId = readStoredMyPersonId();
-    const initialMyId =
-        storedMyId !== null &&
-        fatherPeople.some((person) => person.id === storedMyId)
-            ? storedMyId
-            : null;
+    const initialMyId = identity
+        ? identity.currentPersonId
+        : storedMyId !== null &&
+            fatherPeople.some((person) => person.id === storedMyId)
+          ? storedMyId
+          : null;
     const [myId, setMyId] = useState<string | null>(initialMyId);
     const [pickerOpen, setPickerOpen] = useState(false);
     const [selectedId, setSelectedId] = useState<string | null>(initialMyId);
@@ -173,6 +183,7 @@ export function TaromboExplorer({
     const [treeZoom, setTreeZoom] = useState(1);
     const [showFemaleLineage, setShowFemaleLineage] = useState(false);
     const [savingSnapshot, setSavingSnapshot] = useState(false);
+    const [snapshotMode, setSnapshotMode] = useState(false);
     const snapshotRef = useRef<HTMLDivElement>(null);
     const [ancestorFocusId, setAncestorFocusId] = useState<string | null>(
         initialMyId,
@@ -182,7 +193,12 @@ export function TaromboExplorer({
         Math.round(Math.min(2, Math.max(0.5, value)) * 100) / 100;
 
     const treeZoomControls = (
-        <div className="flex flex-col overflow-hidden rounded-lg border border-tb-outline-variant bg-tb-surface-bright/95 shadow-md backdrop-blur">
+        <div
+            className={cn(
+                'flex flex-col overflow-hidden rounded-lg border border-tb-outline-variant bg-tb-surface-bright/95 shadow-md backdrop-blur',
+                snapshotMode && 'invisible',
+            )}
+        >
             <button
                 type="button"
                 onClick={() => setTreeZoom((z) => clampZoom(z + 0.25))}
@@ -208,13 +224,16 @@ export function TaromboExplorer({
     );
 
     const femaleLineageToggle = (
-        <label className="flex cursor-pointer items-center justify-end gap-2 text-xs font-semibold text-emerald-700 select-none dark:text-emerald-300">
+        <label
+            className={cn(
+                'flex cursor-pointer items-center justify-end gap-2 text-xs font-semibold text-emerald-700 select-none dark:text-emerald-300',
+                snapshotMode && 'invisible',
+            )}
+        >
             <input
                 type="checkbox"
                 checked={showFemaleLineage}
-                onChange={(event) =>
-                    setShowFemaleLineage(event.target.checked)
-                }
+                onChange={(event) => setShowFemaleLineage(event.target.checked)}
                 className="size-4 rounded border-emerald-600 text-emerald-600 accent-emerald-600 focus:ring-2 focus:ring-emerald-500/30"
             />
             Silsilah Perempuan Ditampilkan
@@ -299,17 +318,24 @@ export function TaromboExplorer({
     };
 
     const handleIdentitySelect = (person: TaromboPerson) => {
-        writeStoredMyPersonId(person.id);
-        setMyId(person.id);
-        setPickerOpen(false);
+        router.post(
+            identityRequests.store().url,
+            { person_id: Number(person.id) },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setPickerOpen(false);
 
-        if (person.id !== centerPersonId) {
-            setHistory((prev) => [...prev, centerPersonId]);
-        }
+                    if (person.id !== centerPersonId) {
+                        setHistory((prev) => [...prev, centerPersonId]);
+                    }
 
-        setSelectedId(person.id);
-        setCenterPersonId(person.id);
-        setAncestorFocusId(person.id);
+                    setSelectedId(person.id);
+                    setCenterPersonId(person.id);
+                    setAncestorFocusId(person.id);
+                },
+            },
+        );
     };
 
     const handleIdentityReset = () => {
@@ -355,8 +381,14 @@ export function TaromboExplorer({
         }
 
         setSavingSnapshot(true);
+        setSnapshotMode(true);
 
         try {
+            await new Promise<void>((resolve) =>
+                requestAnimationFrame(() =>
+                    requestAnimationFrame(() => resolve()),
+                ),
+            );
             await document.fonts.ready;
 
             const dataUrl = await toJpeg(snapshotNode, {
@@ -394,6 +426,8 @@ export function TaromboExplorer({
             toast.error(
                 'Tampilan pohon gagal dibuat menjadi gambar. Coba kembali.',
             );
+        } finally {
+            setSnapshotMode(false);
         }
     };
 
@@ -522,7 +556,10 @@ export function TaromboExplorer({
                     {fullscreen ? (
                         <Link
                             href={tarombo.index()}
-                            className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:bg-tb-surface-container"
+                            className={cn(
+                                'inline-flex w-fit items-center gap-1.5 rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:bg-tb-surface-container',
+                                snapshotMode && 'invisible',
+                            )}
                         >
                             <ArrowLeft className="size-4" /> Kembali
                         </Link>
@@ -539,7 +576,9 @@ export function TaromboExplorer({
                                 : `Pohon vertikal dari ${treeCenterPerson?.name ?? 'Leluhur Utama'}`}
                         </p>
                     </div>
-                    <div className="flex justify-end">{femaleLineageToggle}</div>
+                    <div className="flex justify-end">
+                        {femaleLineageToggle}
+                    </div>
                 </div>
                 <div style={{ zoom: treeZoom }}>
                     <DescendantsTree
@@ -662,6 +701,11 @@ export function TaromboExplorer({
                     ) : (
                         <span className="text-sm text-tb-on-surface-variant italic">
                             Belum dipilih
+                        </span>
+                    )}
+                    {identity?.request?.status === 'pending' && (
+                        <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                            Menunggu persetujuan
                         </span>
                     )}
                     <Button

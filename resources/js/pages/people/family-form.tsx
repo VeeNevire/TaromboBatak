@@ -167,6 +167,7 @@ type Props = {
     familyTrees?: FamilyTreeHistoryEntry[];
     approvedMargaTrees?: FamilyTreeHistoryEntry[];
     versionTrees?: FamilyTreeHistoryEntry[];
+    selectedVersionName?: string | null;
     shareableAccounts?: ShareableAccount[];
     pendingTreeShares?: PendingTreeShare[];
     initialFatherName?: string;
@@ -214,7 +215,9 @@ function FamilyTreeVersionAction({
     const actionLabel = isOpenMode ? 'Versi Silsilah' : 'Salin Versi';
     const actionHref = (entry: FamilyTreeHistoryEntry) =>
         isOpenMode
-            ? people.edit(entry.root_person_id)
+            ? people.edit(entry.root_person_id, {
+                  query: { version_tree: entry.id },
+              })
             : familyTreeRoutes.duplicate(entry.id);
 
     if (entries.length === 1) {
@@ -386,8 +389,8 @@ function SilsilahListCard({
                         {lineage.map((entry) => {
                             const isOpen = expanded.has(entry.id);
                             const count = entry.children.length;
-                            const entryTrees = familyTrees.filter((tree) =>
-                                tree.member_person_ids.includes(entry.id),
+                            const entryTrees = familyTrees.filter(
+                                (tree) => tree.root_person_id === entry.id,
                             );
 
                             return (
@@ -467,9 +470,8 @@ function SilsilahListCard({
                                                             const childTrees =
                                                                 familyTrees.filter(
                                                                     (tree) =>
-                                                                        tree.member_person_ids.includes(
-                                                                            child.id,
-                                                                        ),
+                                                                        tree.root_person_id ===
+                                                                        child.id,
                                                                 );
 
                                                             return (
@@ -591,8 +593,8 @@ function MargaLineageCard({
                                 (entry.children ?? []).length > 0;
                             const expandKey = `${entry.id}-${entry.chain ?? 'na'}`;
                             const isOpen = expanded.has(expandKey);
-                            const entryTrees = familyTrees.filter((tree) =>
-                                tree.member_person_ids.includes(entry.id),
+                            const entryTrees = familyTrees.filter(
+                                (tree) => tree.root_person_id === entry.id,
                             );
 
                             return (
@@ -674,9 +676,8 @@ function MargaLineageCard({
                                                             const childTrees =
                                                                 familyTrees.filter(
                                                                     (tree) =>
-                                                                        tree.member_person_ids.includes(
-                                                                            child.id,
-                                                                        ),
+                                                                        tree.root_person_id ===
+                                                                        child.id,
                                                                 );
 
                                                             return (
@@ -1020,6 +1021,7 @@ export default function FamilyForm({
     familyTrees = [],
     approvedMargaTrees = [],
     versionTrees = [],
+    selectedVersionName = null,
     shareableAccounts = [],
     pendingTreeShares = [],
     canPublish = false,
@@ -1119,6 +1121,10 @@ export default function FamilyForm({
 
     const birthOrder = Number(data.birth_order) || 1;
     const siblingCount = Number(data.sibling_count) || 1;
+    const listFamilyTrees = [...familyTrees, ...approvedMargaTrees].filter(
+        (tree, index, all) =>
+            all.findIndex((candidate) => candidate.id === tree.id) === index,
+    );
 
     const prevSiblingCount = useRef(siblingCount);
     const savedExcessToastShown = useRef(false);
@@ -2132,6 +2138,11 @@ export default function FamilyForm({
                                                         jejak keluarga.
                                                     </CardDescription>
                                                 </div>
+                                                {selectedVersionName && (
+                                                    <span className="max-w-56 shrink-0 rounded-lg border border-tb-primary/30 bg-tb-primary/5 px-2.5 py-1.5 text-right text-xs font-semibold text-tb-primary">
+                                                        {selectedVersionName}
+                                                    </span>
+                                                )}
                                                 {person && !readOnly && (
                                                     <FamilyTreeVersionAction
                                                         entries={versionTrees}
@@ -2695,7 +2706,7 @@ export default function FamilyForm({
                                         <SilsilahListCard
                                             lineage={person.lineage}
                                             selfId={person.id}
-                                            familyTrees={familyTrees}
+                                            familyTrees={listFamilyTrees}
                                         />
                                         <FamilyTreeHistoryCard
                                             entries={familyTrees}
@@ -2715,7 +2726,7 @@ export default function FamilyForm({
                                             entries={highlightedLineage}
                                             fatherChain={predictedFatherChain}
                                             focusChain={predictedFocusChain}
-                                            familyTrees={familyTrees}
+                                            familyTrees={listFamilyTrees}
                                         />
                                         <FamilyTreeHistoryCard
                                             entries={familyTrees}

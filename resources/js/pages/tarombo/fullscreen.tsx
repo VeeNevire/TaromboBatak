@@ -1,5 +1,8 @@
 import { Head } from '@inertiajs/react';
-import { TaromboExplorer } from '@/components/tarombo/tarombo-explorer';
+import {
+    TaromboExplorer,
+    type TaromboIdentity,
+} from '@/components/tarombo/tarombo-explorer';
 import type {
     MargaInfo,
     TaromboAlternativeTreeRow,
@@ -11,6 +14,7 @@ type Props = {
     margas: MargaInfo[];
     alternativeTrees: TaromboAlternativeTreeRow[];
     view: 'diagram' | 'tree';
+    identity: TaromboIdentity;
 };
 
 export default function TaromboFullscreen({
@@ -18,6 +22,7 @@ export default function TaromboFullscreen({
     margas,
     alternativeTrees,
     view,
+    identity,
 }: Props) {
     return (
         <>
@@ -28,6 +33,7 @@ export default function TaromboFullscreen({
                 alternativeTrees={alternativeTrees}
                 fullscreen
                 fullscreenView={view}
+                identity={identity}
             />
         </>
     );

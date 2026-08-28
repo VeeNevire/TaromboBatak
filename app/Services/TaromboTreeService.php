@@ -26,6 +26,7 @@ class TaromboTreeService
             ))
             ->with([
                 'person.marga',
+                'person.creator:id,name',
                 'fatherNode',
                 'children' => fn ($query) => $query
                     ->when($margaId !== null, fn ($children) => $children->whereHas(
@@ -57,6 +58,7 @@ class TaromboTreeService
                 'spouse' => $node->person->spouse,
                 'image' => $node->person->image,
                 'bio' => $node->person->bio,
+                'createdBy' => $node->person->creator?->name,
                 'relatedStories' => $node->person->related_stories ?? [],
                 'childrenNames' => $node->children
                     ->sortBy('birth_order')
@@ -81,6 +83,7 @@ class TaromboTreeService
         return $query
             ->with([
                 'marga',
+                'creator:id,name',
                 'children' => fn ($query) => $query
                     ->when($familyTreeId !== null, fn ($query) => $query
                         ->whereHas('familyTrees', fn ($query) => $query->whereKey($familyTreeId))),
@@ -100,6 +103,7 @@ class TaromboTreeService
                 'spouse' => $person->spouse,
                 'image' => $person->image,
                 'bio' => $person->bio,
+                'createdBy' => $person->creator?->name,
                 'relatedStories' => $person->related_stories ?? [],
                 'childrenNames' => $person->children
                     ->sortBy('birth_year')

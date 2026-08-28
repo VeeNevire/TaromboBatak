@@ -187,6 +187,13 @@ export function PersonSummaryDialog({
                             )}
                     </div>
 
+                    <p className="text-xs text-tb-on-surface-variant">
+                        Sumber:{' '}
+                        <span className="font-medium text-tb-on-surface">
+                            {person.createdBy || 'Belum dicatat'}
+                        </span>
+                    </p>
+
                     <DialogFooter className="gap-2 sm:justify-between">
                         <DialogClose asChild>
                             <Button type="button" variant="outline">

@@ -19,6 +19,7 @@ class UpdateStoryRequest extends FormRequest
             'title' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string'],
             'image' => ['nullable', 'url'],
+            'content_url' => ['nullable', 'url:http,https', 'max:2048'],
             'published' => ['boolean'],
             'classification' => ['required', Rule::in(['umum', 'marga'])],
             'marga_id' => [
