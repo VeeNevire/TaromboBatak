@@ -161,7 +161,7 @@ type Props = {
     person: FamilyData | null;
     margas: MargaOption[];
     nameSuggestions: NameSuggestion[];
-    fatherSuggestions: string[];
+    fatherSuggestions: NameSuggestion[];
     lockedMarga?: { id: number; name: string } | null;
     lineage?: MargaLineageEntry[];
     familyTrees?: FamilyTreeHistoryEntry[];
@@ -1767,7 +1767,10 @@ export default function FamilyForm({
         field: 'name' | 'alias' | 'birth_year' | 'death_year' | 'father_name',
         value: string,
     ) => {
-        updateParent(key, { [field]: value });
+        updateParent(key, {
+            [field]: value,
+            ...(key === 'father' && field === 'name' ? { id: null } : {}),
+        });
     };
 
     const setParentMarga = (key: ParentKey, margaId: number | null) => {
@@ -1869,6 +1872,16 @@ export default function FamilyForm({
                         }
                         placeholder={`Nama ${label.toLowerCase()}`}
                         allowNa
+                        onSelect={
+                            key === 'father'
+                                ? (suggestion) =>
+                                      updateParent(key, {
+                                          id: suggestion.id,
+                                          name: suggestion.name,
+                                          marga_id: suggestion.marga_id ?? null,
+                                      })
+                                : undefined
+                        }
                     />
                     <InputError message={errors[`${errorPrefix}.name`]} />
                     <div className="grid gap-1.5 pt-2">
@@ -2688,8 +2701,12 @@ export default function FamilyForm({
                                             entries={familyTrees}
                                             approvedEntries={approvedMargaTrees}
                                             margaName={activeMargaName}
-                                            shareableAccounts={shareableAccounts}
-                                            pendingTreeShares={pendingTreeShares}
+                                            shareableAccounts={
+                                                shareableAccounts
+                                            }
+                                            pendingTreeShares={
+                                                pendingTreeShares
+                                            }
                                         />
                                     </>
                                 ) : (
@@ -2704,8 +2721,12 @@ export default function FamilyForm({
                                             entries={familyTrees}
                                             approvedEntries={approvedMargaTrees}
                                             margaName={activeMargaName}
-                                            shareableAccounts={shareableAccounts}
-                                            pendingTreeShares={pendingTreeShares}
+                                            shareableAccounts={
+                                                shareableAccounts
+                                            }
+                                            pendingTreeShares={
+                                                pendingTreeShares
+                                            }
                                         />
                                     </>
                                 )}

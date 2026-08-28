@@ -17,7 +17,7 @@ type Props = {
     person: FamilyData | null;
     margas: { id: number; name: string }[];
     nameSuggestions: NameSuggestion[];
-    fatherSuggestions: string[];
+    fatherSuggestions: NameSuggestion[];
     lockedMarga?: { id: number; name: string } | null;
     lineage?: MargaLineageEntry[];
     familyTrees?: FamilyTreeHistoryEntry[];
