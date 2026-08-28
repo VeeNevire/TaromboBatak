@@ -1055,30 +1055,31 @@ class PersonController extends Controller
      * Male people eligible to become the selected person's father.
      * Legacy fathers without a recorded gender remain selectable.
      *
-     * @return array<int, string>
+     * @return array<int, array<string, mixed>>
      */
     protected function fatherSuggestions(?Person $person = null, ?int $margaId = null): array
     {
-        $names = Person::query()
+        return Person::query()
+            ->with(['father:id,name', 'marga:id,name'])
             ->when($margaId !== null, fn ($query) => $query->where('marga_id', $margaId))
             ->where('gender', 'L')
             ->when($person !== null, fn ($query) => $query->whereNotIn('id', $person->ineligibleFatherIds()))
             ->whereNotNull('name')
             ->where('name', '!=', 'N/A')
-            ->pluck('name');
-
-        if (
-            $person?->father !== null
-            && ! $person->father->isNa()
-            && ($margaId === null || $person->father->marga_id === $margaId)
-        ) {
-            $names->push($person->father->name);
-        }
-
-        return $names
-            ->unique(fn (string $name) => mb_strtolower(trim($name)))
-            ->sort(SORT_NATURAL | SORT_FLAG_CASE)
-            ->values()
+            ->orderBy('name')
+            ->orderBy('father_id')
+            ->limit(300)
+            ->get()
+            ->map(fn (Person $father) => [
+                'id' => $father->id,
+                'name' => $father->name,
+                'gender' => $father->gender,
+                'marga_id' => $father->marga_id,
+                'marga' => $father->marga?->name,
+                'father_id' => $father->father_id,
+                'father_name' => $father->father?->name,
+                'chain' => $father->chain,
+            ])
             ->all();
     }
 
@@ -1197,7 +1198,6 @@ class PersonController extends Controller
         $shareableAccounts = User::query()
             ->whereKeyNot($user->id)
             ->where('role', '!=', 'admin')
-            ->when(! $user->isStaff(), fn ($query) => $query->where('marga_id', $user->marga_id))
             ->with('marga:id,name')
             ->orderBy('name')
             ->get(['id', 'name', 'email', 'marga_id'])

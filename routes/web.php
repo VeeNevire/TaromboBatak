@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\BudayaController;
+use App\Http\Controllers\AccountController;
 use App\Http\Controllers\ChatGroupController;
 use App\Http\Controllers\ChatGroupMemberController;
 use App\Http\Controllers\ContactController;
@@ -144,6 +145,7 @@ Route::middleware(['auth', 'role.staff'])->group(function () {
 });
 
 Route::middleware(['auth', 'role.admin'])->group(function () {
+    Route::resource('accounts', AccountController::class)->except(['show']);
     Route::resource('sub-admins', SubAdminController::class)->except(['show']);
     Route::post('dashboard/contributions/contributors', [ContributionController::class, 'storeContributor'])->name('contributions.contributors.store');
     Route::delete('dashboard/contributions/contributors/{contributor}', [ContributionController::class, 'destroyContributor'])->name('contributions.contributors.destroy');

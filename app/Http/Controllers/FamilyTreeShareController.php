@@ -25,12 +25,6 @@ class FamilyTreeShareController extends Controller
             ]);
         }
 
-        if (! $sender->isStaff() && ($sender->marga_id === null || $sender->marga_id !== $recipient->marga_id)) {
-            throw ValidationException::withMessages([
-                'recipient_id' => 'Pohon hanya dapat dibagikan kepada akun dengan marga yang sama.',
-            ]);
-        }
-
         FamilyTreeShare::query()->updateOrCreate(
             ['family_tree_id' => $familyTree->id, 'recipient_id' => $recipient->id],
             ['sender_id' => $sender->id, 'status' => FamilyTreeShare::STATUS_PENDING, 'responded_at' => null],

@@ -27,6 +27,7 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import accounts from '@/routes/accounts';
 import announcements from '@/routes/announcements';
 import contacts from '@/routes/contacts';
 import contributions from '@/routes/contributions';
@@ -103,6 +104,11 @@ export function AppSidebar() {
                   {
                       label: 'Kelola Data',
                       items: [
+                          {
+                              title: 'Data Akun',
+                              href: accounts.index(),
+                              icon: Users,
+                          },
                           {
                               title: 'Data Anggota',
                               href: people.index(),

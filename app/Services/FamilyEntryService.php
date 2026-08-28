@@ -62,7 +62,7 @@ class FamilyEntryService
 
             $father = $fatherGiven && $matchedFather === null
                 ? $this->resolveParent(
-                    $data['father_id'] ?? null,
+                    data_get($data, 'father.id') ?? ($data['father_id'] ?? null),
                     $data['father'] ?? null,
                     $fatherMargaId,
                     $forcedMargaId,
@@ -245,14 +245,16 @@ class FamilyEntryService
      */
     protected function findExistingFatherMatch(array $data, ?int $margaId, array $excludedIds): ?Person
     {
-        if (! empty($data['father_id'])) {
+        $fatherId = data_get($data, 'father.id') ?? ($data['father_id'] ?? null);
+
+        if (! empty($fatherId)) {
             $father = Person::query()
-                ->whereKey((int) $data['father_id'])
+                ->whereKey((int) $fatherId)
                 ->whereNotIn('id', $excludedIds)
                 ->when($margaId !== null, fn ($query) => $query->where('marga_id', $margaId))
                 ->first();
 
-            if ($father === null && in_array((int) $data['father_id'], $excludedIds, true)) {
+            if ($father === null && in_array((int) $fatherId, $excludedIds, true)) {
                 throw ValidationException::withMessages([
                     'father_id' => 'Relasi orang tua ini akan membentuk siklus silsilah.',
                 ]);
@@ -658,7 +660,7 @@ class FamilyEntryService
         ?string $expectedGender = null,
         array $excludedIds = [],
     ): ?Person {
-        if ($parentId && $forcedMargaId === null) {
+        if ($parentId) {
             if (in_array($parentId, $excludedIds, true)) {
                 throw ValidationException::withMessages([
                     'father_id' => 'Relasi orang tua ini akan membentuk siklus silsilah.',
@@ -668,6 +670,7 @@ class FamilyEntryService
             $parent = Person::query()
                 ->whereKey($parentId)
                 ->whereNotIn('id', $excludedIds)
+                ->when($forcedMargaId !== null, fn ($query) => $query->where('marga_id', $forcedMargaId))
                 ->when($expectedGender !== null, fn ($query) => $query->where(
                     fn ($query) => $query
                         ->where('gender', $expectedGender)

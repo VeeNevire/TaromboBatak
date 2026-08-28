@@ -16,7 +16,7 @@ type Props = {
     person: FamilyData;
     margas: { id: number; name: string }[];
     nameSuggestions: NameSuggestion[];
-    fatherSuggestions: string[];
+    fatherSuggestions: NameSuggestion[];
     familyTrees: FamilyTreeHistoryEntry[];
     approvedMargaTrees: FamilyTreeHistoryEntry[];
     versionTrees: FamilyTreeHistoryEntry[];
