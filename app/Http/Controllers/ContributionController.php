@@ -6,6 +6,7 @@ use App\Http\Requests\ReviewContributionRequest;
 use App\Http\Requests\StoreContributorRequest;
 use App\Models\ContributionRequest;
 use App\Models\Event;
+use App\Models\FamilyTree;
 use App\Models\FamilyTreeDeletionRequest;
 use App\Models\IdentityRequest;
 use App\Models\Marga;
@@ -27,6 +28,51 @@ use Inertia\Response;
 
 class ContributionController extends Controller
 {
+    public function storeMargaTree(Request $request, FamilyTree $familyTree): RedirectResponse
+    {
+        $user = $request->user();
+
+        abort_unless(
+            (int) $familyTree->user_id === (int) $user->id
+            && $user->marga_id !== null,
+            403,
+            'Hanya pemilik silsilah dengan marga yang dapat mengajukan silsilah.',
+        );
+
+        $familyTree->loadMissing('rootPerson');
+        $root = $familyTree->rootPerson;
+
+        abort_if(
+            $root === null || $root->marga_id !== $user->marga_id,
+            422,
+            'Akar silsilah harus berasal dari marga akun Anda.',
+        );
+
+        $alreadySubmitted = $familyTree->contributionRequests()
+            ->whereIn('status', [ContributionRequest::STATUS_PENDING, ContributionRequest::STATUS_APPROVED])
+            ->exists();
+
+        abort_if($alreadySubmitted, 409, 'Silsilah ini sudah diajukan atau telah disetujui.');
+
+        $contribution = ContributionRequest::create([
+            'requester_id' => $user->id,
+            'matched_father_id' => $root->id,
+            'subject_person_id' => $root->id,
+            'family_tree_id' => $familyTree->id,
+            'affected_person_ids' => [],
+        ]);
+        $contribution->load(['requester', 'subjectPerson', 'matchedFather']);
+
+        User::query()
+            ->whereIn('role', ['contributor_main', 'contributor_member'])
+            ->where('marga_id', $user->marga_id)
+            ->each(fn (User $contributor) => $contributor->notify(new FatherMatchSubmitted($contribution)));
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'Pengajuan silsilah marga berhasil dikirim ke kontributor.']);
+
+        return to_route('people.create');
+    }
+
     public function index(Request $request): Response
     {
         $user = $request->user();
@@ -43,16 +89,21 @@ class ContributionController extends Controller
             ->withQueryString()
             ->through(fn (ContributionRequest $contribution) => [
                 'id' => $contribution->id,
+                'requester_id' => $contribution->requester_id,
                 'status' => $contribution->status,
                 'requester' => $contribution->requester->name,
                 'requester_marga' => $contribution->requester->marga?->name,
                 'subject' => $contribution->subjectPerson->name,
                 'matched_father' => $contribution->matchedFather->name,
+                'matched_father_id' => $contribution->matched_father_id,
                 'matched_father_marga' => $contribution->matchedFather->marga?->name,
                 'reviewer' => $contribution->reviewer?->name,
                 'reviewed_at' => $contribution->reviewed_at?->format('d M Y H:i'),
                 'reason' => $contribution->rejection_reason,
                 'created_at' => $contribution->created_at?->format('d M Y H:i'),
+                'family_tree_id' => $contribution->family_tree_id,
+                'marga_tree' => $contribution->family_tree_id !== null
+                    && empty($contribution->affected_person_ids),
             ]);
 
         $eventRequests = Event::query()

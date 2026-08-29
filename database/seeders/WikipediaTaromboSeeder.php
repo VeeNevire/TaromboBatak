@@ -8,6 +8,7 @@ use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
 use App\Services\ChainNumberingService;
+use App\Services\FamilyTreeVersionService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -303,6 +304,12 @@ class WikipediaTaromboSeeder extends Seeder
                     'mother_node_id' => $person->mother_id === null ? null : $nodeIds[$person->mother_id] ?? null,
                 ]);
         }
+
+        app(FamilyTreeVersionService::class)->duplicate(
+            $tree,
+            $owner,
+            'Wikipedia Tarombo - Versi alternatif',
+        );
     }
 
     /**

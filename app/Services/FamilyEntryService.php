@@ -270,7 +270,7 @@ class FamilyEntryService
         }
 
         $matches = Person::query()
-            ->where('name', $name)
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
             ->where(fn ($query) => $query->where('gender', 'L')->orWhereNull('gender'))
             ->when($margaId !== null, fn ($query) => $query->where('marga_id', $margaId))
             ->whereNotIn('id', $excludedIds)
@@ -434,8 +434,7 @@ class FamilyEntryService
         array $data,
         ?int $forcedMargaId = null,
         ?int $createdBy = null,
-    ): Collection
-    {
+    ): Collection {
         $focusId = isset($data['id']) ? (int) $data['id'] : null;
         $siblingRows = $data['children'] ?? [];
         $childRows = $data['ownChildren'] ?? [];
@@ -705,7 +704,7 @@ class FamilyEntryService
         }
 
         $matches = Person::query()
-            ->where('name', $name)
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
             ->when($margaId !== null, fn ($query) => $query->where('marga_id', $margaId))
             ->whereNotIn('id', $excludedIds)
             ->when($expectedGender !== null, fn ($query) => $query->where(
@@ -713,21 +712,38 @@ class FamilyEntryService
                     ->where('gender', $expectedGender)
                     ->orWhereNull('gender'),
             ))
-            ->limit(2)
+            ->limit(3)
             ->get();
-        $parent = $matches->count() === 1 ? $matches->first() : null;
+
+        if ($matches->count() > 1) {
+            $label = $expectedGender === 'P' ? 'Ibu' : 'Ayah';
+            $errorField = $expectedGender === 'P' ? 'mother.name' : 'father.name';
+
+            throw ValidationException::withMessages([
+                $errorField => "Terdapat lebih dari satu data {$label} dengan nama dan marga yang sama. Pilih salah satu dari daftar nama.",
+            ]);
+        }
+
+        $parent = $matches->first();
 
         if ($parent === null) {
             $label = $expectedGender === 'P' ? 'Ibu' : 'Ayah';
             $errorField = $expectedGender === 'P' ? 'mother.name' : 'father.name';
 
-            if ($excludedIds !== [] && Person::query()->whereIn('id', $excludedIds)->where('name', $name)->exists()) {
+            if ($excludedIds !== [] && Person::query()
+                ->whereIn('id', $excludedIds)
+                ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
+                ->exists()) {
                 throw ValidationException::withMessages([
                     'father.name' => "{$label} tidak boleh merupakan orang itu sendiri, saudara sekandung, atau keturunannya.",
                 ]);
             }
 
-            if ($expectedGender !== null && Person::query()->where('name', $name)->whereNotNull('gender')->where('gender', '!=', $expectedGender)->exists()) {
+            if ($expectedGender !== null && Person::query()
+                ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
+                ->whereNotNull('gender')
+                ->where('gender', '!=', $expectedGender)
+                ->exists()) {
                 throw ValidationException::withMessages([
                     $errorField => "{$label} harus dipilih dari anggota ".($expectedGender === 'P' ? 'perempuan' : 'laki-laki').'.',
                 ]);
@@ -1037,7 +1053,7 @@ class FamilyEntryService
             return null;
         }
 
-        $trimmed = trim($name);
+        $trimmed = preg_replace('/\s+/u', ' ', trim($name)) ?? trim($name);
 
         if ($trimmed === '' || mb_strtoupper($trimmed) === 'N/A') {
             return null;

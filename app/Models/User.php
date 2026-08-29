@@ -48,7 +48,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, ChatGroup> $ownedChatGroups
  * @property-read Collection<int, ChatGroupMember> $chatGroupMemberships
  */
-#[Fillable(['name', 'email', 'password', 'role', 'marga_id', 'province_code', 'regency_code'])]
+#[Fillable(['name', 'email', 'password', 'role', 'marga_id', 'current_person_id', 'province_code', 'regency_code'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable
 {

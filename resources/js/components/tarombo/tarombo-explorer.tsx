@@ -22,6 +22,15 @@ import type { DescendantsAlternativeTree } from '@/components/people/descendants
 import { PersonTreePickerDialog } from '@/components/tarombo/person-tree-picker-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+    Select,
+    SelectContent,
+    SelectGroup,
+    SelectItem,
+    SelectLabel,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { buildTaromboPeople } from '@/data/tarombo-tree';
 import type {
@@ -31,13 +40,15 @@ import type {
     TaromboPersonRow,
 } from '@/data/tarombo-tree';
 import { cn } from '@/lib/utils';
-import peopleRoutes from '@/routes/people';
+import type { TaromboFamilyTreeOption } from '@/pages/tarombo';
 import identityRequests from '@/routes/identity-requests';
+import peopleRoutes from '@/routes/people';
 import tarombo from '@/routes/tarombo';
 
 type FullscreenView = 'diagram' | 'tree';
 
 export type TaromboIdentity = {
+    canSelectAnyPerson: boolean;
     currentPersonId: string | null;
     currentPersonName: string | null;
     request: {
@@ -58,11 +69,35 @@ type Props = {
     identity?: TaromboIdentity;
     fullscreen?: boolean;
     fullscreenView?: FullscreenView;
+    initialPersonId?: string;
+    familyTreeOptions: TaromboFamilyTreeOption[];
+    selectedFamilyTreeId: number | null;
+    selectedTreePeople: TaromboPersonRow[] | null;
 };
 
 const ANCESTOR_DEPTH = 4;
 
 const MY_PERSON_STORAGE_KEY = 'tarombo-my-person-id';
+
+function hasMargaAncestor(people: TaromboPerson[], personId: string): boolean {
+    const byId = new Map(people.map((person) => [person.id, person]));
+    const visited = new Set<string>();
+    let current = byId.get(personId);
+
+    while (current && !visited.has(current.id)) {
+        if (
+            current.hasMarga ??
+            (current.marga !== '' && current.marga !== 'Batak')
+        ) {
+            return true;
+        }
+
+        visited.add(current.id);
+        current = current.parentId ? byId.get(current.parentId) : undefined;
+    }
+
+    return false;
+}
 
 function readStoredMyPersonId(): string | null {
     try {
@@ -75,6 +110,14 @@ function readStoredMyPersonId(): string | null {
 function removeStoredMyPersonId(): void {
     try {
         window.localStorage.removeItem(MY_PERSON_STORAGE_KEY);
+    } catch {
+        return;
+    }
+}
+
+function storeMyPersonId(personId: string): void {
+    try {
+        window.localStorage.setItem(MY_PERSON_STORAGE_KEY, personId);
     } catch {
         return;
     }
@@ -160,22 +203,50 @@ export function TaromboExplorer({
     identity,
     fullscreen = false,
     fullscreenView = 'diagram',
+    initialPersonId,
+    familyTreeOptions,
+    selectedFamilyTreeId,
+    selectedTreePeople,
 }: Props) {
     const people = buildTaromboPeople(rows);
-    const rootPerson = people.find((p) => !p.parentId) ?? people[0];
-    const fatherPeople = people.filter(
-        (person) => person.gender === 'L' || !person.gender,
+    const selectedFamilyTreePeople = buildTaromboPeople(
+        selectedTreePeople ?? rows,
     );
+    const rootPerson = people.find((p) => !p.parentId) ?? people[0];
+    const connectedPeople = people.filter((person) =>
+        hasMargaAncestor(people, person.id),
+    );
+    const eligiblePeople = identity?.canSelectAnyPerson
+        ? connectedPeople
+        : connectedPeople.filter(
+              (person) => person.gender === 'L' || !person.gender,
+          );
+    const requestedPersonId = identity?.request?.personId ?? null;
+    const requestedPerson = requestedPersonId
+        ? people.find((person) => person.id === requestedPersonId)
+        : undefined;
+    const selectablePeople =
+        requestedPerson &&
+        !eligiblePeople.some((person) => person.id === requestedPerson.id)
+            ? [...eligiblePeople, requestedPerson]
+            : eligiblePeople;
     const storedMyId = readStoredMyPersonId();
     const initialMyId = identity
-        ? identity.currentPersonId
+        ? (identity.currentPersonId ??
+          (identity.request?.status === 'pending'
+              ? identity.request.personId
+              : null))
         : storedMyId !== null &&
-            fatherPeople.some((person) => person.id === storedMyId)
+            selectablePeople.some((person) => person.id === storedMyId)
           ? storedMyId
           : null;
+    const initialRequestedPersonId = initialPersonId
+        ? people.find((person) => person.id === initialPersonId)?.id
+        : undefined;
+    const initialFocusId = initialRequestedPersonId ?? initialMyId;
     const [myId, setMyId] = useState<string | null>(initialMyId);
     const [pickerOpen, setPickerOpen] = useState(false);
-    const [selectedId, setSelectedId] = useState<string | null>(initialMyId);
+    const [selectedId, setSelectedId] = useState<string | null>(initialFocusId);
     const [search, setSearch] = useState('');
     const [searchOpen, setSearchOpen] = useState(false);
     const [history, setHistory] = useState<string[]>([]);
@@ -186,7 +257,7 @@ export function TaromboExplorer({
     const [snapshotMode, setSnapshotMode] = useState(false);
     const snapshotRef = useRef<HTMLDivElement>(null);
     const [ancestorFocusId, setAncestorFocusId] = useState<string | null>(
-        initialMyId,
+        initialFocusId,
     );
 
     const clampZoom = (value: number) =>
@@ -253,7 +324,7 @@ export function TaromboExplorer({
             ),
         }));
     const [centerPersonId, setCenterPersonId] = useState<string>(
-        initialMyId ?? rootPerson?.id ?? '',
+        initialFocusId ?? rootPerson?.id ?? '',
     );
     const normalizedSearch = search.trim().toLowerCase();
     const searchResults = normalizedSearch
@@ -277,7 +348,11 @@ export function TaromboExplorer({
               })
               .slice(0, 10)
         : [];
-    const verticalPeople = showFemaleLineage ? people : fatherPeople;
+    const verticalPeople = showFemaleLineage
+        ? selectedFamilyTreePeople
+        : selectedFamilyTreePeople.filter(
+              (person) => person.gender === 'L' || !person.gender,
+          );
     const ancestorPeople = ancestorFocusId
         ? ancestorPath(verticalPeople, ancestorFocusId)
         : [];
@@ -301,9 +376,7 @@ export function TaromboExplorer({
         (person) => person.parentId === treeCenterId,
     );
     const myPerson =
-        myId !== null
-            ? fatherPeople.find((person) => person.id === myId)
-            : undefined;
+        myId !== null ? people.find((person) => person.id === myId) : undefined;
 
     const searchSelect = (person: TaromboPerson) => {
         if (person.id !== centerPersonId) {
@@ -325,6 +398,8 @@ export function TaromboExplorer({
                 preserveScroll: true,
                 onSuccess: () => {
                     setPickerOpen(false);
+                    setMyId(person.id);
+                    storeMyPersonId(person.id);
 
                     if (person.id !== centerPersonId) {
                         setHistory((prev) => [...prev, centerPersonId]);
@@ -463,7 +538,15 @@ export function TaromboExplorer({
             type="button"
             onClick={() =>
                 window.open(
-                    tarombo.fullscreen({ view }).url,
+                    tarombo.fullscreen(
+                        { view },
+                        {
+                            query: {
+                                person: centerPersonId,
+                                family_tree: selectedFamilyTreeId ?? undefined,
+                            },
+                        },
+                    ).url,
                     '_blank',
                     'noopener',
                 )
@@ -474,6 +557,86 @@ export function TaromboExplorer({
         >
             <ExternalLink className="size-4" />
         </button>
+    );
+
+    const accountFamilyTrees = familyTreeOptions.filter(
+        (tree) => tree.group === 'account',
+    );
+    const approvedMargaTrees = familyTreeOptions.filter(
+        (tree) => tree.group === 'marga',
+    );
+    const familyTreeSelector = (
+        <div
+            className={cn(
+                'flex min-w-0 items-center justify-end gap-2',
+                snapshotMode && 'invisible',
+            )}
+        >
+            <span className="shrink-0 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                Silsilah:
+            </span>
+            <Select
+                value={
+                    selectedFamilyTreeId === null
+                        ? 'default'
+                        : String(selectedFamilyTreeId)
+                }
+                onValueChange={(value) => {
+                    const familyTreeId =
+                        value === 'default' ? undefined : Number(value);
+                    const destination = fullscreen
+                        ? tarombo.fullscreen(
+                              { view: fullscreenView },
+                              {
+                                  query: {
+                                      person: centerPersonId,
+                                      family_tree: familyTreeId,
+                                  },
+                              },
+                          )
+                        : tarombo.index({
+                              query: { family_tree: familyTreeId },
+                          });
+
+                    router.get(destination.url, {}, { preserveScroll: true });
+                }}
+            >
+                <SelectTrigger className="h-8 w-56 border-emerald-300 bg-tb-surface-bright text-xs focus:ring-emerald-500/30">
+                    <SelectValue placeholder="Pilih silsilah" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="default">
+                        Pohon Tarombo Default
+                    </SelectItem>
+                    {accountFamilyTrees.length > 0 && (
+                        <SelectGroup>
+                            <SelectLabel>Silsilah Milik Akun</SelectLabel>
+                            {accountFamilyTrees.map((tree) => (
+                                <SelectItem
+                                    key={tree.id}
+                                    value={String(tree.id)}
+                                >
+                                    {tree.name}
+                                </SelectItem>
+                            ))}
+                        </SelectGroup>
+                    )}
+                    {approvedMargaTrees.length > 0 && (
+                        <SelectGroup>
+                            <SelectLabel>Silsilah Marga Disetujui</SelectLabel>
+                            {approvedMargaTrees.map((tree) => (
+                                <SelectItem
+                                    key={tree.id}
+                                    value={String(tree.id)}
+                                >
+                                    {tree.name}
+                                </SelectItem>
+                            ))}
+                        </SelectGroup>
+                    )}
+                </SelectContent>
+            </Select>
+        </div>
     );
 
     const renderDiagramCard = (isExpanded: boolean) => (
@@ -552,12 +715,12 @@ export function TaromboExplorer({
                     !fullscreen && isExpanded && 'max-h-[70vh]',
                 )}
             >
-                <div className="mb-4 grid grid-cols-[1fr_auto_1fr] items-center border-b border-tb-outline-variant pb-3">
+                <div className="relative mb-4 border-b border-tb-outline-variant pb-3">
                     {fullscreen ? (
                         <Link
                             href={tarombo.index()}
                             className={cn(
-                                'inline-flex w-fit items-center gap-1.5 rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:bg-tb-surface-container',
+                                'absolute top-0 left-0 inline-flex w-fit items-center gap-1.5 rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:bg-tb-surface-container',
                                 snapshotMode && 'invisible',
                             )}
                         >
@@ -566,7 +729,7 @@ export function TaromboExplorer({
                     ) : (
                         <span />
                     )}
-                    <div className="min-w-0 text-center">
+                    <div className="min-w-0 px-20 text-center">
                         <h3 className="font-display text-lg font-bold text-tb-on-surface">
                             Silsilah Keturunan
                         </h3>
@@ -576,7 +739,8 @@ export function TaromboExplorer({
                                 : `Pohon vertikal dari ${treeCenterPerson?.name ?? 'Leluhur Utama'}`}
                         </p>
                     </div>
-                    <div className="flex justify-end">
+                    <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
+                        {familyTreeSelector}
                         {femaleLineageToggle}
                     </div>
                 </div>
@@ -681,7 +845,7 @@ export function TaromboExplorer({
                     <span className="text-sm font-medium text-tb-on-surface">
                         Saya adalah:
                     </span>
-                    {myPerson ? (
+                    {myPerson || identity?.request?.status === 'pending' ? (
                         <span className="inline-flex items-center gap-2 rounded-full border border-tb-outline-variant bg-tb-surface-bright px-3 py-1 text-sm font-medium text-tb-on-surface">
                             <span
                                 aria-hidden
@@ -690,12 +854,13 @@ export function TaromboExplorer({
                                     backgroundColor:
                                         margas.find(
                                             (marga) =>
-                                                marga.name === myPerson.marga,
+                                                marga.name === myPerson?.marga,
                                         )?.color ?? 'var(--color-tb-primary)',
                                 }}
                             />
                             <span className="max-w-48 truncate">
-                                {myPerson.name}
+                                {myPerson?.name ??
+                                    identity?.request?.personName}
                             </span>
                         </span>
                     ) : (
@@ -863,7 +1028,8 @@ export function TaromboExplorer({
                                                     ? `Jalur ${ANCESTOR_DEPTH} tingkat leluhur dari ${ancestorFocusPerson.name}`
                                                     : `Pohon vertikal dari ${treeCenterPerson?.name ?? 'Leluhur Utama'}`}
                                             </p>
-                                            <div className="mt-3 flex justify-center">
+                                            <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
+                                                {familyTreeSelector}
                                                 {femaleLineageToggle}
                                             </div>
                                         </div>
@@ -906,7 +1072,7 @@ export function TaromboExplorer({
             <PersonTreePickerDialog
                 open={pickerOpen}
                 onOpenChange={setPickerOpen}
-                people={fatherPeople}
+                people={selectablePeople}
                 alternativeTrees={descendantAlternativeTrees}
                 currentId={myId}
                 onSelect={handleIdentitySelect}

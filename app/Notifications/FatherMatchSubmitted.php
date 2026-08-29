@@ -26,7 +26,9 @@ class FatherMatchSubmitted extends Notification
             'requester_name' => $this->contribution->requester->name,
             'subject_name' => $this->contribution->subjectPerson->name,
             'matched_father_name' => $this->contribution->matchedFather->name,
-            'message' => $this->contribution->requester->name.' mengajukan pencocokan Ayah '.$this->contribution->matchedFather->name.'.',
+            'message' => $this->contribution->family_tree_id !== null
+                ? $this->contribution->requester->name.' mengajukan silsilah marga '.$this->contribution->matchedFather->name.'.'
+                : $this->contribution->requester->name.' mengajukan pencocokan Ayah '.$this->contribution->matchedFather->name.'.',
         ];
     }
 }

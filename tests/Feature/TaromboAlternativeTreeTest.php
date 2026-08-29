@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ContributionRequest;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeNode;
 use App\Models\Marga;
@@ -177,4 +178,59 @@ test('authenticated tarombo rows include related story links for the vertical tr
                         ['title' => 'Sejarah Sangkar Toba', 'url' => 'https://example.com/sejarah'],
                     ],
             )));
+});
+
+test('vertical tarombo can select account and approved marga family trees', function () {
+    $marga = Marga::factory()->create();
+    $owner = User::factory()->withMarga($marga->id)->create();
+    $root = Person::factory()->create(['name' => 'Akar Pilihan', 'marga_id' => $marga->id]);
+    $child = Person::factory()->create(['name' => 'Anak Pilihan', 'marga_id' => $marga->id]);
+    $tree = FamilyTree::create([
+        'user_id' => $owner->id,
+        'root_person_id' => $root->id,
+        'name' => 'Silsilah Pilihan',
+    ]);
+    $rootNode = FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $root->id,
+        'chain' => '1',
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $child->id,
+        'father_node_id' => $rootNode->id,
+        'chain' => '1-1',
+    ]);
+    ContributionRequest::factory()->approved()->create([
+        'requester_id' => $owner->id,
+        'matched_father_id' => $root->id,
+        'subject_person_id' => $root->id,
+        'family_tree_id' => $tree->id,
+    ]);
+
+    $this->actingAs($owner)
+        ->get(route('tarombo.index', ['family_tree' => $tree->id]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('selectedFamilyTreeId', $tree->id)
+            ->where('familyTreeOptions.0.id', $tree->id)
+            ->where('familyTreeOptions.0.group', 'marga')
+            ->has('selectedTreePeople', 2)
+            ->where('selectedTreePeople.1.parentId', (string) $root->id));
+});
+
+test('vertical tarombo rejects a family tree outside the signed in accounts list', function () {
+    $marga = Marga::factory()->create();
+    $owner = User::factory()->withMarga($marga->id)->create();
+    $viewer = User::factory()->withMarga($marga->id)->create();
+    $root = Person::factory()->create(['marga_id' => $marga->id]);
+    $tree = FamilyTree::create([
+        'user_id' => $owner->id,
+        'root_person_id' => $root->id,
+    ]);
+    FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $root->id]);
+
+    $this->actingAs($viewer)
+        ->get(route('tarombo.index', ['family_tree' => $tree->id]))
+        ->assertForbidden();
 });

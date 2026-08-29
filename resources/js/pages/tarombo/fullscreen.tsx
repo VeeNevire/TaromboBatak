@@ -1,13 +1,15 @@
 import { Head } from '@inertiajs/react';
 import {
-    TaromboExplorer,
-    type TaromboIdentity,
+    TaromboExplorer
+    
 } from '@/components/tarombo/tarombo-explorer';
+import type {TaromboIdentity} from '@/components/tarombo/tarombo-explorer';
 import type {
     MargaInfo,
     TaromboAlternativeTreeRow,
     TaromboPersonRow,
 } from '@/data/tarombo-tree';
+import type { TaromboFamilyTreeOption } from '@/pages/tarombo';
 
 type Props = {
     people: TaromboPersonRow[];
@@ -15,6 +17,10 @@ type Props = {
     alternativeTrees: TaromboAlternativeTreeRow[];
     view: 'diagram' | 'tree';
     identity: TaromboIdentity;
+    initialPersonId?: string;
+    familyTreeOptions: TaromboFamilyTreeOption[];
+    selectedFamilyTreeId: number | null;
+    selectedTreePeople: TaromboPersonRow[] | null;
 };
 
 export default function TaromboFullscreen({
@@ -23,6 +29,10 @@ export default function TaromboFullscreen({
     alternativeTrees,
     view,
     identity,
+    initialPersonId,
+    familyTreeOptions,
+    selectedFamilyTreeId,
+    selectedTreePeople,
 }: Props) {
     return (
         <>
@@ -34,6 +44,10 @@ export default function TaromboFullscreen({
                 fullscreen
                 fullscreenView={view}
                 identity={identity}
+                initialPersonId={initialPersonId}
+                familyTreeOptions={familyTreeOptions}
+                selectedFamilyTreeId={selectedFamilyTreeId}
+                selectedTreePeople={selectedTreePeople}
             />
         </>
     );

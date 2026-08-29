@@ -131,6 +131,10 @@ test('a shared recipient cannot manage duplicate or reshare the tree', function 
         ->post(route('family-trees.duplicate', $tree))->assertForbidden();
     $this->actingAs($recipient)->withHeader('Accept', 'application/json')
         ->post(route('family-trees.shares.store', $tree), ['recipient_id' => $thirdUser->id])->assertForbidden();
+    $this->actingAs($recipient)->withHeader('Accept', 'application/json')
+        ->get(route('people.edit', $tree->root_person_id))->assertForbidden();
+    $this->actingAs($recipient)
+        ->get(route('people.show', $tree->root_person_id))->assertSuccessful();
 
     expect(FamilyTree::query()->count())->toBe(1)
         ->and(FamilyTreeShare::query()->count())->toBe(1);

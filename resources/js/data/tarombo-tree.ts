@@ -6,6 +6,7 @@ export type TaromboPersonRow = {
     name: string;
     alias?: string;
     marga: string;
+    hasMarga?: boolean;
     parentId: string | null;
     birthYear?: string;
     birthOrder?: number | null;
@@ -25,6 +26,7 @@ export type TaromboPerson = {
     name: string;
     alias?: string;
     marga: string;
+    hasMarga?: boolean;
     generation: number;
     parentId?: string | null;
     birthYear?: string;

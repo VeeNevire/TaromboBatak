@@ -3,6 +3,7 @@
 namespace App\Policies;
 
 use App\Models\ContributionRequest;
+use App\Models\FamilyTreeShare;
 use App\Models\Person;
 use App\Models\User;
 
@@ -29,7 +30,18 @@ class PersonPolicy
             return true;
         }
 
-        return $this->view($user, $person) && ! $this->isLockedAncestor($person);
+        $sharedTreeExists = $person->familyTrees()
+            ->whereHas('shares', fn ($shares) => $shares
+                ->whereBelongsTo($user, 'recipient')
+                ->where('status', FamilyTreeShare::STATUS_ACCEPTED))
+            ->exists();
+        $ownedTreeExists = $person->familyTrees()
+            ->where('family_trees.user_id', $user->id)
+            ->exists();
+
+        return $this->view($user, $person)
+            && (! $sharedTreeExists || $ownedTreeExists)
+            && ! $this->isLockedAncestor($person);
     }
 
     public function delete(User $user, Person $person): bool

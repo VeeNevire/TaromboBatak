@@ -5,6 +5,7 @@ use App\Events\MessageSent;
 use App\Models\Conversation;
 use App\Models\Marga;
 use App\Models\Message;
+use App\Models\Person;
 use App\Models\User;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Support\Facades\Event;
@@ -308,4 +309,50 @@ test('users can authorize only their own private message channel', function () {
             'channel_name' => 'private-users.'.$otherUser->id,
         ])
         ->assertForbidden();
+});
+
+test('contacts include personName from currentPerson when available', function () {
+    $marga = Marga::factory()->create();
+    $user = User::factory()->withMarga($marga->id)->create();
+    $person = Person::factory()->create(['marga_id' => $marga->id]);
+    $user->update(['current_person_id' => $person->id]);
+
+    $contact = User::factory()->withMarga($marga->id)->create();
+
+    $this->actingAs($user)
+        ->get(route('contacts.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('contacts', 1)
+            ->where('contacts.0.name', $contact->name)
+            ->where('contacts.0.personName', $person->name));
+});
+
+test('contacts have personName as null when user has no currentPerson', function () {
+    $marga = Marga::factory()->create();
+    $user = User::factory()->withMarga($marga->id)->create();
+    $contact = User::factory()->withMarga($marga->id)->create();
+
+    $this->actingAs($user)
+        ->get(route('contacts.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('contacts', 1)
+            ->where('contacts.0.personName', null));
+});
+
+test('contacts show Not Identified when currentPerson name is N/A', function () {
+    $marga = Marga::factory()->create();
+    $user = User::factory()->withMarga($marga->id)->create();
+    $person = Person::factory()->create(['name' => 'N/A', 'marga_id' => $marga->id]);
+    $user->update(['current_person_id' => $person->id]);
+
+    $contact = User::factory()->withMarga($marga->id)->create();
+
+    $this->actingAs($user)
+        ->get(route('contacts.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('contacts', 1)
+            ->where('contacts.0.personName', null));
 });

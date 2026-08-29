@@ -2,10 +2,12 @@
 
 namespace App\Http\Requests;
 
+use App\Services\MargaIdentityPersonService;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Validation\Validator;
 
 class UpdateMargaRequest extends FormRequest
 {
@@ -21,7 +23,25 @@ class UpdateMargaRequest extends FormRequest
             'description' => ['nullable', 'string'],
             'color' => ['nullable', 'string', 'max:32'],
             'image' => ['nullable', $this->imageRule()],
+            'identity_person_id' => ['nullable', 'integer', 'exists:people,id'],
         ];
+    }
+
+    /** @return array<int, callable(Validator): void> */
+    public function after(): array
+    {
+        return [function (Validator $validator): void {
+            if ($validator->errors()->has('identity_person_id') || ! $this->filled('identity_person_id')) {
+                return;
+            }
+
+            if (! app(MargaIdentityPersonService::class)->contains($this->integer('identity_person_id'))) {
+                $validator->errors()->add(
+                    'identity_person_id',
+                    'Identitas marga harus dipilih dari pohon utama Si Raja Batak sampai generasi ke-11.',
+                );
+            }
+        }];
     }
 
     /**

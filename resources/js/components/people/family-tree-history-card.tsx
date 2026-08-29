@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import contributions from '@/routes/contributions';
 import familyTreeShares from '@/routes/family-tree-shares';
 import familyTrees from '@/routes/family-trees';
 import people from '@/routes/people';
@@ -52,6 +53,8 @@ export type FamilyTreeHistoryEntry = {
     can_manage: boolean;
     can_share: boolean;
     can_append: boolean;
+    can_request_marga_tree: boolean;
+    marga_request_status: 'pending' | 'approved' | null;
     can_delete: boolean;
     shares: {
         id: number;
@@ -92,6 +95,9 @@ export function FamilyTreeHistoryCard({
     const [shareEntry, setShareEntry] = useState<FamilyTreeHistoryEntry | null>(
         null,
     );
+    const [renameEntry, setRenameEntry] =
+        useState<FamilyTreeHistoryEntry | null>(null);
+    const [renameName, setRenameName] = useState('');
     const [recipientId, setRecipientId] = useState('');
     const [recipientSearch, setRecipientSearch] = useState('');
     const listTopRef = useRef<HTMLDivElement>(null);
@@ -128,6 +134,8 @@ export function FamilyTreeHistoryCard({
         startIndex,
         startIndex + ITEMS_PER_PAGE,
     );
+    const margaRequestEntry =
+        entries.find((entry) => entry.is_primary) ?? entries[0];
     const rangeStart = filteredEntries.length === 0 ? 0 : startIndex + 1;
     const rangeEnd = Math.min(
         startIndex + ITEMS_PER_PAGE,
@@ -313,15 +321,51 @@ export function FamilyTreeHistoryCard({
                         </section>
                     )}
                     <section className="grid gap-3">
-                        <div>
-                            <h3 className="font-display text-base font-semibold text-tb-on-surface">
-                                Daftar Silsilah Marga
-                                {margaName ? ` ${margaName}` : ''}
-                            </h3>
-                            <p className="mt-1 text-xs text-tb-on-surface-variant">
-                                Silsilah yang telah disetujui Kontributor Utama
-                                atau Kontributor Anggota.
-                            </p>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                                <h3 className="font-display text-base font-semibold text-tb-on-surface">
+                                    Daftar Silsilah Marga
+                                    {margaName ? ` ${margaName}` : ''}
+                                </h3>
+                                <p className="mt-1 text-xs text-tb-on-surface-variant">
+                                    Silsilah yang telah disetujui Kontributor
+                                    Utama atau Kontributor Anggota.
+                                </p>
+                            </div>
+                            {margaRequestEntry?.can_request_marga_tree && (
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={
+                                        margaRequestEntry.marga_request_status !==
+                                        null
+                                    }
+                                    className="text-tb-on-primary shrink-0 self-start bg-tb-primary text-xs hover:bg-tb-primary-light"
+                                    onClick={() => {
+                                        if (
+                                            margaRequestEntry.marga_request_status ===
+                                            null
+                                        ) {
+                                            router.post(
+                                                contributions.margaTree.store(
+                                                    margaRequestEntry.id,
+                                                ).url,
+                                                {},
+                                                { preserveScroll: true },
+                                            );
+                                        }
+                                    }}
+                                >
+                                    <TreePine className="size-3.5" />{' '}
+                                    {margaRequestEntry.marga_request_status ===
+                                    'pending'
+                                        ? 'Menunggu Persetujuan'
+                                        : margaRequestEntry.marga_request_status ===
+                                            'approved'
+                                          ? 'Sudah Disetujui'
+                                          : 'Ajukan Silsilah Marga'}
+                                </Button>
+                            )}
                         </div>
                         {approvedEntries.length === 0 ? (
                             <div className="rounded-xl border border-dashed border-tb-outline-variant bg-tb-surface-container/40 px-4 py-5 text-center">
@@ -495,9 +539,29 @@ export function FamilyTreeHistoryCard({
                                                             Buka
                                                         </Link>
                                                         {entry.can_manage && (
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="text-xs"
+                                                                onClick={() => {
+                                                                    setRenameEntry(
+                                                                        entry,
+                                                                    );
+                                                                    setRenameName(
+                                                                        entry.name ??
+                                                                            `Silsilah ${entry.root_name}`,
+                                                                    );
+                                                                }}
+                                                            >
+                                                                <Pencil className="size-3.5" />{' '}
+                                                                Ubah Nama
+                                                            </Button>
+                                                        )}
+                                                        {entry.can_manage && (
                                                             <Link
-                                                                href={familyTrees.duplicate(
-                                                                    entry.id,
+                                                                href={people.familyVersion.duplicate(
+                                                                    entry.root_person_id,
                                                                 )}
                                                                 method="post"
                                                                 as="button"
@@ -505,12 +569,19 @@ export function FamilyTreeHistoryCard({
                                                             >
                                                                 <Copy className="size-3.5" />{' '}
                                                                 Versi Alternatif
+                                                                Keluarga
                                                             </Link>
                                                         )}
                                                         {entry.can_manage && (
                                                             <Link
                                                                 href={people.edit(
                                                                     entry.root_person_id,
+                                                                    {
+                                                                        query: {
+                                                                            version_tree:
+                                                                                entry.id,
+                                                                        },
+                                                                    },
                                                                 )}
                                                                 className="inline-flex items-center gap-1.5 rounded-lg border border-tb-outline-variant px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
                                                             >
@@ -828,6 +899,84 @@ export function FamilyTreeHistoryCard({
                                 )}
                             </div>
                         </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+            <Dialog
+                open={renameEntry !== null}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setRenameEntry(null);
+                        setRenameName('');
+                    }
+                }}
+            >
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Ubah Nama Silsilah</DialogTitle>
+                        <DialogDescription>
+                            Nama ini hanya mengubah label silsilah. Struktur,
+                            anggota, dan chain tetap sama.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {renameEntry && (
+                        <form
+                            className="grid gap-4"
+                            onSubmit={(event) => {
+                                event.preventDefault();
+
+                                const name = renameName.trim();
+
+                                if (!name) {
+                                    return;
+                                }
+
+                                router.patch(
+                                    familyTrees.name.update(renameEntry.id).url,
+                                    { name },
+                                    {
+                                        preserveScroll: true,
+                                        onSuccess: () => {
+                                            setRenameEntry(null);
+                                            setRenameName('');
+                                        },
+                                    },
+                                );
+                            }}
+                        >
+                            <div className="grid gap-2">
+                                <label
+                                    htmlFor="family-tree-name"
+                                    className="text-sm font-medium text-tb-on-surface"
+                                >
+                                    Nama silsilah
+                                </label>
+                                <Input
+                                    id="family-tree-name"
+                                    value={renameName}
+                                    onChange={(event) =>
+                                        setRenameName(event.target.value)
+                                    }
+                                    maxLength={120}
+                                    autoFocus
+                                />
+                            </div>
+                            <div className="flex justify-end gap-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setRenameEntry(null)}
+                                >
+                                    Batal
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    disabled={!renameName.trim()}
+                                >
+                                    Simpan
+                                </Button>
+                            </div>
+                        </form>
                     )}
                 </DialogContent>
             </Dialog>

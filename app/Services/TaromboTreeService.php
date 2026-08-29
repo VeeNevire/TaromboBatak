@@ -45,6 +45,7 @@ class TaromboTreeService
                 'name' => $node->person->name,
                 'alias' => $node->person->alias,
                 'marga' => $node->person->marga->name ?? 'Batak',
+                'hasMarga' => $node->person->marga_id !== null,
                 'parentId' => $node->pending_father
                     || $node->fatherNode === null
                     || ! $includedPersonIds->has($node->fatherNode->person_id)
@@ -94,6 +95,7 @@ class TaromboTreeService
                 'name' => $person->name,
                 'alias' => $person->alias,
                 'marga' => $person->marga->name ?? 'Batak',
+                'hasMarga' => $person->marga_id !== null,
                 'parentId' => $person->father_id !== null ? (string) $person->father_id : null,
                 'birthYear' => $person->birth_year,
                 'birthOrder' => $person->birth_order,
@@ -183,6 +185,7 @@ class TaromboTreeService
                     'name' => $person->name,
                     'alias' => $person->alias,
                     'marga' => $person->marga->name ?? 'Batak',
+                    'hasMarga' => $person->marga_id !== null,
                     'parentId' => $person->father_id !== null ? (string) $person->father_id : null,
                     'birthOrder' => $person->birth_order,
                     'chain' => $person->chain,

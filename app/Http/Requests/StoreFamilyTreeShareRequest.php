@@ -3,8 +3,10 @@
 namespace App\Http\Requests;
 
 use App\Models\FamilyTree;
+use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class StoreFamilyTreeShareRequest extends FormRequest
 {
@@ -27,5 +29,24 @@ class StoreFamilyTreeShareRequest extends FormRequest
     public function rules(): array
     {
         return ['recipient_id' => ['required', 'integer', 'exists:users,id']];
+    }
+
+    /** @return array<int, callable(Validator): void> */
+    public function after(): array
+    {
+        return [function (Validator $validator): void {
+            if ($validator->errors()->has('recipient_id') || $this->user()?->isStaff()) {
+                return;
+            }
+
+            $recipient = User::query()->find($this->integer('recipient_id'));
+
+            if ($recipient?->marga_id !== $this->user()?->marga_id) {
+                $validator->errors()->add(
+                    'recipient_id',
+                    'Silsilah hanya dapat dibagikan kepada akun dari marga yang sama.',
+                );
+            }
+        }];
     }
 }

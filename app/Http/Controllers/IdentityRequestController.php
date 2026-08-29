@@ -9,6 +9,7 @@ use App\Models\Person;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 
 class IdentityRequestController extends Controller
@@ -17,6 +18,14 @@ class IdentityRequestController extends Controller
     {
         $user = $request->user();
         $person = Person::query()->findOrFail($request->integer('person_id'));
+
+        if ($user->isAdmin()) {
+            $user->update(['current_person_id' => $person->id]);
+
+            Inertia::flash('toast', ['type' => 'success', 'message' => 'Identitas admin berhasil diperbarui.']);
+
+            return back();
+        }
 
         abort_unless($user->marga_id !== null && $person->marga_id === $user->marga_id, 403, 'Nama tersebut berada di luar marga Anda.');
 
@@ -46,7 +55,7 @@ class IdentityRequestController extends Controller
 
     public function approve(Request $request, IdentityRequest $identityRequest): RedirectResponse
     {
-        $this->authorize('review', $identityRequest);
+        Gate::authorize('review', $identityRequest);
 
         DB::transaction(function () use ($request, $identityRequest) {
             $identityRequest = IdentityRequest::query()->lockForUpdate()->findOrFail($identityRequest->id);

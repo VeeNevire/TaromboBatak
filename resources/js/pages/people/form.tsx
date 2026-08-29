@@ -1,5 +1,6 @@
 import { Head, Link } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
+import { FamilyTreeHistoryCard } from '@/components/people/family-tree-history-card';
 import type { FamilyTreeHistoryEntry } from '@/components/people/family-tree-history-card';
 import { Button } from '@/components/ui/button';
 import type { NameSuggestion } from '@/components/ui/name-combobox';
@@ -45,6 +46,10 @@ export default function PersonForm({
     canPublish,
 }: Props) {
     const isEdit = person !== null;
+    const activeMargaName =
+        lockedMarga?.name ??
+        margas.find((marga) => marga.id === person?.marga_id)?.name ??
+        null;
 
     return (
         <>
@@ -63,6 +68,7 @@ export default function PersonForm({
                             Anggota
                         </Link>
                     </Button>
+
                     <div>
                         <h1 className="font-display text-2xl font-bold text-tb-on-surface md:text-3xl">
                             {isEdit ? 'Ubah Keluarga' : 'Tambah Keluarga'}
@@ -73,6 +79,14 @@ export default function PersonForm({
                                 : 'Isi jejak keluarga: orang tua dan daftar saudara/anak dari ayah yang sama.'}
                         </p>
                     </div>
+
+                    <FamilyTreeHistoryCard
+                        entries={familyTrees ?? []}
+                        approvedEntries={approvedMargaTrees ?? []}
+                        margaName={activeMargaName}
+                        shareableAccounts={shareableAccounts ?? []}
+                        pendingTreeShares={pendingTreeShares ?? []}
+                    />
                 </div>
 
                 <FamilyForm
@@ -86,8 +100,7 @@ export default function PersonForm({
                     approvedMargaTrees={approvedMargaTrees}
                     versionTrees={versionTrees}
                     selectedVersionName={selectedVersionName}
-                    shareableAccounts={shareableAccounts}
-                    pendingTreeShares={pendingTreeShares}
+                    showFamilyTreeHistory={false}
                     canPublish={canPublish}
                 />
             </div>
