@@ -47,7 +47,7 @@ export function NodeCard({
     dashed?: boolean;
 }) {
     return (
-        <div className="flex max-w-[170px] min-w-[110px] flex-col items-center">
+        <div className="flex max-w-[150px] min-w-[96px] flex-col items-center">
             <div
                 role={onAvatarClick ? 'button' : undefined}
                 tabIndex={onAvatarClick ? 0 : undefined}

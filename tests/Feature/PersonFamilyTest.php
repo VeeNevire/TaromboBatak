@@ -1004,7 +1004,7 @@ test('the create form lists each family tree created by the signed in account', 
             ->missing('familyTrees.2'));
 });
 
-test('the create form lists only approved family trees from the account marga', function () {
+test('the create form does not expose another accounts approved marga tree', function () {
     $marga = Marga::factory()->create(['name' => 'Simare']);
     $otherMarga = Marga::factory()->create();
     $viewer = User::factory()->withMarga($marga->id)->create();
@@ -1055,6 +1055,12 @@ test('the create form lists only approved family trees from the account marga', 
         ->get(route('people.create'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
+            ->has('approvedMargaTrees', 0));
+
+    $this->actingAs($owner)
+        ->get(route('people.create'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
             ->has('approvedMargaTrees', 1)
             ->where('approvedMargaTrees.0.id', $approvedTree->id)
             ->where('approvedMargaTrees.0.name', 'Silsilah Approved'));
@@ -1090,21 +1096,24 @@ test('the admin family tree card lists all trees while version actions stay focu
     $focus = Person::factory()->create(['name' => 'Fokus Admin']);
     $otherRoot = Person::factory()->create(['name' => 'Akar Lain']);
 
-    FamilyTree::create([
+    $adminTree = FamilyTree::create([
         'user_id' => $admin->id,
         'root_person_id' => $focus->id,
         'name' => 'Versi Admin',
     ]);
-    FamilyTree::create([
+    $userTree = FamilyTree::create([
         'user_id' => $user->id,
         'root_person_id' => $focus->id,
         'name' => 'Versi User',
     ]);
-    FamilyTree::create([
+    $otherTree = FamilyTree::create([
         'user_id' => $user->id,
         'root_person_id' => $otherRoot->id,
         'name' => 'Pohon Lain',
     ]);
+    $adminTree->nodes()->create(['person_id' => $focus->id]);
+    $userTree->nodes()->create(['person_id' => $focus->id]);
+    $otherTree->nodes()->create(['person_id' => $otherRoot->id]);
 
     $this->actingAs($admin)
         ->get(route('people.create'))
@@ -1238,7 +1247,8 @@ test('the create form suggests only male people as fathers', function () {
         ->get(route('people.create'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('fatherSuggestions', ['Calon Ayah']));
+            ->where('fatherSuggestions', fn ($suggestions) => collect($suggestions)
+                ->pluck('name')->all() === ['Calon Ayah']));
 });
 
 test('name suggestions keep duplicate names distinguishable by their father', function () {
@@ -1259,6 +1269,70 @@ test('name suggestions keep duplicate names distinguishable by their father', fu
                     ->where('name', 'Ampunalampak')
                     ->values()
                     ->contains(fn (array $row) => $row['id'] === $second->id && $row['father_name'] === 'Bapak Kedua')));
+});
+
+test('a case-insensitive existing father is reused instead of duplicated', function () {
+    $marga = Marga::factory()->create();
+    $father = Person::factory()->create([
+        'name' => 'Ompu Sitorus',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+    ]);
+
+    $this->actingAs($this->admin)
+        ->post(route('people.store'), [
+            'name' => 'Anak Sitorus',
+            'gender' => 'L',
+            'marga_id' => $marga->id,
+            'birth_order' => 1,
+            'sibling_count' => 1,
+            'father' => [
+                'name' => '  ompu  sitorus  ',
+                'marga_id' => $marga->id,
+            ],
+            'children' => [[
+                'name' => 'Anak Sitorus',
+                'gender' => 'L',
+                'marga_id' => $marga->id,
+            ]],
+        ])
+        ->assertRedirect(route('people.index'));
+
+    expect(Person::query()->where('name', 'Ompu Sitorus')->count())->toBe(1)
+        ->and(Person::query()->where('name', 'Anak Sitorus')->firstOrFail()->father_id)
+        ->toBe($father->id);
+});
+
+test('an ambiguous father name blocks saving instead of creating a duplicate', function () {
+    $marga = Marga::factory()->create();
+    Person::factory()->count(2)->create([
+        'name' => 'Ompu Sitorus',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+    ]);
+
+    $this->actingAs($this->admin)
+        ->from(route('people.create'))
+        ->post(route('people.store'), [
+            'name' => 'Anak Sitorus',
+            'gender' => 'L',
+            'marga_id' => $marga->id,
+            'birth_order' => 1,
+            'sibling_count' => 1,
+            'father' => [
+                'name' => 'Ompu Sitorus',
+                'marga_id' => $marga->id,
+            ],
+            'children' => [[
+                'name' => 'Anak Sitorus',
+                'gender' => 'L',
+                'marga_id' => $marga->id,
+            ]],
+        ])
+        ->assertRedirect(route('people.create'))
+        ->assertSessionHasErrors('father.name');
+
+    expect(Person::query()->where('name', 'Anak Sitorus')->exists())->toBeFalse();
 });
 
 test('an existing unlinked person can be selected as a child without creating a duplicate', function () {
@@ -1369,7 +1443,8 @@ test('father suggestions exclude the focused person siblings and descendants', f
             ->get(route($routeName, $focus))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->where('fatherSuggestions', ['Ayah Saat Ini', 'Kandidat Ayah']));
+                ->where('fatherSuggestions', fn ($suggestions) => collect($suggestions)
+                    ->pluck('name')->all() === ['Kandidat Ayah']));
     }
 });
 

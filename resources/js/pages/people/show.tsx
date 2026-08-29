@@ -1,5 +1,6 @@
 import { Head, Link } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
+import { FamilyTreeHistoryCard } from '@/components/people/family-tree-history-card';
 import type { FamilyTreeHistoryEntry } from '@/components/people/family-tree-history-card';
 import { Button } from '@/components/ui/button';
 import type { NameSuggestion } from '@/components/ui/name-combobox';
@@ -41,6 +42,11 @@ export default function PersonShow({
     canPublish,
     readOnly = false,
 }: Props) {
+    const activeMargaName =
+        margas.find((marga) => marga.id === person.marga_id)?.name ??
+        person.marga ??
+        null;
+
     return (
         <>
             <Head title={`Jejak Keluarga ${person.name}`} />
@@ -67,6 +73,14 @@ export default function PersonShow({
                             Perubahan disimpan sekaligus.
                         </p>
                     </div>
+
+                    <FamilyTreeHistoryCard
+                        entries={familyTrees}
+                        approvedEntries={approvedMargaTrees}
+                        margaName={activeMargaName}
+                        shareableAccounts={shareableAccounts}
+                        pendingTreeShares={pendingTreeShares}
+                    />
                 </div>
 
                 <FamilyForm
@@ -82,6 +96,7 @@ export default function PersonShow({
                     pendingTreeShares={pendingTreeShares}
                     canPublish={canPublish}
                     readOnly={readOnly}
+                    showFamilyTreeHistory={false}
                 />
             </div>
         </>

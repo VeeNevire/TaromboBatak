@@ -57,8 +57,11 @@ export default function AccountForm({
             marga_id: values.marga_id ? Number(values.marga_id) : null,
         }));
 
-        if (account) put(accounts.update(account.id).url);
-        else post(accounts.store().url);
+        if (account) {
+put(accounts.update(account.id).url);
+} else {
+post(accounts.store().url);
+}
     };
 
     return (

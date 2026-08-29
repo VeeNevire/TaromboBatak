@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StorePersonRequest;
+use App\Http\Requests\UpdateFamilyTreeNameRequest;
 use App\Http\Requests\UpdateFamilyTreeStructureRequest;
 use App\Http\Requests\UpdatePersonRequest;
 use App\Models\ContributionRequest;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeDeletionRequest;
+use App\Models\FamilyTreeNode;
 use App\Models\FamilyTreeShare;
 use App\Models\Marga;
 use App\Models\Person;
@@ -18,6 +20,7 @@ use App\Services\FamilyEntryService;
 use App\Services\FamilyTreeStructureService;
 use App\Services\FamilyTreeVersionService;
 use App\Services\TaromboTreeService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -135,11 +138,14 @@ class PersonController extends Controller
      */
     protected function createLineage(User $user, bool $isStaff): array
     {
+        $canBrowseMarga = $isStaff || $user->isContributor();
+
         return Person::query()
             ->with([
                 'marga',
                 'children' => fn ($query) => $query
                     ->when(! $isStaff, fn ($childQuery) => $childQuery->where('marga_id', $user->marga_id))
+                    ->when(! $canBrowseMarga, fn ($childQuery) => $this->scopePeopleVisibleToUser($childQuery, $user))
                     ->where(fn ($childQuery) => $childQuery
                         ->where('gender', 'L')
                         ->orWhereNull('gender'))
@@ -155,6 +161,7 @@ class PersonController extends Controller
                     'father',
                     fn ($father) => $father->where('marga_id', $user->marga_id),
                 ))
+            ->when(! $canBrowseMarga, fn ($query) => $this->scopePeopleVisibleToUser($query, $user))
             ->orderByRaw('chain IS NULL')
             ->orderByRaw('CAST(chain AS UNSIGNED)')
             ->orderBy('name')
@@ -236,7 +243,10 @@ class PersonController extends Controller
         );
 
         return Inertia::render('people/show', [
-            'person' => $this->familyPayload($person, $user->isStaff() ? null : $user->marga_id),
+            'person' => $this->familyPayloadVisibleToUser(
+                $this->familyPayload($person, $user->isStaff() ? null : $user->marga_id),
+                $user,
+            ),
             'margas' => $this->margaOptions(),
             'nameSuggestions' => $this->nameSuggestions(),
             'fatherSuggestions' => $this->fatherSuggestions($person),
@@ -264,9 +274,19 @@ class PersonController extends Controller
             collect($versionTrees)->firstWhere('id', $request->integer('version_tree')),
             'name',
         );
+        abort_if(
+            $request->filled('version_tree') && $selectedVersionName === null,
+            404,
+            'Versi silsilah tidak tersedia untuk orang ini.',
+        );
+        $selectedVersionId = $selectedVersionName !== null ? $request->integer('version_tree') : null;
+
+        $familyPayload = $selectedVersionId !== null
+                ? $this->familyPayloadForVersion($person, $selectedVersionId, $isStaff ? null : $user->marga_id)
+                : $this->familyPayload($person, $isStaff ? null : $user->marga_id);
 
         return Inertia::render('people/form', [
-            'person' => $this->familyPayload($person, $isStaff ? null : $user->marga_id),
+            'person' => $this->familyPayloadVisibleToUser($familyPayload, $user),
             'margas' => $isStaff ? $this->margaOptions() : $this->margaOptionsForUser($user),
             'nameSuggestions' => $this->nameSuggestions($isStaff ? null : $user->marga_id),
             'fatherSuggestions' => $this->fatherSuggestions(
@@ -278,6 +298,7 @@ class PersonController extends Controller
             'approvedMargaTrees' => $this->approvedMargaTrees($user),
             'versionTrees' => $versionTrees,
             'selectedVersionName' => $selectedVersionName,
+            'selectedVersionId' => $selectedVersionId,
             ...$this->familyTreeSharingPayload($user),
             'canPublish' => $isStaff,
         ]);
@@ -306,7 +327,7 @@ class PersonController extends Controller
         $familyTrees = FamilyTree::query()
             ->whereHas('nodes', fn ($query) => $query->where('person_id', $person->id))
             ->when(! $request->user()->isStaff(), fn ($query) => $query->where('user_id', $request->user()->id))
-            ->with(['user:id,name', 'rootPerson:id,name', 'nodes.person:id,name', 'shares.recipient:id,name,email'])
+            ->with(['user:id,name', 'rootPerson:id,name,marga_id', 'nodes.person:id,name', 'shares.recipient:id,name,email', 'contributionRequests:id,family_tree_id,status'])
             ->latest('updated_at')
             ->get();
 
@@ -390,6 +411,10 @@ class PersonController extends Controller
         return $user->marga_id !== null
             && $familyTree->contributionRequests()
                 ->where('status', ContributionRequest::STATUS_APPROVED)
+                ->when(
+                    ! $user->isStaff() && ! $user->isContributor(),
+                    fn ($query) => $query->where('requester_id', $user->id),
+                )
                 ->whereHas('matchedFather', fn ($query) => $query
                     ->where('marga_id', $user->marga_id))
                 ->exists()
@@ -417,6 +442,33 @@ class PersonController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Versi alternatif berhasil dibuat.')]);
 
         return to_route('family-trees.show', $copy);
+    }
+
+    /** Create the first alternative for a family whose V1 is the main graph. */
+    public function duplicateFamilyVersion(Request $request, Person $person): RedirectResponse
+    {
+        $user = $request->user();
+        Gate::authorize('view', $person);
+
+        $source = FamilyTree::query()
+            ->when(! $user->isStaff(), fn ($query) => $query->where('user_id', $user->id))
+            ->whereHas('nodes', fn ($nodes) => $nodes->where('person_id', $person->id))
+            ->orderByDesc('is_primary')
+            ->oldest('id')
+            ->first();
+
+        abort_unless($source !== null, 422, 'Belum ada silsilah sumber untuk keluarga ini.');
+
+        $copy = app(FamilyTreeVersionService::class)->duplicateFamily(
+            $source,
+            $person->id,
+            $user,
+            'Keluarga '.$person->name.' - Versi alternatif',
+        );
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Versi alternatif keluarga berhasil dibuat.')]);
+
+        return to_route('people.edit', ['person' => $person, 'version_tree' => $copy->id]);
     }
 
     /**
@@ -464,6 +516,20 @@ class PersonController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Struktur versi silsilah berhasil diperbarui.')]);
 
         return to_route('family-trees.show', $familyTree);
+    }
+
+    /**
+     * Rename one family tree without changing its structure.
+     */
+    public function updateFamilyTreeName(UpdateFamilyTreeNameRequest $request, FamilyTree $familyTree): RedirectResponse
+    {
+        $this->authorizeFamilyTree($request, $familyTree);
+
+        $familyTree->update(['name' => trim($request->validated('name'))]);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Nama silsilah berhasil diperbarui.')]);
+
+        return back();
     }
 
     protected function authorizeFamilyTree(Request $request, FamilyTree $familyTree): void
@@ -615,6 +681,17 @@ class PersonController extends Controller
         $validated['id'] = $person->id;
 
         Gate::authorize('update', $person);
+
+        $versionTreeId = $request->integer('version_tree');
+        if ($versionTreeId > 0) {
+            $familyTree = FamilyTree::query()->findOrFail($versionTreeId);
+            $this->authorizeFamilyTree($request, $familyTree);
+            app(FamilyTreeStructureService::class)->updateFromFamilyForm($familyTree, $person, $validated);
+
+            Inertia::flash('toast', ['type' => 'success', 'message' => __('Versi silsilah berhasil diperbarui.')]);
+
+            return to_route('people.show', $person);
+        }
 
         if (! $isStaff) {
             $result = DB::transaction(function () use ($validated, $user) {
@@ -921,6 +998,7 @@ class PersonController extends Controller
                     'marga' => $row->marga?->name,
                     'chain' => $row->chain,
                     'is_self' => $row->id === $person->id,
+                    'editable' => Gate::allows('update', $row),
                     'children' => $row->children
                         ->map(fn (Person $child) => [
                             'id' => $child->id,
@@ -929,6 +1007,7 @@ class PersonController extends Controller
                             'marga' => $child->marga?->name,
                             'chain' => $child->chain,
                             'birth_order' => $child->birth_order,
+                            'editable' => Gate::allows('update', $child),
                         ])
                         ->values()
                         ->all(),
@@ -974,6 +1053,108 @@ class PersonController extends Controller
                 ->values()
                 ->all(),
         ];
+    }
+
+    /**
+     * Use the same family form payload, but read parent and child placement
+     * from the selected version's nodes instead of the shared Person graph.
+     *
+     * @return array<string, mixed>
+     */
+    protected function familyPayloadForVersion(Person $person, int $treeId, ?int $margaId = null): array
+    {
+        $payload = $this->familyPayload($person, $margaId);
+        $tree = FamilyTree::query()->with(['nodes.person.marga'])->findOrFail($treeId);
+        $nodes = $tree->nodes->keyBy('person_id');
+        $focusNode = $nodes->get($person->id);
+
+        if ($focusNode === null) {
+            return $payload;
+        }
+
+        $baseChildren = collect($payload['children'])->keyBy('id');
+        $baseOwnChildren = collect($payload['ownChildren'])->keyBy('id');
+        $rowFor = function (FamilyTreeNode $node, $base): array {
+            $personRow = $node->person;
+            $row = is_array($base) ? $base : [];
+
+            return [
+                ...$row,
+                'id' => $personRow->id,
+                'name' => $personRow->name,
+                'alias' => $personRow->alias,
+                'gender' => $personRow->gender,
+                'marga_id' => $personRow->marga_id,
+                'marga' => $personRow->marga?->name,
+                'birth_order' => $node->birth_order,
+                'chain' => $node->chain,
+                'pending' => $node->pending_father,
+                'mother_id' => $node->motherNode?->person_id,
+            ];
+        };
+
+        $fatherNode = $focusNode->fatherNode;
+        $payload['birth_order'] = $focusNode->birth_order;
+        $payload['chain'] = $focusNode->chain;
+        $payload['father_id'] = $fatherNode?->person_id;
+        $payload['father'] = $fatherNode?->person
+            ? [
+                'id' => $fatherNode->person->id,
+                'name' => $fatherNode->person->name,
+                'alias' => $fatherNode->person->alias,
+                'marga_id' => $fatherNode->person->marga_id,
+                'marga' => $fatherNode->person->marga?->name,
+                'chain' => $fatherNode->chain,
+                'birth_year' => $fatherNode->person->birth_year,
+                'death_year' => $fatherNode->person->death_year,
+            ]
+            : null;
+
+        $siblingNodes = $fatherNode?->children()->with('person.marga')->orderBy('birth_order')->orderBy('id')->get()
+            ?? collect([$focusNode]);
+        $childNodes = $focusNode->children()->with('person.marga')->orderBy('birth_order')->orderBy('id')->get();
+
+        $payload['children'] = $siblingNodes
+            ->map(fn (FamilyTreeNode $node) => $rowFor($node, $baseChildren->get($node->person_id, [])))
+            ->values()->all();
+        $payload['ownChildren'] = $childNodes
+            ->map(fn (FamilyTreeNode $node) => $rowFor($node, $baseOwnChildren->get($node->person_id, [])))
+            ->values()->all();
+
+        return $payload;
+    }
+
+    /** @param array<string, mixed> $payload */
+    protected function familyPayloadVisibleToUser(array $payload, User $user): array
+    {
+        if ($user->isStaff() || $user->isContributor()) {
+            return $payload;
+        }
+
+        $visiblePersonIds = Person::query()
+            ->whereHas('familyTrees', fn ($familyTrees) => $familyTrees
+                ->where(fn ($access) => $access
+                    ->where('family_trees.user_id', $user->id)
+                    ->orWhereHas('shares', fn ($shares) => $shares
+                        ->whereBelongsTo($user, 'recipient')
+                        ->where('status', FamilyTreeShare::STATUS_ACCEPTED))))
+            ->pluck('people.id')
+            ->mapWithKeys(fn ($id) => [(int) $id => true]);
+
+        $payload['lineage'] = collect($payload['lineage'] ?? [])
+            ->filter(fn (array $entry) => $visiblePersonIds->has((int) $entry['id']))
+            ->map(function (array $entry) use ($visiblePersonIds): array {
+                $entry['children'] = collect($entry['children'] ?? [])
+                    ->filter(fn (array $child) => $visiblePersonIds->has((int) $child['id']))
+                    ->values()
+                    ->all();
+
+                return $entry;
+            })
+            ->values()
+            ->all();
+
+        return $payload;
     }
 
     /**
@@ -1136,8 +1317,11 @@ class PersonController extends Controller
                     ->whereBelongsTo($user, 'recipient')
                     ->where('status', FamilyTreeShare::STATUS_ACCEPTED))))
             ->whereNotNull('root_person_id')
-            ->when($focus !== null, fn ($query) => $query->where('root_person_id', $focus->id))
-            ->with(['user:id,name', 'rootPerson:id,name', 'nodes.person:id,name', 'shares.recipient:id,name,email'])
+            ->when($focus !== null, fn ($query) => $query->whereHas(
+                'nodes',
+                fn ($nodes) => $nodes->where('person_id', $focus->id),
+            ))
+            ->with(['user:id,name', 'rootPerson:id,name,marga_id', 'nodes.person:id,name', 'shares.recipient:id,name,email', 'contributionRequests:id,family_tree_id,status'])
             ->withExists(['deletionRequests as deletion_pending' => fn ($query) => $query
                 ->where('status', FamilyTreeDeletionRequest::STATUS_PENDING)])
             ->latest('updated_at')
@@ -1163,11 +1347,15 @@ class PersonController extends Controller
             ->whereNotNull('root_person_id')
             ->whereHas('contributionRequests', fn ($query) => $query
                 ->where('status', ContributionRequest::STATUS_APPROVED)
+                ->when(
+                    ! $user->isStaff() && ! $user->isContributor(),
+                    fn ($requestQuery) => $requestQuery->where('requester_id', $user->id),
+                )
                 ->whereHas('matchedFather', fn ($father) => $father
                     ->where('marga_id', $user->marga_id)))
             ->whereHas('nodes.person', fn ($query) => $query
                 ->where('marga_id', $user->marga_id))
-            ->with(['user:id,name', 'rootPerson:id,name', 'nodes.person:id,name', 'shares.recipient:id,name,email'])
+            ->with(['user:id,name', 'rootPerson:id,name', 'nodes.person:id,name', 'shares.recipient:id,name,email', 'contributionRequests:id,family_tree_id,status'])
             ->withExists(['deletionRequests as deletion_pending' => fn ($query) => $query
                 ->where('status', FamilyTreeDeletionRequest::STATUS_PENDING)])
             ->latest('updated_at')
@@ -1189,6 +1377,7 @@ class PersonController extends Controller
             'member_person_ids' => $tree->nodes
                 ->pluck('person_id')
                 ->push($tree->root_person_id)
+                ->map(fn ($personId) => (int) $personId)
                 ->unique()
                 ->values()
                 ->all(),
@@ -1201,6 +1390,15 @@ class PersonController extends Controller
             'can_manage' => $canManage,
             'can_share' => $canManage,
             'can_append' => $user->can('append', $tree),
+            'can_request_marga_tree' => $canManage
+                && $user->marga_id !== null
+                && $tree->rootPerson?->marga_id === $user->marga_id,
+            'marga_request_status' => $tree->contributionRequests
+                ->first(fn (ContributionRequest $request) => in_array(
+                    $request->status,
+                    [ContributionRequest::STATUS_PENDING, ContributionRequest::STATUS_APPROVED],
+                    true,
+                ))?->status,
             'can_delete' => $user->isAdmin() || $tree->user_id === $user->id,
             'shares' => $canManage ? $tree->shares->map(fn (FamilyTreeShare $share) => [
                 'id' => $share->id,
@@ -1214,12 +1412,23 @@ class PersonController extends Controller
         ];
     }
 
+    protected function scopePeopleVisibleToUser(Builder $query, User $user): Builder
+    {
+        return $query->whereHas('familyTrees', fn ($familyTrees) => $familyTrees
+            ->where(fn ($access) => $access
+                ->where('family_trees.user_id', $user->id)
+                ->orWhereHas('shares', fn ($shares) => $shares
+                    ->whereBelongsTo($user, 'recipient')
+                    ->where('status', FamilyTreeShare::STATUS_ACCEPTED))));
+    }
+
     /** @return array{shareableAccounts: array<int, array<string, mixed>>, pendingTreeShares: array<int, array<string, mixed>>} */
     protected function familyTreeSharingPayload(User $user): array
     {
         $shareableAccounts = User::query()
             ->whereKeyNot($user->id)
             ->where('role', '!=', 'admin')
+            ->when(! $user->isStaff(), fn ($query) => $query->where('marga_id', $user->marga_id))
             ->with('marga:id,name')
             ->orderBy('name')
             ->get(['id', 'name', 'email', 'marga_id'])

@@ -3,6 +3,7 @@
 use App\Models\ContributionRequest;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeNode;
+use App\Models\FamilyTreeShare;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
@@ -65,6 +66,73 @@ test('an alternative version can change a parent without changing its source ver
         ->and($versionOne->nodes()->where('person_id', $rajaHumirtap->id)->value('person_id'))->toBe($rajaHumirtap->id);
 });
 
+test('the existing family form updates an alternative version without changing global chains', function () {
+    $user = User::factory()->asAdmin()->create();
+    $root = Person::factory()->create(['name' => 'Si Raja Batak', 'gender' => 'L', 'chain' => '1']);
+    $firstChild = Person::factory()->create([
+        'name' => 'Anak Pertama',
+        'gender' => 'L',
+        'father_id' => $root->id,
+        'birth_order' => 1,
+        'chain' => '1-1',
+    ]);
+    $secondChild = Person::factory()->create([
+        'name' => 'Anak Kedua',
+        'gender' => 'L',
+        'father_id' => $root->id,
+        'birth_order' => 2,
+        'chain' => '1-2',
+    ]);
+    $tree = FamilyTree::create(['user_id' => $user->id, 'root_person_id' => $root->id, 'name' => 'Versi Utama']);
+    $rootNode = FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $root->id, 'chain' => '1']);
+    FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $firstChild->id, 'father_node_id' => $rootNode->id, 'birth_order' => 1, 'chain' => '1-1']);
+    FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $secondChild->id, 'father_node_id' => $rootNode->id, 'birth_order' => 2, 'chain' => '1-2']);
+
+    $alternative = app(FamilyTreeVersionService::class)->duplicate($tree, $user, 'Versi Alternatif');
+
+    $this->actingAs($user)
+        ->put(route('people.update', ['person' => $root, 'version_tree' => $alternative->id]), [
+            'name' => $root->name,
+            'gender' => 'L',
+            'birth_order' => 1,
+            'sibling_count' => 1,
+            'father' => [],
+            'mothers' => [],
+            'children' => [],
+            'ownChildren' => [
+                ['id' => $secondChild->id, 'name' => $secondChild->name, 'gender' => 'L'],
+                ['id' => $firstChild->id, 'name' => $firstChild->name, 'gender' => 'L'],
+            ],
+        ])
+        ->assertRedirect(route('people.show', $root));
+
+    expect($tree->nodes()->where('person_id', $firstChild->id)->value('birth_order'))->toBe(1)
+        ->and($tree->nodes()->where('person_id', $secondChild->id)->value('birth_order'))->toBe(2)
+        ->and($alternative->nodes()->where('person_id', $secondChild->id)->value('birth_order'))->toBe(1)
+        ->and($alternative->nodes()->where('person_id', $firstChild->id)->value('birth_order'))->toBe(2)
+        ->and($firstChild->fresh()->chain)->toBe('1-1')
+        ->and($secondChild->fresh()->chain)->toBe('1-2');
+});
+
+test('an unavailable version context never falls back to the main family form', function () {
+    $user = User::factory()->asAdmin()->create();
+    $person = Person::factory()->create();
+    $otherRoot = Person::factory()->create();
+    $otherTree = FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $otherRoot->id,
+        'name' => 'Versi Orang Lain',
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $otherTree->id,
+        'person_id' => $otherRoot->id,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('people.edit', ['person' => $person, 'version_tree' => $otherTree->id]))
+        ->assertNotFound();
+});
+
 test('a family tree page reads parentage from its own version nodes', function () {
     $admin = User::factory()->asAdmin()->create();
     $rajaLontung = Person::factory()->create(['name' => 'Raja Lontung']);
@@ -101,7 +169,7 @@ test('a family tree page reads parentage from its own version nodes', function (
             ->where('people.2.chain', '1-2'));
 });
 
-test('a user can view an admin family tree from their marga without edit actions', function () {
+test('a user can only view an admin family tree after accepting a share', function () {
     $marga = Marga::factory()->create();
     $otherMarga = Marga::factory()->create();
     $admin = User::factory()->asAdmin()->create();
@@ -130,6 +198,18 @@ test('a user can view an admin family tree from their marga without edit actions
         'matched_father_id' => $visibleRoot->id,
         'subject_person_id' => $visibleRoot->id,
         'family_tree_id' => $tree->id,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('family-trees.show', $tree))
+        ->assertForbidden();
+
+    FamilyTreeShare::create([
+        'family_tree_id' => $tree->id,
+        'sender_id' => $admin->id,
+        'recipient_id' => $user->id,
+        'status' => FamilyTreeShare::STATUS_ACCEPTED,
+        'responded_at' => now(),
     ]);
 
     $this->actingAs($user)
@@ -243,6 +323,31 @@ test('a tree owner can duplicate a version from its history action', function ()
     expect($copy->user_id)->toBe($user->id)
         ->and($copy->name)->toBe('Versi 1 - Versi alternatif')
         ->and($copy->nodes()->value('person_id'))->toBe($root->id);
+});
+
+test('a tree owner can rename a family tree without changing its nodes', function () {
+    $user = User::factory()->create();
+    $root = Person::factory()->create(['name' => 'Raja Lontung']);
+    $tree = FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $root->id,
+        'name' => 'Nama Lama',
+    ]);
+    $node = FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $root->id,
+        'chain' => '1',
+    ]);
+
+    $this->actingAs($user)
+        ->patch(route('family-trees.name.update', $tree), [
+            'name' => 'Nama Baru',
+        ])
+        ->assertRedirect();
+
+    expect($tree->fresh()->name)->toBe('Nama Baru')
+        ->and($node->fresh()->chain)->toBe('1')
+        ->and($node->fresh()->family_tree_id)->toBe($tree->id);
 });
 
 test('updating an alternative tree relationship does not alter its source tree', function () {

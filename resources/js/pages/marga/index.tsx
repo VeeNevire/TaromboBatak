@@ -14,6 +14,13 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import marga from '@/routes/marga';
@@ -26,10 +33,18 @@ type MargaItem = {
     image: string | null;
     image_url: string | null;
     people_count: number;
+    identity_person_id: number | null;
+    identity_person_name: string | null;
 };
 
 type Props = {
     margas: MargaItem[];
+    identityPersonOptions: {
+        id: number;
+        name: string;
+        chain: string;
+        generation: number;
+    }[];
 };
 
 function MargaAvatar({ m, className }: { m: MargaItem; className?: string }) {
@@ -154,7 +169,7 @@ function ImageInput({
     );
 }
 
-export default function MargaIndex({ margas }: Props) {
+export default function MargaIndex({ margas, identityPersonOptions }: Props) {
     const [dialog, setDialog] = useState<null | 'create' | MargaItem>(null);
     const [toDelete, setToDelete] = useState<MargaItem | null>(null);
 
@@ -163,6 +178,7 @@ export default function MargaIndex({ margas }: Props) {
         description: '',
         color: '#b34b1e',
         image: '' as string | File,
+        identity_person_id: null as number | null,
     });
 
     const openCreate = () => {
@@ -176,6 +192,7 @@ export default function MargaIndex({ margas }: Props) {
             description: m.description ?? '',
             color: m.color ?? '#b34b1e',
             image: m.image_url ?? '',
+            identity_person_id: m.identity_person_id,
         });
         setDialog(m);
     };
@@ -344,6 +361,67 @@ export default function MargaIndex({ margas }: Props) {
                                         className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                     />
                                     <InputError message={form.errors.name} />
+                                </div>
+
+                                <div className="grid gap-1.5">
+                                    <Label
+                                        htmlFor="identity_person_id"
+                                        className="text-tb-on-surface"
+                                    >
+                                        Saya adalah
+                                    </Label>
+                                    <Select
+                                        value={
+                                            form.data.identity_person_id ===
+                                            null
+                                                ? 'none'
+                                                : String(
+                                                      form.data
+                                                          .identity_person_id,
+                                                  )
+                                        }
+                                        onValueChange={(value) =>
+                                            form.setData(
+                                                'identity_person_id',
+                                                value === 'none'
+                                                    ? null
+                                                    : Number(value),
+                                            )
+                                        }
+                                    >
+                                        <SelectTrigger
+                                            id="identity_person_id"
+                                            className="w-full border-tb-outline-variant bg-tb-surface-bright"
+                                        >
+                                            <SelectValue placeholder="Pilih identitas marga" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="none">
+                                                Belum dipilih
+                                            </SelectItem>
+                                            {identityPersonOptions.map(
+                                                (person) => (
+                                                    <SelectItem
+                                                        key={person.id}
+                                                        value={String(
+                                                            person.id,
+                                                        )}
+                                                    >
+                                                        {person.chain} ·{' '}
+                                                        {person.name}
+                                                    </SelectItem>
+                                                ),
+                                            )}
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-xs text-tb-on-surface-variant">
+                                        Khusus identifikasi marga dari pohon
+                                        utama Si Raja Batak, maksimal generasi
+                                        ke-11.
+                                    </p>
+                                    <InputError
+                                        message={form.errors.identity_person_id}
+                                    />
                                 </div>
 
                                 <div className="grid gap-1.5">

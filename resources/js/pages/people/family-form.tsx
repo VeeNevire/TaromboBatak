@@ -109,6 +109,7 @@ export type LineageChild = {
     marga: string | null;
     chain: string | null;
     birth_order: number | null;
+    editable?: boolean;
     isSelf?: boolean;
 };
 
@@ -118,6 +119,7 @@ export type LineageEntry = {
     marga: string | null;
     chain: string | null;
     is_self: boolean;
+    editable?: boolean;
     children: LineageChild[];
 };
 
@@ -128,6 +130,7 @@ export type MargaLineageEntry = {
     marga: string | null;
     chain: string | null;
     isAyah?: boolean;
+    editable?: boolean;
     children?: LineageChild[];
 };
 
@@ -168,8 +171,10 @@ type Props = {
     approvedMargaTrees?: FamilyTreeHistoryEntry[];
     versionTrees?: FamilyTreeHistoryEntry[];
     selectedVersionName?: string | null;
+    selectedVersionId?: number | null;
     shareableAccounts?: ShareableAccount[];
     pendingTreeShares?: PendingTreeShare[];
+    showFamilyTreeHistory?: boolean;
     initialFatherName?: string;
     canPublish?: boolean;
     readOnly?: boolean;
@@ -192,32 +197,79 @@ const VALUE_NONE = 'none';
 const NEW_MARGA_VALUE = '__new__';
 const SPOUSE_OTHER_VALUE = '__other__';
 
+const normalizeNameForMatch = (value: string): string =>
+    value.trim().replace(/\s+/g, ' ').toLocaleUpperCase();
+
 type ParentKey = 'father' | number;
 
 const parentErrorPrefix = (key: ParentKey): 'father' | `mothers.${number}` =>
     key === 'father' ? 'father' : `mothers.${key}`;
 
+const orderFamilyTreeVersions = (entries: FamilyTreeHistoryEntry[]) =>
+    [...entries].sort(
+        (left, right) =>
+            Number(right.is_primary) - Number(left.is_primary) ||
+            left.id - right.id,
+    );
+
 function FamilyTreeVersionAction({
     entries,
+    personId,
     iconOnly = false,
     mode = 'duplicate',
 }: {
     entries: FamilyTreeHistoryEntry[];
+    personId?: number;
     iconOnly?: boolean;
     mode?: 'duplicate' | 'open';
 }) {
     if (entries.length === 0) {
-        return null;
+        if (personId == null) {
+            return null;
+        }
+
+        return (
+            <Link
+                href={people.familyVersion.duplicate(personId)}
+                method="post"
+                as="button"
+                aria-label={
+                    iconOnly
+                        ? 'Salin keluarga menjadi versi alternatif'
+                        : undefined
+                }
+                title={
+                    iconOnly
+                        ? 'Salin keluarga menjadi versi alternatif'
+                        : undefined
+                }
+                className={cn(
+                    'inline-flex shrink-0 items-center justify-center rounded-lg border border-tb-outline-variant text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary',
+                    iconOnly
+                        ? 'size-6 text-tb-outline opacity-70 hover:bg-tb-primary/10 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none'
+                        : 'gap-1.5 px-3 py-2 text-xs font-semibold',
+                )}
+            >
+                <Copy className="size-3.5" />
+                {!iconOnly && ' Salin Versi'}
+            </Link>
+        );
     }
 
     const isOpenMode = mode === 'open';
     const Icon = isOpenMode ? Layers3 : Copy;
     const actionLabel = isOpenMode ? 'Versi Silsilah' : 'Salin Versi';
+    const orderedEntries = orderFamilyTreeVersions(entries);
+    const versionNumberById = new Map(
+        orderedEntries.map((entry, index) => [entry.id, index + 1]),
+    );
     const actionHref = (entry: FamilyTreeHistoryEntry) =>
         isOpenMode
-            ? people.edit(entry.root_person_id, {
-                  query: { version_tree: entry.id },
-              })
+            ? entry.can_manage
+                ? people.edit(entry.root_person_id, {
+                      query: { version_tree: entry.id },
+                  })
+                : familyTreeRoutes.show(entry.id)
             : familyTreeRoutes.duplicate(entry.id);
 
     if (entries.length === 1) {
@@ -266,7 +318,7 @@ function FamilyTreeVersionAction({
                 </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-64">
-                {entries.map((entry) => (
+                {orderedEntries.map((entry) => (
                     <DropdownMenuItem key={entry.id} asChild>
                         <Link
                             href={actionHref(entry)}
@@ -274,7 +326,8 @@ function FamilyTreeVersionAction({
                             as={isOpenMode ? 'a' : 'button'}
                             className="w-full text-left"
                         >
-                            {entry.name ?? entry.root_name}
+                            {entry.name ?? entry.root_name} (V
+                            {versionNumberById.get(entry.id)})
                         </Link>
                     </DropdownMenuItem>
                 ))}
@@ -287,25 +340,38 @@ function FamilyTreePersonControls({
     entries,
     personId,
     personName,
+    editable = false,
 }: {
     entries: FamilyTreeHistoryEntry[];
     personId: number;
     personName: string | null | undefined;
+    editable?: boolean;
 }) {
+    const manageableEntries = entries.filter((entry) => entry.can_manage);
+
     return (
         <div className="flex shrink-0 flex-col items-end gap-1">
             <div className="flex items-center gap-1.5">
-                <FamilyTreeVersionAction entries={entries} iconOnly />
-                <Link
-                    href={people.edit(personId)}
-                    aria-label={`Ubah ${displayRowName(personName)}`}
-                    className="inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-tb-outline-variant text-tb-outline opacity-70 transition-opacity hover:border-tb-primary hover:text-tb-primary hover:opacity-100"
-                >
-                    <Pencil className="size-3.5" />
-                </Link>
+                <FamilyTreeVersionAction
+                    entries={entries}
+                    personId={personId}
+                    iconOnly
+                    mode={manageableEntries.length > 0 ? 'duplicate' : 'open'}
+                />
+                {(manageableEntries.length > 0 || editable) && (
+                    <Link
+                        href={people.edit(personId)}
+                        aria-label={`Ubah ${displayRowName(personName)}`}
+                        className="inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-tb-outline-variant text-tb-outline opacity-70 transition-opacity hover:border-tb-primary hover:text-tb-primary hover:opacity-100"
+                    >
+                        <Pencil className="size-3.5" />
+                    </Link>
+                )}
             </div>
             <span className="rounded-full bg-tb-surface-container px-1.5 py-0.5 text-[10px] leading-none font-semibold whitespace-nowrap text-tb-on-surface-variant">
-                {entries.length} versi
+                {entries.length +
+                    (entries.some((entry) => entry.is_primary) ? 0 : 1)}{' '}
+                versi
             </span>
         </div>
     );
@@ -335,6 +401,13 @@ function displayRowName(name: string | null | undefined): string {
 
 function isGapRow(row: ChildRow): boolean {
     return row.id == null && !isNameFilled(row.name ?? '');
+}
+
+function treeBelongsToFamily(
+    tree: FamilyTreeHistoryEntry,
+    personId: number,
+): boolean {
+    return Number(tree.root_person_id) === Number(personId);
 }
 
 function SilsilahListCard({
@@ -389,8 +462,8 @@ function SilsilahListCard({
                         {lineage.map((entry) => {
                             const isOpen = expanded.has(entry.id);
                             const count = entry.children.length;
-                            const entryTrees = familyTrees.filter(
-                                (tree) => tree.root_person_id === entry.id,
+                            const entryTrees = familyTrees.filter((tree) =>
+                                treeBelongsToFamily(tree, entry.id),
                             );
 
                             return (
@@ -447,6 +520,7 @@ function SilsilahListCard({
                                             entries={entryTrees}
                                             personId={entry.id}
                                             personName={entry.name}
+                                            editable={entry.editable}
                                         />
                                     </div>
 
@@ -470,8 +544,10 @@ function SilsilahListCard({
                                                             const childTrees =
                                                                 familyTrees.filter(
                                                                     (tree) =>
-                                                                        tree.root_person_id ===
-                                                                        child.id,
+                                                                        treeBelongsToFamily(
+                                                                            tree,
+                                                                            child.id,
+                                                                        ),
                                                                 );
 
                                                             return (
@@ -522,6 +598,9 @@ function SilsilahListCard({
                                                                             }
                                                                             personName={
                                                                                 child.name
+                                                                            }
+                                                                            editable={
+                                                                                child.editable
                                                                             }
                                                                         />
                                                                     </div>
@@ -593,8 +672,8 @@ function MargaLineageCard({
                                 (entry.children ?? []).length > 0;
                             const expandKey = `${entry.id}-${entry.chain ?? 'na'}`;
                             const isOpen = expanded.has(expandKey);
-                            const entryTrees = familyTrees.filter(
-                                (tree) => tree.root_person_id === entry.id,
+                            const entryTrees = familyTrees.filter((tree) =>
+                                treeBelongsToFamily(tree, entry.id),
                             );
 
                             return (
@@ -659,6 +738,7 @@ function MargaLineageCard({
                                             entries={entryTrees}
                                             personId={entry.id}
                                             personName={entry.name}
+                                            editable={entry.editable}
                                         />
                                     </div>
 
@@ -676,8 +756,10 @@ function MargaLineageCard({
                                                             const childTrees =
                                                                 familyTrees.filter(
                                                                     (tree) =>
-                                                                        tree.root_person_id ===
-                                                                        child.id,
+                                                                        treeBelongsToFamily(
+                                                                            tree,
+                                                                            child.id,
+                                                                        ),
                                                                 );
 
                                                             return (
@@ -710,6 +792,9 @@ function MargaLineageCard({
                                                                             }
                                                                             personName={
                                                                                 child.name
+                                                                            }
+                                                                            editable={
+                                                                                child.editable
                                                                             }
                                                                         />
                                                                     </div>
@@ -1022,8 +1107,10 @@ export default function FamilyForm({
     approvedMargaTrees = [],
     versionTrees = [],
     selectedVersionName = null,
+    selectedVersionId = null,
     shareableAccounts = [],
     pendingTreeShares = [],
+    showFamilyTreeHistory = true,
     canPublish = false,
     readOnly = false,
 }: Props) {
@@ -1117,6 +1204,7 @@ export default function FamilyForm({
                 : ([] as ChildRow[]),
         removed_child_ids: [] as number[],
         removed_own_child_ids: [] as number[],
+        version_tree: selectedVersionId,
     });
 
     const birthOrder = Number(data.birth_order) || 1;
@@ -1125,6 +1213,12 @@ export default function FamilyForm({
         (tree, index, all) =>
             all.findIndex((candidate) => candidate.id === tree.id) === index,
     );
+    const selectedVersionNumber =
+        selectedVersionId === null
+            ? null
+            : orderFamilyTreeVersions(versionTrees).findIndex(
+                  (entry) => entry.id === selectedVersionId,
+              ) + 1;
 
     const prevSiblingCount = useRef(siblingCount);
     const savedExcessToastShown = useRef(false);
@@ -1819,7 +1913,14 @@ export default function FamilyForm({
         }
 
         if (isEdit && person?.id) {
-            post(people.update.form(person.id).action, {
+            const updateAction = people.update.form(person.id, {
+                query:
+                    selectedVersionId !== null
+                        ? { version_tree: selectedVersionId }
+                        : {},
+            }).action;
+
+            post(updateAction, {
                 forceFormData: true,
             });
         } else {
@@ -1832,11 +1933,12 @@ export default function FamilyForm({
         entry,
         ...(entry.children ?? []),
     ]);
+    const fatherCandidates = [...lineageEntries, ...fatherSuggestions];
     const fatherMatch = fatherName
-        ? lineageEntries.find(
+        ? fatherCandidates.find(
               (entry) =>
-                  (entry.name ?? '').trim().toUpperCase() ===
-                  fatherName.toUpperCase(),
+                  normalizeNameForMatch(entry.name ?? '') ===
+                  normalizeNameForMatch(fatherName),
           )
         : undefined;
     const predictedFatherChain = fatherMatch?.chain ?? null;
@@ -2122,8 +2224,21 @@ export default function FamilyForm({
                         disabled={readOnly}
                         className="grid w-full max-w-7xl gap-6"
                     >
-                        <div className="max-w-full overflow-x-auto">
-                            <div className="grid min-w-[1920px] grid-cols-[minmax(640px,1fr)_360px_minmax(640px,1fr)] gap-6">
+                        <div
+                            className={cn(
+                                showFamilyTreeHistory
+                                    ? 'max-w-full overflow-x-auto'
+                                    : 'w-full',
+                            )}
+                        >
+                            <div
+                                className={cn(
+                                    'grid gap-6',
+                                    showFamilyTreeHistory
+                                        ? 'min-w-[1920px] grid-cols-[minmax(640px,1fr)_360px_minmax(640px,1fr)]'
+                                        : 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px]',
+                                )}
+                            >
                                 <div className="grid gap-6">
                                     <Card className="border-tb-outline-variant bg-tb-surface-bright">
                                         <CardHeader>
@@ -2141,6 +2256,8 @@ export default function FamilyForm({
                                                 {selectedVersionName && (
                                                     <span className="max-w-56 shrink-0 rounded-lg border border-tb-primary/30 bg-tb-primary/5 px-2.5 py-1.5 text-right text-xs font-semibold text-tb-primary">
                                                         {selectedVersionName}
+                                                        {selectedVersionNumber &&
+                                                            ` (V${selectedVersionNumber})`}
                                                     </span>
                                                 )}
                                                 {person && !readOnly && (
@@ -2702,44 +2819,27 @@ export default function FamilyForm({
                                     </Card>
                                 </div>
                                 {person ? (
-                                    <>
-                                        <SilsilahListCard
-                                            lineage={person.lineage}
-                                            selfId={person.id}
-                                            familyTrees={listFamilyTrees}
-                                        />
-                                        <FamilyTreeHistoryCard
-                                            entries={familyTrees}
-                                            approvedEntries={approvedMargaTrees}
-                                            margaName={activeMargaName}
-                                            shareableAccounts={
-                                                shareableAccounts
-                                            }
-                                            pendingTreeShares={
-                                                pendingTreeShares
-                                            }
-                                        />
-                                    </>
+                                    <SilsilahListCard
+                                        lineage={person.lineage}
+                                        selfId={person.id}
+                                        familyTrees={listFamilyTrees}
+                                    />
                                 ) : (
-                                    <>
-                                        <MargaLineageCard
-                                            entries={highlightedLineage}
-                                            fatherChain={predictedFatherChain}
-                                            focusChain={predictedFocusChain}
-                                            familyTrees={listFamilyTrees}
-                                        />
-                                        <FamilyTreeHistoryCard
-                                            entries={familyTrees}
-                                            approvedEntries={approvedMargaTrees}
-                                            margaName={activeMargaName}
-                                            shareableAccounts={
-                                                shareableAccounts
-                                            }
-                                            pendingTreeShares={
-                                                pendingTreeShares
-                                            }
-                                        />
-                                    </>
+                                    <MargaLineageCard
+                                        entries={highlightedLineage}
+                                        fatherChain={predictedFatherChain}
+                                        focusChain={predictedFocusChain}
+                                        familyTrees={listFamilyTrees}
+                                    />
+                                )}
+                                {showFamilyTreeHistory && (
+                                    <FamilyTreeHistoryCard
+                                        entries={familyTrees}
+                                        approvedEntries={approvedMargaTrees}
+                                        margaName={activeMargaName}
+                                        shareableAccounts={shareableAccounts}
+                                        pendingTreeShares={pendingTreeShares}
+                                    />
                                 )}
                                 {selectedChild && selectedIndex != null && (
                                     <Card className="border-tb-outline-variant bg-tb-surface-bright">

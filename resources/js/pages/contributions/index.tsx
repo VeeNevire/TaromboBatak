@@ -1,9 +1,11 @@
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import {
     BellRing,
     BookOpen,
     CalendarDays,
     Check,
+    ExternalLink,
+    MessageCircle,
     Plus,
     Trash2,
     UserRoundCog,
@@ -32,24 +34,30 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { dashboard } from '@/routes';
+import contacts from '@/routes/contacts';
 import contributions from '@/routes/contributions';
 import events from '@/routes/events';
 import familyTreeDeletions from '@/routes/family-tree-deletions';
 import identityRequestRoutes from '@/routes/identity-requests';
 import stories from '@/routes/stories';
+import tarombo from '@/routes/tarombo';
 
 type Contribution = {
     id: number;
+    requester_id: number;
     status: 'pending' | 'approved' | 'rejected';
     requester: string;
     requester_marga: string | null;
     subject: string;
     matched_father: string;
+    matched_father_id: number;
     matched_father_marga: string | null;
     reviewer: string | null;
     reviewed_at: string | null;
     reason: string | null;
     created_at: string | null;
+    family_tree_id: number | null;
+    marga_tree: boolean;
 };
 
 type IdentityApproval = {
@@ -298,7 +306,9 @@ export default function ContributionsIndex({
     };
 
     const rejectIdentity = () => {
-        if (!identityToReject) return;
+        if (!identityToReject) {
+            return;
+        }
 
         identityReviewForm.post(
             identityRequestRoutes.reject(identityToReject.id).url,
@@ -334,7 +344,8 @@ export default function ContributionsIndex({
                         </p>
                         <p className="max-w-md text-sm text-tb-on-surface-variant">
                             Pengajuan muncul ketika User Biasa mencocokkan nama
-                            Ayah dengan data yang sudah terdaftar.
+                            Ayah atau mengajukan silsilah marganya untuk
+                            ditinjau.
                         </p>
                     </CardContent>
                 </Card>
@@ -353,10 +364,25 @@ export default function ContributionsIndex({
                                     </span>
                                 </div>
                                 <p className="font-medium text-tb-on-surface">
-                                    {request.requester} mengajukan{' '}
-                                    <strong>{request.matched_father}</strong>{' '}
-                                    sebagai Ayah dari{' '}
-                                    <strong>{request.subject}</strong>.
+                                    {request.marga_tree ? (
+                                        <>
+                                            {request.requester} mengajukan
+                                            silsilah marga{' '}
+                                            <strong>
+                                                {request.matched_father}
+                                            </strong>
+                                            .
+                                        </>
+                                    ) : (
+                                        <>
+                                            {request.requester} mengajukan{' '}
+                                            <strong>
+                                                {request.matched_father}
+                                            </strong>{' '}
+                                            sebagai Ayah dari{' '}
+                                            <strong>{request.subject}</strong>.
+                                        </>
+                                    )}
                                 </p>
                                 <p className="text-sm text-tb-on-surface-variant">
                                     Marga:{' '}
@@ -372,22 +398,55 @@ export default function ContributionsIndex({
                                     </p>
                                 )}
                             </div>
-                            {request.status === 'pending' && (
-                                <div className="flex shrink-0 gap-2">
-                                    <Button
-                                        variant="outline"
-                                        onClick={() => setToReject(request)}
+                            <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                                <Button asChild variant="outline">
+                                    <Link
+                                        href={
+                                            tarombo.index({
+                                                query: {
+                                                    person: request.matched_father_id,
+                                                    ...(request.family_tree_id
+                                                        ? {
+                                                              family_tree:
+                                                                  request.family_tree_id,
+                                                          }
+                                                        : {}),
+                                                },
+                                            }).url
+                                        }
                                     >
-                                        <X className="size-4" /> Tolak
-                                    </Button>
-                                    <Button
-                                        className="bg-tb-primary hover:bg-tb-primary-light"
-                                        onClick={() => approve(request)}
+                                        <ExternalLink className="size-4" /> Buka
+                                        Silsilah
+                                    </Link>
+                                </Button>
+                                <Button asChild variant="outline">
+                                    <Link
+                                        href={
+                                            contacts.show(request.requester_id)
+                                                .url
+                                        }
                                     >
-                                        <Check className="size-4" /> Setujui
-                                    </Button>
-                                </div>
-                            )}
+                                        <MessageCircle className="size-4" />{' '}
+                                        Kirim Pesan
+                                    </Link>
+                                </Button>
+                                {request.status === 'pending' && (
+                                    <>
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => setToReject(request)}
+                                        >
+                                            <X className="size-4" /> Tolak
+                                        </Button>
+                                        <Button
+                                            className="bg-tb-primary hover:bg-tb-primary-light"
+                                            onClick={() => approve(request)}
+                                        >
+                                            <Check className="size-4" /> Setujui
+                                        </Button>
+                                    </>
+                                )}
+                            </div>
                         </CardContent>
                     </Card>
                 ))

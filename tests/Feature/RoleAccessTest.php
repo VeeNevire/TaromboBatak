@@ -55,6 +55,11 @@ test('a regular user sees their first marga member as the lineage boundary root'
         'marga_id' => $userMarga->id,
         'father_id' => $outsideFather->id,
     ]);
+    $tree = FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $boundary->id,
+    ]);
+    $tree->people()->attach($boundary);
 
     $this->actingAs($user)
         ->get(route('people.create'))
@@ -75,6 +80,11 @@ test('the lineage list excludes a wife while retaining her father', function () 
         'gender' => 'L',
         'marga_id' => $marga->id,
     ]);
+    $tree = FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $wifeFather->id,
+    ]);
+    $tree->people()->attach($wifeFather);
     Person::factory()->create([
         'name' => 'Istri',
         'gender' => 'P',
@@ -89,6 +99,34 @@ test('the lineage list excludes a wife while retaining her father', function () 
             ->has('lineage', 1)
             ->where('lineage.0.id', $wifeFather->id)
             ->has('lineage.0.children', 0));
+});
+
+test('a regular users family form hides same marga lineage outside accessible trees', function () {
+    $marga = Marga::factory()->create(['name' => 'Silaban']);
+    $user = User::factory()->withMarga($marga->id)->create();
+    $outsideAncestor = Person::factory()->create([
+        'name' => 'Ompu di luar akses',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+    ]);
+    $focus = Person::factory()->create([
+        'name' => 'Tunggal',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'father_id' => $outsideAncestor->id,
+    ]);
+    $tree = FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $focus->id,
+    ]);
+    $tree->people()->attach($focus);
+
+    $this->actingAs($user)
+        ->get(route('people.edit', $focus))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('person.lineage', 1)
+            ->where('person.lineage.0.id', $focus->id));
 });
 
 test('regular users without a marga cannot create or edit family data', function () {

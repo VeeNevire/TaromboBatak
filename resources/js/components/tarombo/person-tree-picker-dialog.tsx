@@ -1,6 +1,7 @@
+import { Search } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { DescendantsTree } from '@/components/people/descendants-tree';
 import type { DescendantsAlternativeTree } from '@/components/people/descendants-tree';
-import { Input } from '@/components/ui/input';
 import {
     Dialog,
     DialogContent,
@@ -8,9 +9,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import type { TaromboPerson } from '@/data/tarombo-tree';
-import { Search } from 'lucide-react';
-import { useEffect, useState } from 'react';
 
 type Props = {
     open: boolean;

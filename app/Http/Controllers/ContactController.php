@@ -140,8 +140,8 @@ class ContactController extends Controller
 
         $conversations = $this->conversationsFor($user);
         $contacts = User::query()
-                ->with('marga')
-                ->where(function ($query) use ($user) {
+            ->with('marga', 'currentPerson')
+            ->where(function ($query) use ($user) {
                     $query->when($user->marga_id !== null, fn ($query) => $query->where('marga_id', $user->marga_id))
                         ->when($user->marga_id === null, fn ($query) => $query->whereRaw('1 = 0'))
                         ->orWhereIn('id', ContactRequest::query()
@@ -228,6 +228,9 @@ class ContactController extends Controller
         return [
             'id' => $contact->id,
             'name' => $contact->name,
+            'personName' => $contact->currentPerson && ! $contact->currentPerson->isNa()
+                ? $contact->currentPerson->name
+                : null,
             'color' => $contact->marga?->color,
             'role_label' => $contact->isSubAdmin() ? 'Pengurus Marga' : 'Anggota Marga',
             'latest_message' => $conversation?->latestMessage?->body,

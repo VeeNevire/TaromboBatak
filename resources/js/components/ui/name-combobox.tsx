@@ -160,6 +160,9 @@ export function NameCombobox({
                                 {context && (
                                     <span className="text-xs text-tb-on-surface-variant">
                                         {context}
+                                        {suggestion?.marga
+                                            ? ` - Marga ${suggestion.marga}`
+                                            : ''}
                                         {suggestion?.chain
                                             ? ` · Chain ${suggestion.chain}`
                                             : ''}

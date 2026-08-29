@@ -6,6 +6,7 @@ use App\Http\Requests\StoreMargaRequest;
 use App\Http\Requests\UpdateMargaRequest;
 use App\Models\Marga;
 use App\Models\Person;
+use App\Services\MargaIdentityPersonService;
 use App\Services\TaromboStatisticsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,6 +23,7 @@ class MargaController extends Controller
     public function index(): Response
     {
         $margas = Marga::query()
+            ->with('identityPerson:id,name')
             ->withCount('people')
             ->orderBy('people_count', 'desc')
             ->orderBy('name')
@@ -33,11 +35,14 @@ class MargaController extends Controller
                 'color' => $marga->color,
                 'image' => $marga->image,
                 'image_url' => $this->imageUrl($marga->image),
+                'identity_person_id' => $marga->identity_person_id,
+                'identity_person_name' => $marga->identityPerson?->name,
                 'people_count' => $marga->people_count,
             ]);
 
         return Inertia::render('marga/index', [
             'margas' => $margas,
+            'identityPersonOptions' => app(MargaIdentityPersonService::class)->options()->all(),
         ]);
     }
 

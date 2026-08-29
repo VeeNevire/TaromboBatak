@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { AppAvatar } from '@/components/app-avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import {
     Dialog,
     DialogContent,
@@ -13,6 +12,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { dashboard } from '@/routes';
 import accounts from '@/routes/accounts';
 
@@ -21,6 +21,7 @@ type Account = {
     name: string;
     email: string;
     role: string;
+    current_person: string | null;
     marga: string | null;
     created_at: string | null;
 };
@@ -62,7 +63,9 @@ export default function AccountsIndex({
     };
 
     const confirmDelete = () => {
-        if (!toDelete) return;
+        if (!toDelete) {
+return;
+}
 
         deleteForm.delete(accounts.destroy(toDelete.id).url, {
             preserveScroll: true,
@@ -131,7 +134,7 @@ export default function AccountsIndex({
 
                 <Card className="border-tb-outline-variant bg-tb-surface-bright">
                     <CardContent className="overflow-x-auto py-0">
-                        <table className="w-full min-w-[780px] text-sm">
+                        <table className="w-full min-w-[900px] text-sm">
                             <thead>
                                 <tr className="border-b border-tb-outline-variant text-left text-xs text-tb-on-surface-variant">
                                     <th className="px-3 py-3 font-medium">
@@ -142,6 +145,9 @@ export default function AccountsIndex({
                                     </th>
                                     <th className="px-3 py-3 font-medium">
                                         Peran
+                                    </th>
+                                    <th className="px-3 py-3 font-medium">
+                                        Saya adalah
                                     </th>
                                     <th className="px-3 py-3 font-medium">
                                         Marga
@@ -186,6 +192,9 @@ export default function AccountsIndex({
                                             </span>
                                         </td>
                                         <td className="px-3 py-3 text-tb-on-surface-variant">
+                                            {account.current_person ?? '-'}
+                                        </td>
+                                        <td className="px-3 py-3 text-tb-on-surface-variant">
                                             {account.marga ?? '-'}
                                         </td>
                                         <td className="px-3 py-3 text-tb-on-surface-variant">
@@ -226,7 +235,7 @@ export default function AccountsIndex({
                                 {page.data.length === 0 && (
                                     <tr>
                                         <td
-                                            colSpan={6}
+                                            colSpan={7}
                                             className="px-3 py-10 text-center text-tb-on-surface-variant"
                                         >
                                             Belum ada akun yang sesuai.

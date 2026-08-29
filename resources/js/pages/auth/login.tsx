@@ -1,4 +1,4 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head, Link, usePage } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Loader2, Mail, MapPin, Shapes, User } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
@@ -37,7 +37,13 @@ type Props = {
 type FormMode = 'login' | 'register';
 
 export default function Login({ canResetPassword, margas, regions }: Props) {
-    const [mode, setMode] = useState<FormMode>('login');
+    const { url } = usePage();
+    const initialMode = new URLSearchParams(url.split('?')[1] ?? '').get(
+        'mode',
+    );
+    const [mode, setMode] = useState<FormMode>(
+        initialMode === 'register' ? 'register' : 'login',
+    );
     const [direction, setDirection] = useState<1 | -1>(1);
 
     const switchMode = (next: FormMode) => {

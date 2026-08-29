@@ -7,6 +7,7 @@ import {
     CheckCheck,
     ChevronUp,
     Clock,
+    Copy,
     Loader2,
     MessageCircle,
     Megaphone,
@@ -29,7 +30,6 @@ import { AppAvatar } from '@/components/app-avatar';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
     Dialog,
     DialogContent,
@@ -38,14 +38,16 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { dashboard } from '@/routes';
+import { Input } from '@/components/ui/input';
+import { dashboard, login } from '@/routes';
 import announcements from '@/routes/announcements';
-import contacts from '@/routes/contacts';
 import contactRequests from '@/routes/contact-requests';
+import contacts from '@/routes/contacts';
 
 type Contact = {
     id: number;
     name: string;
+    personName: string | null;
     color: string | null;
     role_label: string;
     latest_message: string | null;
@@ -140,6 +142,8 @@ export default function ContactsIndex({
     >({});
     const [search, setSearch] = useState('');
     const [addContactOpen, setAddContactOpen] = useState(false);
+    const [telegramInviteOpen, setTelegramInviteOpen] = useState(false);
+    const [telegramInviteCopied, setTelegramInviteCopied] = useState(false);
     const [contactSearch, setContactSearch] = useState('');
     const [requestingContactId, setRequestingContactId] = useState<
         number | null
@@ -623,6 +627,51 @@ export default function ContactsIndex({
         );
     };
 
+    const telegramInviteUrl = () =>
+        new URL(
+            login({ query: { mode: 'register' } }).url,
+            window.location.origin,
+        ).toString();
+
+    const telegramInviteText = `Horas! ${auth.user.name} mengundang Anda bergabung di Tarombo Batak agar kita dapat terhubung dan berkomunikasi.`;
+
+    const shareTelegramInvite = () => {
+        const shareUrl = new URL('https://t.me/share/url');
+        shareUrl.searchParams.set('url', telegramInviteUrl());
+        shareUrl.searchParams.set('text', telegramInviteText);
+
+        window.open(shareUrl.toString(), '_blank', 'noopener,noreferrer');
+    };
+
+    const copyTelegramInvite = async () => {
+        const invitation = `${telegramInviteText}\n${telegramInviteUrl()}`;
+        let copied = false;
+
+        if (navigator.clipboard?.writeText) {
+            try {
+                await navigator.clipboard.writeText(invitation);
+                copied = true;
+            } catch {
+                copied = false;
+            }
+        }
+
+        if (!copied) {
+            const textArea = document.createElement('textarea');
+            textArea.value = invitation;
+            textArea.style.position = 'fixed';
+            textArea.style.opacity = '0';
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            textArea.remove();
+        }
+
+        setTelegramInviteCopied(true);
+
+        window.setTimeout(() => setTelegramInviteCopied(false), 2000);
+    };
+
     const statusIndicator = (
         <div
             className="flex items-center gap-2 text-xs text-tb-on-surface-variant"
@@ -750,7 +799,17 @@ export default function ContactsIndex({
                                                     <div className="min-w-0 flex-1">
                                                         <div className="flex items-baseline justify-between gap-2">
                                                             <p className="truncate text-sm font-semibold text-tb-on-surface">
-                                                                {contact.name}
+                                                                <span>
+                                                                    {
+                                                                        contact.name
+                                                                    }
+                                                                </span>{' '}
+                                                                <span className="font-normal text-tb-on-surface-variant">
+                                                                    (
+                                                                    {contact.personName ??
+                                                                        'Not Identified'}
+                                                                    )
+                                                                </span>
                                                             </p>
                                                             {contact.latest_message_at && (
                                                                 <time className="shrink-0 text-[11px] text-tb-outline">
@@ -784,6 +843,22 @@ export default function ContactsIndex({
                                     hasSearch={Boolean(search)}
                                 />
                             )}
+
+                            <div className="border-t border-tb-outline-variant p-3">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="w-full justify-start border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950/70"
+                                    onClick={() => setTelegramInviteOpen(true)}
+                                >
+                                    <Send className="size-4" />
+                                    Tambah Kontak Telegram
+                                </Button>
+                                <p className="mt-2 px-1 text-xs leading-relaxed text-tb-on-surface-variant">
+                                    Undang keluarga lewat Telegram untuk
+                                    bergabung dan mulai berkomunikasi.
+                                </p>
+                            </div>
                         </div>
                     </section>
 
@@ -814,7 +889,13 @@ export default function ContactsIndex({
                                     />
                                     <div className="min-w-0 flex-1">
                                         <h2 className="truncate text-sm font-semibold text-tb-on-surface">
-                                            {selectedContact.name}
+                                            <span>{selectedContact.name}</span>{' '}
+                                            <span className="font-normal text-tb-on-surface-variant">
+                                                (
+                                                {selectedContact.personName ??
+                                                    'Not Identified'}
+                                                )
+                                            </span>
                                         </h2>
                                         <div className="flex items-center gap-1.5 text-xs text-tb-on-surface-variant">
                                             {selectedContact.role_label ===
@@ -1098,6 +1179,7 @@ export default function ContactsIndex({
                                 className="border-tb-outline-variant pl-9"
                             />
                         </div>
+
                         <div className="max-h-64 overflow-y-auto rounded-lg border border-tb-outline-variant">
                             {filteredAvailableUsers.length > 0 ? (
                                 filteredAvailableUsers.map((user) => {
@@ -1108,6 +1190,7 @@ export default function ContactsIndex({
                                     const isContact = contactItems.some(
                                         (contact) => contact.id === user.id,
                                     );
+
                                     return (
                                         <div
                                             key={user.id}
@@ -1161,6 +1244,63 @@ export default function ContactsIndex({
                             onClick={() => setAddContactOpen(false)}
                         >
                             Tutup
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={telegramInviteOpen}
+                onOpenChange={(open) => {
+                    setTelegramInviteOpen(open);
+
+                    if (!open) {
+                        setTelegramInviteCopied(false);
+                    }
+                }}
+            >
+                <DialogContent className="border-tb-outline-variant bg-tb-surface-bright sm:max-w-md">
+                    <DialogHeader>
+                        <div className="mb-2 grid size-11 place-items-center rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-300">
+                            <Send className="size-5" />
+                        </div>
+                        <DialogTitle className="font-display text-tb-on-surface">
+                            Tambah Kontak Telegram
+                        </DialogTitle>
+                        <DialogDescription className="leading-relaxed">
+                            Bagikan undangan kepada keluarga melalui Telegram.
+                            Tautan akan membuka halaman pendaftaran Tarombo
+                            Batak. Setelah mereka bergabung, Anda dapat saling
+                            menambahkan sebagai kontak dan berkomunikasi.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="bg-tb-surface-container-low rounded-lg border border-tb-outline-variant p-3 text-sm leading-relaxed text-tb-on-surface-variant">
+                        {telegramInviteText}
+                    </div>
+
+                    <DialogFooter className="grid gap-2 sm:grid-cols-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => void copyTelegramInvite()}
+                        >
+                            {telegramInviteCopied ? (
+                                <Check className="size-4" />
+                            ) : (
+                                <Copy className="size-4" />
+                            )}
+                            {telegramInviteCopied
+                                ? 'Tautan disalin'
+                                : 'Salin tautan'}
+                        </Button>
+                        <Button
+                            type="button"
+                            className="bg-sky-600 text-white hover:bg-sky-700"
+                            onClick={shareTelegramInvite}
+                        >
+                            <Send className="size-4" />
+                            Bagikan ke Telegram
                         </Button>
                     </DialogFooter>
                 </DialogContent>

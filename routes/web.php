@@ -100,6 +100,8 @@ Route::middleware(['auth'])->group(function () {
         ->name('announcements.store');
 
     Route::get('dashboard/tarombo', [TaromboController::class, 'index'])->name('tarombo.index');
+    Route::post('family-trees/{familyTree}/contributions', [ContributionController::class, 'storeMargaTree'])
+        ->name('contributions.marga-tree.store');
 
     Route::get('dashboard/tarombo/full/{view}', [TaromboController::class, 'fullscreen'])
         ->where('view', 'diagram|tree')
@@ -125,10 +127,12 @@ Route::middleware(['auth'])->group(function () {
     Route::get('people/{person}/edit', [PersonController::class, 'edit'])->name('people.edit');
 
     Route::put('people/{person}', [PersonController::class, 'update'])->name('people.update');
+    Route::post('people/{person}/family-version', [PersonController::class, 'duplicateFamilyVersion'])->name('people.family-version.duplicate');
     Route::get('family-trees/{familyTree}', [PersonController::class, 'showFamilyTree'])->name('family-trees.show');
     Route::post('family-trees/{familyTree}/duplicate', [PersonController::class, 'duplicateFamilyTree'])->name('family-trees.duplicate');
     Route::get('family-trees/{familyTree}/edit', [PersonController::class, 'editFamilyTree'])->name('family-trees.edit');
     Route::put('family-trees/{familyTree}', [PersonController::class, 'updateFamilyTree'])->name('family-trees.update');
+    Route::patch('family-trees/{familyTree}/name', [PersonController::class, 'updateFamilyTreeName'])->name('family-trees.name.update');
     Route::delete('family-trees/{familyTree}', [FamilyTreeDeletionController::class, 'destroy'])->name('family-trees.destroy');
     Route::post('family-trees/{familyTree}/shares', [FamilyTreeShareController::class, 'store'])->name('family-trees.shares.store');
     Route::patch('family-tree-shares/{familyTreeShare}', [FamilyTreeShareController::class, 'update'])->name('family-tree-shares.update');

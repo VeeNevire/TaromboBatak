@@ -42,6 +42,7 @@ class UpdatePersonRequest extends FormRequest
             'spouse' => ['nullable', 'string', 'max:255'],
             'spouse_marga' => ['nullable', 'string', 'max:255'],
             'is_public' => $this->user()?->isStaff() ? ['nullable', 'boolean'] : ['prohibited'],
+            'version_tree' => ['nullable', 'integer', 'exists:family_trees,id'],
             'father' => ['nullable', 'array'],
             'father.name' => ['nullable', 'string', 'max:255'],
             'father.alias' => ['nullable', 'string', 'max:255'],

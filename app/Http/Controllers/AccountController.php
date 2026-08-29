@@ -16,7 +16,7 @@ class AccountController extends Controller
     public function index(Request $request): Response
     {
         $accounts = User::query()
-            ->with('marga:id,name')
+            ->with(['marga:id,name', 'currentPerson:id,name'])
             ->when($request->filled('search'), fn ($query) => $query->where(function ($query) use ($request) {
                 $search = $request->string('search')->toString();
                 $query->where('name', 'like', "%{$search}%")
@@ -98,6 +98,7 @@ class AccountController extends Controller
             'role' => $account->role,
             'marga' => $account->marga?->name,
             'marga_id' => $account->marga_id,
+            'current_person' => $account->currentPerson?->name,
             'created_at' => $account->created_at?->format('d M Y'),
         ];
     }

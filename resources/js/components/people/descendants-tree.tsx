@@ -185,9 +185,9 @@ function TreeBranch({
                                     ? 'Kembali ke versi utama'
                                     : 'Buka versi alternatif'
                             }
-                            className="hover:text-tb-on-primary inline-flex h-6 min-w-6 items-center justify-center gap-0.5 rounded-full border border-dashed border-tb-primary bg-tb-primary/10 px-1.5 text-[10px] font-black text-tb-primary transition-colors hover:bg-tb-primary focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none"
+                            className="hover:text-tb-on-primary inline-flex h-6 min-w-6 items-center justify-center gap-0.5 rounded-full border border-dashed border-tb-primary bg-tb-primary/10 px-1.5 text-[10px] font-bold text-tb-primary transition-colors hover:bg-tb-primary focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none"
                         >
-                            V
+                            <ChevronDown className="size-3.5" />
                             {personAlternatives.length > 1 && (
                                 <span>{personAlternatives.length}</span>
                             )}
@@ -521,9 +521,7 @@ export function DescendantsTree({
                             alternativeTrees={alternativeTrees}
                             nodeIdPrefix={nodeIdPrefix}
                             lineageIds={lineageIds}
-                            femaleLineage={
-                                root.gender?.toUpperCase() === 'P'
-                            }
+                            femaleLineage={root.gender?.toUpperCase() === 'P'}
                             markFemaleLineage={markFemaleLineage}
                         />
                     ))}

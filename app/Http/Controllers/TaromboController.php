@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\ContributionRequest;
 use App\Models\FamilyTree;
+use App\Models\FamilyTreeShare;
 use App\Models\IdentityRequest;
 use App\Models\Marga;
 use App\Models\Person;
+use App\Models\User;
 use App\Services\TaromboStatisticsService;
 use App\Services\TaromboTreeService;
 use Illuminate\Database\Eloquent\Builder;
@@ -22,13 +24,16 @@ class TaromboController extends Controller
      */
     public function index(Request $request): Response
     {
-        [$people, $margas, $alternativeTrees, $identity] = $this->treeData($request);
+        [$people, $margas, $alternativeTrees, $identity, $familyTreeOptions, $selectedFamilyTreeId, $selectedTreePeople] = $this->treeData($request);
 
         return Inertia::render('tarombo/index', [
             'people' => $people,
             'margas' => $margas,
             'alternativeTrees' => $alternativeTrees,
             'identity' => $identity,
+            'familyTreeOptions' => $familyTreeOptions,
+            'selectedFamilyTreeId' => $selectedFamilyTreeId,
+            'selectedTreePeople' => $selectedTreePeople,
         ]);
     }
 
@@ -37,7 +42,7 @@ class TaromboController extends Controller
      */
     public function fullscreen(Request $request, string $view): Response
     {
-        [$people, $margas, $alternativeTrees, $identity] = $this->treeData($request);
+        [$people, $margas, $alternativeTrees, $identity, $familyTreeOptions, $selectedFamilyTreeId, $selectedTreePeople] = $this->treeData($request);
 
         return Inertia::render('tarombo/fullscreen', [
             'people' => $people,
@@ -45,13 +50,17 @@ class TaromboController extends Controller
             'alternativeTrees' => $alternativeTrees,
             'view' => $view,
             'identity' => $identity,
+            'initialPersonId' => $request->query('person'),
+            'familyTreeOptions' => $familyTreeOptions,
+            'selectedFamilyTreeId' => $selectedFamilyTreeId,
+            'selectedTreePeople' => $selectedTreePeople,
         ]);
     }
 
     /**
      * Build the scoped tarombo rows and marga legend for the current user.
      *
-     * @return array{0: mixed, 1: mixed, 2: mixed, 3: array<string, mixed>}
+     * @return array{0: mixed, 1: mixed, 2: mixed, 3: array<string, mixed>, 4: array<int, array<string, mixed>>, 5: int|null, 6: array<int, array<string, mixed>>|null}
      */
     private function treeData(Request $request): array
     {
@@ -70,6 +79,22 @@ class TaromboController extends Controller
                 ->when($allowedPersonIds !== null, fn (Builder $query) => $query->whereKey($allowedPersonIds))
                 ->orderBy('id'),
         );
+        $selectableFamilyTrees = $this->selectableFamilyTrees($user);
+        $selectedFamilyTreeId = $request->filled('family_tree')
+            ? $request->integer('family_tree')
+            : null;
+        $selectedFamilyTree = $selectedFamilyTreeId !== null
+            ? $selectableFamilyTrees->firstWhere('id', $selectedFamilyTreeId)
+            : null;
+
+        abort_if(
+            $selectedFamilyTreeId !== null && $selectedFamilyTree === null,
+            403,
+            'Anda tidak memiliki akses ke silsilah yang dipilih.',
+        );
+        $selectedTreePeople = $selectedFamilyTree instanceof FamilyTree
+            ? $service->rowsForFamilyTree($selectedFamilyTree)
+            : null;
 
         $visiblePersonIds = collect($rows)->pluck('id')->map(fn (string $id) => (int) $id);
         $alternativeTrees = FamilyTree::query()
@@ -145,6 +170,7 @@ class TaromboController extends Controller
             $service->margas($isStaff ? null : $user->marga_id),
             $alternativeTrees,
             [
+                'canSelectAnyPerson' => $user->isAdmin(),
                 'currentPersonId' => $user->current_person_id !== null ? (string) $user->current_person_id : null,
                 'currentPersonName' => $user->currentPerson?->name,
                 'request' => $identityRequest ? [
@@ -157,7 +183,61 @@ class TaromboController extends Controller
                     'reason' => $identityRequest->rejection_reason,
                 ] : null,
             ],
+            $selectableFamilyTrees
+                ->map(fn (FamilyTree $tree) => [
+                    'id' => $tree->id,
+                    'name' => $tree->name ?? $tree->rootPerson?->name ?? 'Silsilah',
+                    'rootName' => $tree->rootPerson?->name ?? 'Akar belum ditentukan',
+                    'group' => $tree->approved_for_selection ? 'marga' : 'account',
+                ])
+                ->values()
+                ->all(),
+            $selectedFamilyTreeId,
+            $selectedTreePeople,
         ];
+    }
+
+    /** @return \Illuminate\Database\Eloquent\Collection<int, FamilyTree> */
+    private function selectableFamilyTrees(User $user): \Illuminate\Database\Eloquent\Collection
+    {
+        return FamilyTree::query()
+            ->whereNotNull('root_person_id')
+            ->when(! $user->isAdmin(), function (Builder $query) use ($user): void {
+                $query->where(function (Builder $access) use ($user): void {
+                    $access->whereBelongsTo($user)
+                        ->orWhereHas('shares', fn (Builder $shares) => $shares
+                            ->whereBelongsTo($user, 'recipient')
+                            ->where('status', FamilyTreeShare::STATUS_ACCEPTED));
+
+                    if ($user->isContributor()) {
+                        $access->orWhereHas('contributionRequests', fn (Builder $requests) => $requests
+                            ->where('status', ContributionRequest::STATUS_APPROVED)
+                            ->whereHas('matchedFather', fn (Builder $father) => $father
+                                ->where('marga_id', $user->marga_id)));
+                    } elseif (! $user->isStaff() && $user->marga_id !== null) {
+                        $access->orWhereHas('contributionRequests', fn (Builder $requests) => $requests
+                            ->where('status', ContributionRequest::STATUS_APPROVED)
+                            ->where('requester_id', $user->id)
+                            ->whereHas('matchedFather', fn (Builder $father) => $father
+                                ->where('marga_id', $user->marga_id)));
+                    }
+                });
+            })
+            ->with(['rootPerson:id,name'])
+            ->withExists(['contributionRequests as approved_for_selection' => function (Builder $requests) use ($user): void {
+                $requests->where('status', ContributionRequest::STATUS_APPROVED)
+                    ->when(
+                        ! $user->isAdmin() && ! $user->isContributor(),
+                        fn (Builder $query) => $query->where('requester_id', $user->id),
+                    )
+                    ->when(
+                        $user->isContributor(),
+                        fn (Builder $query) => $query->whereHas('matchedFather', fn (Builder $father) => $father
+                            ->where('marga_id', $user->marga_id)),
+                    );
+            }])
+            ->latest('updated_at')
+            ->get(['id', 'user_id', 'root_person_id', 'name', 'updated_at']);
     }
 
     /** @return Collection<int, int> */
