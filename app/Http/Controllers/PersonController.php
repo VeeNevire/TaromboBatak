@@ -54,6 +54,10 @@ class PersonController extends Controller
                         fn ($familyTrees) => $familyTrees->where('family_trees.user_id', $user->id),
                     ),
             )
+            ->when(
+                ! $isStaff && $user->isContributor(),
+                fn ($query) => $query->whereIn('marga_id', $user->accessibleMargaIds()),
+            )
             ->when($request->filled('search'), function ($query) use ($request) {
                 $search = $request->string('search')->toString();
 
@@ -127,11 +131,13 @@ class PersonController extends Controller
         return Inertia::render('people/form', [
             'person' => null,
             'margas' => $isStaff ? $this->margaOptions() : $this->margaOptionsForUser($user),
-            'nameSuggestions' => $this->nameSuggestions($isStaff ? null : $user->marga_id),
-            'fatherSuggestions' => $this->fatherSuggestions(
-                margaId: $isStaff ? null : $user->marga_id,
+            'nameSuggestions' => $this->nameSuggestions(
+                $isStaff ? null : ($user->isContributor() ? $user->accessibleMargaIds() : $user->marga_id),
             ),
-            'lockedMarga' => $isStaff ? null : $this->lockedMarga($user),
+            'fatherSuggestions' => $this->fatherSuggestions(
+                margaId: $isStaff ? null : ($user->isContributor() ? $user->accessibleMargaIds() : $user->marga_id),
+            ),
+            'lockedMarga' => $isStaff || $user->isContributor() ? null : $this->lockedMarga($user),
             'lineage' => $this->createLineage($user, $isStaff),
             'familyTrees' => $this->familyTrees($user),
             'approvedMargaTrees' => $this->approvedMargaTrees($user),
@@ -149,12 +155,13 @@ class PersonController extends Controller
     protected function createLineage(User $user, bool $isStaff): array
     {
         $canBrowseMarga = $isStaff || $user->isContributor();
+        $margaIds = $isStaff ? null : $user->accessibleMargaIds();
 
         return Person::query()
             ->with([
                 'marga',
                 'children' => fn ($query) => $query
-                    ->when(! $isStaff, fn ($childQuery) => $childQuery->where('marga_id', $user->marga_id))
+                    ->when($margaIds !== null, fn ($childQuery) => $childQuery->whereIn('marga_id', $margaIds))
                     ->when(! $canBrowseMarga, fn ($childQuery) => $this->scopePeopleVisibleToUser($childQuery, $user))
                     ->where(fn ($childQuery) => $childQuery
                         ->where('gender', 'L')
@@ -165,11 +172,11 @@ class PersonController extends Controller
                 ->where('gender', 'L')
                 ->orWhereNull('gender'))
             ->when($isStaff, fn ($query) => $query->whereNull('father_id'))
-            ->when(! $isStaff && $user->marga_id !== null, fn ($query) => $query
-                ->where('marga_id', $user->marga_id)
+            ->when($margaIds !== null, fn ($query) => $query
+                ->whereIn('marga_id', $margaIds)
                 ->whereDoesntHave(
                     'father',
-                    fn ($father) => $father->where('marga_id', $user->marga_id),
+                    fn ($father) => $father->whereIn('marga_id', $margaIds),
                 ))
             ->when(! $canBrowseMarga, fn ($query) => $this->scopePeopleVisibleToUser($query, $user))
             ->orderByRaw('chain IS NULL')
@@ -216,12 +223,19 @@ class PersonController extends Controller
         if ($user->isStaff()) {
             app(FamilyEntryService::class)->save($validated, createdBy: $user->id);
         } else {
-            abort_unless($user->marga_id !== null, 403, 'Akun Anda belum memiliki marga.');
+            $forcedMargaId = $user->isContributor()
+                ? (int) ($validated['marga_id'] ?? 0)
+                : (int) ($user->marga_id ?? 0);
+            abort_unless(
+                $forcedMargaId > 0 && $user->accessibleMargaIds()->contains($forcedMargaId),
+                403,
+                'Marga ini tidak termasuk dalam marga yang dapat Anda kelola.',
+            );
 
-            $result = DB::transaction(function () use ($validated, $user) {
+            $result = DB::transaction(function () use ($validated, $user, $forcedMargaId) {
                 $result = app(FamilyEntryService::class)->save(
                     $validated,
-                    forcedMargaId: $user->marga_id,
+                    forcedMargaId: $forcedMargaId,
                     createdBy: $user->id,
                     deferExistingFatherMatch: true,
                 );
@@ -254,12 +268,15 @@ class PersonController extends Controller
 
         return Inertia::render('people/show', [
             'person' => $this->familyPayloadVisibleToUser(
-                $this->familyPayload($person, $user->isStaff() ? null : $user->marga_id),
+                $this->familyPayload(
+                    $person,
+                    $user->isStaff() ? null : ($user->isContributor() ? $person->marga_id : $user->marga_id),
+                ),
                 $user,
             ),
-            'margas' => $this->margaOptions(),
-            'nameSuggestions' => $this->nameSuggestions(),
-            'fatherSuggestions' => $this->fatherSuggestions($person),
+            'margas' => $user->isStaff() ? $this->margaOptions() : $this->margaOptionsForUser($user),
+            'nameSuggestions' => $this->nameSuggestions($user->isContributor() ? $user->accessibleMargaIds() : null),
+            'fatherSuggestions' => $this->fatherSuggestions($person, $user->isContributor() ? $person->marga_id : null),
             'familyTrees' => $this->familyTrees($user),
             'approvedMargaTrees' => $this->approvedMargaTrees($user),
             'versionTrees' => $versionTrees,
@@ -291,19 +308,22 @@ class PersonController extends Controller
         );
         $selectedVersionId = $selectedVersionName !== null ? $request->integer('version_tree') : null;
 
+        $personMargaScope = $isStaff ? null : ($user->isContributor() ? $person->marga_id : $user->marga_id);
         $familyPayload = $selectedVersionId !== null
-                ? $this->familyPayloadForVersion($person, $selectedVersionId, $isStaff ? null : $user->marga_id)
-                : $this->familyPayload($person, $isStaff ? null : $user->marga_id);
+                ? $this->familyPayloadForVersion($person, $selectedVersionId, $personMargaScope)
+                : $this->familyPayload($person, $personMargaScope);
 
         return Inertia::render('people/form', [
             'person' => $this->familyPayloadVisibleToUser($familyPayload, $user),
             'margas' => $isStaff ? $this->margaOptions() : $this->margaOptionsForUser($user),
-            'nameSuggestions' => $this->nameSuggestions($isStaff ? null : $user->marga_id),
+            'nameSuggestions' => $this->nameSuggestions(
+                $isStaff ? null : ($user->isContributor() ? $user->accessibleMargaIds() : $user->marga_id),
+            ),
             'fatherSuggestions' => $this->fatherSuggestions(
                 $person,
-                $isStaff ? null : $user->marga_id,
+                $isStaff ? null : ($user->isContributor() ? $person->marga_id : $user->marga_id),
             ),
-            'lockedMarga' => $isStaff ? null : $this->lockedMarga($user),
+            'lockedMarga' => $isStaff || $user->isContributor() ? null : $this->lockedMarga($user),
             'familyTrees' => $this->familyTrees($user),
             'approvedMargaTrees' => $this->approvedMargaTrees($user),
             'versionTrees' => $versionTrees,
@@ -390,7 +410,10 @@ class PersonController extends Controller
         );
 
         $service = app(TaromboTreeService::class);
-        $rows = $service->rowsForFamilyTree($familyTree, $user->isStaff() ? null : $user->marga_id);
+        $rows = $service->rowsForFamilyTree(
+            $familyTree,
+            $user->isStaff() ? null : ($user->isContributor() ? $user->accessibleMargaIds() : $user->marga_id),
+        );
         $rootRow = collect($rows)->firstWhere('id', (string) $familyTree->root_person_id)
             ?? collect($rows)->firstWhere('parentId', null)
             ?? collect($rows)->first();
@@ -704,10 +727,19 @@ class PersonController extends Controller
         }
 
         if (! $isStaff) {
-            $result = DB::transaction(function () use ($validated, $user) {
+            $forcedMargaId = $user->isContributor()
+                ? (int) ($validated['marga_id'] ?? $person->marga_id ?? 0)
+                : (int) ($user->marga_id ?? 0);
+            abort_unless(
+                $forcedMargaId > 0 && $user->accessibleMargaIds()->contains($forcedMargaId),
+                403,
+                'Marga ini tidak termasuk dalam marga yang dapat Anda kelola.',
+            );
+
+            $result = DB::transaction(function () use ($validated, $user, $forcedMargaId) {
                 $result = app(FamilyEntryService::class)->save(
                     $validated,
-                    forcedMargaId: $user->marga_id,
+                    forcedMargaId: $forcedMargaId,
                     createdBy: $user->id,
                     deferExistingFatherMatch: true,
                 );
@@ -1235,11 +1267,12 @@ class PersonController extends Controller
      *
      * @return array<int, array{id: int, name: string, alias: string|null, gender: string|null, spouse: string|null, spouse_marga: string|null, marga_id: int|null, marga: string|null, father_id: int|null, father_name: string|null, chain: string|null}>
      */
-    protected function nameSuggestions(?int $margaId = null): array
+    protected function nameSuggestions(int|\Illuminate\Support\Collection|null $margaId = null): array
     {
         return Person::query()
             ->with(['father:id,name', 'marga:id,name'])
-            ->when($margaId !== null, fn ($query) => $query->where('marga_id', $margaId))
+            ->when($margaId instanceof \Illuminate\Support\Collection, fn ($query) => $query->whereIn('marga_id', $margaId))
+            ->when(is_int($margaId), fn ($query) => $query->where('marga_id', $margaId))
             ->whereNotNull('name')
             ->where('name', '!=', 'N/A')
             ->orderBy('name')
@@ -1270,11 +1303,12 @@ class PersonController extends Controller
      *
      * @return array<int, array<string, mixed>>
      */
-    protected function fatherSuggestions(?Person $person = null, ?int $margaId = null): array
+    protected function fatherSuggestions(?Person $person = null, int|\Illuminate\Support\Collection|null $margaId = null): array
     {
         return Person::query()
             ->with(['father:id,name', 'marga:id,name'])
-            ->when($margaId !== null, fn ($query) => $query->where('marga_id', $margaId))
+            ->when($margaId instanceof \Illuminate\Support\Collection, fn ($query) => $query->whereIn('marga_id', $margaId))
+            ->when(is_int($margaId), fn ($query) => $query->where('marga_id', $margaId))
             ->where('gender', 'L')
             ->when($person !== null, fn ($query) => $query->whereNotIn('id', $person->ineligibleFatherIds()))
             ->whereNotNull('name')

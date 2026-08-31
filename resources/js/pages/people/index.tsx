@@ -1,7 +1,19 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { NotebookPen, Pencil, Plus, Route, Search, Trash2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+ import { AnimatePresence, motion } from 'framer-motion';
+  import {
+      ChevronLeft,
+      ChevronRight,
+      NotebookPen,
+      Pencil,
+      Plus,
+      Route,
+      Search,
+      Trash2,
+  } from 'lucide-react';
+  import { useEffect, useMemo, useState } from 'react';
+  import { toast } from 'sonner';
+
 import { toast } from 'sonner';
 import { AppAvatar } from '@/components/app-avatar';
 import { Button } from '@/components/ui/button';
@@ -69,6 +81,7 @@ export default function PeopleIndex({
 }: Props) {
     const [search, setSearch] = useState(filters.search ?? '');
     const [margaFilter, setMargaFilter] = useState(filters.marga_id ?? 'all');
+    const [currentPage, setCurrentPage] = useState(1);
     const [toDelete, setToDelete] = useState<PersonItem | null>(null);
     const deleteForm = useForm<{ person?: string }>({});
     const filteredPeople = useMemo(() => {
@@ -86,6 +99,22 @@ export default function PeopleIndex({
             return matchesSearch && matchesMarga;
         });
     }, [margaFilter, page, search]);
+    const pageSize = 12;
+    const totalPages = Math.max(1, Math.ceil(filteredPeople.length / pageSize));
+    const paginatedPeople = useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+
+        return filteredPeople.slice(start, start + pageSize);
+    }, [currentPage, filteredPeople]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [margaFilter, search]);
+
+    useEffect(() => {
+        setCurrentPage((current) => Math.min(current, totalPages));
+    }, [totalPages]);
+ const showActions = canManage || page.data.some((person) => person.editable);
     const showActions = canManage || page.data.some((person) => person.editable);
 
     const confirmDelete = () => {
@@ -208,7 +237,7 @@ export default function PeopleIndex({
                             </thead>
                             <tbody className="divide-y divide-tb-outline-variant">
                                 <AnimatePresence initial={false}>
-                                    {filteredPeople.map((person) => (
+                                    {paginatedPeople.map((person) => (
                                         <motion.tr
                                             key={person.id}
                                             layout
@@ -385,8 +414,57 @@ export default function PeopleIndex({
                 </Card>
 
                 <div className="text-sm text-tb-on-surface-variant">
-                    Menampilkan {filteredPeople.length} dari {page.data.length}{' '}
-                    anggota
+                    <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
+                        <span>
+                            Menampilkan{' '}
+                            {filteredPeople.length === 0
+                                ? 0
+                                : (currentPage - 1) * pageSize + 1}
+                            –
+                            {Math.min(
+                                currentPage * pageSize,
+                                filteredPeople.length,
+                            )}{' '}
+                            dari {filteredPeople.length} anggota
+                        </span>
+                        {totalPages > 1 && (
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-tb-outline-variant bg-tb-surface-bright"
+                                    disabled={currentPage === 1}
+                                    onClick={() =>
+                                        setCurrentPage((current) =>
+                                            Math.max(1, current - 1),
+                                        )
+                                    }
+                                    aria-label="Halaman sebelumnya"
+                                >
+                                    <ChevronLeft className="size-4" />
+                                    Sebelumnya
+                                </Button>
+                                <span className="min-w-20 text-center text-xs font-medium">
+                                    Halaman {currentPage} dari {totalPages}
+                                </span>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-tb-outline-variant bg-tb-surface-bright"
+                                    disabled={currentPage === totalPages}
+                                    onClick={() =>
+                                        setCurrentPage((current) =>
+                                            Math.min(totalPages, current + 1),
+                                        )
+                                    }
+                                    aria-label="Halaman berikutnya"
+                                >
+                                    Berikutnya
+                                    <ChevronRight className="size-4" />
+                                </Button>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 <Dialog

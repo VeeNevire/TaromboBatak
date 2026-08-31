@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\FamilyTree;
+use App\Models\FamilyTreeNode;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
@@ -141,6 +142,109 @@ test('regular users without a marga cannot create or edit family data', function
         ->assertSessionHas('inertia.flash_data.toast.type', 'error');
     $this->actingAs($user)->get(route('marga.index'))->assertForbidden();
     $this->actingAs($user)->delete(route('people.destroy', $person))->assertForbidden();
+});
+
+test('contributors can access and create family data for managed margas', function () {
+    $primaryMarga = Marga::factory()->create(['name' => 'Lontung']);
+    $managedMarga = Marga::factory()->create(['name' => 'Hutabarat']);
+    $outsideMarga = Marga::factory()->create(['name' => 'Silaban']);
+    $contributor = User::factory()->withMarga($primaryMarga->id)->create([
+        'role' => 'contributor_member',
+    ]);
+    $contributor->managedMargas()->attach($managedMarga);
+
+    $primaryPerson = Person::factory()->create([
+        'name' => 'Lontung Utama',
+        'marga_id' => $primaryMarga->id,
+    ]);
+    $managedPerson = Person::factory()->create([
+        'name' => 'Hutabarat Utama',
+        'marga_id' => $managedMarga->id,
+    ]);
+    Person::factory()->create([
+        'name' => 'Silaban Di luar',
+        'marga_id' => $outsideMarga->id,
+    ]);
+
+    $this->actingAs($contributor)
+        ->get(route('people.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('people.data', 2)
+            ->where('people.data.0.id', $managedPerson->id)
+            ->where('people.data.1.id', $primaryPerson->id));
+
+    $this->actingAs($contributor)
+        ->get(route('people.edit', $managedPerson))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('person.marga_id', $managedMarga->id)
+            ->where('lockedMarga', null)
+            ->has('margas', 2));
+
+    $this->actingAs($contributor)
+        ->post(route('people.store'), [
+            'name' => 'Anggota Hutabarat Baru',
+            'marga_id' => $managedMarga->id,
+            'birth_order' => 1,
+            'sibling_count' => 1,
+            'children' => [['name' => 'Anggota Hutabarat Baru']],
+        ])
+        ->assertRedirect(route('people.index'));
+
+    $this->assertDatabaseHas('people', [
+        'name' => 'Anggota Hutabarat Baru',
+        'marga_id' => $managedMarga->id,
+        'created_by' => $contributor->id,
+    ]);
+});
+
+test('contributors see only family trees rooted in their managed margas', function () {
+    $managedMarga = Marga::factory()->create(['name' => 'Hutabarat']);
+    $outsideMarga = Marga::factory()->create(['name' => 'Silaban']);
+    $contributor = User::factory()->asContributorMember()->create();
+    $contributor->managedMargas()->attach($managedMarga);
+
+    $managedRoot = Person::factory()->create([
+        'name' => 'Akar Hutabarat',
+        'marga_id' => $managedMarga->id,
+    ]);
+    $managedTree = FamilyTree::create([
+        'user_id' => $contributor->id,
+        'root_person_id' => $managedRoot->id,
+        'name' => 'Pohon Hutabarat',
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $managedTree->id,
+        'person_id' => $managedRoot->id,
+    ]);
+
+    $outsideRoot = Person::factory()->create(['marga_id' => $outsideMarga->id]);
+    $outsideTree = FamilyTree::create([
+        'user_id' => User::factory()->create()->id,
+        'root_person_id' => $outsideRoot->id,
+        'name' => 'Pohon Silaban',
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $outsideTree->id,
+        'person_id' => $outsideRoot->id,
+    ]);
+
+    $this->actingAs($contributor)
+        ->get(route('contributions.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('managedFamilyTrees', 1)
+            ->where('managedFamilyTrees.0.id', $managedTree->id)
+            ->where('managedFamilyTrees.0.marga', 'Hutabarat'));
+
+    $this->actingAs($contributor)
+        ->get(route('family-trees.show', $managedTree))
+        ->assertOk();
+
+    $this->actingAs($contributor)
+        ->get(route('family-trees.show', $outsideTree))
+        ->assertForbidden();
 });
 
 test('regular users with a marga can store private family data in their own scope', function () {

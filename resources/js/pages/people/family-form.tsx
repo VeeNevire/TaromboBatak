@@ -18,7 +18,10 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import InputError from '@/components/input-error';
-import { FamilyTreeHistoryCard } from '@/components/people/family-tree-history-card';
+import {
+    ApprovedMargaTreeList,
+    FamilyTreeHistoryCard,
+} from '@/components/people/family-tree-history-card';
 import type { FamilyTreeHistoryEntry } from '@/components/people/family-tree-history-card';
 import { Button } from '@/components/ui/button';
 import {
@@ -410,7 +413,7 @@ function treeBelongsToFamily(
     return Number(tree.root_person_id) === Number(personId);
 }
 
-function SilsilahListCard({
+export function SilsilahListCard({
     lineage,
     selfId,
     familyTrees,
@@ -622,7 +625,7 @@ function SilsilahListCard({
     );
 }
 
-function MargaLineageCard({
+export function MargaLineageCard({
     entries,
     fatherChain,
     focusChain,
@@ -1209,10 +1212,6 @@ export default function FamilyForm({
 
     const birthOrder = Number(data.birth_order) || 1;
     const siblingCount = Number(data.sibling_count) || 1;
-    const listFamilyTrees = [...familyTrees, ...approvedMargaTrees].filter(
-        (tree, index, all) =>
-            all.findIndex((candidate) => candidate.id === tree.id) === index,
-    );
     const selectedVersionNumber =
         selectedVersionId === null
             ? null
@@ -2135,17 +2134,6 @@ export default function FamilyForm({
         );
     };
 
-    const highlightedLineage: MargaLineageEntry[] = (lineage ?? []).map(
-        (entry) => ({
-            ...entry,
-            isAyah:
-                entry.id === fatherMatch?.id ||
-                (entry.children ?? []).some(
-                    (child) => child.id === fatherMatch?.id,
-                ),
-        }),
-    );
-
     transform((currentData) => {
         const withMarga = lockedMarga
             ? {
@@ -2818,20 +2806,12 @@ export default function FamilyForm({
                                         </CardContent>
                                     </Card>
                                 </div>
-                                {person ? (
-                                    <SilsilahListCard
-                                        lineage={person.lineage}
-                                        selfId={person.id}
-                                        familyTrees={listFamilyTrees}
-                                    />
-                                ) : (
-                                    <MargaLineageCard
-                                        entries={highlightedLineage}
-                                        fatherChain={predictedFatherChain}
-                                        focusChain={predictedFocusChain}
-                                        familyTrees={listFamilyTrees}
-                                    />
-                                )}
+                                <ApprovedMargaTreeList
+                                    entries={approvedMargaTrees}
+                                    title="List Silsilah"
+                                    description="Silsilah marga yang telah disetujui."
+                                    asCard
+                                />
                                 {showFamilyTreeHistory && (
                                     <FamilyTreeHistoryCard
                                         entries={familyTrees}

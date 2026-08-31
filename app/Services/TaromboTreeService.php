@@ -17,12 +17,14 @@ class TaromboTreeService
      *
      * @return array<int, array<string, mixed>>
      */
-    public function rowsForFamilyTree(FamilyTree $familyTree, ?int $margaId = null): array
+    public function rowsForFamilyTree(FamilyTree $familyTree, int|Collection|null $margaId = null): array
     {
         $nodes = $familyTree->nodes()
             ->when($margaId !== null, fn (Builder $query) => $query->whereHas(
                 'person',
-                fn (Builder $person) => $person->where('marga_id', $margaId),
+                fn (Builder $person) => $margaId instanceof Collection
+                    ? $person->whereIn('marga_id', $margaId)
+                    : $person->where('marga_id', $margaId),
             ))
             ->with([
                 'person.marga',
@@ -31,7 +33,9 @@ class TaromboTreeService
                 'children' => fn ($query) => $query
                     ->when($margaId !== null, fn ($children) => $children->whereHas(
                         'person',
-                        fn ($person) => $person->where('marga_id', $margaId),
+                        fn ($person) => $margaId instanceof Collection
+                            ? $person->whereIn('marga_id', $margaId)
+                            : $person->where('marga_id', $margaId),
                     ))
                     ->with('person'),
             ])
