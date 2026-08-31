@@ -1,19 +1,16 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
- import { AnimatePresence, motion } from 'framer-motion';
-  import {
-      ChevronLeft,
-      ChevronRight,
-      NotebookPen,
-      Pencil,
-      Plus,
-      Route,
-      Search,
-      Trash2,
-  } from 'lucide-react';
-  import { useEffect, useMemo, useState } from 'react';
-  import { toast } from 'sonner';
-
+import {
+    ChevronLeft,
+    ChevronRight,
+    NotebookPen,
+    Pencil,
+    Plus,
+    Route,
+    Search,
+    Trash2,
+} from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { AppAvatar } from '@/components/app-avatar';
 import { Button } from '@/components/ui/button';
@@ -101,20 +98,12 @@ export default function PeopleIndex({
     }, [margaFilter, page, search]);
     const pageSize = 12;
     const totalPages = Math.max(1, Math.ceil(filteredPeople.length / pageSize));
+    const visiblePage = Math.min(currentPage, totalPages);
     const paginatedPeople = useMemo(() => {
-        const start = (currentPage - 1) * pageSize;
+        const start = (visiblePage - 1) * pageSize;
 
         return filteredPeople.slice(start, start + pageSize);
-    }, [currentPage, filteredPeople]);
-
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [margaFilter, search]);
-
-    useEffect(() => {
-        setCurrentPage((current) => Math.min(current, totalPages));
-    }, [totalPages]);
- const showActions = canManage || page.data.some((person) => person.editable);
+    }, [filteredPeople, visiblePage]);
     const showActions = canManage || page.data.some((person) => person.editable);
 
     const confirmDelete = () => {
@@ -180,7 +169,10 @@ export default function PeopleIndex({
                             <Search className="absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-tb-outline" />
                             <Input
                                 value={search}
-                                onChange={(e) => setSearch(e.target.value)}
+                                onChange={(e) => {
+                                    setSearch(e.target.value);
+                                    setCurrentPage(1);
+                                }}
                                 placeholder="Cari nama, alias, atau marga..."
                                 className="border-tb-outline-variant bg-tb-surface-bright pl-10 focus:border-tb-primary focus:ring-tb-primary/20"
                             />
@@ -188,7 +180,10 @@ export default function PeopleIndex({
                         {canManage && margas.length > 1 && (
                             <Select
                                 value={margaFilter}
-                                onValueChange={setMargaFilter}
+                                onValueChange={(value) => {
+                                    setMargaFilter(value);
+                                    setCurrentPage(1);
+                                }}
                             >
                                 <SelectTrigger className="w-full border-tb-outline-variant bg-tb-surface-bright md:w-56">
                                     <SelectValue placeholder="Semua marga" />
@@ -419,10 +414,10 @@ export default function PeopleIndex({
                             Menampilkan{' '}
                             {filteredPeople.length === 0
                                 ? 0
-                                : (currentPage - 1) * pageSize + 1}
+                                : (visiblePage - 1) * pageSize + 1}
                             –
                             {Math.min(
-                                currentPage * pageSize,
+                                visiblePage * pageSize,
                                 filteredPeople.length,
                             )}{' '}
                             dari {filteredPeople.length} anggota
@@ -433,7 +428,7 @@ export default function PeopleIndex({
                                     variant="outline"
                                     size="sm"
                                     className="border-tb-outline-variant bg-tb-surface-bright"
-                                    disabled={currentPage === 1}
+                                    disabled={visiblePage === 1}
                                     onClick={() =>
                                         setCurrentPage((current) =>
                                             Math.max(1, current - 1),
@@ -445,13 +440,13 @@ export default function PeopleIndex({
                                     Sebelumnya
                                 </Button>
                                 <span className="min-w-20 text-center text-xs font-medium">
-                                    Halaman {currentPage} dari {totalPages}
+                                    Halaman {visiblePage} dari {totalPages}
                                 </span>
                                 <Button
                                     variant="outline"
                                     size="sm"
                                     className="border-tb-outline-variant bg-tb-surface-bright"
-                                    disabled={currentPage === totalPages}
+                                    disabled={visiblePage === totalPages}
                                     onClick={() =>
                                         setCurrentPage((current) =>
                                             Math.min(totalPages, current + 1),
