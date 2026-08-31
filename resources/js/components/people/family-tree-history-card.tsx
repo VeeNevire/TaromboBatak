@@ -16,6 +16,7 @@ import {
     X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -66,6 +67,81 @@ export type FamilyTreeHistoryEntry = {
     deletion_pending: boolean;
     updated_at: string;
 };
+
+export function ApprovedMargaTreeList({
+    entries,
+    title = 'Daftar Silsilah Marga',
+    description = 'Silsilah yang telah disetujui Kontributor Utama atau Kontributor Anggota.',
+    headerAction,
+    asCard = false,
+}: {
+    entries: FamilyTreeHistoryEntry[];
+    title?: string;
+    description?: string;
+    headerAction?: ReactNode;
+    asCard?: boolean;
+}) {
+    const content = (
+        <section className="grid gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <h3 className="font-display text-base font-semibold text-tb-on-surface">
+                    {title}
+                </h3>
+                {headerAction}
+            </div>
+            <div>
+                <p className="mt-1 text-xs text-tb-on-surface-variant">
+                    {description}
+                </p>
+            </div>
+            {entries.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-tb-outline-variant bg-tb-surface-container/40 px-4 py-5 text-center">
+                    <p className="text-sm font-medium text-tb-on-surface">
+                        Belum ada silsilah yang disetujui
+                    </p>
+                </div>
+            ) : (
+                <ol className="grid gap-3">
+                    {entries.map((entry, index) => (
+                        <li
+                            key={entry.id}
+                            className="flex flex-col gap-4 rounded-xl border border-tb-outline-variant bg-tb-surface-container/35 p-4 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                            <div className="flex min-w-0 items-start gap-3">
+                                <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-tb-surface-bright text-sm font-bold text-tb-on-surface-variant ring-1 ring-tb-outline-variant">
+                                    {index + 1}
+                                </span>
+                                <div className="min-w-0">
+                                    <p className="truncate text-sm font-semibold text-tb-on-surface">
+                                        {entry.name ??
+                                            `Silsilah ${entry.root_name}`}
+                                    </p>
+                                    <p className="mt-1 text-xs text-tb-on-surface-variant">
+                                        Akar: {entry.root_name}
+                                    </p>
+                                </div>
+                            </div>
+                            <Link
+                                href={familyTrees.show(entry.id)}
+                                className="text-tb-on-primary inline-flex items-center justify-center gap-1.5 rounded-lg bg-tb-primary px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-90"
+                            >
+                                <TreePine className="size-3.5" /> Buka
+                            </Link>
+                        </li>
+                    ))}
+                </ol>
+            )}
+        </section>
+    );
+
+    return asCard ? (
+        <Card className="border-tb-outline-variant bg-tb-surface-bright">
+            <CardContent className="py-5">{content}</CardContent>
+        </Card>
+    ) : (
+        content
+    );
+}
 
 export function FamilyTreeHistoryCard({
     entries,
@@ -320,19 +396,11 @@ export function FamilyTreeHistoryCard({
                             ))}
                         </section>
                     )}
-                    <section className="grid gap-3">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                            <div>
-                                <h3 className="font-display text-base font-semibold text-tb-on-surface">
-                                    Daftar Silsilah Marga
-                                    {margaName ? ` ${margaName}` : ''}
-                                </h3>
-                                <p className="mt-1 text-xs text-tb-on-surface-variant">
-                                    Silsilah yang telah disetujui Kontributor
-                                    Utama atau Kontributor Anggota.
-                                </p>
-                            </div>
-                            {margaRequestEntry?.can_request_marga_tree && (
+                    <ApprovedMargaTreeList
+                        entries={approvedEntries}
+                        title={`Daftar Silsilah Marga${margaName ? ` ${margaName}` : ''}`}
+                        headerAction={
+                            margaRequestEntry?.can_request_marga_tree && (
                                 <Button
                                     type="button"
                                     size="sm"
@@ -365,48 +433,9 @@ export function FamilyTreeHistoryCard({
                                           ? 'Sudah Disetujui'
                                           : 'Ajukan Silsilah Marga'}
                                 </Button>
-                            )}
-                        </div>
-                        {approvedEntries.length === 0 ? (
-                            <div className="rounded-xl border border-dashed border-tb-outline-variant bg-tb-surface-container/40 px-4 py-5 text-center">
-                                <p className="text-sm font-medium text-tb-on-surface">
-                                    Belum ada silsilah yang disetujui
-                                </p>
-                            </div>
-                        ) : (
-                            <ol className="grid gap-3">
-                                {approvedEntries.map((entry, index) => (
-                                    <li
-                                        key={entry.id}
-                                        className="flex flex-col gap-4 rounded-xl border border-tb-outline-variant bg-tb-surface-container/35 p-4 sm:flex-row sm:items-center sm:justify-between"
-                                    >
-                                        <div className="flex min-w-0 items-start gap-3">
-                                            <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-tb-surface-bright text-sm font-bold text-tb-on-surface-variant ring-1 ring-tb-outline-variant">
-                                                {index + 1}
-                                            </span>
-                                            <div className="min-w-0">
-                                                <p className="truncate text-sm font-semibold text-tb-on-surface">
-                                                    {entry.name ??
-                                                        `Silsilah ${entry.root_name}`}
-                                                </p>
-                                                <p className="mt-1 text-xs text-tb-on-surface-variant">
-                                                    Akar: {entry.root_name}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <Link
-                                            href={familyTrees.show(entry.id)}
-                                            className="text-tb-on-primary inline-flex items-center justify-center gap-1.5 rounded-lg bg-tb-primary px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-90"
-                                        >
-                                            <TreePine className="size-3.5" />{' '}
-                                            Buka
-                                        </Link>
-                                    </li>
-                                ))}
-                            </ol>
-                        )}
-                    </section>
-
+                            )
+                        }
+                    />
                     <div className="border-t border-tb-outline-variant pt-6">
                         <h3 className="font-display text-base font-semibold text-tb-on-surface">
                             Silsilah Milik Akun

@@ -198,6 +198,28 @@ class ContributionController extends Controller
                 'created_at' => $identity->created_at?->format('d M Y H:i'),
             ]);
 
+        $managedMargaIds = ! $user->isAdmin()
+            ? $user->managedMargas()->pluck('margas.id')
+            : collect();
+
+        $managedFamilyTrees = ! $user->isAdmin()
+            ? FamilyTree::query()
+                ->with(['user:id,name', 'rootPerson:id,name,marga_id', 'rootPerson.marga:id,name'])
+                ->whereHas('rootPerson', fn ($root) => $root->whereIn('marga_id', $managedMargaIds))
+                ->latest('updated_at')
+                ->get()
+                ->map(fn (FamilyTree $tree) => [
+                    'id' => $tree->id,
+                    'name' => $tree->name ?? 'Silsilah '.$tree->rootPerson?->name,
+                    'root' => $tree->rootPerson?->name ?? '-',
+                    'marga' => $tree->rootPerson?->marga?->name ?? '-',
+                    'owner' => $tree->user?->name ?? '-',
+                    'updated_at' => $tree->updated_at?->format('d M Y H:i'),
+                ])
+                ->values()
+                ->all()
+            : [];
+
         $contributors = $user->isAdmin()
             ? User::query()
                 ->whereIn('role', ['contributor_main', 'contributor_member'])
@@ -232,6 +254,7 @@ class ContributionController extends Controller
             'storyRequests' => $storyRequests,
             'deletionRequests' => $deletionRequests,
             'identityRequests' => $identityRequests,
+            'managedFamilyTrees' => $managedFamilyTrees,
             'contributors' => $contributors,
             'margas' => $user->isAdmin()
                 ? Marga::query()->orderBy('name')->get(['id', 'name'])

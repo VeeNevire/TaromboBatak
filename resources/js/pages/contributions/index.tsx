@@ -38,6 +38,7 @@ import contacts from '@/routes/contacts';
 import contributions from '@/routes/contributions';
 import events from '@/routes/events';
 import familyTreeDeletions from '@/routes/family-tree-deletions';
+import familyTrees from '@/routes/family-trees';
 import identityRequestRoutes from '@/routes/identity-requests';
 import stories from '@/routes/stories';
 import tarombo from '@/routes/tarombo';
@@ -126,6 +127,15 @@ type DeletionRequest = {
     created_at: string | null;
 };
 
+type ManagedFamilyTree = {
+    id: number;
+    name: string;
+    root: string;
+    marga: string;
+    owner: string;
+    updated_at: string | null;
+};
+
 type Paginated<T> = {
     data: T[];
     total: number;
@@ -141,6 +151,7 @@ type Props = {
     storyRequests: Paginated<StoryApproval>;
     deletionRequests: Paginated<DeletionRequest>;
     identityRequests: Paginated<IdentityApproval>;
+    managedFamilyTrees: ManagedFamilyTree[];
     contributors: Contributor[];
     margas: { id: number; name: string }[];
     canManageContributors: boolean;
@@ -153,6 +164,7 @@ export default function ContributionsIndex({
     storyRequests,
     deletionRequests,
     identityRequests,
+    managedFamilyTrees,
     contributors,
     margas,
     canManageContributors,
@@ -335,6 +347,50 @@ export default function ContributionsIndex({
 
     const content = (
         <div className="flex flex-col gap-4">
+            <Card className="border-tb-outline-variant bg-tb-surface-bright">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                        <BookOpen className="size-5 text-tb-primary" />
+                        Daftar Silsilah yang Dikelola
+                    </CardTitle>
+                    <p className="text-sm text-tb-on-surface-variant">
+                        Silsilah dari marga yang ditugaskan kepada akun Anda.
+                    </p>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                    {managedFamilyTrees.length === 0 ? (
+                        <p className="rounded-lg border border-dashed border-tb-outline-variant px-4 py-6 text-center text-sm text-tb-on-surface-variant">
+                            Belum ada silsilah pada marga yang dikelola.
+                        </p>
+                    ) : (
+                        managedFamilyTrees.map((tree) => (
+                            <div
+                                key={tree.id}
+                                className="flex flex-col gap-3 rounded-lg border border-tb-outline-variant p-4 md:flex-row md:items-center md:justify-between"
+                            >
+                                <div className="min-w-0 space-y-1">
+                                    <p className="font-medium text-tb-on-surface">
+                                        {tree.name}
+                                    </p>
+                                    <p className="text-sm text-tb-on-surface-variant">
+                                        Marga: {tree.marga} Â· Akar: {tree.root}
+                                    </p>
+                                    <p className="text-xs text-tb-on-surface-variant">
+                                        Pemilik: {tree.owner} Â· Diperbarui:{' '}
+                                        {tree.updated_at ?? '-'}
+                                    </p>
+                                </div>
+                                <Button asChild variant="outline" className="shrink-0">
+                                    <Link href={familyTrees.show(tree.id).url}>
+                                        <ExternalLink className="size-4" />
+                                        Buka Silsilah
+                                    </Link>
+                                </Button>
+                            </div>
+                        ))
+                    )}
+                </CardContent>
+            </Card>
             {requests.data.length === 0 ? (
                 <Card className="border-dashed border-tb-outline-variant bg-tb-surface-bright">
                     <CardContent className="flex flex-col items-center gap-2 py-12 text-center">

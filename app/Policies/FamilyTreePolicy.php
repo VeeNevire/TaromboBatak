@@ -22,6 +22,10 @@ class FamilyTreePolicy
     public function view(User $user, FamilyTree $familyTree): bool
     {
         return $this->manage($user, $familyTree)
+            || ($user->isContributor()
+                && $familyTree->rootPerson()
+                    ->whereIn('marga_id', $user->accessibleMargaIds())
+                    ->exists())
             || $familyTree->shares()
                 ->whereBelongsTo($user, 'recipient')
                 ->where('status', FamilyTreeShare::STATUS_ACCEPTED)

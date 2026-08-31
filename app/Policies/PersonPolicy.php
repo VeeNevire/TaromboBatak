@@ -14,14 +14,14 @@ class PersonPolicy
 
     public function create(User $user): bool
     {
-        return $user->isStaff() || $user->marga_id !== null;
+        return $user->isStaff() || $user->accessibleMargaIds()->isNotEmpty();
     }
 
     public function view(User $user, Person $person): bool
     {
         return $user->isStaff()
-            || ($user->marga_id !== null
-                && $person->marga_id === $user->marga_id);
+            || ($person->marga_id !== null
+                && $user->accessibleMargaIds()->contains($person->marga_id));
     }
 
     public function update(User $user, Person $person): bool
