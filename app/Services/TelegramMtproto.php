@@ -186,6 +186,13 @@ class TelegramMtproto
             ->setApiId((int) config('services.telegram.api_id'))
             ->setApiHash((string) config('services.telegram.api_hash'));
 
+        $loggerClass = 'danog\\MadelineProto\\Settings\\Logger';
+        $logger = new $loggerClass;
+        $logger
+            ->setType(\danog\MadelineProto\Logger::FILE_LOGGER)
+            ->setExtra(storage_path('logs/madelineproto.log'));
+        $settings->setLogger($logger);
+
         return $settings;
     }
 
