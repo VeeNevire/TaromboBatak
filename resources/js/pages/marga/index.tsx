@@ -1,7 +1,16 @@
 import { Head, router, useForm } from '@inertiajs/react';
-import { ImagePlus, Pencil, Plus, Shapes, Trash2, X } from 'lucide-react';
+import {
+    ChevronsUpDown,
+    ImagePlus,
+    Pencil,
+    Plus,
+    Shapes,
+    Trash2,
+    X,
+} from 'lucide-react';
 import { useRef, useState } from 'react';
 import InputError from '@/components/input-error';
+import { PersonTreePickerDialog } from '@/components/tarombo/person-tree-picker-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -14,13 +23,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
+import type { TaromboPerson } from '@/data/tarombo-tree';
 import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import marga from '@/routes/marga';
@@ -39,13 +42,39 @@ type MargaItem = {
 
 type Props = {
     margas: MargaItem[];
-    identityPersonOptions: {
-        id: number;
-        name: string;
-        chain: string;
-        generation: number;
-    }[];
+    identityPersonOptions: IdentityPersonOption[];
 };
+
+type IdentityPersonOption = {
+    id: number;
+    name: string;
+    chain: string;
+    generation: number;
+};
+
+function identityTreePeople(options: IdentityPersonOption[]): TaromboPerson[] {
+    const idByChain = new Map(
+        options.map((option) => [option.chain, String(option.id)]),
+    );
+
+    return options.map((option) => {
+        const chainParts = option.chain.split('-');
+        const parentChain = chainParts.slice(0, -1).join('-');
+
+        return {
+            id: String(option.id),
+            name: option.name,
+            marga: 'Batak',
+            generation: option.generation,
+            parentId: parentChain ? (idByChain.get(parentChain) ?? null) : null,
+            birthOrder:
+                chainParts.length > 1
+                    ? Number(chainParts[chainParts.length - 1])
+                    : null,
+            chain: option.chain,
+        };
+    });
+}
 
 function MargaAvatar({ m, className }: { m: MargaItem; className?: string }) {
     if (m.image_url) {
@@ -172,6 +201,8 @@ function ImageInput({
 export default function MargaIndex({ margas, identityPersonOptions }: Props) {
     const [dialog, setDialog] = useState<null | 'create' | MargaItem>(null);
     const [toDelete, setToDelete] = useState<MargaItem | null>(null);
+    const [identityPickerOpen, setIdentityPickerOpen] = useState(false);
+    const identityPeople = identityTreePeople(identityPersonOptions);
 
     const form = useForm({
         name: '',
@@ -183,6 +214,7 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
 
     const openCreate = () => {
         form.reset();
+        setIdentityPickerOpen(false);
         setDialog('create');
     };
 
@@ -194,8 +226,13 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
             image: m.image_url ?? '',
             identity_person_id: m.identity_person_id,
         });
+        setIdentityPickerOpen(false);
         setDialog(m);
     };
+
+    const selectedIdentity = identityPersonOptions.find(
+        (person) => person.id === form.data.identity_person_id,
+    );
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -323,7 +360,12 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
 
                 <Dialog
                     open={dialog !== null}
-                    onOpenChange={(open) => !open && setDialog(null)}
+                    onOpenChange={(open) => {
+                        if (!open) {
+                            setIdentityPickerOpen(false);
+                            setDialog(null);
+                        }
+                    }}
                 >
                     <DialogContent className="sm:max-w-md">
                         <form onSubmit={submit} encType="multipart/form-data">
@@ -370,50 +412,61 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
                                     >
                                         Saya adalah
                                     </Label>
-                                    <Select
-                                        value={
-                                            form.data.identity_person_id ===
-                                            null
-                                                ? 'none'
-                                                : String(
-                                                      form.data
-                                                          .identity_person_id,
-                                                  )
-                                        }
-                                        onValueChange={(value) =>
-                                            form.setData(
-                                                'identity_person_id',
-                                                value === 'none'
-                                                    ? null
-                                                    : Number(value),
-                                            )
-                                        }
-                                    >
-                                        <SelectTrigger
+                                    <div className="flex gap-2">
+                                        <Button
                                             id="identity_person_id"
-                                            className="w-full border-tb-outline-variant bg-tb-surface-bright"
+                                            type="button"
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-haspopup="dialog"
+                                            aria-expanded={identityPickerOpen}
+                                            disabled={
+                                                identityPersonOptions.length ===
+                                                0
+                                            }
+                                            onClick={() =>
+                                                setIdentityPickerOpen(true)
+                                            }
+                                            className="min-w-0 flex-1 justify-between border-tb-outline-variant bg-tb-surface-bright px-3 font-normal text-tb-on-surface hover:bg-tb-surface-container hover:text-tb-on-surface"
                                         >
-                                            <SelectValue placeholder="Pilih identitas marga" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="none">
-                                                Belum dipilih
-                                            </SelectItem>
-                                            {identityPersonOptions.map(
-                                                (person) => (
-                                                    <SelectItem
-                                                        key={person.id}
-                                                        value={String(
-                                                            person.id,
-                                                        )}
-                                                    >
-                                                        {person.chain} ·{' '}
-                                                        {person.name}
-                                                    </SelectItem>
-                                                ),
-                                            )}
-                                        </SelectContent>
-                                    </Select>
+                                            <span
+                                                className={cn(
+                                                    'truncate',
+                                                    !selectedIdentity &&
+                                                        'text-tb-on-surface-variant',
+                                                )}
+                                            >
+                                                {selectedIdentity
+                                                    ? `${selectedIdentity.chain} · ${selectedIdentity.name}`
+                                                    : 'Belum dipilih'}
+                                            </span>
+                                            <ChevronsUpDown className="size-4 shrink-0 text-tb-on-surface-variant" />
+                                        </Button>
+                                        {selectedIdentity && (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="icon"
+                                                aria-label="Hapus pilihan identitas marga"
+                                                title="Hapus pilihan"
+                                                onClick={() =>
+                                                    form.setData(
+                                                        'identity_person_id',
+                                                        null,
+                                                    )
+                                                }
+                                                className="shrink-0 border-tb-outline-variant text-tb-on-surface-variant hover:text-red-600"
+                                            >
+                                                <X className="size-4" />
+                                            </Button>
+                                        )}
+                                    </div>
+                                    {identityPersonOptions.length === 0 && (
+                                        <p className="text-xs text-amber-700 dark:text-amber-300">
+                                            Belum ada nama yang dapat dipilih
+                                            dari pohon utama Si Raja Batak.
+                                        </p>
+                                    )}
                                     <p className="text-xs text-tb-on-surface-variant">
                                         Khusus identifikasi marga dari pohon
                                         utama Si Raja Batak, maksimal generasi
@@ -512,6 +565,25 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
                                 </Button>
                             </DialogFooter>
                         </form>
+
+                        <PersonTreePickerDialog
+                            open={identityPickerOpen}
+                            onOpenChange={setIdentityPickerOpen}
+                            people={identityPeople}
+                            currentId={
+                                form.data.identity_person_id === null
+                                    ? null
+                                    : String(form.data.identity_person_id)
+                            }
+                            description="Pilih nama pada pohon yang menjadi pemilik atau asal nama marga ini."
+                            onSelect={(person) => {
+                                form.setData(
+                                    'identity_person_id',
+                                    Number(person.id),
+                                );
+                                setIdentityPickerOpen(false);
+                            }}
+                        />
                     </DialogContent>
                 </Dialog>
 
