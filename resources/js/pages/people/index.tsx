@@ -1,6 +1,7 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { NotebookPen, Pencil, Plus, Route, Search, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { AppAvatar } from '@/components/app-avatar';
 import { Button } from '@/components/ui/button';
@@ -29,6 +30,7 @@ type PersonItem = {
     name: string;
     alias: string | null;
     marga: string | null;
+    marga_id: number | null;
     marga_color: string | null;
     parent: string | null;
     children_count: number;
@@ -41,14 +43,11 @@ type PersonItem = {
 
 type Paginated = {
     data: PersonItem[];
-    links: { url: string | null; label: string; active: boolean }[];
-    current_page: number;
-    last_page: number;
     total: number;
     from: number | null;
     to: number | null;
-    next_page_url: string | null;
-    prev_page_url: string | null;
+    prev_page_url?: string | null;
+    next_page_url?: string | null;
 };
 
 type MargaOption = { id: number; name: string };
@@ -69,10 +68,25 @@ export default function PeopleIndex({
     hasMarga,
 }: Props) {
     const [search, setSearch] = useState(filters.search ?? '');
+    const [margaFilter, setMargaFilter] = useState(filters.marga_id ?? 'all');
     const [toDelete, setToDelete] = useState<PersonItem | null>(null);
     const deleteForm = useForm<{ person?: string }>({});
-    const showActions =
-        canManage || page.data.some((person) => person.editable);
+    const filteredPeople = useMemo(() => {
+        const query = search.trim().toLocaleLowerCase();
+
+        return page.data.filter((person) => {
+            const matchesSearch =
+                query === '' ||
+                [person.name, person.alias ?? '', person.marga ?? ''].some(
+                    (value) => value.toLocaleLowerCase().includes(query),
+                );
+            const matchesMarga =
+                margaFilter === 'all' || String(person.marga_id) === margaFilter;
+
+            return matchesSearch && matchesMarga;
+        });
+    }, [margaFilter, page, search]);
+    const showActions = canManage || page.data.some((person) => person.editable);
 
     const confirmDelete = () => {
         if (!toDelete) {
@@ -89,52 +103,6 @@ export default function PeopleIndex({
                 );
             },
         });
-    };
-
-    useEffect(() => {
-        if (search === filters.search) {
-            return;
-        }
-
-        const timeout = window.setTimeout(() => {
-            router.get(
-                people.index().url,
-                {
-                    search,
-                    marga_id: filters.marga_id,
-                },
-                {
-                    only: ['people', 'filters'],
-                    preserveScroll: true,
-                    preserveState: true,
-                    replace: true,
-                },
-            );
-        }, 300);
-
-        return () => window.clearTimeout(timeout);
-    }, [filters.marga_id, filters.search, search]);
-
-    const applyFilter = (updates: {
-        search?: string;
-        marga_id?: string | null;
-    }) => {
-        router.get(
-            people.index().url,
-            {
-                search: updates.search !== undefined ? updates.search : search,
-                marga_id:
-                    updates.marga_id !== undefined
-                        ? updates.marga_id
-                        : filters.marga_id,
-            },
-            {
-                only: ['people', 'filters'],
-                preserveScroll: true,
-                preserveState: true,
-                replace: true,
-            },
-        );
     };
 
     return (
@@ -190,13 +158,8 @@ export default function PeopleIndex({
                         </div>
                         {canManage && margas.length > 1 && (
                             <Select
-                                value={filters.marga_id ?? 'all'}
-                                onValueChange={(value) =>
-                                    applyFilter({
-                                        marga_id:
-                                            value === 'all' ? null : value,
-                                    })
-                                }
+                                value={margaFilter}
+                                onValueChange={setMargaFilter}
                             >
                                 <SelectTrigger className="w-full border-tb-outline-variant bg-tb-surface-bright md:w-56">
                                     <SelectValue placeholder="Semua marga" />
@@ -244,11 +207,20 @@ export default function PeopleIndex({
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-tb-outline-variant">
-                                {page.data.map((person) => (
-                                    <tr
-                                        key={person.id}
-                                        className="hover:bg-tb-surface-container/40"
-                                    >
+                                <AnimatePresence initial={false}>
+                                    {filteredPeople.map((person) => (
+                                        <motion.tr
+                                            key={person.id}
+                                            layout
+                                            initial={{ opacity: 0, y: 8 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -8 }}
+                                            transition={{
+                                                duration: 0.18,
+                                                ease: 'easeOut',
+                                            }}
+                                            className="hover:bg-tb-surface-container/40"
+                                        >
                                         <td className="px-3 py-3">
                                             <div className="flex items-center gap-3">
                                                 <AppAvatar
@@ -394,9 +366,10 @@ export default function PeopleIndex({
                                                 </div>
                                             </td>
                                         )}
-                                    </tr>
-                                ))}
-                                {page.data.length === 0 && (
+                                        </motion.tr>
+                                    ))}
+                                </AnimatePresence>
+                                {filteredPeople.length === 0 && (
                                     <tr>
                                         <td
                                             colSpan={showActions ? 5 : 4}
@@ -411,7 +384,10 @@ export default function PeopleIndex({
                     </CardContent>
                 </Card>
 
-                <Pagination page={page} />
+                <div className="text-sm text-tb-on-surface-variant">
+                    Menampilkan {filteredPeople.length} dari {page.data.length}{' '}
+                    anggota
+                </div>
 
                 <Dialog
                     open={toDelete !== null}
@@ -473,7 +449,7 @@ PeopleIndex.layout = {
     ],
 };
 
-function Pagination({ page }: { page: Paginated }) {
+export function Pagination({ page }: { page: Paginated }) {
     const prevUrl = page.prev_page_url;
     const nextUrl = page.next_page_url;
 

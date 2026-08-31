@@ -1,4 +1,5 @@
 import { Head, router, useForm } from '@inertiajs/react';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
     ArrowDown,
     ArrowUp,
@@ -6,11 +7,12 @@ import {
     ImagePlus,
     Pencil,
     Plus,
+    Search,
     Shapes,
     Trash2,
     X,
 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import InputError from '@/components/input-error';
 import { PersonTreePickerDialog } from '@/components/tarombo/person-tree-picker-dialog';
 import { Button } from '@/components/ui/button';
@@ -205,7 +207,21 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
     const [dialog, setDialog] = useState<null | 'create' | MargaItem>(null);
     const [toDelete, setToDelete] = useState<MargaItem | null>(null);
     const [identityPickerOpen, setIdentityPickerOpen] = useState(false);
+    const [search, setSearch] = useState('');
     const identityPeople = identityTreePeople(identityPersonOptions);
+    const filteredMargas = useMemo(() => {
+        const query = search.trim().toLocaleLowerCase();
+
+        if (query === '') {
+            return margas;
+        }
+
+        return margas.filter((margaItem) =>
+            [margaItem.name, margaItem.description ?? ''].some((value) =>
+                value.toLocaleLowerCase().includes(query),
+            ),
+        );
+    }, [margas, search]);
 
     const openMargaTree = (
         margaItem: MargaItem,
@@ -312,6 +328,17 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
                     </Button>
                 </div>
 
+                <div className="relative max-w-md">
+                    <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-tb-on-surface-variant" />
+                    <Input
+                        value={search}
+                        onChange={(event) => setSearch(event.target.value)}
+                        placeholder="Cari nama marga..."
+                        aria-label="Cari nama marga"
+                        className="pl-9"
+                    />
+                </div>
+
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {margas.length === 0 && (
                         <Card className="col-span-full border-tb-outline-variant bg-tb-surface-bright">
@@ -323,20 +350,42 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
                             </CardContent>
                         </Card>
                     )}
-                    {margas.map((m) => (
-                        <Card
-                            key={m.id}
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => openEdit(m)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                    e.preventDefault();
-                                    openEdit(m);
-                                }
-                            }}
-                            className="group cursor-pointer border-tb-outline-variant bg-tb-surface-bright transition-shadow hover:shadow-md"
-                        >
+                    {margas.length > 0 && filteredMargas.length === 0 && (
+                        <Card className="col-span-full border-tb-outline-variant bg-tb-surface-bright">
+                            <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
+                                <Search className="size-8 text-tb-outline" />
+                                <p className="text-sm text-tb-on-surface-variant">
+                                    Tidak ada marga yang cocok dengan pencarian.
+                                </p>
+                            </CardContent>
+                        </Card>
+                    )}
+                    <AnimatePresence initial={false}>
+                        {filteredMargas.map((m) => (
+                            <motion.div
+                                key={m.id}
+                                layout
+                                initial={{ opacity: 0, scale: 0.96, y: 8 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.96, y: -8 }}
+                                transition={{
+                                    duration: 0.2,
+                                    ease: 'easeOut',
+                                }}
+                                className="h-full"
+                            >
+                                <Card
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={() => openEdit(m)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                            e.preventDefault();
+                                            openEdit(m);
+                                        }
+                                    }}
+                                    className="group h-full cursor-pointer border-tb-outline-variant bg-tb-surface-bright transition-shadow hover:shadow-md"
+                                >
                             <CardContent className="gap-4 py-5">
                                 <div className="flex items-start justify-between">
                                     <MargaAvatar
@@ -422,8 +471,10 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
                                     {m.people_count} anggota
                                 </p>
                             </CardContent>
-                        </Card>
-                    ))}
+                                </Card>
+                            </motion.div>
+                        ))}
+                    </AnimatePresence>
                 </div>
 
                 <Dialog

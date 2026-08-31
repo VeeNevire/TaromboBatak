@@ -30,7 +30,7 @@ class StoryController extends Controller
             ->when(! $user->isStaff() && ! $user->isContributor(), fn ($query) => $query->where('created_by', $user->id))
             ->when($user->isContributor(), fn ($query) => $query->where(fn ($query) => $query
                 ->where('classification', Story::CLASSIFICATION_GENERAL)
-                ->orWhere('marga_id', $user->marga_id)
+                ->orWhereIn('marga_id', $user->accessibleMargaIds())
                 ->orWhere('created_by', $user->id)))
             ->when($request->filled('search'), function ($query) use ($request) {
                 $query->where('title', 'like', '%'.$request->string('search').'%');
@@ -356,7 +356,10 @@ class StoryController extends Controller
             ->whereIn('role', ['contributor_main', 'contributor_member'])
             ->when(
                 $story->classification === Story::CLASSIFICATION_MARGA,
-                fn ($query) => $query->where('marga_id', $story->marga_id),
+                fn ($query) => $query->where(function ($scope) use ($story) {
+                    $scope->where('marga_id', $story->marga_id)
+                        ->orWhereHas('managedMargas', fn ($margas) => $margas->whereKey($story->marga_id));
+                }),
             )
             ->each(fn (User $contributor) => $contributor->notify(new StorySubmitted($story)));
     }
@@ -366,7 +369,7 @@ class StoryController extends Controller
         return $user->isAdmin()
             || ($user->isContributor() && (
                 $story->classification === Story::CLASSIFICATION_GENERAL
-                || $user->marga_id === $story->marga_id
+                || $user->accessibleMargaIds()->contains($story->marga_id)
             ));
     }
 

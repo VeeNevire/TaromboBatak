@@ -1,5 +1,6 @@
 import { Head, Link, useForm } from '@inertiajs/react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ListTree } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import {
@@ -9,6 +10,15 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { dashboard } from '@/routes';
@@ -23,6 +33,8 @@ type Account = {
 };
 type Marga = { id: number; name: string };
 
+const contributorRoles = ['contributor_main', 'contributor_member'];
+
 const roles = [
     ['admin', 'Admin'],
     ['subadmin', 'Sub Admin'],
@@ -34,21 +46,46 @@ const roles = [
 export default function AccountForm({
     account,
     margas,
+    managedMargaOptions,
+    managedMargaIds,
 }: {
     account: Account | null;
     margas: Marga[];
+    managedMargaOptions: Marga[];
+    managedMargaIds: number[];
 }) {
     const isEdit = account !== null;
+    const [managementOpen, setManagementOpen] = useState(false);
+    const [margaSearch, setMargaSearch] = useState('');
     const { data, setData, post, put, processing, errors, transform } = useForm(
         {
             name: account?.name ?? '',
             email: account?.email ?? '',
             role: account?.role ?? 'user',
             marga_id: account?.marga_id ? String(account.marga_id) : '',
+            managed_marga_ids: managedMargaIds,
             password: '',
             password_confirmation: '',
         },
     );
+
+    const isContributor = contributorRoles.includes(data.role);
+    const filteredManagedMargas = useMemo(() => {
+        const query = margaSearch.trim().toLowerCase();
+
+        return managedMargaOptions.filter((marga) =>
+            query ? marga.name.toLowerCase().includes(query) : true,
+        );
+    }, [managedMargaOptions, margaSearch]);
+
+    const toggleManagedMarga = (margaId: number, checked: boolean) => {
+        setData(
+            'managed_marga_ids',
+            checked
+                ? [...data.managed_marga_ids, margaId]
+                : data.managed_marga_ids.filter((id) => id !== margaId),
+        );
+    };
 
     const submit = (event: React.FormEvent) => {
         event.preventDefault();
@@ -131,9 +168,14 @@ post(accounts.store().url);
                                 <select
                                     id="role"
                                     value={data.role}
-                                    onChange={(e) =>
-                                        setData('role', e.target.value)
-                                    }
+                                    onChange={(e) => {
+                                        const role = e.target.value;
+                                        setData('role', role);
+
+                                        if (!contributorRoles.includes(role)) {
+                                            setData('managed_marga_ids', []);
+                                        }
+                                    }}
                                     className="h-10 rounded-md border border-tb-outline-variant bg-tb-surface-bright px-3 text-sm text-tb-on-surface focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20 focus:outline-none"
                                 >
                                     {roles.map(([value, label]) => (
@@ -164,6 +206,28 @@ post(accounts.store().url);
                                     ))}
                                 </select>
                             </Field>
+                            {isContributor && (
+                                <Field
+                                    label="Manajemen Marga"
+                                    id="managed_marga_ids"
+                                    error={errors.managed_marga_ids}
+                                >
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            className="w-fit border-tb-primary text-tb-primary hover:bg-tb-primary/10"
+                                            onClick={() => setManagementOpen(true)}
+                                        >
+                                            <ListTree className="size-4" />
+                                            Daftar Manajemen Marga
+                                        </Button>
+                                        <span className="text-xs text-tb-on-surface-variant">
+                                            {data.managed_marga_ids.length} marga dipilih
+                                        </span>
+                                    </div>
+                                </Field>
+                            )}
                             <Field
                                 label={`Password${isEdit ? '' : ' *'}`}
                                 id="password"
@@ -227,6 +291,47 @@ post(accounts.store().url);
                     </div>
                 </form>
             </div>
+            <Dialog open={managementOpen} onOpenChange={setManagementOpen}>
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Daftar Manajemen Marga</DialogTitle>
+                        <DialogDescription>
+                            Pilih marga yang memiliki Pohon Silsilah Bawah dan dapat dikelola akun ini.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <Input
+                        value={margaSearch}
+                        onChange={(event) => setMargaSearch(event.target.value)}
+                        placeholder="Cari marga..."
+                    />
+                    <div className="grid max-h-72 gap-2 overflow-y-auto rounded-lg border border-tb-outline-variant p-2">
+                        {filteredManagedMargas.map((marga) => (
+                            <label
+                                key={marga.id}
+                                className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 hover:bg-tb-surface-container"
+                            >
+                                <Checkbox
+                                    checked={data.managed_marga_ids.includes(marga.id)}
+                                    onCheckedChange={(checked) =>
+                                        toggleManagedMarga(marga.id, checked === true)
+                                    }
+                                />
+                                <span className="text-sm text-tb-on-surface">{marga.name}</span>
+                            </label>
+                        ))}
+                        {filteredManagedMargas.length === 0 && (
+                            <p className="px-3 py-5 text-center text-sm text-tb-on-surface-variant">
+                                Marga dengan Pohon Silsilah Bawah belum tersedia.
+                            </p>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" onClick={() => setManagementOpen(false)}>
+                            Selesai ({data.managed_marga_ids.length})
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     );
 }

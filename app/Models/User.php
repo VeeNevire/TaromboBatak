@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -33,6 +34,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Marga|null $marga
+ * @property-read Collection<int, Marga> $managedMargas
  * @property-read Person|null $currentPerson
  * @property-read Collection<int, FamilyTree> $familyTrees
  * @property-read Collection<int, ContributionRequest> $contributionRequests
@@ -136,6 +138,24 @@ class User extends Authenticatable
     public function marga(): BelongsTo
     {
         return $this->belongsTo(Marga::class);
+    }
+
+    /** @return BelongsToMany<Marga, $this> */
+    public function managedMargas(): BelongsToMany
+    {
+        return $this->belongsToMany(Marga::class, 'marga_user');
+    }
+
+    /** @return \Illuminate\Support\Collection<int, int> */
+    public function accessibleMargaIds(): \Illuminate\Support\Collection
+    {
+        return $this->managedMargas()
+            ->pluck('margas.id')
+            ->push($this->marga_id)
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
     }
 
     /** @return BelongsTo<Person, $this> */

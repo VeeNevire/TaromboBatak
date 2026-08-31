@@ -47,12 +47,18 @@ class TaromboController extends Controller
         $margaTree = null;
 
         if ($request->filled('marga_id') || $request->filled('marga_direction')) {
-            abort_unless($request->user()->isStaff(), 403);
+            $requestedMargaId = $request->integer('marga_id');
+            abort_unless(
+                $request->user()->isStaff()
+                || ($request->user()->isContributor()
+                    && $request->user()->accessibleMargaIds()->contains($requestedMargaId)),
+                403,
+            );
 
             $direction = $request->string('marga_direction')->toString();
             abort_unless(in_array($direction, ['upper', 'lower'], true), 404);
 
-            $marga = Marga::query()->with('identityPerson')->findOrFail($request->integer('marga_id'));
+            $marga = Marga::query()->with('identityPerson')->findOrFail($requestedMargaId);
             abort_if($marga->identity_person_id === null || $marga->identityPerson === null, 404, 'Identitas marga belum dipilih.');
 
             $margaTree = [
@@ -87,10 +93,11 @@ class TaromboController extends Controller
         $user->loadMissing('currentPerson');
         $isStaff = $user->isStaff();
         $service = app(TaromboTreeService::class);
+        $accessibleMargaIds = $user->accessibleMargaIds();
         $allowedPersonIds = $isStaff
             ? null
-            : ($user->marga_id !== null
-                ? $this->personIdsForMargaAndFemaleBranches($user->marga_id)
+            : ($accessibleMargaIds->isNotEmpty()
+                ? $this->personIdsForMargaAndFemaleBranches($accessibleMargaIds)
                 : collect());
 
         $rows = $service->rows(
@@ -186,7 +193,7 @@ class TaromboController extends Controller
 
         return [
             $rows,
-            $service->margas($isStaff ? null : $user->marga_id),
+            $service->margas($isStaff ? null : $accessibleMargaIds->all()),
             $alternativeTrees,
             [
                 'canSelectAnyPerson' => $user->isAdmin(),
@@ -260,14 +267,14 @@ class TaromboController extends Controller
     }
 
     /** @return Collection<int, int> */
-    private function personIdsForMargaAndFemaleBranches(int $margaId): Collection
+    private function personIdsForMargaAndFemaleBranches(Collection $margaIds): Collection
     {
         $visibleIds = Person::query()
-            ->where('marga_id', $margaId)
+            ->whereIn('marga_id', $margaIds)
             ->pluck('id')
             ->map(fn (int $id) => $id);
         $frontier = Person::query()
-            ->where('marga_id', $margaId)
+            ->whereIn('marga_id', $margaIds)
             ->where('gender', 'P')
             ->pluck('id');
 

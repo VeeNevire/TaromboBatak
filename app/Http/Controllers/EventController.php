@@ -28,7 +28,7 @@ class EventController extends Controller
         $events = Event::query()
             ->with(['creator', 'marga', 'reviewer'])
             ->when(! $user->isStaff() && ! $user->isContributor(), fn ($query) => $query->where('created_by', $user->id))
-            ->when($user->isContributor(), fn ($query) => $query->where('marga_id', $user->marga_id))
+            ->when($user->isContributor(), fn ($query) => $query->whereIn('marga_id', $user->accessibleMargaIds()))
             ->when($request->filled('search'), function ($query) use ($request) {
                 $query->where('title', 'like', '%'.$request->string('search').'%');
             })
@@ -339,14 +339,17 @@ class EventController extends Controller
 
         User::query()
             ->whereIn('role', ['contributor_main', 'contributor_member'])
-            ->where('marga_id', $event->marga_id)
+            ->where(function ($query) use ($event) {
+                $query->where('marga_id', $event->marga_id)
+                    ->orWhereHas('managedMargas', fn ($margas) => $margas->whereKey($event->marga_id));
+            })
             ->each(fn (User $contributor) => $contributor->notify(new EventSubmitted($event)));
     }
 
     protected function canReview(User $user, Event $event): bool
     {
         return $user->isAdmin()
-            || ($user->isContributor() && $user->marga_id === $event->marga_id);
+            || ($user->isContributor() && $user->accessibleMargaIds()->contains($event->marga_id));
     }
 
     protected function authorizeReview(User $user, Event $event): void

@@ -46,7 +46,7 @@ class PersonController extends Controller
             ->with(['marga', 'father'])
             ->withCount('children')
             ->when(
-                ! $isStaff,
+                ! $isStaff && ! $user->isContributor(),
                 fn ($query) => $query
                     ->where('marga_id', $user->marga_id)
                     ->whereHas(
@@ -55,24 +55,24 @@ class PersonController extends Controller
                     ),
             )
             ->when($request->filled('search'), function ($query) use ($request) {
-                $query->where(function ($query) use ($request) {
-                    $query->where('name', 'like', '%'.$request->string('search').'%')
-                        ->orWhere('alias', 'like', '%'.$request->string('search').'%')
-                        ->orWhereHas('marga', fn ($marga) => $marga
-                            ->where('name', 'like', '%'.$request->string('search').'%'));
+                $search = $request->string('search')->toString();
+
+                $query->where(function ($personQuery) use ($search) {
+                    $personQuery
+                        ->where('name', 'like', "%{$search}%")
+                        ->orWhere('alias', 'like', "%{$search}%")
+                        ->orWhereHas('marga', fn ($margaQuery) => $margaQuery->where('name', 'like', "%{$search}%"));
                 });
             })
-            ->when($request->filled('marga_id'), function ($query) use ($request) {
-                $query->where('marga_id', $request->integer('marga_id'));
-            })
+            ->when($request->filled('marga_id'), fn ($query) => $query->where('marga_id', $request->integer('marga_id')))
             ->orderBy('name')
-            ->paginate(12)
-            ->withQueryString()
-            ->through(fn (Person $person) => [
+            ->get()
+            ->map(fn (Person $person) => [
                 'id' => $person->id,
                 'name' => $person->name,
                 'alias' => $person->alias,
                 'marga' => $person->marga?->name,
+                'marga_id' => $person->marga_id,
                 'marga_color' => $person->marga?->color,
                 'parent' => $person->father?->name,
                 'children_count' => $person->children_count,
@@ -84,7 +84,7 @@ class PersonController extends Controller
             ]);
 
         $margas = Marga::query()
-            ->when(! $isStaff, fn ($query) => $query->where('id', $user->marga_id))
+            ->when(! $isStaff, fn ($query) => $query->whereIn('id', $user->accessibleMargaIds()))
             ->orderBy('name')
             ->get()
             ->map(fn (Marga $marga) => [
@@ -93,14 +93,24 @@ class PersonController extends Controller
             ]);
 
         return Inertia::render('people/index', [
-            'people' => $people,
+            'people' => [
+                'data' => $people->values()->all(),
+                'links' => [],
+                'current_page' => 1,
+                'last_page' => 1,
+                'total' => $people->count(),
+                'from' => $people->isNotEmpty() ? 1 : null,
+                'to' => $people->isNotEmpty() ? $people->count() : null,
+                'next_page_url' => null,
+                'prev_page_url' => null,
+            ],
             'filters' => [
                 'search' => $request->string('search')->toString(),
                 'marga_id' => $request->input('marga_id'),
             ],
             'margas' => $margas,
             'canManage' => $isStaff,
-            'hasMarga' => $isStaff || $user->marga_id !== null,
+            'hasMarga' => $isStaff || $user->accessibleMargaIds()->isNotEmpty(),
         ]);
     }
 
@@ -1339,7 +1349,9 @@ class PersonController extends Controller
      */
     protected function approvedMargaTrees(User $user): array
     {
-        if ($user->marga_id === null) {
+        $margaIds = $user->accessibleMargaIds();
+
+        if ($margaIds->isEmpty()) {
             return [];
         }
 
@@ -1352,9 +1364,9 @@ class PersonController extends Controller
                     fn ($requestQuery) => $requestQuery->where('requester_id', $user->id),
                 )
                 ->whereHas('matchedFather', fn ($father) => $father
-                    ->where('marga_id', $user->marga_id)))
+                    ->whereIn('marga_id', $margaIds)))
             ->whereHas('nodes.person', fn ($query) => $query
-                ->where('marga_id', $user->marga_id))
+                ->whereIn('marga_id', $margaIds))
             ->with(['user:id,name', 'rootPerson:id,name', 'nodes.person:id,name', 'shares.recipient:id,name,email', 'contributionRequests:id,family_tree_id,status'])
             ->withExists(['deletionRequests as deletion_pending' => fn ($query) => $query
                 ->where('status', FamilyTreeDeletionRequest::STATUS_PENDING)])
@@ -1487,12 +1499,14 @@ class PersonController extends Controller
      */
     protected function margaOptionsForUser(User $user): array
     {
-        if ($user->marga_id === null) {
+        $margaIds = $user->accessibleMargaIds();
+
+        if ($margaIds->isEmpty()) {
             return [];
         }
 
         return Marga::query()
-            ->where('id', $user->marga_id)
+            ->whereIn('id', $margaIds)
             ->get()
             ->map(fn (Marga $marga) => [
                 'id' => $marga->id,
