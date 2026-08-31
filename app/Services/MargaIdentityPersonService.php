@@ -2,8 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\FamilyTree;
-use App\Models\FamilyTreeNode;
+use App\Models\Person;
 use Illuminate\Support\Collection;
 
 class MargaIdentityPersonService
@@ -13,28 +12,51 @@ class MargaIdentityPersonService
     /** @return Collection<int, array{id: int, name: string, chain: string, generation: int}> */
     public function options(): Collection
     {
-        $primaryTreeId = FamilyTree::query()
-            ->where('is_primary', true)
-            ->whereHas('rootPerson', fn ($query) => $query->where('name', 'Si Raja Batak'))
-            ->latest('id')
-            ->value('id');
+        $people = Person::query()
+            ->whereNotNull('chain')
+            ->orderBy('id')
+            ->get(['id', 'name', 'father_id', 'chain']);
+        $root = $people->first(fn (Person $person) => $person->name === 'Si Raja Batak');
 
-        if ($primaryTreeId === null) {
+        if (! $root instanceof Person) {
             return collect();
         }
 
-        return FamilyTreeNode::query()
-            ->where('family_tree_id', $primaryTreeId)
-            ->whereNotNull('chain')
-            ->with('person:id,name')
-            ->get(['id', 'family_tree_id', 'person_id', 'chain'])
-            ->map(fn (FamilyTreeNode $node) => [
-                'id' => $node->person_id,
-                'name' => $node->person->name,
-                'chain' => $node->chain,
-                'generation' => substr_count($node->chain, '-') + 1,
-            ])
-            ->filter(fn (array $option) => $option['generation'] <= self::MAX_GENERATION)
+        $childrenByFather = $people
+            ->filter(fn (Person $person) => $person->father_id !== null)
+            ->groupBy('father_id');
+        $connectedPeople = collect();
+        $queue = [$root];
+        $seen = [];
+
+        while ($queue !== []) {
+            /** @var Person $person */
+            $person = array_shift($queue);
+
+            if (isset($seen[$person->id])) {
+                continue;
+            }
+
+            $seen[$person->id] = true;
+            $generation = substr_count($person->chain, '-') + 1;
+
+            if ($generation > self::MAX_GENERATION) {
+                continue;
+            }
+
+            $connectedPeople->push([
+                'id' => $person->id,
+                'name' => $person->name,
+                'chain' => $person->chain,
+                'generation' => $generation,
+            ]);
+
+            foreach ($childrenByFather->get($person->id, collect()) as $child) {
+                $queue[] = $child;
+            }
+        }
+
+        return $connectedPeople
             ->sort(fn (array $left, array $right) => strnatcmp($left['chain'], $right['chain']))
             ->values();
     }

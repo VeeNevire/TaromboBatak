@@ -1,78 +1,72 @@
 <?php
 
-use App\Models\FamilyTree;
-use App\Models\FamilyTreeNode;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
-use Inertia\Testing\AssertableInertia as Assert;
+use App\Services\MargaIdentityPersonService;
 
-function margaIdentityNode(FamilyTree $tree, Person $person, string $chain): FamilyTreeNode
-{
-    return FamilyTreeNode::create([
-        'family_tree_id' => $tree->id,
-        'person_id' => $person->id,
-        'chain' => $chain,
+test('marga identity options use connected tarombo people through generation eleven without family tree nodes', function () {
+    $root = Person::factory()->create([
+        'name' => 'Si Raja Batak',
+        'father_id' => null,
+        'chain' => '1',
     ]);
-}
-
-test('marga identity options only use the primary Si Raja Batak tree through generation eleven', function () {
-    $admin = User::factory()->asAdmin()->create();
-    $root = Person::factory()->create(['name' => 'Si Raja Batak']);
-    $generationEleven = Person::factory()->create(['name' => 'Generasi Sebelas']);
-    $generationTwelve = Person::factory()->create(['name' => 'Generasi Dua Belas']);
-    $alternativeOnly = Person::factory()->create(['name' => 'Khusus Alternatif']);
-    $primary = FamilyTree::create([
-        'user_id' => $admin->id,
-        'root_person_id' => $root->id,
-        'is_primary' => true,
+    $generationEleven = Person::factory()->create([
+        'name' => 'Generasi Sebelas',
+        'father_id' => $root->id,
+        'chain' => '1-1-1-1-1-1-1-1-1-1-1',
     ]);
-    $alternative = FamilyTree::create([
-        'user_id' => $admin->id,
-        'root_person_id' => $root->id,
-        'based_on_id' => $primary->id,
-        'is_primary' => false,
+    Person::factory()->create([
+        'name' => 'Generasi Dua Belas',
+        'father_id' => $generationEleven->id,
+        'chain' => '1-1-1-1-1-1-1-1-1-1-1-1',
+    ]);
+    Person::factory()->create([
+        'name' => 'Pohon Lain',
+        'father_id' => null,
+        'chain' => '2',
     ]);
 
-    margaIdentityNode($primary, $root, '1');
-    margaIdentityNode($primary, $generationEleven, '1-1-1-1-1-1-1-1-1-1-1');
-    margaIdentityNode($primary, $generationTwelve, '1-1-1-1-1-1-1-1-1-1-1-1');
-    margaIdentityNode($alternative, $alternativeOnly, '1-2');
+    $options = app(MargaIdentityPersonService::class)->options();
 
-    $this->actingAs($admin)
-        ->get(route('marga.index'))
-        ->assertSuccessful()
-        ->assertInertia(fn (Assert $page) => $page
-            ->has('identityPersonOptions', 2)
-            ->where('identityPersonOptions.0.id', $root->id)
-            ->where('identityPersonOptions.1.id', $generationEleven->id));
+    expect($options->pluck('id')->all())->toBe([
+        $root->id,
+        $generationEleven->id,
+    ]);
 });
 
 test('an admin can save a valid marga identity and invalid tree nodes are rejected', function () {
     $admin = User::factory()->asAdmin()->create();
-    $root = Person::factory()->create(['name' => 'Si Raja Batak']);
-    $validIdentity = Person::factory()->create(['name' => 'Raja Marga']);
-    $invalidIdentity = Person::factory()->create(['name' => 'Di luar batas']);
-    $primary = FamilyTree::create([
-        'user_id' => $admin->id,
-        'root_person_id' => $root->id,
-        'is_primary' => true,
+    $root = Person::factory()->create([
+        'name' => 'Si Raja Batak',
+        'father_id' => null,
+        'chain' => '1',
     ]);
-    margaIdentityNode($primary, $root, '1');
-    margaIdentityNode($primary, $validIdentity, '1-1');
-    margaIdentityNode($primary, $invalidIdentity, '1-1-1-1-1-1-1-1-1-1-1-1');
+    $validIdentity = Person::factory()->create([
+        'name' => 'Raja Marga',
+        'father_id' => $root->id,
+        'chain' => '1-1',
+    ]);
+    $invalidIdentity = Person::factory()->create([
+        'name' => 'Di luar batas',
+        'father_id' => $validIdentity->id,
+        'chain' => '1-1-1-1-1-1-1-1-1-1-1-1',
+    ]);
 
     $this->actingAs($admin)
+        ->from(route('marga.index'))
         ->post(route('marga.store'), [
             'name' => 'Marga Valid',
             'identity_person_id' => $validIdentity->id,
         ])
+        ->assertSessionHasNoErrors()
         ->assertRedirect(route('marga.index'));
 
     expect(Marga::query()->where('name', 'Marga Valid')->value('identity_person_id'))
         ->toBe($validIdentity->id);
 
     $this->actingAs($admin)
+        ->from(route('marga.index'))
         ->post(route('marga.store'), [
             'name' => 'Marga Tidak Valid',
             'identity_person_id' => $invalidIdentity->id,
