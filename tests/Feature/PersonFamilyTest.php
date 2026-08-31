@@ -1061,9 +1061,8 @@ test('the create form does not expose another accounts approved marga tree', fun
         ->get(route('people.create'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->has('approvedMargaTrees', 1)
-            ->where('approvedMargaTrees.0.id', $approvedTree->id)
-            ->where('approvedMargaTrees.0.name', 'Silsilah Approved'));
+            ->has('approvedMargaTrees', 0)
+            ->has('familyTrees', 3));
 });
 
 test('the family history card displays the topmost father node as its root', function () {

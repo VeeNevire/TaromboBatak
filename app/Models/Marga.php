@@ -46,4 +46,10 @@ class Marga extends Model
     {
         return $this->belongsToMany(User::class, 'marga_user');
     }
+
+    /** @return HasMany<MargaAccessRequest, $this> */
+    public function accessRequests(): HasMany
+    {
+        return $this->hasMany(MargaAccessRequest::class);
+    }
 }

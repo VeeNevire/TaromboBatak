@@ -51,7 +51,9 @@ class TaromboController extends Controller
             abort_unless(
                 $request->user()->isStaff()
                 || ($request->user()->isContributor()
-                    && $request->user()->accessibleMargaIds()->contains($requestedMargaId)),
+                    && $request->user()->accessibleMargaIds()->contains($requestedMargaId))
+                || (! $request->user()->isContributor()
+                    && $request->user()->approvedMargaAccessIds()->contains($requestedMargaId)),
                 403,
             );
 
@@ -93,7 +95,12 @@ class TaromboController extends Controller
         $user->loadMissing('currentPerson');
         $isStaff = $user->isStaff();
         $service = app(TaromboTreeService::class);
-        $accessibleMargaIds = $user->accessibleMargaIds();
+        $accessibleMargaIds = $isStaff || $user->isContributor()
+            ? $user->accessibleMargaIds()
+            : $user->accessibleMargaIds()
+                ->merge($user->approvedMargaAccessIds())
+                ->unique()
+                ->values();
         $allowedPersonIds = $isStaff
             ? null
             : ($accessibleMargaIds->isNotEmpty()
@@ -240,21 +247,33 @@ class TaromboController extends Controller
                             ->where('status', ContributionRequest::STATUS_APPROVED)
                             ->whereHas('matchedFather', fn (Builder $father) => $father
                                 ->where('marga_id', $user->marga_id)));
-                    } elseif (! $user->isStaff() && $user->marga_id !== null) {
+                    } elseif (! $user->isStaff() && ! $user->isContributor()) {
                         $access->orWhereHas('contributionRequests', fn (Builder $requests) => $requests
                             ->where('status', ContributionRequest::STATUS_APPROVED)
-                            ->where('requester_id', $user->id)
                             ->whereHas('matchedFather', fn (Builder $father) => $father
-                                ->where('marga_id', $user->marga_id)));
+                                ->whereIn('marga_id', $user->approvedMargaAccessIds())));
+                    }
+
+                    if (! $user->isStaff()) {
+                        $margaIds = $user->isContributor()
+                            ? $user->accessibleMargaIds()
+                            : $user->approvedMargaAccessIds();
+
+                        $access->orWhere(function (Builder $adminTree) use ($margaIds): void {
+                            $adminTree
+                                ->whereHas('user', fn (Builder $owner) => $owner->whereIn('role', ['admin', 'subadmin']))
+                                ->whereHas('nodes.person', fn (Builder $person) => $person->whereIn('marga_id', $margaIds));
+                        });
                     }
                 });
             })
             ->with(['rootPerson:id,name'])
             ->withExists(['contributionRequests as approved_for_selection' => function (Builder $requests) use ($user): void {
-                $requests->where('status', ContributionRequest::STATUS_APPROVED)
+                    $requests->where('status', ContributionRequest::STATUS_APPROVED)
                     ->when(
                         ! $user->isAdmin() && ! $user->isContributor(),
-                        fn (Builder $query) => $query->where('requester_id', $user->id),
+                        fn (Builder $query) => $query->whereHas('matchedFather', fn (Builder $father) => $father
+                            ->whereIn('marga_id', $user->approvedMargaAccessIds())),
                     )
                     ->when(
                         $user->isContributor(),

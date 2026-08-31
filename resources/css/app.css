@@ -352,6 +352,27 @@
     .tb-tree li[data-female-lineage='true'] > ul::before {
         border-style: dashed;
     }
+
+    .tb-tree--compact li {
+        padding: 4px 1px 0;
+    }
+
+    /* Keep broad descendant branches from pushing their siblings too far apart. */
+    .tb-tree--compact {
+        zoom: 0.72;
+        transform-origin: top center;
+    }
+
+    .tb-tree--compact li > ul::before,
+    .tb-tree--compact li::before,
+    .tb-tree--compact li::after {
+        height: 4px;
+    }
+
+    .tb-tree--compact li:only-child {
+        padding-top: 0;
+    }
+
 }
 
 @keyframes tb-node-in {

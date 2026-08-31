@@ -38,6 +38,7 @@ use Illuminate\Support\Carbon;
  * @property-read Person|null $currentPerson
  * @property-read Collection<int, FamilyTree> $familyTrees
  * @property-read Collection<int, ContributionRequest> $contributionRequests
+ * @property-read Collection<int, MargaAccessRequest> $margaAccessRequests
  * @property-read Collection<int, ContactRequest> $sentContactRequests
  * @property-read Collection<int, ContactRequest> $receivedContactRequests
  * @property-read Collection<int, Event> $events
@@ -188,6 +189,23 @@ class User extends Authenticatable
     public function contributionRequests(): HasMany
     {
         return $this->hasMany(ContributionRequest::class, 'requester_id');
+    }
+
+    /** @return HasMany<MargaAccessRequest, $this> */
+    public function margaAccessRequests(): HasMany
+    {
+        return $this->hasMany(MargaAccessRequest::class, 'requester_id');
+    }
+
+    /** @return \Illuminate\Support\Collection<int, int> */
+    public function approvedMargaAccessIds(): \Illuminate\Support\Collection
+    {
+        return $this->margaAccessRequests()
+            ->where('status', MargaAccessRequest::STATUS_APPROVED)
+            ->pluck('marga_id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
     }
 
     /** @return HasMany<ContactRequest, $this> */

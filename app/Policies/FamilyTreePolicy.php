@@ -22,6 +22,7 @@ class FamilyTreePolicy
     public function view(User $user, FamilyTree $familyTree): bool
     {
         return $this->manage($user, $familyTree)
+            || $this->hasApprovedMargaAccess($user, $familyTree)
             || ($user->isContributor()
                 && $familyTree->rootPerson()
                     ->whereIn('marga_id', $user->accessibleMargaIds())
@@ -84,6 +85,25 @@ class FamilyTreePolicy
 
     public function append(User $user, FamilyTree $familyTree): bool
     {
-        return $this->view($user, $familyTree);
+        return $this->manage($user, $familyTree)
+            || $this->hasApprovedMargaAccess($user, $familyTree)
+            || $familyTree->shares()
+                ->whereBelongsTo($user, 'recipient')
+                ->where('status', FamilyTreeShare::STATUS_ACCEPTED)
+                ->exists();
+    }
+
+    protected function hasApprovedMargaAccess(User $user, FamilyTree $familyTree): bool
+    {
+        if ($user->isStaff() || $user->isContributor()) {
+            return false;
+        }
+
+        return $user->approvedMargaAccessIds()->isNotEmpty()
+            && $familyTree->user()->whereIn('role', ['admin', 'subadmin'])->exists()
+            && $familyTree->nodes()
+                ->whereHas('person', fn ($person) => $person
+                    ->whereIn('marga_id', $user->approvedMargaAccessIds()))
+                ->exists();
     }
 }

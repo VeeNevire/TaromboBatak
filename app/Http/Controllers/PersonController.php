@@ -141,6 +141,8 @@ class PersonController extends Controller
             'lineage' => $this->createLineage($user, $isStaff),
             'familyTrees' => $this->familyTrees($user),
             'approvedMargaTrees' => $this->approvedMargaTrees($user),
+            'margaAccessMargaId' => $user->isStaff() || $user->isContributor() ? null : $user->marga_id,
+            'margaAccessStatus' => $this->margaAccessStatus($user, $user->marga_id),
             ...$this->familyTreeSharingPayload($user),
             'canPublish' => $isStaff,
         ]);
@@ -279,6 +281,8 @@ class PersonController extends Controller
             'fatherSuggestions' => $this->fatherSuggestions($person, $user->isContributor() ? $person->marga_id : null),
             'familyTrees' => $this->familyTrees($user),
             'approvedMargaTrees' => $this->approvedMargaTrees($user),
+            'margaAccessMargaId' => $user->isStaff() || $user->isContributor() ? null : $user->marga_id,
+            'margaAccessStatus' => $this->margaAccessStatus($user, $user->marga_id),
             'versionTrees' => $versionTrees,
             'selectedVersionName' => $selectedVersionName,
             ...$this->familyTreeSharingPayload($user),
@@ -326,6 +330,8 @@ class PersonController extends Controller
             'lockedMarga' => $isStaff || $user->isContributor() ? null : $this->lockedMarga($user),
             'familyTrees' => $this->familyTrees($user),
             'approvedMargaTrees' => $this->approvedMargaTrees($user),
+            'margaAccessMargaId' => $user->isStaff() || $user->isContributor() ? null : $user->marga_id,
+            'margaAccessStatus' => $this->margaAccessStatus($user, $user->marga_id),
             'versionTrees' => $versionTrees,
             'selectedVersionName' => $selectedVersionName,
             'selectedVersionId' => $selectedVersionId,
@@ -410,9 +416,14 @@ class PersonController extends Controller
         );
 
         $service = app(TaromboTreeService::class);
+        $visibleMargaIds = $user->isStaff()
+            ? null
+            : ($user->isContributor()
+                ? $user->accessibleMargaIds()
+                : $user->accessibleMargaIds()->merge($user->approvedMargaAccessIds())->unique()->values());
         $rows = $service->rowsForFamilyTree(
             $familyTree,
-            $user->isStaff() ? null : ($user->isContributor() ? $user->accessibleMargaIds() : $user->marga_id),
+            $visibleMargaIds,
         );
         $rootRow = collect($rows)->firstWhere('id', (string) $familyTree->root_person_id)
             ?? collect($rows)->firstWhere('parentId', null)
@@ -441,18 +452,37 @@ class PersonController extends Controller
 
     protected function approvedFamilyTreeMatchesUserMarga(FamilyTree $familyTree, User $user): bool
     {
-        return $user->marga_id !== null
+        $accessibleMargaIds = $user->isContributor()
+            ? $user->accessibleMargaIds()
+            : $user->approvedMargaAccessIds();
+
+        if ($accessibleMargaIds->isNotEmpty()
+            && $familyTree->user()->whereIn('role', ['admin', 'subadmin'])->exists()
+            && $familyTree->nodes()
+                ->whereHas('person', fn ($query) => $query->whereIn('marga_id', $accessibleMargaIds))
+                ->exists()) {
+            return true;
+        }
+
+        $margaId = $familyTree->rootPerson()->value('marga_id');
+
+        return $margaId !== null
+            && ($user->isStaff() || $user->isContributor() || $user->approvedMargaAccessIds()->contains($margaId))
             && $familyTree->contributionRequests()
                 ->where('status', ContributionRequest::STATUS_APPROVED)
                 ->when(
                     ! $user->isStaff() && ! $user->isContributor(),
-                    fn ($query) => $query->where('requester_id', $user->id),
+                    fn ($query) => $query->whereHas('matchedFather', fn ($father) => $father
+                        ->whereIn('marga_id', $user->approvedMargaAccessIds())),
                 )
-                ->whereHas('matchedFather', fn ($query) => $query
-                    ->where('marga_id', $user->marga_id))
+                ->when(
+                    $user->isContributor(),
+                    fn ($query) => $query->whereHas('matchedFather', fn ($father) => $father
+                        ->where('marga_id', $user->marga_id)),
+                )
                 ->exists()
             && $familyTree->nodes()
-                ->whereHas('person', fn ($query) => $query->where('marga_id', $user->marga_id))
+                ->whereHas('person', fn ($query) => $query->where('marga_id', $margaId))
                 ->exists();
     }
 
@@ -1377,30 +1407,47 @@ class PersonController extends Controller
     }
 
     /**
-     * Approved family trees visible to accounts from the same marga.
+     * Family trees visible in the marga list.
+     * Staff can see every rooted tree; other accounts are limited to
+     * approved trees within their accessible margas.
      *
      * @return array<int, array<string, mixed>>
      */
     protected function approvedMargaTrees(User $user): array
     {
-        $margaIds = $user->accessibleMargaIds();
+        $margaIds = $user->isStaff()
+            ? null
+            : ($user->isContributor() ? $user->accessibleMargaIds() : $user->approvedMargaAccessIds());
+        $treeMargaIds = $margaIds ?? collect();
 
-        if ($margaIds->isEmpty()) {
+        if (! $user->isStaff() && $margaIds->isEmpty()) {
             return [];
         }
 
         return FamilyTree::query()
             ->whereNotNull('root_person_id')
-            ->whereHas('contributionRequests', fn ($query) => $query
-                ->where('status', ContributionRequest::STATUS_APPROVED)
-                ->when(
-                    ! $user->isStaff() && ! $user->isContributor(),
-                    fn ($requestQuery) => $requestQuery->where('requester_id', $user->id),
-                )
-                ->whereHas('matchedFather', fn ($father) => $father
-                    ->whereIn('marga_id', $margaIds)))
-            ->whereHas('nodes.person', fn ($query) => $query
-                ->whereIn('marga_id', $margaIds))
+            ->when(! $user->isStaff(), function ($query) use ($user, $margaIds, $treeMargaIds): void {
+                $query
+                    ->whereHas('nodes.person', fn ($person) => $person->whereIn('marga_id', $treeMargaIds))
+                    ->where(function ($accessQuery) use ($user, $margaIds): void {
+                        $accessQuery->whereHas('user', fn ($owner) => $owner->whereIn('role', ['admin', 'subadmin']))
+                            ->orWhereHas('contributionRequests', function ($requestQuery) use ($user, $margaIds): void {
+                                $requestQuery->where('status', ContributionRequest::STATUS_APPROVED)
+                                    ->where(function ($requestAccessQuery) use ($user, $margaIds): void {
+                                        if (! $user->isContributor()) {
+                                            $requestAccessQuery->where('requester_id', $user->id);
+                                        }
+
+                                        if ($margaIds->isNotEmpty()) {
+                                            $requestAccessQuery->orWhereHas(
+                                                'matchedFather',
+                                                fn ($father) => $father->whereIn('marga_id', $margaIds),
+                                            );
+                                        }
+                                    });
+                            });
+                    });
+            })
             ->with(['user:id,name', 'rootPerson:id,name', 'nodes.person:id,name', 'shares.recipient:id,name,email', 'contributionRequests:id,family_tree_id,status'])
             ->withExists(['deletionRequests as deletion_pending' => fn ($query) => $query
                 ->where('status', FamilyTreeDeletionRequest::STATUS_PENDING)])
@@ -1458,6 +1505,18 @@ class PersonController extends Controller
         ];
     }
 
+    protected function margaAccessStatus(User $user, ?int $margaId): ?string
+    {
+        if ($margaId === null || $user->isStaff() || $user->isContributor()) {
+            return null;
+        }
+
+        return $user->margaAccessRequests()
+            ->where('marga_id', $margaId)
+            ->latest('id')
+            ->value('status');
+    }
+
     protected function scopePeopleVisibleToUser(Builder $query, User $user): Builder
     {
         return $query->whereHas('familyTrees', fn ($familyTrees) => $familyTrees
@@ -1465,7 +1524,13 @@ class PersonController extends Controller
                 ->where('family_trees.user_id', $user->id)
                 ->orWhereHas('shares', fn ($shares) => $shares
                     ->whereBelongsTo($user, 'recipient')
-                    ->where('status', FamilyTreeShare::STATUS_ACCEPTED))));
+                    ->where('status', FamilyTreeShare::STATUS_ACCEPTED))
+                ->orWhere(function ($adminTree) use ($user): void {
+                    $adminTree
+                        ->whereHas('user', fn ($owner) => $owner->whereIn('role', ['admin', 'subadmin']))
+                        ->whereHas('nodes.person', fn ($person) => $person
+                            ->whereIn('marga_id', $user->approvedMargaAccessIds()));
+                })));
     }
 
     /** @return array{shareableAccounts: array<int, array<string, mixed>>, pendingTreeShares: array<int, array<string, mixed>>} */

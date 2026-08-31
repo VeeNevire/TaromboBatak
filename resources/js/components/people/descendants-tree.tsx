@@ -22,6 +22,7 @@ type Props = {
     readOnly?: boolean;
     markFemaleLineage?: boolean;
     collapseDepth?: number;
+    compact?: boolean;
 };
 
 type LineageLine = {
@@ -70,6 +71,7 @@ function TreeBranch({
     femaleLineage,
     markFemaleLineage,
     collapseDepth,
+    compact,
     alternativeTrees,
     nodeIdPrefix,
 }: {
@@ -110,6 +112,7 @@ function TreeBranch({
     const card = (
         <NodeCard
             node={toNode(person, numberById.get(person.id))}
+            compact={compact}
             highlighted={isCenter || isHighlighted}
             onAvatarClick={
                 showProfileOnName ? () => onSelect?.(person.id) : undefined
@@ -157,7 +160,7 @@ function TreeBranch({
                 </button>
             )}
             {(children.length > 0 || personAlternatives.length > 0) && (
-                <div className="mt-1 flex items-center gap-1.5">
+                    <div className={compact ? 'mt-0.5 flex items-center gap-1' : 'mt-1 flex items-center gap-1.5'}>
                     {children.length > 0 && !activeAlternative && (
                         <button
                             type="button"
@@ -167,7 +170,7 @@ function TreeBranch({
                                     ? 'Bentangkan cabang'
                                     : 'Ciutkan cabang'
                             }
-                            className="flex size-5 items-center justify-center rounded-full border border-[#a79e8c]/60 bg-white text-[#5B6A61] transition-colors hover:bg-[#EFE2C9]"
+                            className={compact ? 'flex size-4 items-center justify-center rounded-full border border-[#a79e8c]/60 bg-white text-[#5B6A61] transition-colors hover:bg-[#EFE2C9]' : 'flex size-5 items-center justify-center rounded-full border border-[#a79e8c]/60 bg-white text-[#5B6A61] transition-colors hover:bg-[#EFE2C9]'}
                         >
                             {isCollapsed ? (
                                 <ChevronRight className="size-3.5" />
@@ -198,7 +201,7 @@ function TreeBranch({
                                     ? 'Kembali ke versi utama'
                                     : 'Buka versi alternatif'
                             }
-                            className="hover:text-tb-on-primary inline-flex h-6 min-w-6 items-center justify-center gap-0.5 rounded-full border border-dashed border-tb-primary bg-tb-primary/10 px-1.5 text-[10px] font-bold text-tb-primary transition-colors hover:bg-tb-primary focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none"
+                            className={compact ? 'hover:text-tb-on-primary inline-flex h-5 min-w-5 items-center justify-center gap-0.5 rounded-full border border-dashed border-tb-primary bg-tb-primary/10 px-1 text-[9px] font-bold text-tb-primary transition-colors hover:bg-tb-primary focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none' : 'hover:text-tb-on-primary inline-flex h-6 min-w-6 items-center justify-center gap-0.5 rounded-full border border-dashed border-tb-primary bg-tb-primary/10 px-1.5 text-[10px] font-bold text-tb-primary transition-colors hover:bg-tb-primary focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none'}
                         >
                             <ChevronDown className="size-3.5" />
                             {personAlternatives.length > 1 && (
@@ -235,6 +238,7 @@ function TreeBranch({
                             }
                             markFemaleLineage={markFemaleLineage}
                             collapseDepth={collapseDepth}
+                            compact={compact}
                         />
                     ))}
                 </ul>
@@ -315,6 +319,7 @@ export function DescendantsTree({
     lineagePath = EMPTY_LINEAGE_PATH,
     markFemaleLineage = false,
     collapseDepth,
+    compact = false,
 }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [profilePerson, setProfilePerson] = useState<TaromboPerson | null>(
@@ -523,7 +528,7 @@ export function DescendantsTree({
                 </svg>
             )}
             {visibleRoots.length > 0 ? (
-                <ul className="tb-tree">
+                <ul className={compact ? 'tb-tree tb-tree--compact' : 'tb-tree'}>
                     {visibleRoots.map((root) => (
                         <TreeBranch
                             key={root.id}
@@ -546,6 +551,7 @@ export function DescendantsTree({
                             femaleLineage={root.gender?.toUpperCase() === 'P'}
                             markFemaleLineage={markFemaleLineage}
                             collapseDepth={collapseDepth}
+                            compact={compact}
                         />
                     ))}
                 </ul>

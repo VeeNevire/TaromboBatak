@@ -20,6 +20,8 @@ type Props = {
     fatherSuggestions: NameSuggestion[];
     familyTrees: FamilyTreeHistoryEntry[];
     approvedMargaTrees: FamilyTreeHistoryEntry[];
+    margaAccessMargaId: number | null;
+    margaAccessStatus: 'pending' | 'approved' | 'rejected' | null;
     versionTrees: FamilyTreeHistoryEntry[];
     selectedVersionName?: string | null;
     shareableAccounts: ShareableAccount[];
@@ -35,6 +37,8 @@ export default function PersonShow({
     fatherSuggestions,
     familyTrees,
     approvedMargaTrees,
+    margaAccessMargaId,
+    margaAccessStatus,
     versionTrees,
     selectedVersionName,
     shareableAccounts,
@@ -78,6 +82,8 @@ export default function PersonShow({
                         entries={familyTrees}
                         approvedEntries={approvedMargaTrees}
                         margaName={activeMargaName}
+                        margaId={margaAccessMargaId}
+                        margaAccessStatus={margaAccessStatus}
                         shareableAccounts={shareableAccounts}
                         pendingTreeShares={pendingTreeShares}
                     />

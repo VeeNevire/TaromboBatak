@@ -23,6 +23,8 @@ type Props = {
     lineage?: MargaLineageEntry[];
     familyTrees?: FamilyTreeHistoryEntry[];
     approvedMargaTrees?: FamilyTreeHistoryEntry[];
+    margaAccessMargaId?: number | null;
+    margaAccessStatus?: 'pending' | 'approved' | 'rejected' | null;
     versionTrees?: FamilyTreeHistoryEntry[];
     selectedVersionName?: string | null;
     shareableAccounts?: ShareableAccount[];
@@ -39,6 +41,8 @@ export default function PersonForm({
     lineage,
     familyTrees,
     approvedMargaTrees,
+    margaAccessMargaId,
+    margaAccessStatus,
     versionTrees,
     selectedVersionName,
     shareableAccounts,
@@ -84,6 +88,8 @@ export default function PersonForm({
                         entries={familyTrees ?? []}
                         approvedEntries={approvedMargaTrees ?? []}
                         margaName={activeMargaName}
+                        margaId={margaAccessMargaId}
+                        margaAccessStatus={margaAccessStatus}
                         shareableAccounts={shareableAccounts ?? []}
                         pendingTreeShares={pendingTreeShares ?? []}
                     />
@@ -98,6 +104,8 @@ export default function PersonForm({
                     lineage={lineage}
                     familyTrees={familyTrees}
                     approvedMargaTrees={approvedMargaTrees}
+                    margaAccessMargaId={margaAccessMargaId}
+                    margaAccessStatus={margaAccessStatus}
                     versionTrees={versionTrees}
                     selectedVersionName={selectedVersionName}
                     showFamilyTreeHistory={false}

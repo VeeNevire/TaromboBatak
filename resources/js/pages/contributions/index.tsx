@@ -74,6 +74,18 @@ type IdentityApproval = {
     created_at: string | null;
 };
 
+type MargaAccessApproval = {
+    id: number;
+    requester: string;
+    requester_marga: string | null;
+    marga: string;
+    status: 'pending' | 'approved' | 'rejected';
+    reviewer: string | null;
+    reviewed_at: string | null;
+    reason: string | null;
+    created_at: string | null;
+};
+
 type Contributor = {
     id: number;
     name: string;
@@ -151,6 +163,7 @@ type Props = {
     storyRequests: Paginated<StoryApproval>;
     deletionRequests: Paginated<DeletionRequest>;
     identityRequests: Paginated<IdentityApproval>;
+    margaAccessRequests: MargaAccessApproval[];
     managedFamilyTrees: ManagedFamilyTree[];
     contributors: Contributor[];
     margas: { id: number; name: string }[];
@@ -164,6 +177,7 @@ export default function ContributionsIndex({
     storyRequests,
     deletionRequests,
     identityRequests,
+    margaAccessRequests,
     managedFamilyTrees,
     contributors,
     margas,
@@ -200,6 +214,28 @@ export default function ContributionsIndex({
         router.post(
             contributions.approve(request.id).url,
             {},
+            { preserveScroll: true },
+        );
+    };
+
+    const approveMargaAccess = (request: MargaAccessApproval) => {
+        router.post(
+            contributions.margaAccess.approve(request.id).url,
+            {},
+            { preserveScroll: true },
+        );
+    };
+
+    const rejectMargaAccess = (request: MargaAccessApproval) => {
+        const reason = window.prompt('Alasan penolakan (opsional):', '');
+
+        if (reason === null) {
+            return;
+        }
+
+        router.post(
+            contributions.margaAccess.reject(request.id).url,
+            { reason },
             { preserveScroll: true },
         );
     };
@@ -347,6 +383,65 @@ export default function ContributionsIndex({
 
     const content = (
         <div className="flex flex-col gap-4">
+            {margaAccessRequests.length > 0 && (
+                <Card className="border-tb-outline-variant bg-tb-surface-bright">
+                    <CardHeader>
+                        <CardTitle className="text-lg">
+                            Permintaan Akses Marga
+                        </CardTitle>
+                        <p className="text-sm text-tb-on-surface-variant">
+                            Pengguna meminta izin untuk membuka daftar silsilah
+                            marga.
+                        </p>
+                    </CardHeader>
+                    <CardContent className="grid gap-3">
+                        {margaAccessRequests.map((request) => (
+                            <div
+                                key={request.id}
+                                className="flex flex-col gap-3 rounded-lg border border-tb-outline-variant p-4 md:flex-row md:items-center md:justify-between"
+                            >
+                                <div className="min-w-0 space-y-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <StatusBadge status={request.status} />
+                                        <span className="text-xs text-tb-on-surface-variant">
+                                            {request.created_at}
+                                        </span>
+                                    </div>
+                                    <p className="font-medium text-tb-on-surface">
+                                        {request.requester} meminta akses marga{' '}
+                                        <strong>{request.marga}</strong>.
+                                    </p>
+                                    {request.reason && (
+                                        <p className="text-sm text-red-700 dark:text-red-300">
+                                            Alasan: {request.reason}
+                                        </p>
+                                    )}
+                                </div>
+                                {request.status === 'pending' && (
+                                    <div className="flex shrink-0 gap-2">
+                                        <Button
+                                            variant="outline"
+                                            onClick={() =>
+                                                rejectMargaAccess(request)
+                                            }
+                                        >
+                                            <X className="size-4" /> Tolak
+                                        </Button>
+                                        <Button
+                                            className="bg-tb-primary hover:bg-tb-primary-light"
+                                            onClick={() =>
+                                                approveMargaAccess(request)
+                                            }
+                                        >
+                                            <Check className="size-4" /> Setujui
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </CardContent>
+                </Card>
+            )}
             <Card className="border-tb-outline-variant bg-tb-surface-bright">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-lg">
@@ -1429,7 +1524,10 @@ function Field({
 function StatusBadge({
     status,
 }: {
-    status: Contribution['status'] | IdentityApproval['status'];
+    status:
+        | Contribution['status']
+        | IdentityApproval['status']
+        | MargaAccessApproval['status'];
 }) {
     const labels = {
         pending: 'Menunggu',
