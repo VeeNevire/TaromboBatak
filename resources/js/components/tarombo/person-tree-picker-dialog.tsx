@@ -1,5 +1,5 @@
 import { Search } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { DescendantsTree } from '@/components/people/descendants-tree';
 import type { DescendantsAlternativeTree } from '@/components/people/descendants-tree';
 import {
@@ -19,6 +19,7 @@ type Props = {
     alternativeTrees?: DescendantsAlternativeTree[];
     currentId?: string | null;
     onSelect: (person: TaromboPerson) => void;
+    description?: string;
 };
 
 export function PersonTreePickerDialog({
@@ -28,6 +29,7 @@ export function PersonTreePickerDialog({
     alternativeTrees = [],
     currentId,
     onSelect,
+    description = 'Pilih satu nama pada pohon di bawah ini untuk mengatur identitas Anda di Pohon Tarombo.',
 }: Props) {
     const [search, setSearch] = useState('');
     const rootPerson = people.find((person) => !person.parentId) ?? people[0];
@@ -40,25 +42,19 @@ export function PersonTreePickerDialog({
               .slice(0, 8)
         : [];
 
-    useEffect(() => {
-        if (!open) {
-            setSearch('');
-        }
-    }, [open]);
-
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-4xl">
+            <DialogContent
+                className="sm:max-w-4xl"
+                onCloseAutoFocus={() => setSearch('')}
+            >
                 <DialogHeader>
                     <div className="flex items-start justify-between gap-4">
                         <div>
                             <DialogTitle className="font-display text-tb-on-surface">
                                 Pohon Silsilah Keturunan
                             </DialogTitle>
-                            <DialogDescription>
-                                Pilih satu nama pada pohon di bawah ini untuk
-                                mengatur identitas Anda di Pohon Tarombo.
-                            </DialogDescription>
+                            <DialogDescription>{description}</DialogDescription>
                         </div>
                         <div className="relative w-44 shrink-0 sm:w-56">
                             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-tb-on-surface-variant" />
