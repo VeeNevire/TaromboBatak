@@ -10,12 +10,14 @@ use App\Models\FamilyTree;
 use App\Models\FamilyTreeDeletionRequest;
 use App\Models\IdentityRequest;
 use App\Models\Marga;
+use App\Models\MargaAccessRequest;
 use App\Models\Person;
 use App\Models\Story;
 use App\Models\User;
 use App\Notifications\EventSubmitted;
 use App\Notifications\FamilyTreeDeletionSubmitted;
 use App\Notifications\FatherMatchSubmitted;
+use App\Notifications\MargaAccessRequested;
 use App\Notifications\StorySubmitted;
 use App\Services\ChainNumberingService;
 use App\Services\FamilyEntryService;
@@ -28,6 +30,43 @@ use Inertia\Response;
 
 class ContributionController extends Controller
 {
+    public function storeMargaAccessRequest(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        abort_unless(! $user->isStaff() && ! $user->isContributor() && $user->marga_id !== null, 403);
+
+        $existing = $user->margaAccessRequests()
+            ->where('marga_id', $user->marga_id)
+            ->whereIn('status', [MargaAccessRequest::STATUS_PENDING, MargaAccessRequest::STATUS_APPROVED])
+            ->exists();
+        abort_if($existing, 409, 'Permintaan akses marga sudah pernah diajukan.');
+
+        $accessRequest = MargaAccessRequest::create([
+            'requester_id' => $user->id,
+            'marga_id' => $user->marga_id,
+        ]);
+        $accessRequest->load(['requester', 'marga']);
+
+        User::query()
+            ->where(function ($query) use ($accessRequest) {
+                $query->where('role', 'admin')
+                    ->orWhere(function ($contributors) use ($accessRequest) {
+                        $contributors
+                            ->whereIn('role', ['contributor_main', 'contributor_member'])
+                            ->where(function ($scope) use ($accessRequest) {
+                                $scope->where('marga_id', $accessRequest->marga_id)
+                                    ->orWhereHas('managedMargas', fn ($margas) => $margas->whereKey($accessRequest->marga_id));
+                            });
+                    });
+            })
+            ->whereKeyNot($user->id)
+            ->each(fn (User $recipient) => $recipient->notify(new MargaAccessRequested($accessRequest)));
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'Pengajuan akses marga berhasil dikirim.']);
+
+        return to_route('people.index');
+    }
+
     public function storeMargaTree(Request $request, FamilyTree $familyTree): RedirectResponse
     {
         $user = $request->user();
@@ -198,6 +237,25 @@ class ContributionController extends Controller
                 'created_at' => $identity->created_at?->format('d M Y H:i'),
             ]);
 
+        $margaAccessRequests = MargaAccessRequest::query()
+            ->with(['requester.marga', 'marga', 'reviewer'])
+            ->when(! $user->isAdmin(), fn ($query) => $query->whereIn('marga_id', $user->accessibleMargaIds()))
+            ->latest()
+            ->get()
+            ->map(fn (MargaAccessRequest $accessRequest) => [
+                'id' => $accessRequest->id,
+                'requester' => $accessRequest->requester->name,
+                'requester_marga' => $accessRequest->requester->marga?->name,
+                'marga' => $accessRequest->marga->name,
+                'status' => $accessRequest->status,
+                'reviewer' => $accessRequest->reviewer?->name,
+                'reviewed_at' => $accessRequest->reviewed_at?->format('d M Y H:i'),
+                'reason' => $accessRequest->rejection_reason,
+                'created_at' => $accessRequest->created_at?->format('d M Y H:i'),
+            ])
+            ->values()
+            ->all();
+
         $managedMargaIds = ! $user->isAdmin()
             ? $user->managedMargas()->pluck('margas.id')
             : collect();
@@ -254,6 +312,7 @@ class ContributionController extends Controller
             'storyRequests' => $storyRequests,
             'deletionRequests' => $deletionRequests,
             'identityRequests' => $identityRequests,
+            'margaAccessRequests' => $margaAccessRequests,
             'managedFamilyTrees' => $managedFamilyTrees,
             'contributors' => $contributors,
             'margas' => $user->isAdmin()
@@ -365,6 +424,40 @@ class ContributionController extends Controller
         return to_route('contributions.index');
     }
 
+    public function approveMargaAccess(Request $request, MargaAccessRequest $margaAccessRequest): RedirectResponse
+    {
+        $this->authorizeMargaAccessReview($request->user(), $margaAccessRequest);
+
+        $margaAccessRequest->update([
+            'status' => MargaAccessRequest::STATUS_APPROVED,
+            'reviewed_by' => $request->user()->id,
+            'reviewed_at' => now(),
+            'rejection_reason' => null,
+        ]);
+        $this->markMargaAccessNotificationsRead($margaAccessRequest);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'Akses marga disetujui.']);
+
+        return to_route('contributions.index');
+    }
+
+    public function rejectMargaAccess(ReviewContributionRequest $request, MargaAccessRequest $margaAccessRequest): RedirectResponse
+    {
+        $this->authorizeMargaAccessReview($request->user(), $margaAccessRequest);
+
+        $margaAccessRequest->update([
+            'status' => MargaAccessRequest::STATUS_REJECTED,
+            'reviewed_by' => $request->user()->id,
+            'reviewed_at' => now(),
+            'rejection_reason' => $request->validated('reason'),
+        ]);
+        $this->markMargaAccessNotificationsRead($margaAccessRequest);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'Pengajuan akses marga ditolak.']);
+
+        return to_route('contributions.index');
+    }
+
     protected function authorizeReview(User $user, ContributionRequest $contribution): void
     {
         abort_unless(
@@ -374,10 +467,27 @@ class ContributionController extends Controller
         );
     }
 
+    protected function authorizeMargaAccessReview(User $user, MargaAccessRequest $accessRequest): void
+    {
+        abort_unless(
+            $user->isAdmin()
+            || ($user->isContributor() && $user->accessibleMargaIds()->contains($accessRequest->marga_id)),
+            403,
+        );
+        abort_unless($accessRequest->status === MargaAccessRequest::STATUS_PENDING, 409, 'Pengajuan sudah ditinjau.');
+    }
+
     protected function markRequestNotificationsRead(ContributionRequest $contribution): void
     {
         DatabaseNotification::query()
             ->where('data->contribution_request_id', $contribution->id)
+            ->update(['read_at' => now()]);
+    }
+
+    protected function markMargaAccessNotificationsRead(MargaAccessRequest $accessRequest): void
+    {
+        DatabaseNotification::query()
+            ->where('data->marga_access_request_id', $accessRequest->id)
             ->update(['read_at' => now()]);
     }
 }

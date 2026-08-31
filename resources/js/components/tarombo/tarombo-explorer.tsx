@@ -842,9 +842,10 @@ export function TaromboExplorer({
                         markFemaleLineage={
                             margaTree ? false : showFemaleLineage
                         }
-                        collapseDepth={
-                            margaTree?.direction === 'lower' ? 6 : undefined
-                        }
+                         collapseDepth={
+                             margaTree?.direction === 'lower' ? 6 : undefined
+                         }
+                         compact={fullscreen && fullscreenView === 'tree'}
                         nodeIdPrefix={
                             fullscreen
                                 ? 'tarombo-fullscreen-tree-node'

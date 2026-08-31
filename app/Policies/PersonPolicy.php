@@ -21,7 +21,8 @@ class PersonPolicy
     {
         return $user->isStaff()
             || ($person->marga_id !== null
-                && $user->accessibleMargaIds()->contains($person->marga_id));
+                && ($user->accessibleMargaIds()->contains($person->marga_id)
+                    || $user->approvedMargaAccessIds()->contains($person->marga_id)));
     }
 
     public function update(User $user, Person $person): bool
@@ -38,9 +39,13 @@ class PersonPolicy
         $ownedTreeExists = $person->familyTrees()
             ->where('family_trees.user_id', $user->id)
             ->exists();
+        $createdByUser = (int) $person->created_by === (int) $user->id;
+        $staffTreeExists = $person->familyTrees()
+            ->whereHas('user', fn ($owner) => $owner->whereIn('role', ['admin', 'subadmin']))
+            ->exists();
 
         return $this->view($user, $person)
-            && (! $sharedTreeExists || $ownedTreeExists)
+            && ($ownedTreeExists || $createdByUser || (! $sharedTreeExists && ! $staffTreeExists))
             && ! $this->isLockedAncestor($person);
     }
 

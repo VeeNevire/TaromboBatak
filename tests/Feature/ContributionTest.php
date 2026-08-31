@@ -1,9 +1,13 @@
 <?php
 
 use App\Models\ContributionRequest;
+use App\Models\FamilyTree;
+use App\Models\FamilyTreeNode;
 use App\Models\Marga;
+use App\Models\MargaAccessRequest;
 use App\Models\Person;
 use App\Models\User;
+use Inertia\Testing\AssertableInertia as Assert;
 
 test('matching an existing father creates a pending contribution and notifies contributors', function () {
     $marga = Marga::factory()->create();
@@ -159,4 +163,135 @@ test('only an admin can create contributor accounts', function () {
         'marga_id' => $marga->id,
         'role' => 'contributor_main',
     ]);
+});
+
+test('a user can request marga access and its managers can approve it', function () {
+    $marga = Marga::factory()->create(['name' => 'Silaban']);
+    $user = User::factory()->withMarga($marga->id)->create();
+    $contributor = User::factory()->asContributorMember()->create();
+    $contributor->managedMargas()->attach($marga);
+    $admin = User::factory()->asAdmin()->create();
+
+    $this->actingAs($user)
+        ->post(route('marga-access-requests.store'))
+        ->assertRedirect(route('people.index'));
+
+    $accessRequest = MargaAccessRequest::firstOrFail();
+
+    expect($accessRequest->requester_id)->toBe($user->id)
+        ->and($accessRequest->marga_id)->toBe($marga->id)
+        ->and($accessRequest->status)->toBe(MargaAccessRequest::STATUS_PENDING)
+        ->and($contributor->notifications()->count())->toBe(1)
+        ->and($admin->notifications()->count())->toBe(1);
+
+    $this->actingAs($contributor)
+        ->get(route('contributions.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('margaAccessRequests', 1)
+            ->where('margaAccessRequests.0.marga', 'Silaban'));
+
+    $this->actingAs($contributor)
+        ->post(route('contributions.marga-access.approve', $accessRequest))
+        ->assertRedirect(route('contributions.index'));
+
+    expect($accessRequest->fresh()->status)->toBe(MargaAccessRequest::STATUS_APPROVED);
+
+    $this->actingAs($user)
+        ->post(route('marga-access-requests.store'))
+        ->assertStatus(409);
+});
+
+test('approved marga access unlocks another users approved family tree as read-only', function () {
+    $marga = Marga::factory()->create();
+    $owner = User::factory()->withMarga($marga->id)->create();
+    $viewer = User::factory()->withMarga($marga->id)->create();
+    $root = Person::factory()->create(['marga_id' => $marga->id, 'name' => 'Akar Silaban']);
+    $tree = FamilyTree::create([
+        'user_id' => $owner->id,
+        'root_person_id' => $root->id,
+        'name' => 'Silsilah Silaban',
+    ]);
+    FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $root->id]);
+    ContributionRequest::factory()->approved()->create([
+        'requester_id' => $owner->id,
+        'matched_father_id' => $root->id,
+        'subject_person_id' => $root->id,
+        'family_tree_id' => $tree->id,
+    ]);
+
+    $this->actingAs($viewer)
+        ->get(route('people.create'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->has('approvedMargaTrees', 0));
+
+    MargaAccessRequest::create([
+        'requester_id' => $viewer->id,
+        'marga_id' => $marga->id,
+        'status' => MargaAccessRequest::STATUS_APPROVED,
+    ]);
+
+    $this->actingAs($viewer)
+        ->get(route('people.create'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('approvedMargaTrees', 1)
+            ->where('approvedMargaTrees.0.id', $tree->id));
+
+    $this->actingAs($viewer)
+        ->get(route('family-trees.show', $tree))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('canEditFamilyTree', false));
+
+});
+
+test('approved marga access exposes a staff tree without contribution approval and preserves person ownership', function () {
+    $marga = Marga::factory()->create(['name' => 'Borbor']);
+    $admin = User::factory()->asAdmin()->create();
+    $viewer = User::factory()->withMarga($marga->id)->create();
+    $root = Person::factory()->create([
+        'name' => 'Siraja Borbor',
+        'marga_id' => $marga->id,
+        'created_by' => $admin->id,
+    ]);
+    $tree = FamilyTree::create([
+        'user_id' => $admin->id,
+        'root_person_id' => $root->id,
+        'name' => 'Tarombo Borbor Admin',
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $root->id,
+    ]);
+    $tree->people()->attach($root);
+    MargaAccessRequest::create([
+        'requester_id' => $viewer->id,
+        'marga_id' => $marga->id,
+        'status' => MargaAccessRequest::STATUS_APPROVED,
+    ]);
+
+    $this->actingAs($viewer)
+        ->get(route('people.create'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('approvedMargaTrees.0.id', $tree->id));
+
+    $this->actingAs($viewer)
+        ->get(route('family-trees.show', $tree))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('canEditFamilyTree', false));
+
+    expect($viewer->can('append', $tree))->toBeTrue();
+
+    $addedPerson = Person::factory()->create([
+        'marga_id' => $marga->id,
+        'created_by' => $viewer->id,
+        'father_id' => $root->id,
+    ]);
+    $tree->people()->attach($addedPerson);
+
+    expect($viewer->can('update', $root))->toBeFalse()
+        ->and($viewer->can('update', $addedPerson))->toBeTrue();
 });

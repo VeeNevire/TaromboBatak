@@ -18,10 +18,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import InputError from '@/components/input-error';
-import {
-    ApprovedMargaTreeList,
-    FamilyTreeHistoryCard,
-} from '@/components/people/family-tree-history-card';
+import { FamilyTreeHistoryCard } from '@/components/people/family-tree-history-card';
 import type { FamilyTreeHistoryEntry } from '@/components/people/family-tree-history-card';
 import { Button } from '@/components/ui/button';
 import {
@@ -172,6 +169,8 @@ type Props = {
     lineage?: MargaLineageEntry[];
     familyTrees?: FamilyTreeHistoryEntry[];
     approvedMargaTrees?: FamilyTreeHistoryEntry[];
+    margaAccessMargaId?: number | null;
+    margaAccessStatus?: 'pending' | 'approved' | 'rejected' | null;
     versionTrees?: FamilyTreeHistoryEntry[];
     selectedVersionName?: string | null;
     selectedVersionId?: number | null;
@@ -1108,6 +1107,8 @@ export default function FamilyForm({
     lineage,
     familyTrees = [],
     approvedMargaTrees = [],
+    margaAccessMargaId = null,
+    margaAccessStatus = null,
     versionTrees = [],
     selectedVersionName = null,
     selectedVersionId = null,
@@ -1212,6 +1213,10 @@ export default function FamilyForm({
 
     const birthOrder = Number(data.birth_order) || 1;
     const siblingCount = Number(data.sibling_count) || 1;
+    const listFamilyTrees = [...familyTrees, ...approvedMargaTrees].filter(
+        (tree, index, all) =>
+            all.findIndex((candidate) => candidate.id === tree.id) === index,
+    );
     const selectedVersionNumber =
         selectedVersionId === null
             ? null
@@ -1945,6 +1950,16 @@ export default function FamilyForm({
         predictedFatherChain && data.name.trim()
             ? `${predictedFatherChain}-${birthOrder}`
             : null;
+    const highlightedLineage: MargaLineageEntry[] = (lineage ?? []).map(
+        (entry) => ({
+            ...entry,
+            isAyah:
+                entry.id === fatherMatch?.id ||
+                (entry.children ?? []).some(
+                    (child) => child.id === fatherMatch?.id,
+                ),
+        }),
+    );
 
     const renderParentBlock = (
         key: ParentKey,
@@ -2806,17 +2821,27 @@ export default function FamilyForm({
                                         </CardContent>
                                     </Card>
                                 </div>
-                                <ApprovedMargaTreeList
-                                    entries={approvedMargaTrees}
-                                    title="List Silsilah"
-                                    description="Silsilah marga yang telah disetujui."
-                                    asCard
-                                />
+                                {person ? (
+                                    <SilsilahListCard
+                                        lineage={person.lineage}
+                                        selfId={person.id}
+                                        familyTrees={listFamilyTrees}
+                                    />
+                                ) : (
+                                    <MargaLineageCard
+                                        entries={highlightedLineage}
+                                        fatherChain={predictedFatherChain}
+                                        focusChain={predictedFocusChain}
+                                        familyTrees={listFamilyTrees}
+                                    />
+                                )}
                                 {showFamilyTreeHistory && (
                                     <FamilyTreeHistoryCard
                                         entries={familyTrees}
                                         approvedEntries={approvedMargaTrees}
                                         margaName={activeMargaName}
+                                        margaId={margaAccessMargaId}
+                                        margaAccessStatus={margaAccessStatus}
                                         shareableAccounts={shareableAccounts}
                                         pendingTreeShares={pendingTreeShares}
                                     />

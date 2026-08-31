@@ -34,6 +34,7 @@ function pastelFor(id: string): string {
 export function NodeCard({
     node,
     highlighted = false,
+    compact = false,
     badge,
     onAvatarClick,
     onNameClick,
@@ -41,13 +42,19 @@ export function NodeCard({
 }: {
     node: TreeNode;
     highlighted?: boolean;
+    compact?: boolean;
     badge?: string;
     onAvatarClick?: () => void;
     onNameClick?: () => void;
     dashed?: boolean;
 }) {
     return (
-        <div className="flex max-w-[150px] min-w-[96px] flex-col items-center">
+        <div
+            className={cn(
+                'flex flex-col items-center',
+                compact ? 'max-w-[110px] min-w-[64px]' : 'max-w-[150px] min-w-[96px]',
+            )}
+        >
             <div
                 role={onAvatarClick ? 'button' : undefined}
                 tabIndex={onAvatarClick ? 0 : undefined}
@@ -68,7 +75,8 @@ export function NodeCard({
                     }
                 }}
                 className={cn(
-                    'flex h-12 w-12 items-center justify-center overflow-hidden border transition-shadow',
+                    'flex items-center justify-center overflow-hidden border transition-shadow',
+                    compact ? 'h-8 w-8' : 'h-12 w-12',
                     dashed && 'border-dashed',
                     highlighted ? 'rounded-xl' : 'rounded-full',
                     onAvatarClick &&
@@ -107,7 +115,9 @@ export function NodeCard({
                     }
                 }}
                 className={cn(
-                    'mt-2 rounded-md border bg-white px-2 py-1 text-center text-[11px] leading-snug font-semibold',
+                    compact
+                        ? 'mt-0.5 rounded-md border bg-white px-1 py-0.5 text-center text-[8px] leading-tight font-semibold'
+                        : 'mt-2 rounded-md border bg-white px-2 py-1 text-center text-[11px] leading-snug font-semibold',
                     dashed && 'border-dashed',
                     onNameClick &&
                         'cursor-pointer hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#B8934A] focus-visible:outline-none',

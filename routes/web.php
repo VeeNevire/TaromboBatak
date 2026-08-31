@@ -181,6 +181,8 @@ Route::middleware(['auth', 'role.contributor'])->group(function () {
     Route::post('identity-requests/{identityRequest}/reject', [IdentityRequestController::class, 'reject'])->name('identity-requests.reject');
     Route::post('dashboard/contributions/{contribution}/approve', [ContributionController::class, 'approve'])->name('contributions.approve');
     Route::post('dashboard/contributions/{contribution}/reject', [ContributionController::class, 'reject'])->name('contributions.reject');
+    Route::post('dashboard/contributions/marga-access/{margaAccessRequest}/approve', [ContributionController::class, 'approveMargaAccess'])->name('contributions.marga-access.approve');
+    Route::post('dashboard/contributions/marga-access/{margaAccessRequest}/reject', [ContributionController::class, 'rejectMargaAccess'])->name('contributions.marga-access.reject');
     Route::post('events/{event}/approve', [EventController::class, 'approve'])->name('events.approve');
     Route::post('events/{event}/reject', [EventController::class, 'reject'])->name('events.reject');
     Route::post('stories/{story}/approve', [StoryController::class, 'approve'])->name('stories.approve');
@@ -188,5 +190,10 @@ Route::middleware(['auth', 'role.contributor'])->group(function () {
     Route::post('family-tree-deletions/{deletion}/approve', [FamilyTreeDeletionController::class, 'approve'])->name('family-tree-deletions.approve');
     Route::post('family-tree-deletions/{deletion}/reject', [FamilyTreeDeletionController::class, 'reject'])->name('family-tree-deletions.reject');
 });
+
+Route::middleware('auth')->post(
+    'marga-access-requests',
+    [ContributionController::class, 'storeMargaAccessRequest'],
+)->name('marga-access-requests.store');
 
 require __DIR__.'/settings.php';

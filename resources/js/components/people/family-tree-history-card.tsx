@@ -37,6 +37,7 @@ import { cn } from '@/lib/utils';
 import contributions from '@/routes/contributions';
 import familyTreeShares from '@/routes/family-tree-shares';
 import familyTrees from '@/routes/family-trees';
+import margaAccessRequests from '@/routes/marga-access-requests';
 import people from '@/routes/people';
 
 const ITEMS_PER_PAGE = 5;
@@ -147,12 +148,16 @@ export function FamilyTreeHistoryCard({
     entries,
     approvedEntries = [],
     margaName,
+    margaId,
+    margaAccessStatus,
     shareableAccounts = [],
     pendingTreeShares = [],
 }: {
     entries: FamilyTreeHistoryEntry[];
     approvedEntries?: FamilyTreeHistoryEntry[];
     margaName?: string | null;
+    margaId?: number | null;
+    margaAccessStatus?: 'pending' | 'approved' | 'rejected' | null;
     shareableAccounts?: {
         id: number;
         name: string;
@@ -212,6 +217,8 @@ export function FamilyTreeHistoryCard({
     );
     const margaRequestEntry =
         entries.find((entry) => entry.is_primary) ?? entries[0];
+    const canRequestMargaAccess =
+        margaId != null && margaAccessStatus !== 'approved';
     const rangeStart = filteredEntries.length === 0 ? 0 : startIndex + 1;
     const rangeEnd = Math.min(
         startIndex + ITEMS_PER_PAGE,
@@ -307,32 +314,56 @@ export function FamilyTreeHistoryCard({
                                 </CardDescription>
                             </div>
                         </div>
-                        <button
-                            type="button"
-                            onClick={() => setExpanded((current) => !current)}
-                            aria-expanded={expanded}
-                            aria-label={
-                                expanded
-                                    ? 'Kembali ke form Tambah Keluarga'
-                                    : 'Perbesar Daftar Silsilah'
-                            }
-                            title={expanded ? 'Kembali ke Form' : 'Perbesar'}
-                            className={cn(
-                                'inline-flex shrink-0 items-center justify-center rounded-lg border border-tb-outline-variant text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none',
-                                expanded
-                                    ? 'h-9 gap-2 px-3 text-sm font-medium'
-                                    : 'size-9',
+                        <div className="flex shrink-0 items-center gap-2">
+                            {canRequestMargaAccess && (
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={margaAccessStatus === 'pending'}
+                                    onClick={() =>
+                                            router.post(
+                                                margaAccessRequests.store().url,
+                                            {},
+                                            { preserveScroll: true },
+                                        )
+                                    }
+                                >
+                                    <TreePine className="size-3.5" />
+                                    {margaAccessStatus === 'pending'
+                                        ? 'Menunggu Persetujuan'
+                                        : margaAccessStatus === 'rejected'
+                                          ? 'Ajukan Lagi'
+                                          : 'Ajukan Buka Marga'}
+                                </Button>
                             )}
-                        >
-                            {expanded ? (
-                                <>
-                                    <ArrowLeft className="size-4" />
-                                    Kembali ke Form
-                                </>
-                            ) : (
-                                <Maximize2 className="size-4" />
-                            )}
-                        </button>
+                            <button
+                                type="button"
+                                onClick={() => setExpanded((current) => !current)}
+                                aria-expanded={expanded}
+                                aria-label={
+                                    expanded
+                                        ? 'Kembali ke form Tambah Keluarga'
+                                        : 'Perbesar Daftar Silsilah'
+                                }
+                                title={expanded ? 'Kembali ke Form' : 'Perbesar'}
+                                className={cn(
+                                    'inline-flex shrink-0 items-center justify-center rounded-lg border border-tb-outline-variant text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none',
+                                    expanded
+                                        ? 'h-9 gap-2 px-3 text-sm font-medium'
+                                        : 'size-9',
+                                )}
+                            >
+                                {expanded ? (
+                                    <>
+                                        <ArrowLeft className="size-4" />
+                                        Kembali ke Form
+                                    </>
+                                ) : (
+                                    <Maximize2 className="size-4" />
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </CardHeader>
                 <CardContent className="grid gap-6">
