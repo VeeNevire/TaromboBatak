@@ -120,6 +120,12 @@ class User extends Authenticatable
         return $this->hasOne(TelegramAccount::class);
     }
 
+    /** @return HasOne<TelegramAuthSession, $this> */
+    public function telegramAuthSession(): HasOne
+    {
+        return $this->hasOne(TelegramAuthSession::class);
+    }
+
     /** @return HasMany<ChatGroup, $this> */
     public function ownedChatGroups(): HasMany
     {

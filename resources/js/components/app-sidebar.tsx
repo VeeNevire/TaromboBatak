@@ -39,6 +39,7 @@ import people from '@/routes/people';
 import stories from '@/routes/stories';
 import subAdmins from '@/routes/sub-admins';
 import tarombo from '@/routes/tarombo';
+import telegramMessages from '@/routes/telegram-messages';
 import type { NavGroup } from '@/types';
 
 export function AppSidebar() {
@@ -67,6 +68,11 @@ export function AppSidebar() {
                     title: 'News Feed',
                     href: newsFeed.index(),
                     icon: Newspaper,
+                },
+                {
+                    title: 'Pesan Telegram',
+                    href: telegramMessages.index(),
+                    icon: MessageCircle,
                 },
                 {
                     title: 'Pohon Tarombo',

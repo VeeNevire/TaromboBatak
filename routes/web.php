@@ -28,6 +28,7 @@ use App\Http\Controllers\TaromboController;
 use App\Http\Controllers\TaromboSnapshotController;
 use App\Http\Controllers\TelegramAnnouncementController;
 use App\Http\Controllers\TelegramGroupLinkController;
+use App\Http\Controllers\TelegramMessagesController;
 use App\Http\Controllers\TentangController;
 use Illuminate\Support\Facades\Route;
 
@@ -56,6 +57,15 @@ Route::get('tentang', [TentangController::class, 'index'])->name('tentang.view')
 
 Route::middleware(['auth'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('telegram/messages', [TelegramMessagesController::class, 'index'])->name('telegram-messages.index');
+    Route::post('telegram/messages/sync', [TelegramMessagesController::class, 'sync'])
+        ->middleware('throttle:5,1')
+        ->name('telegram-messages.sync');
+    Route::post('telegram/messages/{dialog}/reply', [TelegramMessagesController::class, 'reply'])
+        ->middleware('throttle:30,1')
+        ->name('telegram-messages.reply');
+    Route::post('telegram/messages/{dialog}/read', [TelegramMessagesController::class, 'read'])
+        ->name('telegram-messages.read');
 
     Route::get('dashboard/news-feed', [NewsFeedController::class, 'index'])
         ->name('news-feed.index');
