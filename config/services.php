@@ -38,6 +38,9 @@ return [
     'telegram' => [
         'bot_token' => env('TELEGRAM_BOT_TOKEN'),
         'bot_username' => env('TELEGRAM_BOT_USERNAME'),
+        'api_id' => env('TELEGRAM_API_ID'),
+        'api_hash' => env('TELEGRAM_API_HASH'),
+        'mtproto_session_path' => env('TELEGRAM_MTPROTO_SESSION_PATH', storage_path('app/private/telegram/sessions')),
     ],
 
 ];

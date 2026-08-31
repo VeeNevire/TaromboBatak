@@ -1,4 +1,4 @@
-import { Form, Head, usePage } from '@inertiajs/react';
+import { Form, Head, Link, usePage } from '@inertiajs/react';
 import { Link2, MapPin, Send, Shapes, Unlink } from 'lucide-react';
 import { useState } from 'react';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import { edit } from '@/routes/profile';
 import telegramConnection from '@/routes/telegram-connection';
+import telegramMtproto from '@/routes/telegram-mtproto';
 import type { Auth } from '@/types';
 
 type PageProps = {
@@ -329,6 +330,9 @@ export default function Profile({
                                     Akun ini dapat menerima pengumuman dan
                                     digunakan untuk memasangkan grup Telegram.
                                 </p>
+                                <Link href={telegramMtproto.index()} className="text-sm text-sky-600 hover:underline">
+                                    Kelola koneksi MTProto untuk membaca chat dan channel
+                                </Link>
                             </>
                         ) : (
                             <div className="space-y-4">
@@ -337,6 +341,9 @@ export default function Profile({
                                     pengumuman dan memasangkan grup Telegram ke
                                     aplikasi.
                                 </p>
+                                <Link href={telegramMtproto.index()} className="text-sm text-sky-600 hover:underline">
+                                    Hubungkan akun Telegram dengan MTProto
+                                </Link>
                                 <Form {...telegramConnection.store.form()}>
                                     {({ processing }) => (
                                         <Button
