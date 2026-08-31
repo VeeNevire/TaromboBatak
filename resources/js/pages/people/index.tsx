@@ -1,16 +1,19 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
-import {
-    ChevronLeft,
-    ChevronRight,
-    NotebookPen,
-    Pencil,
-    Plus,
-    Route,
-    Search,
-    Trash2,
-} from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+ import { AnimatePresence, motion } from 'framer-motion';
+  import {
+      ChevronLeft,
+      ChevronRight,
+      NotebookPen,
+      Pencil,
+      Plus,
+      Route,
+      Search,
+      Trash2,
+  } from 'lucide-react';
+  import { useEffect, useMemo, useState } from 'react';
+  import { toast } from 'sonner';
+
 import { toast } from 'sonner';
 import { AppAvatar } from '@/components/app-avatar';
 import { Button } from '@/components/ui/button';
@@ -111,7 +114,7 @@ export default function PeopleIndex({
     useEffect(() => {
         setCurrentPage((current) => Math.min(current, totalPages));
     }, [totalPages]);
-
+ const showActions = canManage || page.data.some((person) => person.editable);
     const showActions = canManage || page.data.some((person) => person.editable);
 
     const confirmDelete = () => {
