@@ -97,7 +97,7 @@ class MargaController extends Controller
     {
         $data = $request->validated();
 
-        $data['image'] = $this->resolveImage($request);
+        $data['image'] = $this->resolveImage($request, $marga->image);
 
         if ($marga->image !== null && $data['image'] !== $marga->image) {
             $this->deleteStoredImage($marga->image);
@@ -129,7 +129,7 @@ class MargaController extends Controller
      *
      * @return string|null Stored path (margas/...) or the raw URL.
      */
-    protected function resolveImage(Request $request): ?string
+    protected function resolveImage(Request $request, ?string $existingImage = null): ?string
     {
         $image = $request->file('image');
 
@@ -146,6 +146,10 @@ class MargaController extends Controller
         }
 
         $trimmed = trim($raw);
+
+        if ($existingImage !== null && $trimmed === $this->imageUrl($existingImage)) {
+            return $existingImage;
+        }
 
         if (str_starts_with($trimmed, '/storage/')) {
             return $trimmed;

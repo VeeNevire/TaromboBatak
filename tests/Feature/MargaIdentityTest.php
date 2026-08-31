@@ -4,6 +4,8 @@ use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
 use App\Services\MargaIdentityPersonService;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 test('marga identity options use connected tarombo people through generation eleven without family tree nodes', function () {
     $root = Person::factory()->create([
@@ -72,4 +74,82 @@ test('an admin can save a valid marga identity and invalid tree nodes are reject
             'identity_person_id' => $invalidIdentity->id,
         ])
         ->assertSessionHasErrors('identity_person_id');
+});
+
+test('an admin can update a marga identity and image through a spoofed multipart request', function () {
+    Storage::fake('public');
+
+    $admin = User::factory()->asAdmin()->create();
+    $root = Person::factory()->create([
+        'name' => 'Si Raja Batak',
+        'father_id' => null,
+        'chain' => '1',
+    ]);
+    $identity = Person::factory()->create([
+        'name' => 'Raja Saribu',
+        'father_id' => $root->id,
+        'chain' => '1-1',
+    ]);
+    $marga = Marga::factory()->create([
+        'name' => 'Saribu Raja',
+        'image' => 'margas/old.png',
+    ]);
+    Storage::disk('public')->put($marga->image, 'old image');
+
+    $this->actingAs($admin)
+        ->from(route('marga.index'))
+        ->post(route('marga.update', $marga), [
+            '_method' => 'put',
+            'name' => $marga->name,
+            'description' => $marga->description,
+            'color' => $marga->color,
+            'image' => Storage::disk('public')->url($marga->image),
+            'identity_person_id' => $identity->id,
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('marga.index'));
+
+    $marga->refresh();
+
+    expect($marga->identity_person_id)->toBe($identity->id)
+        ->and($marga->image)->toBe('margas/old.png');
+    Storage::disk('public')->assertExists('margas/old.png');
+
+    $this->actingAs($admin)
+        ->from(route('marga.index'))
+        ->post(route('marga.update', $marga), [
+            '_method' => 'put',
+            'name' => $marga->name,
+            'description' => $marga->description,
+            'color' => $marga->color,
+            'image' => UploadedFile::fake()->image('saribu-raja.png'),
+            'identity_person_id' => $identity->id,
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('marga.index'));
+
+    $marga->refresh();
+
+    expect($marga->identity_person_id)->toBe($identity->id)
+        ->and($marga->image)->toStartWith('margas/');
+    Storage::disk('public')->assertExists($marga->image);
+    Storage::disk('public')->assertMissing('margas/old.png');
+});
+
+test('an admin cannot update a marga to a name already in use', function () {
+    $admin = User::factory()->asAdmin()->create();
+    $marga = Marga::factory()->create(['name' => 'Saribu Raja']);
+    Marga::factory()->create(['name' => 'Simatupang']);
+
+    $this->actingAs($admin)
+        ->from(route('marga.index'))
+        ->post(route('marga.update', $marga), [
+            '_method' => 'put',
+            'name' => 'Simatupang',
+            'description' => $marga->description,
+            'color' => $marga->color,
+        ])
+        ->assertSessionHasErrors('name');
+
+    expect($marga->fresh()->name)->toBe('Saribu Raja');
 });

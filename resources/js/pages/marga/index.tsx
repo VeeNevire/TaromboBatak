@@ -238,12 +238,17 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
         e.preventDefault();
 
         if (dialog === 'create') {
+            form.transform((data) => data);
             form.post(marga.store().url, {
                 forceFormData: true,
                 onSuccess: () => setDialog(null),
             });
         } else if (dialog) {
-            form.put(marga.update(dialog.id).url, {
+            form.transform((data) => ({
+                ...data,
+                _method: 'put',
+            }));
+            form.post(marga.update(dialog.id).url, {
                 forceFormData: true,
                 onSuccess: () => setDialog(null),
             });
