@@ -249,7 +249,7 @@ export function TaromboExplorer({
         }
 
         if (margaTree.direction === 'lower') {
-            const descendants = descendantSubtree(
+            return descendantSubtree(
                 selectedFamilyTreePeople,
                 margaIdentity.id,
             ).filter(
@@ -258,18 +258,28 @@ export function TaromboExplorer({
                     person.gender === 'L' ||
                     !person.gender,
             );
-
-            const lineageIds = new Set(
-                margaLineagePath.map((person) => person.id),
-            );
-
-            return [
-                ...margaLineagePath,
-                ...descendants.filter((person) => !lineageIds.has(person.id)),
-            ];
         }
 
-        return margaLineagePath;
+        const lineageIds = new Set(margaLineagePath.map((person) => person.id));
+        const siblingIds = new Set<string>();
+
+        for (const person of margaLineagePath) {
+            for (const sibling of selectedFamilyTreePeople) {
+                if (
+                    sibling.parentId === person.parentId &&
+                    !lineageIds.has(sibling.id)
+                ) {
+                    siblingIds.add(sibling.id);
+                }
+            }
+        }
+
+        return [
+            ...margaLineagePath,
+            ...selectedFamilyTreePeople.filter((person) =>
+                siblingIds.has(person.id),
+            ),
+        ];
     }, [margaIdentity, margaLineagePath, margaTree, selectedFamilyTreePeople]);
     const rootPerson = people.find((p) => !p.parentId) ?? people[0];
     const connectedPeople = people.filter((person) =>
@@ -825,7 +835,7 @@ export function TaromboExplorer({
                         readOnly={Boolean(margaTree)}
                         alternativeTrees={descendantAlternativeTrees}
                         lineagePath={
-                            margaTree
+                            margaTree?.direction === 'upper'
                                 ? margaLineagePath.map((person) => person.id)
                                 : lineagePath
                         }
@@ -1149,7 +1159,8 @@ export function TaromboExplorer({
                                                     descendantAlternativeTrees
                                                 }
                                                 lineagePath={
-                                                    margaTree
+                                                    margaTree?.direction ===
+                                                    'upper'
                                                         ? margaLineagePath.map(
                                                               (person) =>
                                                                   person.id,
