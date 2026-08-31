@@ -10,8 +10,9 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -47,16 +48,30 @@ return Application::configure(basePath: dirname(__DIR__))
             $status = $response->getStatusCode();
 
             if ($status === 419 && ! $request->expectsJson()) {
-                Auth::logout();
-                $request->session()->invalidate();
+                $authenticated = $request->user() !== null;
+
+                Log::warning('Session/CSRF token mismatch.', [
+                    'method' => $request->method(),
+                    'route' => $request->route()?->getName(),
+                    'authenticated' => $authenticated,
+                ]);
+
+                if (! $authenticated) {
+                    Auth::logout();
+                    $request->session()->invalidate();
+                }
+
                 $request->session()->regenerateToken();
 
                 Inertia::flash('toast', [
                     'type' => 'warning',
-                    'message' => 'Sesi Anda telah berakhir. Silakan login kembali.',
+                    'message' => $authenticated
+                        ? 'Token keamanan kedaluwarsa. Silakan muat ulang halaman lalu coba lagi.'
+                        : 'Sesi Anda telah berakhir. Silakan login kembali.',
+                    'center' => true,
                 ]);
 
-                return to_route('login');
+                return $authenticated ? redirect()->back() : to_route('login');
             }
 
             // Navigasi browser yang ditolak kebijakan tidak perlu menampilkan

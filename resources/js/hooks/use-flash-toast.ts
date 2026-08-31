@@ -13,7 +13,11 @@ export function useFlashToast(): void {
                 return;
             }
 
-            toast[data.type](data.message);
+            toast[data.type](data.message, data.center ? {
+                position: 'top-center',
+                duration: Infinity,
+                closeButton: true,
+            } : undefined);
         });
     }, []);
 }

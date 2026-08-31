@@ -2,11 +2,13 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Marga;
 use App\Services\MargaIdentityPersonService;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 class UpdateMargaRequest extends FormRequest
@@ -18,8 +20,11 @@ class UpdateMargaRequest extends FormRequest
      */
     public function rules(): array
     {
+        /** @var Marga $marga */
+        $marga = $this->route('marga');
+
         return [
-            'name' => ['required', 'string', 'max:255', 'unique:margas,name,'.$this->route('marga')],
+            'name' => ['required', 'string', 'max:255', Rule::unique(Marga::class, 'name')->ignore($marga)],
             'description' => ['nullable', 'string'],
             'color' => ['nullable', 'string', 'max:32'],
             'image' => ['nullable', $this->imageRule()],
