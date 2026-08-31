@@ -14,7 +14,7 @@ import {
     UserSearch,
     X,
 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { TaromboDiagram } from '@/components/landing/tarombo-diagram';
 import { DescendantsTree } from '@/components/people/descendants-tree';
@@ -73,6 +73,11 @@ type Props = {
     familyTreeOptions: TaromboFamilyTreeOption[];
     selectedFamilyTreeId: number | null;
     selectedTreePeople: TaromboPersonRow[] | null;
+    margaTree?: {
+        margaName: string;
+        identityPersonId: string;
+        direction: 'upper' | 'lower';
+    } | null;
 };
 
 const ANCESTOR_DEPTH = 4;
@@ -207,11 +212,65 @@ export function TaromboExplorer({
     familyTreeOptions,
     selectedFamilyTreeId,
     selectedTreePeople,
+    margaTree = null,
 }: Props) {
     const people = buildTaromboPeople(rows);
     const selectedFamilyTreePeople = buildTaromboPeople(
         selectedTreePeople ?? rows,
     );
+    const margaIdentity = margaTree
+        ? selectedFamilyTreePeople.find(
+              (person) => person.id === margaTree.identityPersonId,
+          )
+        : undefined;
+    const margaLineagePath = useMemo(() => {
+        if (!margaTree || !margaIdentity) {
+            return [] as TaromboPerson[];
+        }
+
+        const byId = new Map(
+            selectedFamilyTreePeople.map((person) => [person.id, person]),
+        );
+        const path: TaromboPerson[] = [];
+        const visited = new Set<string>();
+        let current: TaromboPerson | undefined = margaIdentity;
+
+        while (current && !visited.has(current.id)) {
+            path.unshift(current);
+            visited.add(current.id);
+            current = current.parentId ? byId.get(current.parentId) : undefined;
+        }
+
+        return path;
+    }, [margaIdentity, margaTree, selectedFamilyTreePeople]);
+    const margaTreePeople = useMemo(() => {
+        if (!margaTree || !margaIdentity) {
+            return selectedFamilyTreePeople;
+        }
+
+        if (margaTree.direction === 'lower') {
+            const descendants = descendantSubtree(
+                selectedFamilyTreePeople,
+                margaIdentity.id,
+            ).filter(
+                (person) =>
+                    person.id === margaIdentity.id ||
+                    person.gender === 'L' ||
+                    !person.gender,
+            );
+
+            const lineageIds = new Set(
+                margaLineagePath.map((person) => person.id),
+            );
+
+            return [
+                ...margaLineagePath,
+                ...descendants.filter((person) => !lineageIds.has(person.id)),
+            ];
+        }
+
+        return margaLineagePath;
+    }, [margaIdentity, margaLineagePath, margaTree, selectedFamilyTreePeople]);
     const rootPerson = people.find((p) => !p.parentId) ?? people[0];
     const connectedPeople = people.filter((person) =>
         hasMargaAncestor(people, person.id),
@@ -368,6 +427,11 @@ export function TaromboExplorer({
         verticalPeople.find((person) => !person.parentId) ??
         verticalPeople[0];
     const treeCenterId = treeCenterPerson?.id ?? '';
+    const renderedTreePeople = margaTree ? margaTreePeople : treePeople;
+    const renderedTreeCenterId = margaTree
+        ? (margaTreePeople[0]?.id ?? '')
+        : treeCenterId;
+    const renderedHighlightId = margaTree ? margaIdentity?.id : selectedId;
     const ancestorFocusPerson =
         ancestorFocusId && ancestorPeople.length > 0
             ? verticalPeople.find((person) => person.id === ancestorFocusId)
@@ -731,32 +795,43 @@ export function TaromboExplorer({
                     )}
                     <div className="min-w-0 px-20 text-center">
                         <h3 className="font-display text-lg font-bold text-tb-on-surface">
-                            Silsilah Keturunan
+                            {margaTree
+                                ? `Pohon Silsilah ${margaTree.direction === 'upper' ? 'Atas' : 'Bawah'}`
+                                : 'Silsilah Keturunan'}
                         </h3>
                         <p className="mt-1 max-w-64 truncate text-xs text-tb-on-surface-variant">
-                            {ancestorFocusPerson
-                                ? `Jalur ${ANCESTOR_DEPTH} tingkat leluhur dari ${ancestorFocusPerson.name}`
-                                : `Pohon vertikal dari ${treeCenterPerson?.name ?? 'Leluhur Utama'}`}
+                            {margaTree
+                                ? `${margaTree.direction === 'upper' ? 'Si Raja Batak sampai' : 'Keturunan dari'} ${margaIdentity?.name ?? margaTree.margaName}`
+                                : ancestorFocusPerson
+                                  ? `Jalur ${ANCESTOR_DEPTH} tingkat leluhur dari ${ancestorFocusPerson.name}`
+                                  : `Pohon vertikal dari ${treeCenterPerson?.name ?? 'Leluhur Utama'}`}
                         </p>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
-                        {familyTreeSelector}
-                        {femaleLineageToggle}
+                        {!margaTree && familyTreeSelector}
+                        {!margaTree && femaleLineageToggle}
                     </div>
                 </div>
                 <div style={{ zoom: treeZoom }}>
                     <DescendantsTree
-                        key={`${treeCenterId}-${ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
-                        people={treePeople}
-                        centerId={treeCenterId}
-                        onSelect={handlePersonSelect}
-                        highlightId={selectedId}
-                        editNodes
-                        selectOnClick
-                        showProfileOnName
+                        key={`${renderedTreeCenterId}-${margaTree?.direction ?? ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
+                        people={renderedTreePeople}
+                        centerId={renderedTreeCenterId}
+                        onSelect={margaTree ? undefined : handlePersonSelect}
+                        highlightId={renderedHighlightId}
+                        editNodes={!margaTree}
+                        selectOnClick={!margaTree}
+                        showProfileOnName={!margaTree}
+                        readOnly={Boolean(margaTree)}
                         alternativeTrees={descendantAlternativeTrees}
-                        lineagePath={lineagePath}
-                        markFemaleLineage={showFemaleLineage}
+                        lineagePath={
+                            margaTree
+                                ? margaLineagePath.map((person) => person.id)
+                                : lineagePath
+                        }
+                        markFemaleLineage={
+                            margaTree ? false : showFemaleLineage
+                        }
                         nodeIdPrefix={
                             fullscreen
                                 ? 'tarombo-fullscreen-tree-node'
@@ -764,7 +839,10 @@ export function TaromboExplorer({
                         }
                     />
                 </div>
-                {!treeHasChildren && !ancestorFocusId && noChildrenNotice}
+                {!margaTree &&
+                    !treeHasChildren &&
+                    !ancestorFocusId &&
+                    noChildrenNotice}
             </div>
             {treeHasChildren && (
                 <div className="absolute bottom-3 left-3 z-10">
@@ -799,14 +877,19 @@ export function TaromboExplorer({
         >
             <div className="flex items-start justify-between gap-3">
                 <div className={cn('flex', fullscreen && 'items-center gap-3')}>
-                    {fullscreen && fullscreenView === 'diagram' && backButton}
+                    {fullscreen &&
+                        (fullscreenView === 'diagram' || margaTree) &&
+                        backButton}
                     <div>
                         <h1 className="font-display text-2xl font-bold text-tb-on-surface md:text-3xl">
-                            Pohon Tarombo
+                            {margaTree
+                                ? `Pohon Silsilah ${margaTree.direction === 'upper' ? 'Atas' : 'Bawah'}`
+                                : 'Pohon Tarombo'}
                         </h1>
                         <p className="mt-1 text-sm text-tb-on-surface-variant">
-                            Visualisasi silsilah keluarga langsung dari
-                            database. Klik anggota untuk melihat detail.
+                            {margaTree
+                                ? `${margaTree.direction === 'upper' ? 'Jalur leluhur dari Si Raja Batak sampai' : 'Keturunan patrilineal dari'} ${margaIdentity?.name ?? margaTree.margaName}.`
+                                : 'Visualisasi silsilah keluarga langsung dari database. Klik anggota untuk melihat detail.'}
                         </p>
                     </div>
                 </div>
@@ -841,7 +924,12 @@ export function TaromboExplorer({
                     fullscreen && 'flex min-h-0 flex-1 flex-col',
                 )}
             >
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <div
+                    className={cn(
+                        'flex flex-wrap items-center gap-x-3 gap-y-2',
+                        margaTree && 'hidden',
+                    )}
+                >
                     <span className="text-sm font-medium text-tb-on-surface">
                         Saya adalah:
                     </span>
@@ -898,7 +986,10 @@ export function TaromboExplorer({
                 </div>
 
                 <div
-                    className="relative mx-auto mb-4 w-full max-w-md"
+                    className={cn(
+                        'relative mx-auto mb-4 w-full max-w-md',
+                        margaTree && 'hidden',
+                    )}
                     onBlur={(event) => {
                         if (
                             !event.currentTarget.contains(event.relatedTarget)
@@ -1021,12 +1112,16 @@ export function TaromboExplorer({
                                     <div className="relative overflow-hidden rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-4">
                                         <div className="mb-4 border-b border-tb-outline-variant pb-3 text-center">
                                             <h3 className="font-display text-lg font-bold text-tb-on-surface">
-                                                Silsilah Keturunan
+                                                {margaTree
+                                                    ? `Pohon Silsilah ${margaTree.direction === 'upper' ? 'Atas' : 'Bawah'}`
+                                                    : 'Silsilah Keturunan'}
                                             </h3>
                                             <p className="mt-1 text-xs text-tb-on-surface-variant">
-                                                {ancestorFocusPerson
-                                                    ? `Jalur ${ANCESTOR_DEPTH} tingkat leluhur dari ${ancestorFocusPerson.name}`
-                                                    : `Pohon vertikal dari ${treeCenterPerson?.name ?? 'Leluhur Utama'}`}
+                                                {margaTree
+                                                    ? `${margaTree.direction === 'upper' ? 'Si Raja Batak sampai' : 'Keturunan dari'} ${margaIdentity?.name ?? margaTree.margaName}`
+                                                    : ancestorFocusPerson
+                                                      ? `Jalur ${ANCESTOR_DEPTH} tingkat leluhur dari ${ancestorFocusPerson.name}`
+                                                      : `Pohon vertikal dari ${treeCenterPerson?.name ?? 'Leluhur Utama'}`}
                                             </p>
                                             <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
                                                 {familyTreeSelector}
@@ -1035,18 +1130,32 @@ export function TaromboExplorer({
                                         </div>
                                         <div style={{ zoom: treeZoom }}>
                                             <DescendantsTree
-                                                key={`${treeCenterId}-${ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
-                                                people={treePeople}
-                                                centerId={treeCenterId}
-                                                onSelect={handlePersonSelect}
-                                                highlightId={selectedId}
-                                                editNodes
-                                                selectOnClick
-                                                showProfileOnName
+                                                key={`${renderedTreeCenterId}-${margaTree?.direction ?? ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
+                                                people={renderedTreePeople}
+                                                centerId={renderedTreeCenterId}
+                                                onSelect={
+                                                    margaTree
+                                                        ? undefined
+                                                        : handlePersonSelect
+                                                }
+                                                highlightId={
+                                                    renderedHighlightId
+                                                }
+                                                editNodes={!margaTree}
+                                                selectOnClick={!margaTree}
+                                                showProfileOnName={!margaTree}
+                                                readOnly={Boolean(margaTree)}
                                                 alternativeTrees={
                                                     descendantAlternativeTrees
                                                 }
-                                                lineagePath={lineagePath}
+                                                lineagePath={
+                                                    margaTree
+                                                        ? margaLineagePath.map(
+                                                              (person) =>
+                                                                  person.id,
+                                                          )
+                                                        : lineagePath
+                                                }
                                                 markFemaleLineage={
                                                     showFemaleLineage
                                                 }
