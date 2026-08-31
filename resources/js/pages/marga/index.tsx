@@ -1,5 +1,7 @@
 import { Head, router, useForm } from '@inertiajs/react';
 import {
+    ArrowDown,
+    ArrowUp,
     ChevronsUpDown,
     ImagePlus,
     Pencil,
@@ -27,6 +29,7 @@ import type { TaromboPerson } from '@/data/tarombo-tree';
 import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import marga from '@/routes/marga';
+import tarombo from '@/routes/tarombo';
 
 type MargaItem = {
     id: number;
@@ -204,6 +207,26 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
     const [identityPickerOpen, setIdentityPickerOpen] = useState(false);
     const identityPeople = identityTreePeople(identityPersonOptions);
 
+    const openMargaTree = (
+        margaItem: MargaItem,
+        direction: 'upper' | 'lower',
+    ) => {
+        if (margaItem.identity_person_id === null) {
+            return;
+        }
+
+        window.open(
+            tarombo.fullscreen('tree', {
+                query: {
+                    marga_id: margaItem.id,
+                    marga_direction: direction,
+                },
+            }).url,
+            '_blank',
+            'noopener,noreferrer',
+        );
+    };
+
     const form = useForm({
         name: '',
         description: '',
@@ -321,6 +344,46 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
                                         className="h-11 w-11 rounded-xl"
                                     />
                                     <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            disabled={
+                                                m.identity_person_id === null
+                                            }
+                                            className="size-8 text-emerald-700 hover:text-emerald-800 disabled:opacity-40"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                openMargaTree(m, 'upper');
+                                            }}
+                                            aria-label={`Pohon Silsilah Atas ${m.name}`}
+                                            title={
+                                                m.identity_person_id === null
+                                                    ? 'Pilih identitas marga terlebih dahulu'
+                                                    : 'Pohon Silsilah Atas'
+                                            }
+                                        >
+                                            <ArrowUp className="size-4" />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            disabled={
+                                                m.identity_person_id === null
+                                            }
+                                            className="size-8 text-emerald-700 hover:text-emerald-800 disabled:opacity-40"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                openMargaTree(m, 'lower');
+                                            }}
+                                            aria-label={`Pohon Silsilah Bawah ${m.name}`}
+                                            title={
+                                                m.identity_person_id === null
+                                                    ? 'Pilih identitas marga terlebih dahulu'
+                                                    : 'Pohon Silsilah Bawah'
+                                            }
+                                        >
+                                            <ArrowDown className="size-4" />
+                                        </Button>
                                         <Button
                                             variant="ghost"
                                             size="icon"

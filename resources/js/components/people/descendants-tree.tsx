@@ -19,6 +19,7 @@ type Props = {
     nodeIdPrefix?: string;
     lineagePath?: readonly string[];
     showProfileOnName?: boolean;
+    readOnly?: boolean;
     markFemaleLineage?: boolean;
 };
 
@@ -62,6 +63,7 @@ function TreeBranch({
     editNodes,
     selectOnClick,
     showProfileOnName,
+    readOnly,
     onOpenProfile,
     lineageIds,
     femaleLineage,
@@ -80,6 +82,7 @@ function TreeBranch({
     editNodes?: boolean;
     selectOnClick?: boolean;
     showProfileOnName?: boolean;
+    readOnly?: boolean;
     onOpenProfile: (person: TaromboPerson) => void;
     alternativeTrees: DescendantsAlternativeTree[];
     nodeIdPrefix: string;
@@ -117,7 +120,14 @@ function TreeBranch({
 
     return (
         <li data-female-lineage={markFemaleLineage && femaleLineage}>
-            {showProfileOnName ? (
+            {readOnly ? (
+                <div
+                    id={`${nodeIdPrefix}-${person.id}`}
+                    className="relative z-20 inline-block rounded-lg"
+                >
+                    {card}
+                </div>
+            ) : showProfileOnName ? (
                 <div
                     id={`${nodeIdPrefix}-${person.id}`}
                     className="relative z-20 inline-block rounded-lg"
@@ -211,6 +221,7 @@ function TreeBranch({
                             editNodes={editNodes}
                             selectOnClick={selectOnClick}
                             showProfileOnName={showProfileOnName}
+                            readOnly={readOnly}
                             onOpenProfile={onOpenProfile}
                             alternativeTrees={alternativeTrees}
                             nodeIdPrefix={nodeIdPrefix}
@@ -293,6 +304,7 @@ export function DescendantsTree({
     editNodes = false,
     selectOnClick = false,
     showProfileOnName = false,
+    readOnly = false,
     alternativeTrees = [],
     hideRoot = false,
     nodeIdPrefix = 'tree-node',
@@ -517,6 +529,7 @@ export function DescendantsTree({
                             editNodes={editNodes}
                             selectOnClick={selectOnClick}
                             showProfileOnName={showProfileOnName}
+                            readOnly={readOnly}
                             onOpenProfile={setProfilePerson}
                             alternativeTrees={alternativeTrees}
                             nodeIdPrefix={nodeIdPrefix}

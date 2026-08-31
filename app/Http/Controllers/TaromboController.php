@@ -44,6 +44,24 @@ class TaromboController extends Controller
     {
         [$people, $margas, $alternativeTrees, $identity, $familyTreeOptions, $selectedFamilyTreeId, $selectedTreePeople] = $this->treeData($request);
 
+        $margaTree = null;
+
+        if ($request->filled('marga_id') || $request->filled('marga_direction')) {
+            abort_unless($request->user()->isStaff(), 403);
+
+            $direction = $request->string('marga_direction')->toString();
+            abort_unless(in_array($direction, ['upper', 'lower'], true), 404);
+
+            $marga = Marga::query()->with('identityPerson')->findOrFail($request->integer('marga_id'));
+            abort_if($marga->identity_person_id === null || $marga->identityPerson === null, 404, 'Identitas marga belum dipilih.');
+
+            $margaTree = [
+                'margaName' => $marga->name,
+                'identityPersonId' => (string) $marga->identity_person_id,
+                'direction' => $direction,
+            ];
+        }
+
         return Inertia::render('tarombo/fullscreen', [
             'people' => $people,
             'margas' => $margas,
@@ -54,6 +72,7 @@ class TaromboController extends Controller
             'familyTreeOptions' => $familyTreeOptions,
             'selectedFamilyTreeId' => $selectedFamilyTreeId,
             'selectedTreePeople' => $selectedTreePeople,
+            'margaTree' => $margaTree,
         ]);
     }
 
