@@ -228,10 +228,12 @@ class TaromboTreeService
      *
      * @return array<int, array{name: string, color: string}>
      */
-    public function margas(?int $margaId = null, bool $publicOnly = false): array
+    public function margas(int|array|null $margaId = null, bool $publicOnly = false): array
     {
         return Marga::query()
-            ->when($margaId !== null, fn (Builder $query) => $query->where('id', $margaId))
+            ->when($margaId !== null, fn (Builder $query) => is_array($margaId)
+                ? $query->whereIn('id', $margaId)
+                : $query->where('id', $margaId))
             ->when($publicOnly, fn (Builder $query) => $query->whereHas('people', fn (Builder $people) => $people->where('is_public', true)))
             ->orderBy('name')
             ->get()

@@ -34,7 +34,7 @@ class ContributionController extends Controller
 
         abort_unless(
             (int) $familyTree->user_id === (int) $user->id
-            && $user->marga_id !== null,
+            && $user->accessibleMargaIds()->isNotEmpty(),
             403,
             'Hanya pemilik silsilah dengan marga yang dapat mengajukan silsilah.',
         );
@@ -43,7 +43,7 @@ class ContributionController extends Controller
         $root = $familyTree->rootPerson;
 
         abort_if(
-            $root === null || $root->marga_id !== $user->marga_id,
+            $root === null || ! $user->accessibleMargaIds()->contains($root->marga_id),
             422,
             'Akar silsilah harus berasal dari marga akun Anda.',
         );
@@ -65,7 +65,10 @@ class ContributionController extends Controller
 
         User::query()
             ->whereIn('role', ['contributor_main', 'contributor_member'])
-            ->where('marga_id', $user->marga_id)
+            ->where(function ($query) use ($root) {
+                $query->where('marga_id', $root->marga_id)
+                    ->orWhereHas('managedMargas', fn ($margas) => $margas->whereKey($root->marga_id));
+            })
             ->each(fn (User $contributor) => $contributor->notify(new FatherMatchSubmitted($contribution)));
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Pengajuan silsilah marga berhasil dikirim ke kontributor.']);
@@ -82,7 +85,7 @@ class ContributionController extends Controller
             ->with(['requester.marga', 'matchedFather.marga', 'subjectPerson', 'reviewer'])
             ->when(! $user->isAdmin(), fn ($query) => $query->whereHas(
                 'matchedFather',
-                fn ($father) => $father->where('marga_id', $user->marga_id),
+                fn ($father) => $father->whereIn('marga_id', $user->accessibleMargaIds()),
             ))
             ->latest()
             ->paginate(15, ['*'], 'family_page')
@@ -109,7 +112,7 @@ class ContributionController extends Controller
         $eventRequests = Event::query()
             ->with(['creator.marga', 'marga', 'reviewer'])
             ->where('status', Event::STATUS_PENDING)
-            ->when(! $user->isAdmin(), fn ($query) => $query->where('marga_id', $user->marga_id))
+            ->when(! $user->isAdmin(), fn ($query) => $query->whereIn('marga_id', $user->accessibleMargaIds()))
             ->latest()
             ->paginate(15, ['*'], 'event_page')
             ->withQueryString()
@@ -134,7 +137,7 @@ class ContributionController extends Controller
             ->where('status', Story::STATUS_PENDING)
             ->when(! $user->isAdmin(), fn ($query) => $query->where(fn ($query) => $query
                 ->where('classification', Story::CLASSIFICATION_GENERAL)
-                ->orWhere('marga_id', $user->marga_id)))
+                ->orWhereIn('marga_id', $user->accessibleMargaIds())))
             ->latest()
             ->paginate(15, ['*'], 'story_page')
             ->withQueryString()
@@ -156,7 +159,7 @@ class ContributionController extends Controller
 
         $deletionRequests = FamilyTreeDeletionRequest::query()
             ->with(['requester.marga', 'marga', 'reviewer'])
-            ->when(! $user->isAdmin(), fn ($query) => $query->where('marga_id', $user->marga_id))
+            ->when(! $user->isAdmin(), fn ($query) => $query->whereIn('marga_id', $user->accessibleMargaIds()))
             ->latest()
             ->paginate(15, ['*'], 'deletion_page')
             ->withQueryString()
@@ -177,7 +180,7 @@ class ContributionController extends Controller
             ->with(['requester.marga', 'person.marga', 'reviewer'])
             ->when(! $user->isAdmin(), fn ($query) => $query->whereHas(
                 'person',
-                fn ($person) => $person->where('marga_id', $user->marga_id),
+                fn ($person) => $person->whereIn('marga_id', $user->accessibleMargaIds()),
             ))
             ->latest()
             ->paginate(15, ['*'], 'identity_page')
@@ -343,7 +346,7 @@ class ContributionController extends Controller
     {
         abort_unless(
             $user->isAdmin()
-            || ($user->isContributor() && $user->marga_id === $contribution->matchedFather->marga_id),
+            || ($user->isContributor() && $user->accessibleMargaIds()->contains($contribution->matchedFather->marga_id)),
             403,
         );
     }

@@ -105,11 +105,6 @@ export function AppSidebar() {
                       label: 'Kelola Data',
                       items: [
                           {
-                              title: 'Data Akun',
-                              href: accounts.index(),
-                              icon: Users,
-                          },
-                          {
                               title: 'Data Anggota',
                               href: people.index(),
                               icon: Users,
@@ -159,6 +154,11 @@ export function AppSidebar() {
                   {
                       label: 'Administrasi',
                       items: [
+                          {
+                              title: 'Data Pengguna',
+                              href: accounts.index(),
+                              icon: Users,
+                          },
                           {
                               title: 'Sub Admin',
                               href: subAdmins.index(),

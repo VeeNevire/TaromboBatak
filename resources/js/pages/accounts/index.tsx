@@ -1,5 +1,12 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { Pencil, Plus, ShieldCheck, Trash, UserRound } from 'lucide-react';
+import {
+    History,
+    Pencil,
+    Plus,
+    ShieldCheck,
+    Trash,
+    UserRound,
+} from 'lucide-react';
 import { useState } from 'react';
 import { AppAvatar } from '@/components/app-avatar';
 import { Button } from '@/components/ui/button';
@@ -23,6 +30,7 @@ type Account = {
     role: string;
     current_person: string | null;
     marga: string | null;
+    managed_margas: string[];
     created_at: string | null;
 };
 
@@ -33,6 +41,14 @@ type Page = {
     total: number;
     prev_page_url: string | null;
     next_page_url: string | null;
+};
+
+type ActivityLog = {
+    id: number;
+    action: 'created' | 'updated' | 'deleted';
+    description: string;
+    actor: string;
+    created_at: string | null;
 };
 
 const roleLabels: Record<string, string> = {
@@ -52,6 +68,9 @@ export default function AccountsIndex({
 }) {
     const [search, setSearch] = useState(filters.search);
     const [toDelete, setToDelete] = useState<Account | null>(null);
+    const [activityAccount, setActivityAccount] = useState<Account | null>(null);
+    const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+    const [activityLoading, setActivityLoading] = useState(false);
     const deleteForm = useForm({});
 
     const applyFilters = (nextSearch = search, nextRole = filters.role) => {
@@ -71,6 +90,29 @@ return;
             preserveScroll: true,
             onSuccess: () => setToDelete(null),
         });
+    };
+
+    const openActivityLog = async (account: Account) => {
+        setActivityAccount(account);
+        setActivityLogs([]);
+        setActivityLoading(true);
+
+        try {
+            const response = await fetch(accounts.activityLog(account.id).url, {
+                headers: { Accept: 'application/json' },
+            });
+
+            if (!response.ok) {
+                throw new Error('Gagal memuat log aktivitas.');
+            }
+
+            const payload = (await response.json()) as { logs: ActivityLog[] };
+            setActivityLogs(payload.logs ?? []);
+        } catch {
+            setActivityLogs([]);
+        } finally {
+            setActivityLoading(false);
+        }
     };
 
     return (
@@ -155,6 +197,9 @@ return;
                                     <th className="px-3 py-3 font-medium">
                                         Dibuat
                                     </th>
+                                    <th className="px-3 py-3 font-medium">
+                                        Log Aktivitas
+                                    </th>
                                     <th className="px-3 py-3 text-right font-medium">
                                         Aksi
                                     </th>
@@ -195,10 +240,27 @@ return;
                                             {account.current_person ?? '-'}
                                         </td>
                                         <td className="px-3 py-3 text-tb-on-surface-variant">
-                                            {account.marga ?? '-'}
+                                            <div>{account.marga ?? '-'}</div>
+                                            {account.managed_margas.length > 0 && (
+                                                <div className="mt-1 max-w-52 text-xs text-tb-primary">
+                                                    Kelola: {account.managed_margas.join(', ')}
+                                                </div>
+                                            )}
                                         </td>
                                         <td className="px-3 py-3 text-tb-on-surface-variant">
                                             {account.created_at ?? '-'}
+                                        </td>
+                                        <td className="px-3 py-3">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                title="Lihat Log Aktivitas"
+                                                className="gap-1.5 text-tb-primary hover:bg-tb-surface-container"
+                                                onClick={() => openActivityLog(account)}
+                                            >
+                                                <History className="size-4" />
+                                                Lihat Log
+                                            </Button>
                                         </td>
                                         <td className="px-3 py-3">
                                             <div className="flex justify-end gap-1">
@@ -235,7 +297,7 @@ return;
                                 {page.data.length === 0 && (
                                     <tr>
                                         <td
-                                            colSpan={7}
+                                            colSpan={8}
                                             className="px-3 py-10 text-center text-tb-on-surface-variant"
                                         >
                                             Belum ada akun yang sesuai.
@@ -309,6 +371,51 @@ return;
                                 : 'Ya, Hapus'}
                         </Button>
                     </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={activityAccount !== null}
+                onOpenChange={(open) => !open && setActivityAccount(null)}
+            >
+                <DialogContent className="border-tb-outline-variant bg-tb-surface-bright sm:max-w-xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-tb-on-surface">
+                            Log Aktivitas Akun
+                        </DialogTitle>
+                        <DialogDescription>
+                            Riwayat perubahan untuk {activityAccount?.name}.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {activityLoading ? (
+                        <p className="py-8 text-center text-sm text-tb-on-surface-variant">
+                            Memuat log aktivitas...
+                        </p>
+                    ) : activityLogs.length === 0 ? (
+                        <p className="py-8 text-center text-sm text-tb-on-surface-variant">
+                            Belum ada aktivitas tercatat.
+                        </p>
+                    ) : (
+                        <div className="max-h-80 overflow-y-auto rounded-lg border border-tb-outline-variant">
+                            <div className="divide-y divide-tb-outline-variant">
+                                {activityLogs.map((log) => (
+                                    <div key={log.id} className="grid gap-1 px-4 py-3">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                            <span className="text-sm font-semibold text-tb-on-surface">
+                                                {log.description}
+                                            </span>
+                                            <span className="text-xs text-tb-on-surface-variant">
+                                                {log.created_at ?? '-'}
+                                            </span>
+                                        </div>
+                                        <span className="text-xs text-tb-on-surface-variant">
+                                            Oleh {log.actor}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </DialogContent>
             </Dialog>
         </>

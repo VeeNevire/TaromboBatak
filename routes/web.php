@@ -158,6 +158,7 @@ Route::middleware(['auth', 'role.staff'])->group(function () {
 
 Route::middleware(['auth', 'role.admin'])->group(function () {
     Route::resource('accounts', AccountController::class)->except(['show']);
+    Route::get('accounts/{account}/activity-log', [AccountController::class, 'activityLog'])->name('accounts.activity-log');
     Route::resource('sub-admins', SubAdminController::class)->except(['show']);
     Route::post('identity-requests/{identityRequest}/cancel', [IdentityRequestController::class, 'cancel'])->name('identity-requests.cancel');
     Route::post('dashboard/contributions/contributors', [ContributionController::class, 'storeContributor'])->name('contributions.contributors.store');

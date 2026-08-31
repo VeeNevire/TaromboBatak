@@ -21,6 +21,7 @@ type Props = {
     showProfileOnName?: boolean;
     readOnly?: boolean;
     markFemaleLineage?: boolean;
+    collapseDepth?: number;
 };
 
 type LineageLine = {
@@ -68,6 +69,7 @@ function TreeBranch({
     lineageIds,
     femaleLineage,
     markFemaleLineage,
+    collapseDepth,
     alternativeTrees,
     nodeIdPrefix,
 }: {
@@ -89,6 +91,7 @@ function TreeBranch({
     lineageIds: ReadonlySet<string>;
     femaleLineage: boolean;
     markFemaleLineage: boolean;
+    collapseDepth?: number;
 }) {
     const [activeAlternativeId, setActiveAlternativeId] = useState<
         number | null
@@ -231,6 +234,7 @@ function TreeBranch({
                                 child.gender?.toUpperCase() === 'P'
                             }
                             markFemaleLineage={markFemaleLineage}
+                            collapseDepth={collapseDepth}
                         />
                     ))}
                 </ul>
@@ -310,6 +314,7 @@ export function DescendantsTree({
     nodeIdPrefix = 'tree-node',
     lineagePath = EMPTY_LINEAGE_PATH,
     markFemaleLineage = false,
+    collapseDepth,
 }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [profilePerson, setProfilePerson] = useState<TaromboPerson | null>(
@@ -376,7 +381,11 @@ export function DescendantsTree({
             visited.add(id);
             const children = childrenOf.get(id) ?? [];
 
-            if (depth >= 3 && children.length > 0 && !lineageIds.has(id)) {
+            if (
+                depth >= (collapseDepth ?? 3) &&
+                children.length > 0 &&
+                !lineageIds.has(id)
+            ) {
                 initial.add(id);
             }
 
@@ -536,6 +545,7 @@ export function DescendantsTree({
                             lineageIds={lineageIds}
                             femaleLineage={root.gender?.toUpperCase() === 'P'}
                             markFemaleLineage={markFemaleLineage}
+                            collapseDepth={collapseDepth}
                         />
                     ))}
                 </ul>
