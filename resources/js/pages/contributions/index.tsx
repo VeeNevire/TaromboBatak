@@ -4,6 +4,7 @@ import {
     BookOpen,
     CalendarDays,
     Check,
+    ExternalLink,
     MessageCircle,
     Plus,
     Share2,
