@@ -199,7 +199,7 @@ test('contributors can access and create family data for managed margas', functi
     ]);
 });
 
-test('contributors see only family trees rooted in their managed margas', function () {
+test('contributors see one managed marga entry instead of separate family trees', function () {
     $managedMarga = Marga::factory()->create(['name' => 'Hutabarat']);
     $outsideMarga = Marga::factory()->create(['name' => 'Silaban']);
     $contributor = User::factory()->asContributorMember()->create();
@@ -209,6 +209,7 @@ test('contributors see only family trees rooted in their managed margas', functi
         'name' => 'Akar Hutabarat',
         'marga_id' => $managedMarga->id,
     ]);
+    $managedMarga->update(['identity_person_id' => $managedRoot->id]);
     $managedTree = FamilyTree::create([
         'user_id' => $contributor->id,
         'root_person_id' => $managedRoot->id,
@@ -234,9 +235,10 @@ test('contributors see only family trees rooted in their managed margas', functi
         ->get(route('contributions.index'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->has('managedFamilyTrees', 1)
-            ->where('managedFamilyTrees.0.id', $managedTree->id)
-            ->where('managedFamilyTrees.0.marga', 'Hutabarat'));
+            ->has('managedMargas', 1)
+            ->where('managedMargas.0.id', $managedMarga->id)
+            ->where('managedMargas.0.name', 'Hutabarat')
+            ->where('managedMargas.0.identity_person_name', 'Akar Hutabarat'));
 
     $this->actingAs($contributor)
         ->get(route('family-trees.show', $managedTree))

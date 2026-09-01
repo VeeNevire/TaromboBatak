@@ -25,7 +25,6 @@ class MargaController extends Controller
         $margas = Marga::query()
             ->with('identityPerson:id,name')
             ->withCount('people')
-            ->orderBy('people_count', 'desc')
             ->orderBy('name')
             ->get()
             ->map(fn (Marga $marga) => [

@@ -260,19 +260,19 @@ class ContributionController extends Controller
             ? $user->managedMargas()->pluck('margas.id')
             : collect();
 
-        $managedFamilyTrees = ! $user->isAdmin()
-            ? FamilyTree::query()
-                ->with(['user:id,name', 'rootPerson:id,name,marga_id', 'rootPerson.marga:id,name'])
-                ->whereHas('rootPerson', fn ($root) => $root->whereIn('marga_id', $managedMargaIds))
-                ->latest('updated_at')
+        $managedMargas = ! $user->isAdmin()
+            ? Marga::query()
+                ->with('identityPerson:id,name')
+                ->withCount('people')
+                ->whereKey($managedMargaIds)
+                ->orderBy('name')
                 ->get()
-                ->map(fn (FamilyTree $tree) => [
-                    'id' => $tree->id,
-                    'name' => $tree->name ?? 'Silsilah '.$tree->rootPerson?->name,
-                    'root' => $tree->rootPerson?->name ?? '-',
-                    'marga' => $tree->rootPerson?->marga?->name ?? '-',
-                    'owner' => $tree->user?->name ?? '-',
-                    'updated_at' => $tree->updated_at?->format('d M Y H:i'),
+                ->map(fn (Marga $marga) => [
+                    'id' => $marga->id,
+                    'name' => $marga->name,
+                    'people_count' => $marga->people_count,
+                    'identity_person_id' => $marga->identity_person_id,
+                    'identity_person_name' => $marga->identityPerson?->name,
                 ])
                 ->values()
                 ->all()
@@ -313,7 +313,7 @@ class ContributionController extends Controller
             'deletionRequests' => $deletionRequests,
             'identityRequests' => $identityRequests,
             'margaAccessRequests' => $margaAccessRequests,
-            'managedFamilyTrees' => $managedFamilyTrees,
+            'managedMargas' => $managedMargas,
             'contributors' => $contributors,
             'margas' => $user->isAdmin()
                 ? Marga::query()->orderBy('name')->get(['id', 'name'])

@@ -4,9 +4,9 @@ import {
     BookOpen,
     CalendarDays,
     Check,
-    ExternalLink,
     MessageCircle,
     Plus,
+    Share2,
     Trash2,
     UserRoundCog,
     X,
@@ -38,7 +38,6 @@ import contacts from '@/routes/contacts';
 import contributions from '@/routes/contributions';
 import events from '@/routes/events';
 import familyTreeDeletions from '@/routes/family-tree-deletions';
-import familyTrees from '@/routes/family-trees';
 import identityRequestRoutes from '@/routes/identity-requests';
 import stories from '@/routes/stories';
 import tarombo from '@/routes/tarombo';
@@ -139,13 +138,12 @@ type DeletionRequest = {
     created_at: string | null;
 };
 
-type ManagedFamilyTree = {
+type ManagedMarga = {
     id: number;
     name: string;
-    root: string;
-    marga: string;
-    owner: string;
-    updated_at: string | null;
+    people_count: number;
+    identity_person_id: number | null;
+    identity_person_name: string | null;
 };
 
 type Paginated<T> = {
@@ -164,7 +162,7 @@ type Props = {
     deletionRequests: Paginated<DeletionRequest>;
     identityRequests: Paginated<IdentityApproval>;
     margaAccessRequests: MargaAccessApproval[];
-    managedFamilyTrees: ManagedFamilyTree[];
+    managedMargas: ManagedMarga[];
     contributors: Contributor[];
     margas: { id: number; name: string }[];
     canManageContributors: boolean;
@@ -178,7 +176,7 @@ export default function ContributionsIndex({
     deletionRequests,
     identityRequests,
     margaAccessRequests,
-    managedFamilyTrees,
+    managedMargas,
     contributors,
     margas,
     canManageContributors,
@@ -209,6 +207,42 @@ export default function ContributionsIndex({
         marga_id: '',
         role: 'contributor_member',
     });
+    const [copiedMargaId, setCopiedMargaId] = useState<number | null>(null);
+
+    const lowerTreeUrl = (marga: ManagedMarga) =>
+        tarombo.fullscreen('tree', {
+            query: {
+                marga_id: marga.id,
+                marga_direction: 'lower',
+            },
+        }).url;
+
+    const openManagedMarga = (marga: ManagedMarga) => {
+        if (marga.identity_person_id === null) {
+            return;
+        }
+
+        window.open(lowerTreeUrl(marga), '_blank', 'noopener,noreferrer');
+    };
+
+    const shareManagedMarga = async (marga: ManagedMarga) => {
+        if (marga.identity_person_id === null) {
+            return;
+        }
+
+        const url = new URL(lowerTreeUrl(marga), window.location.origin).href;
+
+        if (navigator.share) {
+            await navigator.share({
+                title: `Silsilah ${marga.name}`,
+                url,
+            });
+        } else if (navigator.clipboard) {
+            await navigator.clipboard.writeText(url);
+            setCopiedMargaId(marga.id);
+            window.setTimeout(() => setCopiedMargaId(null), 1800);
+        }
+    };
 
     const approve = (request: Contribution) => {
         router.post(
@@ -453,33 +487,49 @@ export default function ContributionsIndex({
                     </p>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                    {managedFamilyTrees.length === 0 ? (
+                    {managedMargas.length === 0 ? (
                         <p className="rounded-lg border border-dashed border-tb-outline-variant px-4 py-6 text-center text-sm text-tb-on-surface-variant">
                             Belum ada silsilah pada marga yang dikelola.
                         </p>
                     ) : (
-                        managedFamilyTrees.map((tree) => (
+                        managedMargas.map((marga) => (
                             <div
-                                key={tree.id}
-                                className="flex flex-col gap-3 rounded-lg border border-tb-outline-variant p-4 md:flex-row md:items-center md:justify-between"
+                                key={marga.id}
+                                role="button"
+                                tabIndex={marga.identity_person_id === null ? -1 : 0}
+                                onClick={() => openManagedMarga(marga)}
+                                onKeyDown={(event) => {
+                                    if (event.key === 'Enter' || event.key === ' ') {
+                                        event.preventDefault();
+                                        openManagedMarga(marga);
+                                    }
+                                }}
+                                className="flex flex-col gap-3 rounded-lg border border-tb-outline-variant p-4 transition-shadow md:flex-row md:items-center md:justify-between"
                             >
                                 <div className="min-w-0 space-y-1">
                                     <p className="font-medium text-tb-on-surface">
-                                        {tree.name}
+                                        {marga.name}
                                     </p>
                                     <p className="text-sm text-tb-on-surface-variant">
-                                        Marga: {tree.marga} Â· Akar: {tree.root}
+                                        Pemilik marga:{' '}
+                                        {marga.identity_person_name ?? 'Belum terhubung'}
                                     </p>
                                     <p className="text-xs text-tb-on-surface-variant">
-                                        Pemilik: {tree.owner} Â· Diperbarui:{' '}
-                                        {tree.updated_at ?? '-'}
+                                        {marga.people_count} anggota · Silsilah bawah
                                     </p>
                                 </div>
-                                <Button asChild variant="outline" className="shrink-0">
-                                    <Link href={familyTrees.show(tree.id).url}>
-                                        <ExternalLink className="size-4" />
-                                        Buka Silsilah
-                                    </Link>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="shrink-0"
+                                    disabled={marga.identity_person_id === null}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        void shareManagedMarga(marga);
+                                    }}
+                                >
+                                    <Share2 className="size-4" />
+                                    {copiedMargaId === marga.id ? 'Tersalin' : 'Share'}
                                 </Button>
                             </div>
                         ))

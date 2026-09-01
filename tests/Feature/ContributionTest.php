@@ -295,3 +295,28 @@ test('approved marga access exposes a staff tree without contribution approval a
     expect($viewer->can('update', $root))->toBeFalse()
         ->and($viewer->can('update', $addedPerson))->toBeTrue();
 });
+
+test('a contributor sees trees from every managed marga in the family form', function () {
+    $accountMarga = Marga::factory()->create(['name' => 'Marga Akun']);
+    $managedMarga = Marga::factory()->create(['name' => 'Marga Kelolaan']);
+    $contributor = User::factory()->asMainContributor()->withMarga($accountMarga->id)->create();
+    $contributor->managedMargas()->attach($managedMarga);
+    $admin = User::factory()->asAdmin()->create();
+    $root = Person::factory()->create(['marga_id' => $managedMarga->id]);
+    $tree = FamilyTree::create([
+        'user_id' => $admin->id,
+        'root_person_id' => $root->id,
+        'name' => 'Silsilah Marga Kelolaan',
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $root->id,
+    ]);
+
+    $this->actingAs($contributor)
+        ->get(route('people.create'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('margas', fn ($margas) => collect($margas)->pluck('id')->contains($managedMarga->id))
+            ->where('approvedMargaTrees.0.id', $tree->id));
+});
