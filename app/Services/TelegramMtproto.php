@@ -173,18 +173,19 @@ class TelegramMtproto
         File::ensureDirectoryExists(dirname($sessionPath), 0700, true);
 
         $class = 'danog\\MadelineProto\\API';
-        $settingsClass = 'danog\\MadelineProto\\Settings\\AppInfo';
-
         return new $class($sessionPath, $this->settings());
     }
 
     private function settings(): object
     {
-        $settingsClass = 'danog\\MadelineProto\\Settings\\AppInfo';
+        $settingsClass = 'danog\\MadelineProto\\Settings';
         $settings = new $settingsClass;
-        $settings
+        $appInfoClass = 'danog\\MadelineProto\\Settings\\AppInfo';
+        $appInfo = new $appInfoClass;
+        $appInfo
             ->setApiId((int) config('services.telegram.api_id'))
             ->setApiHash((string) config('services.telegram.api_hash'));
+        $settings->setAppInfo($appInfo);
 
         $loggerClass = 'danog\\MadelineProto\\Settings\\Logger';
         $logger = new $loggerClass;
