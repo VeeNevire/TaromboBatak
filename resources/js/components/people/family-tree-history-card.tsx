@@ -6,6 +6,8 @@ import {
     Check,
     Copy,
     Crown,
+    ChevronLeft,
+    ChevronRight,
     Maximize2,
     Pencil,
     Search,
@@ -82,6 +84,15 @@ export function ApprovedMargaTreeList({
     headerAction?: ReactNode;
     asCard?: boolean;
 }) {
+    const [currentPage, setCurrentPage] = useState(1);
+    const totalPages = Math.max(1, Math.ceil(entries.length / ITEMS_PER_PAGE));
+    const safePage = Math.min(currentPage, totalPages);
+    const startIndex = (safePage - 1) * ITEMS_PER_PAGE;
+    const visibleEntries = entries.slice(
+        startIndex,
+        startIndex + ITEMS_PER_PAGE,
+    );
+
     const content = (
         <section className="grid gap-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -102,15 +113,16 @@ export function ApprovedMargaTreeList({
                     </p>
                 </div>
             ) : (
-                <ol className="grid gap-3">
-                    {entries.map((entry, index) => (
+                <>
+                    <ol className="grid gap-3">
+                     {visibleEntries.map((entry, index) => (
                         <li
                             key={entry.id}
                             className="flex flex-col gap-4 rounded-xl border border-tb-outline-variant bg-tb-surface-container/35 p-4 sm:flex-row sm:items-center sm:justify-between"
                         >
                             <div className="flex min-w-0 items-start gap-3">
                                 <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-tb-surface-bright text-sm font-bold text-tb-on-surface-variant ring-1 ring-tb-outline-variant">
-                                    {index + 1}
+                                     {startIndex + index + 1}
                                 </span>
                                 <div className="min-w-0">
                                     <p className="truncate text-sm font-semibold text-tb-on-surface">
@@ -130,7 +142,37 @@ export function ApprovedMargaTreeList({
                             </Link>
                         </li>
                     ))}
-                </ol>
+                    </ol>
+                    {totalPages > 1 && (
+                     <div className="flex items-center justify-between gap-3 pt-1">
+                         <p className="text-xs text-tb-on-surface-variant">
+                             Halaman {safePage} dari {totalPages}
+                         </p>
+                         <div className="flex items-center gap-1">
+                             <Button
+                                 type="button"
+                                 variant="outline"
+                                 size="icon"
+                                 aria-label="Halaman silsilah marga sebelumnya"
+                                 disabled={safePage === 1}
+                                 onClick={() => setCurrentPage(Math.max(1, safePage - 1))}
+                             >
+                                 <ChevronLeft className="size-4" />
+                             </Button>
+                             <Button
+                                 type="button"
+                                 variant="outline"
+                                 size="icon"
+                                 aria-label="Halaman silsilah marga berikutnya"
+                                 disabled={safePage === totalPages}
+                                 onClick={() => setCurrentPage(Math.min(totalPages, safePage + 1))}
+                             >
+                                 <ChevronRight className="size-4" />
+                             </Button>
+                         </div>
+                     </div>
+                    )}
+                </>
             )}
         </section>
     );

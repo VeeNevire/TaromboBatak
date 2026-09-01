@@ -6,6 +6,30 @@ use App\Models\User;
 use App\Services\MargaIdentityPersonService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Inertia\Testing\AssertableInertia as Assert;
+
+test('marga index is alphabetical and exposes connection state from its identity', function () {
+    $admin = User::factory()->asAdmin()->create();
+    $root = Person::factory()->create(['chain' => '1', 'father_id' => null]);
+    $connectedIdentity = Person::factory()->create([
+        'chain' => '1-1',
+        'father_id' => $root->id,
+    ]);
+    $zeta = Marga::factory()->create([
+        'name' => 'Zeta',
+        'identity_person_id' => $connectedIdentity->id,
+    ]);
+    $alpha = Marga::factory()->create(['name' => 'Alpha']);
+
+    $this->actingAs($admin)
+        ->get(route('marga.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('margas.0.id', $alpha->id)
+            ->where('margas.0.identity_person_id', null)
+            ->where('margas.1.id', $zeta->id)
+            ->where('margas.1.identity_person_id', $connectedIdentity->id));
+});
 
 test('marga identity options use connected tarombo people through generation eleven without family tree nodes', function () {
     $root = Person::factory()->create([

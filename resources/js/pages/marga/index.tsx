@@ -470,6 +470,18 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
                                 <p className="text-xs font-medium text-tb-primary">
                                     {m.people_count} anggota
                                 </p>
+                                <span
+                                    className={cn(
+                                        'w-fit rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                                        m.identity_person_id !== null
+                                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                                            : 'bg-tb-surface-container text-tb-on-surface-variant',
+                                    )}
+                                >
+                                    {m.identity_person_id !== null
+                                        ? 'Connected'
+                                        : 'Not Connected'}
+                                </span>
                             </CardContent>
                                 </Card>
                             </motion.div>
