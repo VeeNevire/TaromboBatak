@@ -68,6 +68,14 @@ const mediaQuery = (): MediaQueryList | null => {
     return window.matchMedia('(prefers-color-scheme: dark)');
 };
 
+const subscribeToSystemAppearance = (callback: () => void) => {
+    const query = mediaQuery();
+
+    query?.addEventListener('change', callback);
+
+    return () => query?.removeEventListener('change', callback);
+};
+
 const handleSystemThemeChange = (): void => applyTheme(currentAppearance);
 
 export function initializeTheme(): void {
@@ -94,9 +102,17 @@ export function useAppearance(): UseAppearanceReturn {
         () => 'system',
     );
 
-    const resolvedAppearance: ResolvedAppearance = isDarkMode(appearance)
-        ? 'dark'
-        : 'light';
+    const systemPrefersDark = useSyncExternalStore(
+        subscribeToSystemAppearance,
+        prefersDark,
+        () => false,
+    );
+
+    const resolvedAppearance: ResolvedAppearance =
+        appearance === 'dark' ||
+        (appearance === 'system' && systemPrefersDark)
+            ? 'dark'
+            : 'light';
 
     const updateAppearance = (mode: Appearance): void => {
         currentAppearance = mode;
