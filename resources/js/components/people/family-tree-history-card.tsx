@@ -1,6 +1,8 @@
 import { Link, router } from '@inertiajs/react';
 import {
+    ArrowDown,
     ArrowLeft,
+    ArrowUp,
     ArrowUpRight,
     Clock3,
     Check,
@@ -142,17 +144,36 @@ export function ApprovedMargaTreeList({
                                     </p>
                                 </div>
                             </div>
-                            <Link
-                                href={tarombo.fullscreen('tree', {
-                                    query: {
-                                        marga_id: entry.id,
-                                        marga_direction: 'lower',
-                                    },
-                                })}
-                                className="text-tb-on-primary inline-flex items-center justify-center gap-1.5 rounded-lg bg-tb-primary px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-90"
-                            >
-                                <TreePine className="size-3.5" /> Buka
-                            </Link>
+                            <div className="grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-2">
+                                <Link
+                                    href={tarombo.fullscreen('tree', {
+                                        query: {
+                                            marga_id: entry.id,
+                                            marga_direction: 'upper',
+                                        },
+                                    })}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    aria-label={`Pohon Silsilah Atas ${entry.name}`}
+                                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
+                                >
+                                    <ArrowUp className="size-3.5" /> Pohon Atas
+                                </Link>
+                                <Link
+                                    href={tarombo.fullscreen('tree', {
+                                        query: {
+                                            marga_id: entry.id,
+                                            marga_direction: 'lower',
+                                        },
+                                    })}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    aria-label={`Pohon Silsilah Bawah ${entry.name}`}
+                                    className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-tb-primary px-3 py-2 text-xs font-semibold text-tb-on-primary transition-opacity hover:opacity-90"
+                                >
+                                    <ArrowDown className="size-3.5" /> Pohon Bawah
+                                </Link>
+                            </div>
                         </li>
                     ))}
                     </ol>
