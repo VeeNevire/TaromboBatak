@@ -228,6 +228,25 @@ class TaromboTreeService
     }
 
     /**
+     * Return the complete patrilineal path from the topmost ancestor through
+     * the selected person.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function rowsForPersonWithAncestors(Person $person): array
+    {
+        $ids = $person->lineage()
+            ->push($person)
+            ->pluck('id');
+
+        return $this->rows(
+            Person::query()
+                ->whereIn('id', $ids)
+                ->orderBy('id'),
+        );
+    }
+
+    /**
      * Build the marga legend for the radial tarombo diagram.
      *
      * @return array<int, array{name: string, color: string}>
