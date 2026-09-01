@@ -273,7 +273,13 @@ class TaromboController extends Controller
             ->where(function (Builder $selectable): void {
                 $selectable
                     ->whereNotNull('based_on_id')
-                    ->orWhereHas('rootPerson', fn (Builder $root) => $root->whereNull('father_id'));
+                    ->orWhereHas('rootPerson', fn (Builder $root) => $root
+                        ->whereNull('father_id')
+                        ->whereNull('mother_id')
+                        ->whereDoesntHave('familyTreeNodes', fn (Builder $nodes) => $nodes
+                            ->where(fn (Builder $parentage) => $parentage
+                                ->whereNotNull('father_node_id')
+                                ->orWhereNotNull('mother_node_id'))));
             })
             ->when(! $user->isAdmin(), function (Builder $query) use ($user): void {
                 $query->where(function (Builder $access) use ($user): void {
@@ -309,7 +315,7 @@ class TaromboController extends Controller
             })
             ->with(['rootPerson:id,name'])
             ->withExists(['contributionRequests as approved_for_selection' => function (Builder $requests) use ($user): void {
-                    $requests->where('status', ContributionRequest::STATUS_APPROVED)
+                $requests->where('status', ContributionRequest::STATUS_APPROVED)
                     ->when(
                         ! $user->isAdmin() && ! $user->isContributor(),
                         fn (Builder $query) => $query->whereHas('matchedFather', fn (Builder $father) => $father

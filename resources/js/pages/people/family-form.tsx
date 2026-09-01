@@ -2821,7 +2821,7 @@ setVillagesLoading(false);
                                                 />
                                             </div>
 
-                                            <div className="grid gap-3 rounded-xl border border-tb-outline-variant bg-tb-surface-container/30 p-4">
+                                            <div id="related-stories" className="grid gap-3 rounded-xl border border-tb-outline-variant bg-tb-surface-container/30 p-4">
                                                 <div className="flex flex-wrap items-start justify-between gap-3">
                                                     <div>
                                                         <h3 className="flex items-center gap-2 text-sm font-semibold text-tb-on-surface">

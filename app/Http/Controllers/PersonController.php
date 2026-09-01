@@ -41,13 +41,18 @@ class PersonController extends Controller
     public function index(Request $request): Response
     {
         $user = $request->user();
-        $isStaff = $user->isStaff();
+        $isGuest = $user === null;
+        $isStaff = $user?->isStaff() ?? false;
 
         $people = Person::query()
-            ->with(['marga', 'father'])
+            ->with([
+                'marga',
+                'father' => fn ($query) => $query->when($isGuest, fn ($father) => $father->public()),
+            ])
             ->withCount('children')
+            ->when($isGuest, fn ($query) => $query->public())
             ->when(
-                ! $isStaff && ! $user->isContributor(),
+                ! $isGuest && ! $isStaff && ! $user->isContributor(),
                 fn ($query) => $query
                     ->where('marga_id', $user->marga_id)
                     ->whereHas(
@@ -56,7 +61,7 @@ class PersonController extends Controller
                     ),
             )
             ->when(
-                ! $isStaff && $user->isContributor(),
+                ! $isGuest && ! $isStaff && $user->isContributor(),
                 fn ($query) => $query->whereIn('marga_id', $user->accessibleMargaIds()),
             )
             ->when($request->filled('search'), function ($query) use ($request) {
@@ -70,35 +75,46 @@ class PersonController extends Controller
                 });
             })
             ->when($request->filled('marga_id'), fn ($query) => $query->where('marga_id', $request->integer('marga_id')))
-            ->orderBy('name')
-            ->get()
-            ->map(fn (Person $person) => [
-                'id' => $person->id,
-                'name' => $person->name,
-                'alias' => $person->alias,
-                'marga' => $person->marga?->name,
-                'marga_id' => $person->marga_id,
-                'marga_color' => $person->marga?->color,
-                'parent' => $person->father?->name,
-                'children_count' => $person->children_count,
-                'birth_year' => $person->birth_year,
-                'chain' => $person->chain,
-                'pending' => (bool) $person->pending_father,
-                'created_at' => $person->created_at?->format('d M Y'),
-                'editable' => $user->can('update', $person),
-            ]);
+            ->orderBy('name');
 
-        $margas = Marga::query()
-            ->when(! $isStaff, fn ($query) => $query->whereIn('id', $user->accessibleMargaIds()))
-            ->orderBy('name')
-            ->get()
-            ->map(fn (Marga $marga) => [
-                'id' => $marga->id,
-                'name' => $marga->name,
-            ]);
+        $mapPerson = fn (Person $person) => [
+            'id' => $person->id,
+            'name' => $person->name,
+            'alias' => $person->alias,
+            'marga' => $person->marga?->name,
+            'marga_id' => $person->marga_id,
+            'marga_color' => $person->marga?->color,
+            'parent' => $person->father?->name,
+            'children_count' => $person->children_count,
+            'birth_year' => $person->birth_year,
+            'chain' => $person->chain,
+            'pending' => (bool) $person->pending_father,
+            'created_at' => $person->created_at?->format('d M Y'),
+            'editable' => $user?->can('update', $person) ?? false,
+        ];
+
+        if ($isGuest) {
+            $paginatedPeople = $people
+                ->paginate(12)
+                ->withQueryString()
+                ->through($mapPerson);
+        } else {
+            $people = $people->get()->map($mapPerson);
+        }
+
+        $margas = $isGuest
+            ? collect()
+            : Marga::query()
+                ->when(! $isStaff, fn ($query) => $query->whereIn('id', $user->accessibleMargaIds()))
+                ->orderBy('name')
+                ->get()
+                ->map(fn (Marga $marga) => [
+                    'id' => $marga->id,
+                    'name' => $marga->name,
+                ]);
 
         return Inertia::render('people/index', [
-            'people' => [
+            'people' => $isGuest ? $paginatedPeople : [
                 'data' => $people->values()->all(),
                 'links' => [],
                 'current_page' => 1,
@@ -115,7 +131,35 @@ class PersonController extends Controller
             ],
             'margas' => $margas,
             'canManage' => $isStaff,
-            'hasMarga' => $isStaff || $user->accessibleMargaIds()->isNotEmpty(),
+            'hasMarga' => ! $isGuest && ($isStaff || $user->accessibleMargaIds()->isNotEmpty()),
+            'isGuest' => $isGuest,
+        ]);
+    }
+
+    public function publicPreview(Request $request): Response|RedirectResponse
+    {
+        if ($request->user() !== null) {
+            return to_route('people.create');
+        }
+
+        $margas = Marga::query()
+            ->whereNotNull('identity_person_id')
+            ->whereHas('people', fn ($query) => $query->public())
+            ->with('identityPerson:id,name')
+            ->withCount(['people as people_count' => fn ($query) => $query->public()])
+            ->orderBy('name')
+            ->get(['id', 'name', 'identity_person_id'])
+            ->map(fn (Marga $marga) => [
+                'id' => $marga->id,
+                'name' => $marga->name,
+                'identity_person_id' => $marga->identity_person_id,
+                'identity_person_name' => $marga->identityPerson?->name,
+                'people_count' => $marga->people_count,
+            ])
+            ->values();
+
+        return Inertia::render('people/public-preview', [
+            'margas' => $margas,
         ]);
     }
 

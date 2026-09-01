@@ -4,6 +4,7 @@ import {
     CalendarDays,
     ExternalLink,
     GitBranch,
+    MapPin,
     Pencil,
     UserRound,
 } from 'lucide-react';
@@ -111,8 +112,38 @@ export function PersonSummaryDialog({
                                         </dd>
                                     </div>
                                 )}
+                                {person.location &&
+                                    Object.values(person.location).some(Boolean) && (
+                                        <div className="flex items-start justify-between gap-4">
+                                            <dt className="flex items-center gap-1.5 text-tb-on-surface-variant">
+                                                <MapPin className="size-3.5" />
+                                                Lokasi
+                                            </dt>
+                                            <dd className="max-w-[65%] text-right font-medium text-tb-on-surface">
+                                                {[
+                                                    person.location.village,
+                                                    person.location.district,
+                                                    person.location.regency,
+                                                    person.location.province,
+                                                ]
+                                                    .filter(Boolean)
+                                                    .join(', ')}
+                                            </dd>
+                                        </div>
+                                    )}
                             </dl>
                         </section>
+
+                        {person.bio && (
+                            <section className="rounded-xl border border-tb-outline-variant bg-tb-surface-container/50 p-4">
+                                <h3 className="mb-2 font-semibold text-tb-on-surface">
+                                    Biografi
+                                </h3>
+                                <p className="whitespace-pre-line leading-relaxed text-tb-on-surface-variant">
+                                    {person.bio}
+                                </p>
+                            </section>
+                        )}
 
                         <section className="rounded-xl border border-tb-outline-variant bg-tb-surface-container/50 p-4">
                             <h3 className="mb-3 flex items-center gap-2 font-semibold text-tb-on-surface">
@@ -149,15 +180,22 @@ export function PersonSummaryDialog({
                             </dl>
                         </section>
 
-                        {person.relatedStories &&
-                            person.relatedStories.length > 0 && (
-                                <section className="rounded-xl border border-tb-outline-variant bg-tb-surface-container/50 p-4">
-                                    <h3 className="mb-3 flex items-center gap-2 font-semibold text-tb-on-surface">
+                        <section id="related-stories" className="rounded-xl border border-tb-outline-variant bg-tb-surface-container/50 p-4">
+                                    <div className="mb-3 flex items-center justify-between gap-3">
+                                        <h3 className="flex items-center gap-2 font-semibold text-tb-on-surface">
                                         <BookOpen className="size-4 text-tb-primary" />
                                         Sejarah/Cerita Terkait
-                                    </h3>
-                                    <ol className="grid gap-2">
-                                        {person.relatedStories.map(
+                                        </h3>
+                                        <Button asChild size="sm" variant="outline">
+                                            <Link href={`${peopleRoutes.edit({ person: Number(person.id) })}#related-stories`}>
+                                                Tambah Link
+                                            </Link>
+                                        </Button>
+                                    </div>
+                                    {person.relatedStories &&
+                                    person.relatedStories.length > 0 ? (
+                                        <ol className="grid gap-2">
+                                            {person.relatedStories.map(
                                             (story, index) => (
                                                 <li
                                                     key={`${story.url}-${index}`}
@@ -180,15 +218,25 @@ export function PersonSummaryDialog({
                                                         <ExternalLink className="size-4 shrink-0" />
                                                     </a>
                                                 </li>
-                                            ),
-                                        )}
-                                    </ol>
+                                                ),
+                                            )}
+                                        </ol>
+                                    ) : (
+                                        <p className="text-tb-on-surface-variant">
+                                            Belum ada link sejarah atau cerita.
+                                        </p>
+                                    )}
+                                    <p className="mt-3 text-xs text-tb-on-surface-variant">
+                                        Sumber:{' '}
+                                        <span className="font-medium text-tb-on-surface">
+                                            Link ke website lain
+                                        </span>
+                                    </p>
                                 </section>
-                            )}
                     </div>
 
                     <p className="text-xs text-tb-on-surface-variant">
-                        Sumber:{' '}
+                        Kontributor:{' '}
                         <span className="font-medium text-tb-on-surface">
                             {person.createdBy || 'Belum dicatat'}
                         </span>

@@ -1,7 +1,7 @@
 <?php
 
-use App\Http\Controllers\BudayaController;
 use App\Http\Controllers\AccountController;
+use App\Http\Controllers\BudayaController;
 use App\Http\Controllers\ChatGroupController;
 use App\Http\Controllers\ChatGroupMemberController;
 use App\Http\Controllers\ContactController;
@@ -41,6 +41,11 @@ Route::get('dashboard/news-feed', [NewsFeedController::class, 'index'])
 
 Route::get('dashboard/tarombo', [TaromboController::class, 'index'])
     ->name('tarombo.index');
+
+Route::get('silsilah-saya', [PersonController::class, 'publicPreview'])
+    ->name('people.public-preview');
+
+Route::get('people', [PersonController::class, 'index'])->name('people.index');
 
 Route::get('tarombo', [TaromboController::class, 'public'])->name('tarombo.view');
 
@@ -138,8 +143,6 @@ Route::middleware(['auth'])->group(function () {
         ->name('tarombo.snapshots.image');
     Route::delete('dashboard/tarombo/snapshots/{taromboSnapshot}', [TaromboSnapshotController::class, 'destroy'])
         ->name('tarombo.snapshots.destroy');
-
-    Route::get('people', [PersonController::class, 'index'])->name('people.index');
 
     Route::get('people/create', [PersonController::class, 'create'])->name('people.create');
 

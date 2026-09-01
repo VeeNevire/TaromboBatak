@@ -7,8 +7,87 @@ use App\Models\Person;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
-test('guests are redirected to login when visiting the people index', function () {
-    $this->get(route('people.index'))->assertRedirect(route('login'));
+test('guests can view only public people in the read-only data table', function () {
+    $publicFather = Person::factory()->create([
+        'name' => 'Ayah Publik',
+        'is_public' => true,
+    ]);
+    $privateFather = Person::factory()->create([
+        'name' => 'Ayah Privat',
+        'is_public' => false,
+    ]);
+    $publicPerson = Person::factory()->create([
+        'name' => 'Anggota Publik',
+        'father_id' => $privateFather->id,
+        'is_public' => true,
+    ]);
+    Person::factory()->create([
+        'name' => 'Anggota Privat',
+        'father_id' => $publicFather->id,
+        'is_public' => false,
+    ]);
+
+    $this->get(route('people.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('people/index')
+            ->where('isGuest', true)
+            ->where('canManage', false)
+            ->where('hasMarga', false)
+            ->has('margas', 0)
+            ->has('people.data', 2)
+            ->where('people.data.0.id', $publicPerson->id)
+            ->where('people.data.0.parent', null));
+});
+
+test('the guest data table paginates public people', function () {
+    Person::factory()->count(13)->create(['is_public' => true]);
+
+    $this->get(route('people.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('isGuest', true)
+            ->has('people.data', 12)
+            ->where('people.total', 13)
+            ->where('people.from', 1)
+            ->where('people.to', 12)
+            ->where('people.prev_page_url', null)
+            ->where('people.next_page_url', fn ($url) => is_string($url)));
+});
+
+test('guests can open the Silsilah Saya preview with public marga data', function () {
+    $publicMarga = Marga::factory()->create(['name' => 'Silaban']);
+    $publicRoot = Person::factory()->create([
+        'name' => 'Akar Silaban',
+        'marga_id' => $publicMarga->id,
+        'is_public' => true,
+    ]);
+    $publicMarga->update(['identity_person_id' => $publicRoot->id]);
+
+    $privateMarga = Marga::factory()->create(['name' => 'Marga Privat']);
+    $privateRoot = Person::factory()->create([
+        'marga_id' => $privateMarga->id,
+        'is_public' => false,
+    ]);
+    $privateMarga->update(['identity_person_id' => $privateRoot->id]);
+
+    $this->get(route('people.public-preview'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('people/public-preview')
+            ->has('margas', 1)
+            ->where('margas.0.id', $publicMarga->id)
+            ->where('margas.0.identity_person_name', 'Akar Silaban')
+            ->where('margas.0.people_count', 1));
+});
+
+test('authenticated users enter their editable Silsilah Saya page', function () {
+    $marga = Marga::factory()->create();
+    $user = User::factory()->withMarga($marga->id)->create();
+
+    $this->actingAs($user)
+        ->get(route('people.public-preview'))
+        ->assertRedirect(route('people.create'));
 });
 
 test('regular users only see their own marga inside their family trees', function () {

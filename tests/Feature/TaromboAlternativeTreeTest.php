@@ -222,14 +222,22 @@ test('vertical tarombo can select account and approved marga family trees', func
 test('vertical tarombo only lists top level and alternative family trees', function () {
     $admin = User::factory()->asAdmin()->create();
     $root = Person::factory()->create(['name' => 'Si Raja Batak']);
-    $branchRoot = Person::factory()->create([
-        'name' => 'Raja Isumbaon',
-        'father_id' => $root->id,
-    ]);
+    $branchRoot = Person::factory()->create(['name' => 'Raja Isumbaon']);
     $topLevelTree = FamilyTree::create([
         'user_id' => $admin->id,
         'root_person_id' => $root->id,
         'name' => 'Pohon Utama',
+    ]);
+    $rootNode = FamilyTreeNode::create([
+        'family_tree_id' => $topLevelTree->id,
+        'person_id' => $root->id,
+        'chain' => '1',
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $topLevelTree->id,
+        'person_id' => $branchRoot->id,
+        'father_node_id' => $rootNode->id,
+        'chain' => '1-1',
     ]);
     $branchTree = FamilyTree::create([
         'user_id' => $admin->id,
