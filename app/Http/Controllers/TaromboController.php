@@ -62,6 +62,7 @@ class TaromboController extends Controller
     public function fullscreen(Request $request, string $view): Response
     {
         [$people, $margas, $alternativeTrees, $identity, $familyTreeOptions, $selectedFamilyTreeId, $selectedTreePeople] = $this->treeData($request);
+        $service = app(TaromboTreeService::class);
 
         $margaTree = null;
 
@@ -81,6 +82,17 @@ class TaromboController extends Controller
 
             $marga = Marga::query()->with('identityPerson')->findOrFail($requestedMargaId);
             abort_if($marga->identity_person_id === null || $marga->identityPerson === null, 404, 'Identitas marga belum dipilih.');
+
+            // The normal scoped payload can omit the marga identity for a
+            // non-staff account. A marga tree must always contain its own
+            // identity and descendants, otherwise the React fallback uses
+            // the first unrelated row as the visual root.
+            $identityRows = collect($service->rowsForPerson($marga->identityPerson));
+            $people = collect($people)
+                ->merge($identityRows)
+                ->unique('id')
+                ->values()
+                ->all();
 
             $margaTree = [
                 'margaName' => $marga->name,
