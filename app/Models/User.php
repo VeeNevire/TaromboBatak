@@ -27,6 +27,8 @@ use Illuminate\Support\Carbon;
  * @property int|null $current_person_id
  * @property string|null $province_code
  * @property string|null $regency_code
+ * @property string|null $district_code
+ * @property string|null $village_code
  * @property string|null $two_factor_secret
  * @property string|null $two_factor_recovery_codes
  * @property Carbon|null $two_factor_confirmed_at
@@ -51,7 +53,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, ChatGroup> $ownedChatGroups
  * @property-read Collection<int, ChatGroupMember> $chatGroupMemberships
  */
-#[Fillable(['name', 'email', 'password', 'role', 'marga_id', 'current_person_id', 'province_code', 'regency_code'])]
+#[Fillable(['name', 'email', 'password', 'role', 'marga_id', 'current_person_id', 'province_code', 'regency_code', 'district_code', 'village_code'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable
 {

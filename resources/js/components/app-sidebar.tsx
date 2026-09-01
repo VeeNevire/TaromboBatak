@@ -140,7 +140,7 @@ export function AppSidebar() {
                       items: [
                           {
                               title: 'Silsilah Saya',
-                              href: people.index(),
+                              href: people.publicPreview(),
                               icon: Users,
                           },
                           {

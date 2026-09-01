@@ -1,6 +1,6 @@
 import { Form, Head, Link, usePage } from '@inertiajs/react';
 import { Link2, MapPin, Send, Shapes, Unlink } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
@@ -16,6 +16,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { edit } from '@/routes/profile';
+import regionRoutes from '@/routes/regions';
 import telegramConnection from '@/routes/telegram-connection';
 import telegramMtproto from '@/routes/telegram-mtproto';
 import type { Auth } from '@/types';
@@ -26,6 +27,7 @@ type PageProps = {
 
 type MargaOption = { id: number; name: string };
 type RegencyOption = { code: string; name: string };
+type AreaOption = { code: string; name: string };
 type RegionOption = {
     code: string;
     name: string;
@@ -61,6 +63,20 @@ export default function Profile({
     const [regencyCode, setRegencyCode] = useState(
         auth.user.regency_code ?? '',
     );
+    const [districtCode, setDistrictCode] = useState(
+        auth.user.district_code ?? '',
+    );
+    const [villageCode, setVillageCode] = useState(
+        auth.user.village_code ?? '',
+    );
+    const [districts, setDistricts] = useState<AreaOption[]>([]);
+    const [villages, setVillages] = useState<AreaOption[]>([]);
+    const [districtsLoading, setDistrictsLoading] = useState(
+        Boolean(auth.user.regency_code),
+    );
+    const [villagesLoading, setVillagesLoading] = useState(
+        Boolean(auth.user.district_code),
+    );
     const regencies =
         regions.find((region) => region.code === provinceCode)?.regencies ?? [];
 
@@ -69,6 +85,91 @@ export default function Profile({
 
         setProvinceCode(nextCode);
         setRegencyCode('');
+        setDistrictCode('');
+        setVillageCode('');
+        setDistricts([]);
+        setVillages([]);
+        setDistrictsLoading(false);
+        setVillagesLoading(false);
+    };
+
+    useEffect(() => {
+        if (!regencyCode) {
+return;
+}
+
+        const controller = new AbortController();
+        fetch(regionRoutes.districts(regencyCode).url, {
+            headers: { Accept: 'application/json' },
+            signal: controller.signal,
+        })
+            .then((response) => response.json() as Promise<{ data: AreaOption[] }>)
+            .then((payload) => {
+                if (!controller.signal.aborted) {
+setDistricts(payload.data);
+}
+            })
+            .catch(() => {
+                if (!controller.signal.aborted) {
+setDistricts([]);
+}
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) {
+setDistrictsLoading(false);
+}
+            });
+
+        return () => controller.abort();
+    }, [regencyCode]);
+
+    useEffect(() => {
+        if (!districtCode) {
+return;
+}
+
+        const controller = new AbortController();
+        fetch(regionRoutes.villages(districtCode).url, {
+            headers: { Accept: 'application/json' },
+            signal: controller.signal,
+        })
+            .then((response) => response.json() as Promise<{ data: AreaOption[] }>)
+            .then((payload) => {
+                if (!controller.signal.aborted) {
+setVillages(payload.data);
+}
+            })
+            .catch(() => {
+                if (!controller.signal.aborted) {
+setVillages([]);
+}
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) {
+setVillagesLoading(false);
+}
+            });
+
+        return () => controller.abort();
+    }, [districtCode]);
+
+    const selectRegency = (value: string) => {
+        const nextCode = value === EMPTY_VALUE ? '' : value;
+        setRegencyCode(nextCode);
+        setDistrictCode('');
+        setVillageCode('');
+        setDistricts([]);
+        setVillages([]);
+        setDistrictsLoading(Boolean(nextCode));
+        setVillagesLoading(false);
+    };
+
+    const selectDistrict = (value: string) => {
+        const nextCode = value === EMPTY_VALUE ? '' : value;
+        setDistrictCode(nextCode);
+        setVillageCode('');
+        setVillages([]);
+        setVillagesLoading(Boolean(nextCode));
     };
 
     return (
@@ -230,13 +331,7 @@ export default function Profile({
                                         <MapPin className="pointer-events-none absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 text-tb-outline" />
                                         <Select
                                             value={regencyCode || EMPTY_VALUE}
-                                            onValueChange={(value) =>
-                                                setRegencyCode(
-                                                    value === EMPTY_VALUE
-                                                        ? ''
-                                                        : value,
-                                                )
-                                            }
+                                            onValueChange={selectRegency}
                                             disabled={!provinceCode}
                                         >
                                             <SelectTrigger
@@ -273,6 +368,80 @@ export default function Profile({
                                     </div>
 
                                     <InputError message={errors.regency_code} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="district_code">Kecamatan</Label>
+                                    <div className="relative">
+                                        <MapPin className="pointer-events-none absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 text-tb-outline" />
+                                        <Select
+                                            value={districtCode || EMPTY_VALUE}
+                                            onValueChange={selectDistrict}
+                                            disabled={!regencyCode || districtsLoading}
+                                        >
+                                            <SelectTrigger id="district_code" className="w-full pl-10">
+                                                <SelectValue
+                                                    placeholder={
+                                                        districtsLoading
+                                                            ? 'Memuat kecamatan...'
+                                                            : regencyCode
+                                                              ? 'Pilih kecamatan'
+                                                              : 'Pilih kabupaten/kota dahulu'
+                                                    }
+                                                />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value={EMPTY_VALUE}>
+                                                    Belum memilih kecamatan
+                                                </SelectItem>
+                                                {districts.map((district) => (
+                                                    <SelectItem key={district.code} value={district.code}>
+                                                        {district.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <input type="hidden" name="district_code" value={districtCode} />
+                                    </div>
+                                    <InputError message={errors.district_code} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="village_code">Desa/Kelurahan</Label>
+                                    <div className="relative">
+                                        <MapPin className="pointer-events-none absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 text-tb-outline" />
+                                        <Select
+                                            value={villageCode || EMPTY_VALUE}
+                                            onValueChange={(value) =>
+                                                setVillageCode(value === EMPTY_VALUE ? '' : value)
+                                            }
+                                            disabled={!districtCode || villagesLoading}
+                                        >
+                                            <SelectTrigger id="village_code" className="w-full pl-10">
+                                                <SelectValue
+                                                    placeholder={
+                                                        villagesLoading
+                                                            ? 'Memuat desa/kelurahan...'
+                                                            : districtCode
+                                                              ? 'Pilih desa/kelurahan'
+                                                              : 'Pilih kecamatan dahulu'
+                                                    }
+                                                />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value={EMPTY_VALUE}>
+                                                    Belum memilih desa/kelurahan
+                                                </SelectItem>
+                                                {villages.map((village) => (
+                                                    <SelectItem key={village.code} value={village.code}>
+                                                        {village.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <input type="hidden" name="village_code" value={villageCode} />
+                                    </div>
+                                    <InputError message={errors.village_code} />
                                 </div>
                             </div>
 

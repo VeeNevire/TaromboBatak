@@ -4,6 +4,7 @@ namespace App\Concerns;
 
 use App\Models\User;
 use App\Support\IndonesiaRegions;
+use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Validation\Rule;
 
@@ -22,15 +23,35 @@ trait ProfileValidationRules
             'marga_id' => ['nullable', 'integer', 'exists:margas,id'],
             'province_code' => [
                 'nullable',
-                'required_with:regency_code',
+                'required_with:regency_code,district_code,village_code',
                 'string',
                 Rule::in(IndonesiaRegions::provinceCodes()),
             ],
             'regency_code' => [
                 'nullable',
-                'required_with:province_code',
+                'required_with:province_code,district_code,village_code',
                 'string',
                 Rule::in(IndonesiaRegions::regencyCodesFor($this->input('province_code'))),
+            ],
+            'district_code' => [
+                'nullable',
+                'required_with:province_code,regency_code,village_code',
+                'string',
+                function (string $attribute, mixed $value, Closure $fail): void {
+                    if (! IndonesiaRegions::districtBelongsToRegency($value, $this->input('regency_code'))) {
+                        $fail('Kecamatan tidak sesuai dengan kabupaten/kota yang dipilih.');
+                    }
+                },
+            ],
+            'village_code' => [
+                'nullable',
+                'required_with:province_code,regency_code,district_code',
+                'string',
+                function (string $attribute, mixed $value, Closure $fail): void {
+                    if (! IndonesiaRegions::villageBelongsToDistrict($value, $this->input('district_code'))) {
+                        $fail('Desa/kelurahan tidak sesuai dengan kecamatan yang dipilih.');
+                    }
+                },
             ],
         ];
     }

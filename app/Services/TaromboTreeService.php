@@ -6,6 +6,7 @@ use App\Models\FamilyTree;
 use App\Models\FamilyTreeNode;
 use App\Models\Marga;
 use App\Models\Person;
+use App\Support\IndonesiaRegions;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -65,6 +66,7 @@ class TaromboTreeService
                 'bio' => $node->person->bio,
                 'createdBy' => $node->person->creator?->name,
                 'relatedStories' => $node->person->related_stories ?? [],
+                'location' => $this->locationFor($node->person),
                 'childrenNames' => $node->children
                     ->sortBy('birth_order')
                     ->map(fn (FamilyTreeNode $child) => $child->person->birth_year
@@ -111,6 +113,7 @@ class TaromboTreeService
                 'bio' => $person->bio,
                 'createdBy' => $person->creator?->name,
                 'relatedStories' => $person->related_stories ?? [],
+                'location' => $this->locationFor($person),
                 'childrenNames' => $person->children
                     ->sortBy('birth_year')
                     ->map(fn (Person $child) => $child->birth_year
@@ -194,6 +197,7 @@ class TaromboTreeService
                     'birthOrder' => $person->birth_order,
                     'chain' => $person->chain,
                     'pending' => (bool) $person->pending_father,
+                    'location' => $this->locationFor($person),
                 ])
                 ->values()
                 ->all(),
@@ -265,5 +269,23 @@ class TaromboTreeService
                 'color' => $marga->color ?? '#b34b1e',
             ])
             ->all();
+    }
+
+    /** @return array{province: string|null, regency: string|null, district: string|null, village: string|null} */
+    private function locationFor(Person $person): array
+    {
+        $province = collect(IndonesiaRegions::all())->firstWhere('code', $person->province_code);
+        $regency = collect($province['regencies'] ?? [])->firstWhere('code', $person->regency_code);
+        $district = collect(IndonesiaRegions::districtsFor($person->regency_code ?? ''))
+            ->firstWhere('code', $person->district_code);
+        $village = collect(IndonesiaRegions::villagesFor($person->district_code ?? ''))
+            ->firstWhere('code', $person->village_code);
+
+        return [
+            'province' => $province['name'] ?? null,
+            'regency' => $regency['name'] ?? null,
+            'district' => $district['name'] ?? null,
+            'village' => $village['name'] ?? null,
+        ];
     }
 }

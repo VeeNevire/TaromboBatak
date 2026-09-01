@@ -16,6 +16,7 @@ import people from '@/routes/people';
 
 type Props = {
     person: FamilyData | null;
+    regions: { code: string; name: string; regencies: { code: string; name: string }[] }[];
     margas: { id: number; name: string }[];
     nameSuggestions: NameSuggestion[];
     fatherSuggestions: NameSuggestion[];
@@ -34,6 +35,7 @@ type Props = {
 
 export default function PersonForm({
     person,
+    regions,
     margas,
     nameSuggestions,
     fatherSuggestions,
@@ -97,6 +99,7 @@ export default function PersonForm({
 
                 <FamilyForm
                     person={person}
+                    regions={regions}
                     margas={margas}
                     nameSuggestions={nameSuggestions}
                     fatherSuggestions={fatherSuggestions}

@@ -16,6 +16,7 @@ export type TaromboPersonRow = {
     bio?: string;
     createdBy?: string | null;
     relatedStories?: RelatedStory[];
+    location?: RegionLocation;
     chain?: string | null;
     pending?: boolean;
     childrenNames?: string[];
@@ -37,6 +38,7 @@ export type TaromboPerson = {
     bio?: string;
     createdBy?: string | null;
     relatedStories?: RelatedStory[];
+    location?: RegionLocation;
     chain?: string | null;
     pending?: boolean;
     childrenNames?: string[];
@@ -45,6 +47,13 @@ export type TaromboPerson = {
 export type RelatedStory = {
     title: string;
     url: string;
+};
+
+export type RegionLocation = {
+    province: string | null;
+    regency: string | null;
+    district: string | null;
+    village: string | null;
 };
 
 export type TaromboAlternativeTreeRow = {

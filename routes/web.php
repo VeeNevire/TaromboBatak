@@ -1,7 +1,7 @@
 <?php
 
-use App\Http\Controllers\BudayaController;
 use App\Http\Controllers\AccountController;
+use App\Http\Controllers\BudayaController;
 use App\Http\Controllers\ChatGroupController;
 use App\Http\Controllers\ChatGroupMemberController;
 use App\Http\Controllers\ContactController;
@@ -15,6 +15,7 @@ use App\Http\Controllers\FeedCommentController;
 use App\Http\Controllers\FeedPostController;
 use App\Http\Controllers\GroupMessageController;
 use App\Http\Controllers\IdentityRequestController;
+use App\Http\Controllers\IndonesiaRegionController;
 use App\Http\Controllers\KomunitasController;
 use App\Http\Controllers\MargaController;
 use App\Http\Controllers\MessageController;
@@ -41,6 +42,11 @@ Route::get('dashboard/news-feed', [NewsFeedController::class, 'index'])
 Route::get('dashboard/tarombo', [TaromboController::class, 'index'])
     ->name('tarombo.index');
 
+Route::get('silsilah-saya', [PersonController::class, 'publicPreview'])
+    ->name('people.public-preview');
+
+Route::get('people', [PersonController::class, 'index'])->name('people.index');
+
 Route::get('tarombo', [TaromboController::class, 'public'])->name('tarombo.view');
 
 Route::get('tarombo/full', [TaromboController::class, 'publicFullscreen'])
@@ -61,6 +67,15 @@ Route::get('kegiatan/{event}', [EventController::class, 'show'])->name('kegiatan
 Route::get('komunitas', [KomunitasController::class, 'index'])->name('komunitas.view');
 
 Route::get('tentang', [TentangController::class, 'index'])->name('tentang.view');
+
+Route::get('regions/districts/{regencyCode}', [IndonesiaRegionController::class, 'districts'])
+    ->where('regencyCode', '\\d{2}\\.\\d{2}')
+    ->middleware('throttle:120,1')
+    ->name('regions.districts');
+Route::get('regions/villages/{districtCode}', [IndonesiaRegionController::class, 'villages'])
+    ->where('districtCode', '\\d{2}\\.\\d{2}\\.\\d{2}')
+    ->middleware('throttle:120,1')
+    ->name('regions.villages');
 
 Route::middleware(['auth'])->group(function () {
     Route::get('telegram/messages', [TelegramMessagesController::class, 'index'])->name('telegram-messages.index');
@@ -128,8 +143,6 @@ Route::middleware(['auth'])->group(function () {
         ->name('tarombo.snapshots.image');
     Route::delete('dashboard/tarombo/snapshots/{taromboSnapshot}', [TaromboSnapshotController::class, 'destroy'])
         ->name('tarombo.snapshots.destroy');
-
-    Route::get('people', [PersonController::class, 'index'])->name('people.index');
 
     Route::get('people/create', [PersonController::class, 'create'])->name('people.create');
 

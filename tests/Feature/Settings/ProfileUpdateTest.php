@@ -34,6 +34,8 @@ test('profile information can be updated', function () {
             'marga_id' => $marga->id,
             'province_code' => '12',
             'regency_code' => '12.71',
+            'district_code' => '12.71.01',
+            'village_code' => '12.71.01.1001',
         ]);
 
     $response
@@ -48,6 +50,8 @@ test('profile information can be updated', function () {
     expect($user->marga_id)->toBe($marga->id);
     expect($user->province_code)->toBe('12');
     expect($user->regency_code)->toBe('12.71');
+    expect($user->district_code)->toBe('12.71.01');
+    expect($user->village_code)->toBe('12.71.01.1001');
 });
 
 test('profile rejects a city or regency outside the selected province', function () {
@@ -63,6 +67,8 @@ test('profile rejects a city or regency outside the selected province', function
             'email' => $user->email,
             'province_code' => '12',
             'regency_code' => '13.01',
+            'district_code' => '13.01.01',
+            'village_code' => '13.01.01.2001',
         ])
         ->assertRedirect(route('profile.edit'))
         ->assertSessionHasErrors('regency_code');

@@ -20,6 +20,10 @@ use Illuminate\Support\Collection as SupportCollection;
  * @property string|null $gender
  * @property string|null $alias
  * @property int|null $marga_id
+ * @property string|null $province_code
+ * @property string|null $regency_code
+ * @property string|null $district_code
+ * @property string|null $village_code
  * @property int|null $created_by
  * @property int|null $father_id
  * @property bool $pending_father
@@ -47,7 +51,7 @@ use Illuminate\Support\Collection as SupportCollection;
  * @property-read Collection<int, Person> $siblings
  * @property-read Collection<int, Person> $wives
  */
-#[Fillable(['name', 'gender', 'alias', 'marga_id', 'created_by', 'father_id', 'mother_id', 'birth_order', 'sibling_count', 'chain', 'birth_year', 'death_year', 'image', 'bio', 'related_stories', 'spouse', 'spouse_marga', 'pending_father', 'is_public'])]
+#[Fillable(['name', 'gender', 'alias', 'marga_id', 'province_code', 'regency_code', 'district_code', 'village_code', 'created_by', 'father_id', 'mother_id', 'birth_order', 'sibling_count', 'chain', 'birth_year', 'death_year', 'image', 'bio', 'related_stories', 'spouse', 'spouse_marga', 'pending_father', 'is_public'])]
 class Person extends Model
 {
     /** @use HasFactory<PersonFactory> */

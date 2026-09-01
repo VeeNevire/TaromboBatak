@@ -35,6 +35,8 @@ class UserFactory extends Factory
             'marga_id' => null,
             'province_code' => null,
             'regency_code' => null,
+            'district_code' => null,
+            'village_code' => null,
         ];
     }
 
