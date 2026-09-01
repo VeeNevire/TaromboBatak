@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Marga;
+use App\Models\MargaAccessRequest;
 use App\Models\Person;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -54,4 +55,55 @@ test('marga tree requires a valid identity and staff access', function () {
             'marga_direction' => 'lower',
         ]))
         ->assertNotFound();
+});
+
+test('approved users receive the complete ancestor path for an upper marga tree', function () {
+    $marga = Marga::factory()->create(['name' => 'Silaban']);
+    $otherMarga = Marga::factory()->create(['name' => 'Saribu Raja']);
+    $viewer = User::factory()->withMarga($marga->id)->create();
+    $root = Person::factory()->create([
+        'name' => 'Si Raja Batak',
+        'marga_id' => null,
+        'gender' => 'L',
+    ]);
+    $ancestor = Person::factory()->create([
+        'name' => 'Tuan Sorimangaraja',
+        'marga_id' => $otherMarga->id,
+        'father_id' => $root->id,
+        'gender' => 'L',
+    ]);
+    $identity = Person::factory()->create([
+        'name' => 'Borsak Junjungan',
+        'marga_id' => $marga->id,
+        'father_id' => $ancestor->id,
+        'gender' => 'L',
+    ]);
+    $marga->update(['identity_person_id' => $identity->id]);
+
+    MargaAccessRequest::create([
+        'requester_id' => $viewer->id,
+        'marga_id' => $marga->id,
+        'status' => MargaAccessRequest::STATUS_APPROVED,
+    ]);
+
+    $this->actingAs($viewer)
+        ->get(route('tarombo.fullscreen', [
+            'view' => 'tree',
+            'marga_id' => $marga->id,
+            'marga_direction' => 'upper',
+        ]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('margaTree.identityPersonId', (string) $identity->id)
+            ->where('margaTree.direction', 'upper')
+            ->where('people', fn ($people) => collect($people)
+                ->pluck('id')
+                ->sort()
+                ->values()
+                ->all() === collect([$root, $ancestor, $identity])
+                ->pluck('id')
+                ->map(fn (int $id) => (string) $id)
+                ->sort()
+                ->values()
+                ->all()));
 });

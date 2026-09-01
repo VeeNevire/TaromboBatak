@@ -85,9 +85,13 @@ class TaromboController extends Controller
 
             // The normal scoped payload can omit the marga identity for a
             // non-staff account. A marga tree must always contain its own
-            // identity and descendants, otherwise the React fallback uses
-            // the first unrelated row as the visual root.
-            $identityRows = collect($service->rowsForPerson($marga->identityPerson));
+            // identity and the branch required by the selected direction,
+            // otherwise the React tree cannot resolve its visual root/path.
+            $identityRows = collect(
+                $direction === 'upper'
+                    ? $service->rowsForPersonWithAncestors($marga->identityPerson)
+                    : $service->rowsForPerson($marga->identityPerson),
+            );
             $people = collect($people)
                 ->merge($identityRows)
                 ->unique('id')
