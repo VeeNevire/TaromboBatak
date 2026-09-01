@@ -19,7 +19,10 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import InputError from '@/components/input-error';
 import { FamilyTreeHistoryCard } from '@/components/people/family-tree-history-card';
-import type { FamilyTreeHistoryEntry } from '@/components/people/family-tree-history-card';
+import type {
+    ApprovedMargaTreeEntry,
+    FamilyTreeHistoryEntry,
+} from '@/components/people/family-tree-history-card';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -168,7 +171,7 @@ type Props = {
     lockedMarga?: { id: number; name: string } | null;
     lineage?: MargaLineageEntry[];
     familyTrees?: FamilyTreeHistoryEntry[];
-    approvedMargaTrees?: FamilyTreeHistoryEntry[];
+    approvedMargaTrees?: ApprovedMargaTreeEntry[];
     margaAccessMargaId?: number | null;
     margaAccessStatus?: 'pending' | 'approved' | 'rejected' | null;
     versionTrees?: FamilyTreeHistoryEntry[];
@@ -1213,10 +1216,7 @@ export default function FamilyForm({
 
     const birthOrder = Number(data.birth_order) || 1;
     const siblingCount = Number(data.sibling_count) || 1;
-    const listFamilyTrees = [...familyTrees, ...approvedMargaTrees].filter(
-        (tree, index, all) =>
-            all.findIndex((candidate) => candidate.id === tree.id) === index,
-    );
+    const listFamilyTrees = familyTrees;
     const selectedVersionNumber =
         selectedVersionId === null
             ? null

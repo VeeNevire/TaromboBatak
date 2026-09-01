@@ -14,7 +14,6 @@ use App\Http\Controllers\FamilyTreeShareController;
 use App\Http\Controllers\FeedCommentController;
 use App\Http\Controllers\FeedPostController;
 use App\Http\Controllers\GroupMessageController;
-use App\Http\Controllers\HomeController;
 use App\Http\Controllers\IdentityRequestController;
 use App\Http\Controllers\KomunitasController;
 use App\Http\Controllers\MargaController;
@@ -32,7 +31,15 @@ use App\Http\Controllers\TelegramMessagesController;
 use App\Http\Controllers\TentangController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', [HomeController::class, 'index'])->name('home');
+Route::get('/', [NewsFeedController::class, 'index'])->name('home');
+
+Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+Route::get('dashboard/news-feed', [NewsFeedController::class, 'index'])
+    ->name('news-feed.index');
+
+Route::get('dashboard/tarombo', [TaromboController::class, 'index'])
+    ->name('tarombo.index');
 
 Route::get('tarombo', [TaromboController::class, 'public'])->name('tarombo.view');
 
@@ -56,7 +63,6 @@ Route::get('komunitas', [KomunitasController::class, 'index'])->name('komunitas.
 Route::get('tentang', [TentangController::class, 'index'])->name('tentang.view');
 
 Route::middleware(['auth'])->group(function () {
-    Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('telegram/messages', [TelegramMessagesController::class, 'index'])->name('telegram-messages.index');
     Route::post('telegram/messages/sync', [TelegramMessagesController::class, 'sync'])
         ->middleware('throttle:5,1')
@@ -67,8 +73,6 @@ Route::middleware(['auth'])->group(function () {
     Route::post('telegram/messages/{dialog}/read', [TelegramMessagesController::class, 'read'])
         ->name('telegram-messages.read');
 
-    Route::get('dashboard/news-feed', [NewsFeedController::class, 'index'])
-        ->name('news-feed.index');
     Route::post('dashboard/news-feed/statuses', [FeedPostController::class, 'store'])
         ->middleware('throttle:20,1')
         ->name('news-feed.posts.store');
@@ -109,7 +113,6 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('throttle:10,1')
         ->name('announcements.store');
 
-    Route::get('dashboard/tarombo', [TaromboController::class, 'index'])->name('tarombo.index');
     Route::post('family-trees/{familyTree}/contributions', [ContributionController::class, 'storeMargaTree'])
         ->name('contributions.marga-tree.store');
 

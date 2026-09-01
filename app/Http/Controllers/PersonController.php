@@ -1418,43 +1418,24 @@ class PersonController extends Controller
         $margaIds = $user->isStaff()
             ? null
             : ($user->isContributor() ? $user->accessibleMargaIds() : $user->approvedMargaAccessIds());
-        $treeMargaIds = $margaIds ?? collect();
-
         if (! $user->isStaff() && $margaIds->isEmpty()) {
             return [];
         }
 
-        return FamilyTree::query()
-            ->whereNotNull('root_person_id')
-            ->when(! $user->isStaff(), function ($query) use ($user, $margaIds, $treeMargaIds): void {
-                $query
-                    ->whereHas('nodes.person', fn ($person) => $person->whereIn('marga_id', $treeMargaIds))
-                    ->where(function ($accessQuery) use ($user, $margaIds): void {
-                        $accessQuery->whereHas('user', fn ($owner) => $owner->whereIn('role', ['admin', 'subadmin']))
-                            ->orWhereHas('contributionRequests', function ($requestQuery) use ($user, $margaIds): void {
-                                $requestQuery->where('status', ContributionRequest::STATUS_APPROVED)
-                                    ->where(function ($requestAccessQuery) use ($user, $margaIds): void {
-                                        if (! $user->isContributor()) {
-                                            $requestAccessQuery->where('requester_id', $user->id);
-                                        }
-
-                                        if ($margaIds->isNotEmpty()) {
-                                            $requestAccessQuery->orWhereHas(
-                                                'matchedFather',
-                                                fn ($father) => $father->whereIn('marga_id', $margaIds),
-                                            );
-                                        }
-                                    });
-                            });
-                    });
-            })
-            ->with(['user:id,name', 'rootPerson:id,name', 'nodes.person:id,name', 'shares.recipient:id,name,email', 'contributionRequests:id,family_tree_id,status'])
-            ->withExists(['deletionRequests as deletion_pending' => fn ($query) => $query
-                ->where('status', FamilyTreeDeletionRequest::STATUS_PENDING)])
-            ->latest('updated_at')
-            ->get(['id', 'user_id', 'root_person_id', 'name', 'source_name', 'is_primary', 'updated_at'])
-            ->filter(fn (FamilyTree $tree) => $tree->rootPerson !== null)
-            ->map(fn (FamilyTree $tree): array => $this->familyTreeHistoryEntry($tree, $user))
+        return Marga::query()
+            ->whereNotNull('identity_person_id')
+            ->when($margaIds !== null, fn ($query) => $query->whereKey($margaIds))
+            ->with('identityPerson:id,name')
+            ->withCount('people')
+            ->orderBy('name')
+            ->get(['id', 'name', 'identity_person_id'])
+            ->map(fn (Marga $marga): array => [
+                'id' => $marga->id,
+                'name' => $marga->name,
+                'identity_person_id' => $marga->identity_person_id,
+                'identity_person_name' => $marga->identityPerson?->name,
+                'people_count' => $marga->people_count,
+            ])
             ->values()
             ->all();
     }

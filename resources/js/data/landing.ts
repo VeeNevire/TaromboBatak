@@ -8,7 +8,7 @@ import {
     Users,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { home } from '@/routes';
+import { dashboard } from '@/routes';
 import budaya from '@/routes/budaya';
 import komunitas from '@/routes/komunitas';
 import marga from '@/routes/marga';
@@ -16,7 +16,7 @@ import tarombo from '@/routes/tarombo';
 import tentang from '@/routes/tentang';
 
 export const navLinks = [
-    { label: 'Beranda', href: home() },
+    { label: 'Beranda', href: dashboard() },
     { label: 'Tarombo', href: tarombo.view() },
     { label: 'Marga', href: marga.view() },
     { label: 'Budaya', href: budaya.view() },
@@ -93,7 +93,7 @@ export const testimonial = {
 
 export const footerNav = {
     navigasi: [
-        { label: 'Beranda', href: home() },
+        { label: 'Beranda', href: dashboard() },
         { label: 'Tarombo', href: tarombo.view() },
         { label: 'Marga', href: marga.view() },
         { label: 'Budaya', href: budaya.view() },
