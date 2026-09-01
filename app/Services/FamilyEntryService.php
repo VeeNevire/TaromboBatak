@@ -28,7 +28,7 @@ class FamilyEntryService
      *                                   creation is disabled.
      * @param  int|null  $createdBy  User id stamped on newly created records
      *                               so their owner can edit them later.
-     * @return array{father: Person|null, matchedFather: Person|null, mother: Person|null, children: Collection<int, Person>, detached: array<int, Person>}
+     * @return array{father: Person|null, matchedFather: Person|null, mother: Person|null, children: Collection<int, Person>, deleted: array<int, int>}
      */
     public function save(
         array $data,
@@ -166,7 +166,7 @@ class FamilyEntryService
                 $mothers,
             );
 
-            $detached = $this->detachRemoved(
+            $deleted = $this->deleteRemoved(
                 $data['removed_child_ids'] ?? [],
                 $data['removed_own_child_ids'] ?? [],
                 $focus?->id,
@@ -191,7 +191,7 @@ class FamilyEntryService
                 'mothers' => $mothers,
                 'children' => $children,
                 'ownChildren' => $ownChildren,
-                'detached' => $detached,
+                'deleted' => $deleted,
                 'focus' => $focus,
                 'familyTrees' => $familyTrees,
                 'fatherChanged' => $fatherChanged,
@@ -223,15 +223,9 @@ class FamilyEntryService
         }
 
         if (! empty($data['removed_own_child_ids']) && $result['focus'] !== null) {
-            // Baris anak (own children) dilepas: rekomputasi chain dari fokus
-            // agar keturunan yang tersisa tetap bernomor benar.
+            // Setelah anak dihapus permanen, rekomputasi chain dari fokus agar
+            // nomor keturunan yang tersisa tetap benar.
             $numbering->recomputeBranch($result['focus']);
-        }
-
-        foreach ($result['detached'] as $detachedPerson) {
-            // Pohon yang dilepas berdiri sendiri; chain lamanya sudah dibersihkan
-            // sehingga recompute memberi nomor induk root baru bila punya keturunan.
-            $numbering->recomputeFromAncestor($detachedPerson->fresh());
         }
 
         $result['familyTrees']->each->touch();
@@ -930,20 +924,18 @@ class FamilyEntryService
     }
 
     /**
-     * Detach people that were removed from the form from their parent
-     * instead of deleting them. Every attribute stays intact and the whole
-     * patrilineal descendant subtree is preserved; the detached person just
-     * becomes the root of its own standalone tree.
+     * Permanently delete people removed from the family form.
      *
-     * The focused person (the record being edited) is never detached. For
-     * non-staff users every detached person must have been created by the
+     * The focused person is never deleted. A person with descendants is
+     * rejected so deleting the row cannot silently orphan another branch.
+     * For non-staff users every deleted person must have been created by the
      * submitting user.
      *
      * @param  array<int, mixed>  $siblingIds
      * @param  array<int, mixed>  $ownChildIds
-     * @return array<int, Person>
+     * @return array<int, int>
      */
-    protected function detachRemoved(array $siblingIds, array $ownChildIds, ?int $focusId, ?int $forcedMargaId, ?int $createdBy): array
+    protected function deleteRemoved(array $siblingIds, array $ownChildIds, ?int $focusId, ?int $forcedMargaId, ?int $createdBy): array
     {
         $ids = array_values(array_unique(array_filter(
             array_merge($siblingIds, $ownChildIds),
@@ -970,26 +962,27 @@ class FamilyEntryService
             abort_unless(
                 $people->every(fn (Person $person) => (int) $person->created_by === (int) $createdBy),
                 403,
-                'Anda tidak memiliki akses untuk melepas salah satu anggota.',
+                'Anda tidak memiliki akses untuk menghapus salah satu anggota.',
             );
         }
 
-        $detached = [];
+        $withDescendants = $people->filter(fn (Person $person) => Person::query()
+            ->where('father_id', $person->id)
+            ->orWhere('mother_id', $person->id)
+            ->exists());
 
-        foreach ($people as $person) {
-            if ($person->father_id === null) {
-                continue;
-            }
-
-            // Chain lama memakai format "ayah-anak" sehingga tidak lagi valid
-            // untuk sebuah root baru; dibersihkan di sini, nomor induk baru
-            // diberikan oleh recompute setelah transaksi commit.
-            $person->forceFill(['father_id' => null, 'chain' => null])->save();
-
-            $detached[] = $person;
+        if ($withDescendants->isNotEmpty()) {
+            $names = $withDescendants->pluck('name')->implode(', ');
+            throw ValidationException::withMessages([
+                'children' => "Tidak dapat menghapus {$names} karena masih memiliki keturunan. Hapus keturunannya terlebih dahulu.",
+            ]);
         }
 
-        return $detached;
+        foreach ($people as $person) {
+            $person->delete();
+        }
+
+        return $people->pluck('id')->map(fn ($id) => (int) $id)->all();
     }
 
     /**

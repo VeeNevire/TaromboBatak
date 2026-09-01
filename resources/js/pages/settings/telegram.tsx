@@ -17,10 +17,14 @@ export default function TelegramSettings({ configured, account, pendingStatus, q
     const [mode, setMode] = useState<'phone' | 'qr'>(pendingStatus?.startsWith('qr_') ? 'qr' : 'phone');
 
     useEffect(() => {
-        if (mode !== 'qr' || pendingStatus !== 'qr_pending') return;
+        if (mode !== 'qr' || pendingStatus !== 'qr_pending') {
+return;
+}
+
         const timer = window.setInterval(async () => {
             const response = await fetch(telegramMtproto.qrStatus.url(), { headers: { Accept: 'application/json' } });
             const result = (await response.json()) as { status: string };
+
             if (result.status === 'connected') {
                 window.clearInterval(timer);
                 router.reload({ only: ['account', 'pendingStatus', 'qrSvg', 'qrExpiresAt'] });
@@ -29,6 +33,7 @@ export default function TelegramSettings({ configured, account, pendingStatus, q
                 router.reload({ only: ['account', 'pendingStatus', 'qrSvg', 'qrExpiresAt'] });
             }
         }, 2500);
+
         return () => window.clearInterval(timer);
     }, [mode, pendingStatus]);
 

@@ -620,7 +620,7 @@ test('changing a father path does not move or renumber his siblings', function (
         ->and($child->fresh()->chain)->toBe('2-1-1');
 });
 
-test('detaching a saved sibling keeps the person and their whole descendant branch', function () {
+test('deleting a saved sibling is rejected when it has descendants', function () {
     $marga = Marga::factory()->create();
     $father = Person::factory()->create(['marga_id' => $marga->id]);
 
@@ -665,22 +665,21 @@ test('detaching a saved sibling keeps the person and their whole descendant bran
             ],
             'removed_child_ids' => [$sibling->id],
         ])
-        ->assertRedirect()
-        ->assertSessionHasNoErrors();
+        ->assertSessionHasErrors('children');
 
     expect(Person::find($sibling->id))->not->toBeNull()
         ->and(Person::find($child->id))->not->toBeNull()
         ->and(Person::find($grandchild->id))->not->toBeNull()
-        ->and($sibling->fresh()->father_id)->toBeNull()
+        ->and($sibling->fresh()->father_id)->toBe($father->id)
         ->and($child->fresh()->father_id)->toBe($sibling->id)
         ->and($grandchild->fresh()->father_id)->toBe($child->id)
         ->and($focused->fresh()->father_id)->toBe($father->id)
-        ->and($sibling->fresh()->chain)->toBe('2')
-        ->and($child->fresh()->chain)->toBe('2-1')
-        ->and($grandchild->fresh()->chain)->toBe('2-1-1');
+        ->and($sibling->fresh()->chain)->toBeNull()
+        ->and($child->fresh()->chain)->toBeNull()
+        ->and($grandchild->fresh()->chain)->toBeNull();
 });
 
-test('detaching a saved own child keeps the child and their descendants', function () {
+test('deleting a saved own child is rejected when it has descendants', function () {
     $marga = Marga::factory()->create();
     $focused = Person::factory()->create(['name' => 'Fokus', 'marga_id' => $marga->id]);
 
@@ -707,15 +706,39 @@ test('detaching a saved own child keeps the child and their descendants', functi
             'ownChildren' => [],
             'removed_own_child_ids' => [$anak->id],
         ])
-        ->assertRedirect()
-        ->assertSessionHasNoErrors();
+        ->assertSessionHasErrors('children');
 
     expect(Person::find($anak->id))->not->toBeNull()
         ->and(Person::find($cucu->id))->not->toBeNull()
-        ->and($anak->fresh()->father_id)->toBeNull()
+        ->and($anak->fresh()->father_id)->toBe($focused->id)
         ->and($cucu->fresh()->father_id)->toBe($anak->id)
-        ->and($anak->fresh()->chain)->toBe('1')
-        ->and($cucu->fresh()->chain)->toBe('1-1');
+        ->and($anak->fresh()->chain)->toBeNull()
+        ->and($cucu->fresh()->chain)->toBeNull();
+});
+
+test('deleting a saved leaf child removes it from the family permanently', function () {
+    $marga = Marga::factory()->create();
+    $focused = Person::factory()->create(['name' => 'Bagot Sinta', 'marga_id' => $marga->id]);
+    $child = Person::factory()->create([
+        'name' => 'Tatap Raja',
+        'marga_id' => $marga->id,
+        'father_id' => $focused->id,
+    ]);
+
+    $this->actingAs($this->admin)
+        ->put(route('people.update', $focused), [
+            'name' => $focused->name,
+            'marga_id' => $marga->id,
+            'father' => null,
+            'children' => [],
+            'ownChildren' => [],
+            'removed_own_child_ids' => [$child->id],
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect(Person::find($child->id))->toBeNull()
+        ->and(Person::where('father_id', $focused->id)->whereKey($child->id)->exists())->toBeFalse();
 });
 
 test('removing a child from a family tree version detaches its tree node', function () {

@@ -8,8 +8,8 @@ import { cn, toUrl } from '@/lib/utils';
 import { edit as editAppearance } from '@/routes/appearance';
 import { edit } from '@/routes/profile';
 import { edit as editSecurity } from '@/routes/security';
-import telegramMtproto from '@/routes/telegram-mtproto';
 import telegramMessages from '@/routes/telegram-messages';
+import telegramMtproto from '@/routes/telegram-mtproto';
 import type { NavItem } from '@/types';
 
 const sidebarNavItems: NavItem[] = [

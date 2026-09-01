@@ -83,13 +83,18 @@ export default function TelegramMessages({
     );
 
     useEffect(() => {
-        if (!selectedDialog) return;
-        if (selectedDialog.unread_count > 0)
-            router.post(
+        if (!selectedDialog) {
+return;
+}
+
+        if (selectedDialog.unread_count > 0) {
+router.post(
                 telegramMessages.read(selectedDialog.id).url,
                 {},
                 { preserveScroll: true, preserveState: true },
             );
+}
+
         bottomRef.current?.scrollIntoView({ behavior: 'instant' });
     }, [selectedDialog?.id]);
 
@@ -106,7 +111,10 @@ export default function TelegramMessages({
     );
 
     useEffect(() => {
-        if (!selectedDialog) return;
+        if (!selectedDialog) {
+return;
+}
+
         const timer = window.setInterval(
             () =>
                 router.reload({
@@ -116,6 +124,7 @@ export default function TelegramMessages({
                 }),
             8000,
         );
+
         return () => window.clearInterval(timer);
     }, [selectedDialog?.id]);
 
@@ -124,11 +133,20 @@ export default function TelegramMessages({
             query: { dialog_id: id, search: query || undefined },
         }).url;
     const paginationUrl = (value: string | null) => {
-        if (!value) return null;
+        if (!value) {
+return null;
+}
+
         const next = new URL(value, window.location.origin);
-        if (selectedDialog)
-            next.searchParams.set('dialog_id', String(selectedDialog.id));
-        if (query) next.searchParams.set('search', query);
+
+        if (selectedDialog) {
+next.searchParams.set('dialog_id', String(selectedDialog.id));
+}
+
+        if (query) {
+next.searchParams.set('search', query);
+}
+
         return next.toString();
     };
     const dialogItems = dialogs.data;
