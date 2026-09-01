@@ -28,6 +28,10 @@ test('a family store creates the father, mother, and all sibling rows as people'
         'gender' => 'L',
         'alias' => 'Tuan Sorba Dibanua',
         'marga_id' => $marga->id,
+        'province_code' => '32',
+        'regency_code' => '32.01',
+        'district_code' => '32.01.02',
+        'village_code' => '32.01.02.2001',
         'birth_order' => 2,
         'sibling_count' => 3,
         'father' => ['name' => 'Si Raja Batak', 'birth_year' => '1850', 'death_year' => '1920'],
@@ -59,6 +63,10 @@ test('a family store creates the father, mother, and all sibling rows as people'
         ->and($children[1]->birth_order)->toBe(2)
         ->and($children[1]->sibling_count)->toBe(3)
         ->and($children[1]->chain)->toBe('1-2')
+        ->and($children[1]->province_code)->toBe('32')
+        ->and($children[1]->regency_code)->toBe('32.01')
+        ->and($children[1]->district_code)->toBe('32.01.02')
+        ->and($children[1]->village_code)->toBe('32.01.02.2001')
         ->and($children[0]->spouse_marga)->toBe('Hutapea')
         ->and($children[2]->name)->toBe('N/A');
 });

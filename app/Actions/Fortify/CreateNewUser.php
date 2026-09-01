@@ -30,6 +30,22 @@ class CreateNewUser implements CreatesNewUsers
                 'string',
                 Rule::in(IndonesiaRegions::regencyCodesFor($input['province_code'] ?? null)),
             ],
+            'district_code' => [
+                'required',
+                'string',
+                Rule::in(array_column(
+                    IndonesiaRegions::districtsFor($input['regency_code'] ?? ''),
+                    'code',
+                )),
+            ],
+            'village_code' => [
+                'required',
+                'string',
+                Rule::in(array_column(
+                    IndonesiaRegions::villagesFor($input['district_code'] ?? ''),
+                    'code',
+                )),
+            ],
         ])->validate();
 
         return User::create([
@@ -39,6 +55,8 @@ class CreateNewUser implements CreatesNewUsers
             'marga_id' => $input['marga_id'] ?? null,
             'province_code' => $input['province_code'],
             'regency_code' => $input['regency_code'],
+            'district_code' => $input['district_code'],
+            'village_code' => $input['village_code'],
         ]);
     }
 }

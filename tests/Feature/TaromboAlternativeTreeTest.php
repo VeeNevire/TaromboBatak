@@ -219,6 +219,44 @@ test('vertical tarombo can select account and approved marga family trees', func
             ->where('selectedTreePeople.1.parentId', (string) $root->id));
 });
 
+test('vertical tarombo only lists top level and alternative family trees', function () {
+    $admin = User::factory()->asAdmin()->create();
+    $root = Person::factory()->create(['name' => 'Si Raja Batak']);
+    $branchRoot = Person::factory()->create([
+        'name' => 'Raja Isumbaon',
+        'father_id' => $root->id,
+    ]);
+    $topLevelTree = FamilyTree::create([
+        'user_id' => $admin->id,
+        'root_person_id' => $root->id,
+        'name' => 'Pohon Utama',
+    ]);
+    $branchTree = FamilyTree::create([
+        'user_id' => $admin->id,
+        'root_person_id' => $branchRoot->id,
+        'name' => 'Pohon Ranting',
+    ]);
+    $alternativeTree = FamilyTree::create([
+        'user_id' => $admin->id,
+        'root_person_id' => $branchRoot->id,
+        'based_on_id' => $branchTree->id,
+        'name' => 'Pohon Ranting - Versi Alternatif',
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('tarombo.fullscreen', ['view' => 'tree']))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('familyTreeOptions', fn ($options) => collect($options)
+                ->pluck('id')
+                ->sort()
+                ->values()
+                ->all() === collect([$topLevelTree->id, $alternativeTree->id])
+                ->sort()
+                ->values()
+                ->all()));
+});
+
 test('vertical tarombo rejects a family tree outside the signed in accounts list', function () {
     $marga = Marga::factory()->create();
     $owner = User::factory()->withMarga($marga->id)->create();

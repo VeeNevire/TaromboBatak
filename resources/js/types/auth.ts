@@ -11,6 +11,8 @@ export type User = {
     marga_id: number | null;
     province_code: string | null;
     regency_code: string | null;
+    district_code: string | null;
+    village_code: string | null;
     avatar?: string;
     email_verified_at: string | null;
     created_at: string;

@@ -1,6 +1,6 @@
 import { Head, Link, useForm } from '@inertiajs/react';
-import { ArrowLeft, ListTree } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { ArrowLeft, ListTree, MapPin } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,6 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { dashboard } from '@/routes';
 import accounts from '@/routes/accounts';
+import regionRoutes from '@/routes/regions';
 
 type Account = {
     id: number;
@@ -30,8 +31,14 @@ type Account = {
     email: string;
     role: string;
     marga_id: number | null;
+    province_code: string | null;
+    regency_code: string | null;
+    district_code: string | null;
+    village_code: string | null;
 };
 type Marga = { id: number; name: string };
+type RegionOption = { code: string; name: string };
+type ProvinceOption = RegionOption & { regencies: RegionOption[] };
 
 const contributorRoles = ['contributor_main', 'contributor_member'];
 
@@ -48,21 +55,35 @@ export default function AccountForm({
     margas,
     managedMargaOptions,
     managedMargaIds,
+    regions,
 }: {
     account: Account | null;
     margas: Marga[];
     managedMargaOptions: Marga[];
     managedMargaIds: number[];
+    regions: ProvinceOption[];
 }) {
     const isEdit = account !== null;
     const [managementOpen, setManagementOpen] = useState(false);
     const [margaSearch, setMargaSearch] = useState('');
+    const [districtOptions, setDistrictOptions] = useState<RegionOption[]>([]);
+    const [villageOptions, setVillageOptions] = useState<RegionOption[]>([]);
+    const [districtsLoading, setDistrictsLoading] = useState(
+        Boolean(account?.regency_code),
+    );
+    const [villagesLoading, setVillagesLoading] = useState(
+        Boolean(account?.district_code),
+    );
     const { data, setData, post, put, processing, errors, transform } = useForm(
         {
             name: account?.name ?? '',
             email: account?.email ?? '',
             role: account?.role ?? 'user',
             marga_id: account?.marga_id ? String(account.marga_id) : '',
+            province_code: account?.province_code ?? '',
+            regency_code: account?.regency_code ?? '',
+            district_code: account?.district_code ?? '',
+            village_code: account?.village_code ?? '',
             managed_marga_ids: managedMargaIds,
             password: '',
             password_confirmation: '',
@@ -70,6 +91,83 @@ export default function AccountForm({
     );
 
     const isContributor = contributorRoles.includes(data.role);
+    const regencyOptions =
+        regions.find((province) => province.code === data.province_code)
+            ?.regencies ?? [];
+
+    useEffect(() => {
+        if (!data.regency_code) {
+            return;
+        }
+
+        const controller = new AbortController();
+
+        fetch(regionRoutes.districts(data.regency_code).url, {
+            headers: { Accept: 'application/json' },
+            signal: controller.signal,
+        })
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error('Gagal memuat kecamatan.');
+                }
+
+                return response.json() as Promise<{ data: RegionOption[] }>;
+            })
+            .then((payload) => {
+                if (!controller.signal.aborted) {
+                    setDistrictOptions(payload.data);
+                }
+            })
+            .catch((error: unknown) => {
+                if (!(error instanceof DOMException && error.name === 'AbortError')) {
+                    setDistrictOptions([]);
+                }
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) {
+                    setDistrictsLoading(false);
+                }
+            });
+
+        return () => controller.abort();
+    }, [data.regency_code]);
+
+    useEffect(() => {
+        if (!data.district_code) {
+            return;
+        }
+
+        const controller = new AbortController();
+
+        fetch(regionRoutes.villages(data.district_code).url, {
+            headers: { Accept: 'application/json' },
+            signal: controller.signal,
+        })
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error('Gagal memuat desa/kelurahan.');
+                }
+
+                return response.json() as Promise<{ data: RegionOption[] }>;
+            })
+            .then((payload) => {
+                if (!controller.signal.aborted) {
+                    setVillageOptions(payload.data);
+                }
+            })
+            .catch((error: unknown) => {
+                if (!(error instanceof DOMException && error.name === 'AbortError')) {
+                    setVillageOptions([]);
+                }
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) {
+                    setVillagesLoading(false);
+                }
+            });
+
+        return () => controller.abort();
+    }, [data.district_code]);
     const filteredManagedMargas = useMemo(() => {
         const query = margaSearch.trim().toLowerCase();
 
@@ -206,6 +304,142 @@ post(accounts.store().url);
                                     ))}
                                 </select>
                             </Field>
+                            <div className="grid gap-4 rounded-xl border border-tb-outline-variant bg-tb-surface-container/30 p-4 sm:grid-cols-2">
+                                <div className="sm:col-span-2">
+                                    <div className="flex items-center gap-2 font-semibold text-tb-on-surface">
+                                        <MapPin className="size-4 text-tb-primary" />
+                                        Domisili
+                                    </div>
+                                    <p className="mt-1 text-xs text-tb-on-surface-variant">
+                                        Opsional. Jika diisi, pilih alamat secara lengkap dan berurutan.
+                                    </p>
+                                </div>
+                                <Field
+                                    label="Provinsi"
+                                    id="province_code"
+                                    error={errors.province_code}
+                                >
+                                    <select
+                                        id="province_code"
+                                        value={data.province_code}
+                                        onChange={(event) => {
+                                            setData('province_code', event.target.value);
+                                            setData('regency_code', '');
+                                            setData('district_code', '');
+                                            setData('village_code', '');
+                                            setDistrictOptions([]);
+                                            setVillageOptions([]);
+                                            setDistrictsLoading(false);
+                                            setVillagesLoading(false);
+                                        }}
+                                        className="h-10 rounded-md border border-tb-outline-variant bg-tb-surface-bright px-3 text-sm text-tb-on-surface focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20 focus:outline-none"
+                                    >
+                                        <option value="">Pilih provinsi</option>
+                                        {regions.map((province) => (
+                                            <option key={province.code} value={province.code}>
+                                                {province.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </Field>
+                                <Field
+                                    label="Kabupaten/Kota"
+                                    id="regency_code"
+                                    error={errors.regency_code}
+                                >
+                                    <select
+                                        id="regency_code"
+                                        value={data.regency_code}
+                                        disabled={!data.province_code}
+                                        onChange={(event) => {
+                                            const regencyCode = event.target.value;
+
+                                            setData('regency_code', regencyCode);
+                                            setData('district_code', '');
+                                            setData('village_code', '');
+                                            setDistrictOptions([]);
+                                            setVillageOptions([]);
+                                            setDistrictsLoading(Boolean(regencyCode));
+                                            setVillagesLoading(false);
+                                        }}
+                                        className="h-10 rounded-md border border-tb-outline-variant bg-tb-surface-bright px-3 text-sm text-tb-on-surface focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        <option value="">
+                                            {data.province_code
+                                                ? 'Pilih kabupaten/kota'
+                                                : 'Pilih provinsi dahulu'}
+                                        </option>
+                                        {regencyOptions.map((regency) => (
+                                            <option key={regency.code} value={regency.code}>
+                                                {regency.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </Field>
+                                <Field
+                                    label="Kecamatan"
+                                    id="district_code"
+                                    error={errors.district_code}
+                                >
+                                    <select
+                                        id="district_code"
+                                        value={data.district_code}
+                                        disabled={!data.regency_code || districtsLoading}
+                                        aria-busy={districtsLoading}
+                                        onChange={(event) => {
+                                            const districtCode = event.target.value;
+
+                                            setData('district_code', districtCode);
+                                            setData('village_code', '');
+                                            setVillageOptions([]);
+                                            setVillagesLoading(Boolean(districtCode));
+                                        }}
+                                        className="h-10 rounded-md border border-tb-outline-variant bg-tb-surface-bright px-3 text-sm text-tb-on-surface focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        <option value="">
+                                            {districtsLoading
+                                                ? 'Memuat kecamatan...'
+                                                : data.regency_code
+                                                  ? 'Pilih kecamatan'
+                                                  : 'Pilih kabupaten/kota dahulu'}
+                                        </option>
+                                        {districtOptions.map((district) => (
+                                            <option key={district.code} value={district.code}>
+                                                {district.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </Field>
+                                <Field
+                                    label="Desa/Kelurahan"
+                                    id="village_code"
+                                    error={errors.village_code}
+                                >
+                                    <select
+                                        id="village_code"
+                                        value={data.village_code}
+                                        disabled={!data.district_code || villagesLoading}
+                                        aria-busy={villagesLoading}
+                                        onChange={(event) =>
+                                            setData('village_code', event.target.value)
+                                        }
+                                        className="h-10 rounded-md border border-tb-outline-variant bg-tb-surface-bright px-3 text-sm text-tb-on-surface focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        <option value="">
+                                            {villagesLoading
+                                                ? 'Memuat desa/kelurahan...'
+                                                : data.district_code
+                                                  ? 'Pilih desa/kelurahan'
+                                                  : 'Pilih kecamatan dahulu'}
+                                        </option>
+                                        {villageOptions.map((village) => (
+                                            <option key={village.code} value={village.code}>
+                                                {village.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </Field>
+                            </div>
                             {isContributor && (
                                 <Field
                                     label="Manajemen Marga"
@@ -361,6 +595,10 @@ function Field({
                 {label}
                 {!label.includes('*') &&
                 id !== 'marga_id' &&
+                id !== 'province_code' &&
+                id !== 'regency_code' &&
+                id !== 'district_code' &&
+                id !== 'village_code' &&
                 id !== 'password_confirmation' ? (
                     <span className="text-red-600"> *</span>
                 ) : null}

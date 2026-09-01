@@ -97,3 +97,72 @@ test('account changes are recorded and visible to admins', function () {
 
     expect(ActivityLog::query()->where('account_id', $account->id)->count())->toBe(1);
 });
+
+test('account form provides cascading district and village options', function () {
+    $admin = User::factory()->asAdmin()->create();
+
+    $this->actingAs($admin)
+        ->get(route('accounts.create'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('regions', fn ($regions) => collect($regions)->contains(
+                fn (array $province) => $province['code'] === '12'
+                    && collect($province['regencies'])->contains(
+                        fn (array $regency) => $regency['code'] === '12.71',
+                    ),
+            )));
+
+    $this->getJson(route('regions.districts', ['regencyCode' => '12.71']))
+        ->assertOk()
+        ->assertJsonPath('data.0.code', '12.71.01');
+
+    $this->getJson(route('regions.villages', ['districtCode' => '12.71.01']))
+        ->assertOk()
+        ->assertJsonPath('data.0.code', '12.71.01.1001');
+});
+
+test('admin can save a complete hierarchical domicile on an account', function () {
+    $admin = User::factory()->asAdmin()->create();
+
+    $this->actingAs($admin)
+        ->post(route('accounts.store'), [
+            'name' => 'Pengguna Berdomisili',
+            'email' => 'domisili@example.com',
+            'role' => 'user',
+            'marga_id' => null,
+            'province_code' => '12',
+            'regency_code' => '12.71',
+            'district_code' => '12.71.01',
+            'village_code' => '12.71.01.1001',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+        ])
+        ->assertRedirect(route('accounts.index'))
+        ->assertSessionHasNoErrors();
+
+    $account = User::query()->where('email', 'domisili@example.com')->firstOrFail();
+
+    expect($account->province_code)->toBe('12')
+        ->and($account->regency_code)->toBe('12.71')
+        ->and($account->district_code)->toBe('12.71.01')
+        ->and($account->village_code)->toBe('12.71.01.1001');
+});
+
+test('account domicile rejects a district or village outside its parent region', function () {
+    $admin = User::factory()->asAdmin()->create();
+
+    $this->actingAs($admin)
+        ->post(route('accounts.store'), [
+            'name' => 'Alamat Tidak Sesuai',
+            'email' => 'alamat-salah@example.com',
+            'role' => 'user',
+            'marga_id' => null,
+            'province_code' => '12',
+            'regency_code' => '12.71',
+            'district_code' => '13.71.01',
+            'village_code' => '13.71.02.1001',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+        ])
+        ->assertSessionHasErrors(['district_code', 'village_code']);
+});

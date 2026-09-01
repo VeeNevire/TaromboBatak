@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use App\Support\IndonesiaRegions;
 
 class StorePersonRequest extends FormRequest
 {
@@ -20,6 +21,10 @@ class StorePersonRequest extends FormRequest
             'alias' => ['nullable', 'string', 'max:255'],
             'gender' => ['nullable', 'string', 'max:1'],
             'marga_id' => ['nullable', 'exists:margas,id'],
+            'province_code' => ['nullable', 'string', 'size:2'],
+            'regency_code' => ['nullable', 'string', 'size:5'],
+            'district_code' => ['nullable', 'string', 'size:8'],
+            'village_code' => ['nullable', 'string', 'size:13'],
             'father_id' => ['nullable', 'exists:people,id'],
             'mother_id' => ['nullable', 'exists:people,id'],
             'birth_order' => ['nullable', 'integer', 'min:1'],
@@ -90,6 +95,32 @@ class StorePersonRequest extends FormRequest
             'removed_own_child_ids.*' => ['integer', 'distinct', 'exists:people,id'],
         ];
 
+        $this->addRegionRules($rules);
+
         return $rules;
+    }
+
+    /** @param array<string, array<int, mixed>> $rules */
+    private function addRegionRules(array &$rules): void
+    {
+        $rules['regency_code'][] = function ($attribute, $value, $fail): void {
+            if ($value !== null && ! IndonesiaRegions::regencyBelongsToProvince($value, $this->input('province_code'))) {
+                $fail('Kabupaten/kota tidak sesuai dengan provinsi.');
+            }
+        };
+        $rules['district_code'][] = function ($attribute, $value, $fail): void {
+            if ($value !== null && ! IndonesiaRegions::districtBelongsToRegency($value, $this->input('regency_code'))) {
+                $fail('Kecamatan tidak sesuai dengan kabupaten/kota.');
+            }
+        };
+        $rules['village_code'][] = function ($attribute, $value, $fail): void {
+            if ($value !== null && ! IndonesiaRegions::villageBelongsToDistrict($value, $this->input('district_code'))) {
+                $fail('Desa/kelurahan tidak sesuai dengan kecamatan.');
+            }
+        };
+        $rules['province_code'][] = 'required_with:regency_code,district_code,village_code';
+        $rules['regency_code'][] = 'required_with:province_code,district_code,village_code';
+        $rules['district_code'][] = 'required_with:province_code,regency_code,village_code';
+        $rules['village_code'][] = 'required_with:province_code,regency_code,district_code';
     }
 }

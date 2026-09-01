@@ -1,7 +1,7 @@
 import { Form, Head, Link, usePage } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Loader2, Mail, MapPin, Shapes, User } from 'lucide-react';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { BrandLogo } from '@/components/brand-logo';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
@@ -18,10 +18,12 @@ import {
 } from '@/components/ui/select';
 import { store as loginStore } from '@/routes/login';
 import { request as passwordRequest } from '@/routes/password';
+import regionRoutes from '@/routes/regions';
 import { store as registerStore } from '@/routes/register';
 
 type MargaOption = { id: number; name: string };
 type RegencyOption = { code: string; name: string };
+type AreaOption = { code: string; name: string };
 type RegionOption = {
     code: string;
     name: string;
@@ -341,12 +343,115 @@ function RegisterForm({
     const [margaId, setMargaId] = useState('');
     const [provinceCode, setProvinceCode] = useState('');
     const [regencyCode, setRegencyCode] = useState('');
+    const [districtCode, setDistrictCode] = useState('');
+    const [villageCode, setVillageCode] = useState('');
+    const [districts, setDistricts] = useState<AreaOption[]>([]);
+    const [villages, setVillages] = useState<AreaOption[]>([]);
+    const [districtsLoading, setDistrictsLoading] = useState(false);
+    const [villagesLoading, setVillagesLoading] = useState(false);
     const regencies =
         regions.find((region) => region.code === provinceCode)?.regencies ?? [];
+
+    useEffect(() => {
+        if (!regencyCode) {
+            return;
+        }
+
+        const controller = new AbortController();
+
+        fetch(regionRoutes.districts(regencyCode).url, {
+            headers: { Accept: 'application/json' },
+            signal: controller.signal,
+        })
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error('Gagal memuat kecamatan.');
+                }
+
+                return response.json() as Promise<{ data: AreaOption[] }>;
+            })
+            .then((payload) => {
+                if (!controller.signal.aborted) {
+                    setDistricts(payload.data);
+                }
+            })
+            .catch((error: unknown) => {
+                if (!(error instanceof DOMException && error.name === 'AbortError')) {
+                    setDistricts([]);
+                }
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) {
+                    setDistrictsLoading(false);
+                }
+            });
+
+        return () => controller.abort();
+    }, [regencyCode]);
+
+    useEffect(() => {
+        if (!districtCode) {
+            return;
+        }
+
+        const controller = new AbortController();
+
+        fetch(regionRoutes.villages(districtCode).url, {
+            headers: { Accept: 'application/json' },
+            signal: controller.signal,
+        })
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error('Gagal memuat desa/kelurahan.');
+                }
+
+                return response.json() as Promise<{ data: AreaOption[] }>;
+            })
+            .then((payload) => {
+                if (!controller.signal.aborted) {
+                    setVillages(payload.data);
+                }
+            })
+            .catch((error: unknown) => {
+                if (!(error instanceof DOMException && error.name === 'AbortError')) {
+                    setVillages([]);
+                }
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) {
+                    setVillagesLoading(false);
+                }
+            });
+
+        return () => controller.abort();
+    }, [districtCode]);
 
     const selectProvince = (code: string) => {
         setProvinceCode(code);
         setRegencyCode('');
+        setDistrictCode('');
+        setVillageCode('');
+        setDistricts([]);
+        setVillages([]);
+        setDistrictsLoading(false);
+        setVillagesLoading(false);
+    };
+
+    const selectRegency = (code: string) => {
+        setRegencyCode(code);
+        setDistrictCode('');
+        setVillageCode('');
+        setDistricts([]);
+        setVillages([]);
+        setDistrictsLoading(Boolean(code));
+        setVillagesLoading(false);
+    };
+
+    const selectDistrict = (code: string) => {
+        setDistrictCode(code);
+        setVillageCode('');
+        setVillages([]);
+        setVillagesLoading(Boolean(code));
     };
 
     return (
@@ -508,7 +613,7 @@ function RegisterForm({
                                 <MapPin className="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-tb-outline" />
                                 <Select
                                     value={regencyCode}
-                                    onValueChange={setRegencyCode}
+                                    onValueChange={selectRegency}
                                     disabled={!provinceCode}
                                     required
                                 >
@@ -550,6 +655,112 @@ function RegisterForm({
 
                         <div className="grid gap-1.5">
                             <Label
+                                htmlFor="district"
+                                className="font-medium text-tb-on-surface"
+                            >
+                                Kecamatan Domisili
+                            </Label>
+                            <div className="relative">
+                                <MapPin className="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-tb-outline" />
+                                <Select
+                                    value={districtCode}
+                                    onValueChange={selectDistrict}
+                                    disabled={!regencyCode || districtsLoading}
+                                    required
+                                >
+                                    <SelectTrigger
+                                        id="district"
+                                        tabIndex={5}
+                                        className="w-full border-tb-outline-variant bg-tb-surface-bright pl-11 focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        <SelectValue
+                                            placeholder={
+                                                districtsLoading
+                                                    ? 'Memuat kecamatan...'
+                                                    : regencyCode
+                                                      ? 'Pilih kecamatan domisili'
+                                                      : 'Pilih kabupaten/kota terlebih dahulu'
+                                            }
+                                        />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {districts.map((district) => (
+                                            <SelectItem
+                                                key={district.code}
+                                                value={district.code}
+                                            >
+                                                {district.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <input
+                                    type="hidden"
+                                    name="district_code"
+                                    value={districtCode}
+                                />
+                            </div>
+                            <InputError
+                                message={errors.district_code}
+                                className="text-sm text-red-600"
+                            />
+                        </div>
+
+                        <div className="grid gap-1.5">
+                            <Label
+                                htmlFor="village"
+                                className="font-medium text-tb-on-surface"
+                            >
+                                Desa/Kelurahan Domisili
+                            </Label>
+                            <div className="relative">
+                                <MapPin className="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-tb-outline" />
+                                <Select
+                                    value={villageCode}
+                                    onValueChange={setVillageCode}
+                                    disabled={!districtCode || villagesLoading}
+                                    required
+                                >
+                                    <SelectTrigger
+                                        id="village"
+                                        tabIndex={6}
+                                        className="w-full border-tb-outline-variant bg-tb-surface-bright pl-11 focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        <SelectValue
+                                            placeholder={
+                                                villagesLoading
+                                                    ? 'Memuat desa/kelurahan...'
+                                                    : districtCode
+                                                      ? 'Pilih desa/kelurahan domisili'
+                                                      : 'Pilih kecamatan terlebih dahulu'
+                                            }
+                                        />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {villages.map((village) => (
+                                            <SelectItem
+                                                key={village.code}
+                                                value={village.code}
+                                            >
+                                                {village.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <input
+                                    type="hidden"
+                                    name="village_code"
+                                    value={villageCode}
+                                />
+                            </div>
+                            <InputError
+                                message={errors.village_code}
+                                className="text-sm text-red-600"
+                            />
+                        </div>
+
+                        <div className="grid gap-1.5">
+                            <Label
                                 htmlFor="password"
                                 className="font-medium text-tb-on-surface"
                             >
@@ -559,7 +770,7 @@ function RegisterForm({
                                 id="password"
                                 name="password"
                                 required
-                                tabIndex={5}
+                                tabIndex={7}
                                 autoComplete="new-password"
                                 placeholder="Minimal 8 karakter"
                                 className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
@@ -581,7 +792,7 @@ function RegisterForm({
                                 id="password_confirmation"
                                 name="password_confirmation"
                                 required
-                                tabIndex={6}
+                                tabIndex={8}
                                 autoComplete="new-password"
                                 placeholder="Ulangi kata sandi"
                                 className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"

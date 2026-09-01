@@ -9,6 +9,7 @@ import {
     ImageIcon,
     Layers3,
     Link2,
+    MapPin,
     Pencil,
     Plus,
     Trash2,
@@ -61,6 +62,7 @@ import { getInitials } from '@/data/tarombo-tree';
 import { cn } from '@/lib/utils';
 import familyTreeRoutes from '@/routes/family-trees';
 import people from '@/routes/people';
+import regionRoutes from '@/routes/regions';
 
 export type ChildRow = {
     id?: number | null;
@@ -143,6 +145,10 @@ export type FamilyData = {
     gender: string;
     alias: string;
     marga_id: number | null;
+    province_code: string | null;
+    regency_code: string | null;
+    district_code: string | null;
+    village_code: string | null;
     birth_order: number | null;
     sibling_count: number | null;
     chain: string | null;
@@ -162,9 +168,17 @@ export type FamilyData = {
 };
 
 type MargaOption = { id: number; name: string };
+type RegionOption = { code: string; name: string };
+type ProvinceOption = RegionOption & { regencies: RegionOption[] };
+type LocationField =
+    | 'province_code'
+    | 'regency_code'
+    | 'district_code'
+    | 'village_code';
 
 type Props = {
     person: FamilyData | null;
+    regions: ProvinceOption[];
     margas: MargaOption[];
     nameSuggestions: NameSuggestion[];
     fatherSuggestions: NameSuggestion[];
@@ -1103,6 +1117,7 @@ function SpouseMargaSelect({
 
 export default function FamilyForm({
     person,
+    regions,
     margas,
     nameSuggestions,
     fatherSuggestions,
@@ -1125,6 +1140,14 @@ export default function FamilyForm({
     const initialImageMode: 'url' | 'upload' =
         person?.image && !/^https?:\/\//i.test(person.image) ? 'upload' : 'url';
     const initialMothers = toMotherRows(person);
+    const [districtOptions, setDistrictOptions] = useState<RegionOption[]>([]);
+    const [villageOptions, setVillageOptions] = useState<RegionOption[]>([]);
+    const [districtsLoading, setDistrictsLoading] = useState(
+        Boolean(person?.regency_code),
+    );
+    const [villagesLoading, setVillagesLoading] = useState(
+        Boolean(person?.district_code),
+    );
     const initialMotherIndex = (motherId: number | null | undefined) => {
         const index = initialMothers.findIndex(
             (mother) => mother.id === motherId,
@@ -1147,6 +1170,10 @@ export default function FamilyForm({
         gender: person?.gender ?? '',
         alias: person?.alias ?? '',
         marga_id: person?.marga_id ?? lockedMarga?.id ?? null,
+        province_code: person?.province_code ?? '',
+        regency_code: person?.regency_code ?? '',
+        district_code: person?.district_code ?? '',
+        village_code: person?.village_code ?? '',
         new_marga: person?.new_marga ?? '',
         birth_order: person?.birth_order ?? 1,
         sibling_count:
@@ -1213,6 +1240,93 @@ export default function FamilyForm({
         removed_own_child_ids: [] as number[],
         version_tree: selectedVersionId,
     });
+
+    const regencyOptions =
+        regions.find((province) => province.code === data.province_code)
+            ?.regencies ?? [];
+    const locationFields: [LocationField, string, RegionOption[], string][] = [
+        ['province_code', 'Provinsi', regions, 'Pilih provinsi'],
+        [
+            'regency_code',
+            'Kabupaten/Kota',
+            regencyOptions,
+            'Pilih kabupaten/kota',
+        ],
+        [
+            'district_code',
+            'Kecamatan',
+            districtOptions,
+            districtsLoading ? 'Memuat kecamatan...' : 'Pilih kecamatan',
+        ],
+        [
+            'village_code',
+            'Desa/Kelurahan',
+            villageOptions,
+            villagesLoading
+                ? 'Memuat desa/kelurahan...'
+                : 'Pilih desa/kelurahan',
+        ],
+    ];
+
+    useEffect(() => {
+        if (!data.regency_code) {
+            return;
+        }
+
+        const controller = new AbortController();
+        fetch(regionRoutes.districts(data.regency_code).url, {
+            headers: { Accept: 'application/json' },
+            signal: controller.signal,
+        })
+            .then((response) => response.json() as Promise<{ data: RegionOption[] }>)
+            .then((payload) => {
+                if (!controller.signal.aborted) {
+setDistrictOptions(payload.data);
+}
+            })
+            .catch(() => {
+                if (!controller.signal.aborted) {
+setDistrictOptions([]);
+}
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) {
+setDistrictsLoading(false);
+}
+            });
+
+        return () => controller.abort();
+    }, [data.regency_code]);
+
+    useEffect(() => {
+        if (!data.district_code) {
+            return;
+        }
+
+        const controller = new AbortController();
+        fetch(regionRoutes.villages(data.district_code).url, {
+            headers: { Accept: 'application/json' },
+            signal: controller.signal,
+        })
+            .then((response) => response.json() as Promise<{ data: RegionOption[] }>)
+            .then((payload) => {
+                if (!controller.signal.aborted) {
+setVillageOptions(payload.data);
+}
+            })
+            .catch(() => {
+                if (!controller.signal.aborted) {
+setVillageOptions([]);
+}
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) {
+setVillagesLoading(false);
+}
+            });
+
+        return () => controller.abort();
+    }, [data.district_code]);
 
     const birthOrder = Number(data.birth_order) || 1;
     const siblingCount = Number(data.sibling_count) || 1;
@@ -2387,6 +2501,75 @@ export default function FamilyForm({
                                                             errors.marga_id
                                                         }
                                                     />
+                                                </div>
+                                            </div>
+
+                                            <div className="rounded-lg border border-tb-outline-variant bg-tb-surface-container-low p-4">
+                                                <div className="mb-3 flex items-center gap-2">
+                                                    <MapPin className="size-4 text-tb-primary" />
+                                                    <p className="text-sm font-medium text-tb-on-surface">
+                                                        Domisili
+                                                    </p>
+                                                </div>
+                                                <div className="grid gap-4 md:grid-cols-2">
+                                                    {locationFields.map(([field, label, options, placeholder]) => {
+                                                        const value = data[field];
+
+                                                        return (
+                                                            <div className="grid gap-1.5" key={field}>
+                                                                <Label className="text-tb-on-surface">{label}</Label>
+                                                                <Select
+                                                                    value={value || ''}
+                                                                    onValueChange={(nextValue) => {
+                                                                        if (field === 'province_code') {
+                                                                            setData('province_code', nextValue);
+                                                                            setData('regency_code', '');
+                                                                            setData('district_code', '');
+                                                                            setData('village_code', '');
+                                                                            setDistrictOptions([]);
+                                                                            setVillageOptions([]);
+                                                                            setDistrictsLoading(true);
+                                                                            setVillagesLoading(false);
+                                                                        } else if (field === 'regency_code') {
+                                                                            setData('regency_code', nextValue);
+                                                                            setData('district_code', '');
+                                                                            setData('village_code', '');
+                                                                            setVillageOptions([]);
+                                                                            setDistrictsLoading(true);
+                                                                            setVillagesLoading(false);
+                                                                        } else if (field === 'district_code') {
+                                                                            setData('district_code', nextValue);
+                                                                            setData('village_code', '');
+                                                                            setVillagesLoading(true);
+                                                                        } else {
+                                                                            setData('village_code', nextValue);
+                                                                        }
+                                                                    }}
+                                                                    disabled={
+                                                                        field === 'regency_code'
+                                                                            ? !data.province_code
+                                                                            : field === 'district_code'
+                                                                              ? !data.regency_code
+                                                                              : field === 'village_code'
+                                                                                ? !data.district_code
+                                                                                : false
+                                                                    }
+                                                                >
+                                                                    <SelectTrigger className="w-full border-tb-outline-variant bg-tb-surface-bright">
+                                                                        <SelectValue placeholder={placeholder} />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        {options.map((option) => (
+                                                                            <SelectItem key={option.code} value={option.code}>
+                                                                                {option.name}
+                                                                            </SelectItem>
+                                                                        ))}
+                                                                    </SelectContent>
+                                                                </Select>
+                                                                <InputError message={errors[field]} />
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
 

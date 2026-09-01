@@ -20,6 +20,7 @@ use App\Services\FamilyEntryService;
 use App\Services\FamilyTreeStructureService;
 use App\Services\FamilyTreeVersionService;
 use App\Services\TaromboTreeService;
+use App\Support\IndonesiaRegions;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
@@ -130,6 +131,7 @@ class PersonController extends Controller
 
         return Inertia::render('people/form', [
             'person' => null,
+            'regions' => IndonesiaRegions::all(),
             'margas' => $isStaff ? $this->margaOptions() : $this->margaOptionsForUser($user),
             'nameSuggestions' => $this->nameSuggestions(
                 $isStaff ? null : ($user->isContributor() ? $user->accessibleMargaIds() : $user->marga_id),
@@ -319,6 +321,7 @@ class PersonController extends Controller
 
         return Inertia::render('people/form', [
             'person' => $this->familyPayloadVisibleToUser($familyPayload, $user),
+            'regions' => IndonesiaRegions::all(),
             'margas' => $isStaff ? $this->margaOptions() : $this->margaOptionsForUser($user),
             'nameSuggestions' => $this->nameSuggestions(
                 $isStaff ? null : ($user->isContributor() ? $user->accessibleMargaIds() : $user->marga_id),
@@ -1021,6 +1024,10 @@ class PersonController extends Controller
             'is_public' => (bool) $person->is_public,
             'birth_year' => $person->birth_year,
             'death_year' => $person->death_year,
+            'province_code' => $person->province_code,
+            'regency_code' => $person->regency_code,
+            'district_code' => $person->district_code,
+            'village_code' => $person->village_code,
             'image' => $person->image,
             'bio' => $person->bio,
             'related_stories' => $person->related_stories ?? [],

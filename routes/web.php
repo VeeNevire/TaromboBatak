@@ -15,6 +15,7 @@ use App\Http\Controllers\FeedCommentController;
 use App\Http\Controllers\FeedPostController;
 use App\Http\Controllers\GroupMessageController;
 use App\Http\Controllers\IdentityRequestController;
+use App\Http\Controllers\IndonesiaRegionController;
 use App\Http\Controllers\KomunitasController;
 use App\Http\Controllers\MargaController;
 use App\Http\Controllers\MessageController;
@@ -61,6 +62,15 @@ Route::get('kegiatan/{event}', [EventController::class, 'show'])->name('kegiatan
 Route::get('komunitas', [KomunitasController::class, 'index'])->name('komunitas.view');
 
 Route::get('tentang', [TentangController::class, 'index'])->name('tentang.view');
+
+Route::get('regions/districts/{regencyCode}', [IndonesiaRegionController::class, 'districts'])
+    ->where('regencyCode', '\\d{2}\\.\\d{2}')
+    ->middleware('throttle:120,1')
+    ->name('regions.districts');
+Route::get('regions/villages/{districtCode}', [IndonesiaRegionController::class, 'villages'])
+    ->where('districtCode', '\\d{2}\\.\\d{2}\\.\\d{2}')
+    ->middleware('throttle:120,1')
+    ->name('regions.villages');
 
 Route::middleware(['auth'])->group(function () {
     Route::get('telegram/messages', [TelegramMessagesController::class, 'index'])->name('telegram-messages.index');

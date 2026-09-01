@@ -8,6 +8,7 @@ use App\Models\ActivityLog;
 use App\Models\Marga;
 use App\Models\User;
 use App\Services\AccountActivityLogger;
+use App\Support\IndonesiaRegions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -73,6 +74,7 @@ class AccountController extends Controller
             'margas' => $this->margaOptions(),
             'managedMargaOptions' => $this->managedMargaOptions(),
             'managedMargaIds' => [],
+            'regions' => IndonesiaRegions::all(),
         ]);
     }
 
@@ -93,7 +95,14 @@ class AccountController extends Controller
                 $request->user(),
                 'created',
                 'Akun dibuat.',
-                ['role' => $account->role, 'marga_id' => $account->marga_id],
+                [
+                    'role' => $account->role,
+                    'marga_id' => $account->marga_id,
+                    'province_code' => $account->province_code,
+                    'regency_code' => $account->regency_code,
+                    'district_code' => $account->district_code,
+                    'village_code' => $account->village_code,
+                ],
             );
         });
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Akun berhasil ditambahkan.']);
@@ -110,10 +119,15 @@ class AccountController extends Controller
                 'email' => $account->email,
                 'role' => $account->role,
                 'marga_id' => $account->marga_id,
+                'province_code' => $account->province_code,
+                'regency_code' => $account->regency_code,
+                'district_code' => $account->district_code,
+                'village_code' => $account->village_code,
             ],
             'margas' => $this->margaOptions(),
             'managedMargaOptions' => $this->managedMargaOptions(),
             'managedMargaIds' => $account->managedMargas()->pluck('margas.id')->map(fn (int $id) => $id)->all(),
+            'regions' => IndonesiaRegions::all(),
         ]);
     }
 
@@ -129,6 +143,10 @@ class AccountController extends Controller
                 'email' => $account->email,
                 'role' => $account->role,
                 'marga_id' => $account->marga_id,
+                'province_code' => $account->province_code,
+                'regency_code' => $account->regency_code,
+                'district_code' => $account->district_code,
+                'village_code' => $account->village_code,
                 'managed_margas' => $account->managedMargas()->pluck('margas.name')->values()->all(),
             ];
             $account->fill(collect($validated)->except('password')->all());
@@ -143,6 +161,10 @@ class AccountController extends Controller
                 'email' => $account->email,
                 'role' => $account->role,
                 'marga_id' => $account->marga_id,
+                'province_code' => $account->province_code,
+                'regency_code' => $account->regency_code,
+                'district_code' => $account->district_code,
+                'village_code' => $account->village_code,
                 'managed_margas' => $account->managedMargas()->pluck('margas.name')->values()->all(),
             ];
             $changes = array_keys(array_filter($after, fn ($value, $key) => $value !== $before[$key], ARRAY_FILTER_USE_BOTH));
