@@ -1,5 +1,6 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import {
+    ArrowDown,
     BellRing,
     BookOpen,
     CalendarDays,
@@ -519,19 +520,33 @@ export default function ContributionsIndex({
                                         {marga.people_count} anggota · Silsilah bawah
                                     </p>
                                 </div>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="shrink-0"
-                                    disabled={marga.identity_person_id === null}
-                                    onClick={(event) => {
-                                        event.stopPropagation();
-                                        void shareManagedMarga(marga);
-                                    }}
-                                >
-                                    <Share2 className="size-4" />
-                                    {copiedMargaId === marga.id ? 'Tersalin' : 'Share'}
-                                </Button>
+                                <div className="flex shrink-0 gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="icon"
+                                        disabled={marga.identity_person_id === null}
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            openManagedMarga(marga);
+                                        }}
+                                        aria-label={`Buka silsilah bawah ${marga.name}`}
+                                        title="Buka silsilah bawah"
+                                    >
+                                        <ArrowDown className="size-4" />
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            void shareManagedMarga(marga);
+                                        }}
+                                    >
+                                        <Share2 className="size-4" />
+                                        {copiedMargaId === marga.id ? 'Tersalin' : 'Share'}
+                                    </Button>
+                                </div>
                             </div>
                         ))
                     )}
