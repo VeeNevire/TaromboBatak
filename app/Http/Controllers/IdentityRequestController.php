@@ -87,7 +87,7 @@ class IdentityRequestController extends Controller
 
     public function reject(ReviewContributionRequest $request, IdentityRequest $identityRequest): RedirectResponse
     {
-        $this->authorize('review', $identityRequest);
+        Gate::authorize('review', $identityRequest);
 
         $identityRequest->update([
             'status' => IdentityRequest::STATUS_REJECTED,
@@ -103,7 +103,7 @@ class IdentityRequestController extends Controller
 
     public function cancel(Request $request, IdentityRequest $identityRequest): RedirectResponse
     {
-        $this->authorize('cancel', $identityRequest);
+        Gate::authorize('cancel', $identityRequest);
 
         $identityRequest->update([
             'status' => IdentityRequest::STATUS_CANCELLED,

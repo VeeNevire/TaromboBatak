@@ -117,6 +117,28 @@ class FamilyTreeStructureService
             }
         }
 
+        // A removed row must also be detached from this version. Keeping the
+        // node untouched here makes it reappear after the form redirects.
+        $removedPersonIds = collect([
+            ...($data['removed_child_ids'] ?? []),
+            ...($data['removed_own_child_ids'] ?? []),
+        ])
+            ->filter(fn ($id) => is_numeric($id))
+            ->map(fn ($id) => (int) $id)
+            ->unique();
+
+        foreach ($removedPersonIds as $personId) {
+            $node = $nodeForPerson($personId);
+
+            if ($node !== null && $node->id !== $focusNode->id) {
+                $entries[$node->id] = [
+                    'id' => $node->id,
+                    'father_node_id' => null,
+                    'birth_order' => null,
+                ];
+            }
+        }
+
         $this->update($tree, array_values($entries));
     }
 

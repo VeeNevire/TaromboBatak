@@ -718,6 +718,45 @@ test('detaching a saved own child keeps the child and their descendants', functi
         ->and($cucu->fresh()->chain)->toBe('1-1');
 });
 
+test('removing a child from a family tree version detaches its tree node', function () {
+    $marga = Marga::factory()->create();
+    $focused = Person::factory()->create(['name' => 'Fokus Versi', 'marga_id' => $marga->id]);
+    $child = Person::factory()->create([
+        'name' => 'Anak Versi',
+        'marga_id' => $marga->id,
+        'father_id' => $focused->id,
+    ]);
+    $tree = FamilyTree::create([
+        'user_id' => $this->admin->id,
+        'root_person_id' => $focused->id,
+        'name' => 'Versi Uji Hapus Anak',
+    ]);
+    $focusNode = FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $focused->id,
+    ]);
+    $childNode = FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $child->id,
+        'father_node_id' => $focusNode->id,
+    ]);
+
+    $this->actingAs($this->admin)
+        ->put(route('people.update', $focused), [
+            'name' => $focused->name,
+            'marga_id' => $marga->id,
+            'father' => null,
+            'children' => [],
+            'ownChildren' => [],
+            'removed_own_child_ids' => [$child->id],
+            'version_tree' => $tree->id,
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect($childNode->fresh()->father_node_id)->toBeNull();
+});
+
 test('the focused person is never removed even when listed as removed', function () {
     $marga = Marga::factory()->create();
     $focused = Person::factory()->create(['name' => 'Fokus', 'marga_id' => $marga->id]);
