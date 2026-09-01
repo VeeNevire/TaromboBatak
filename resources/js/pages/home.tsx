@@ -6,7 +6,6 @@ import { Hero } from '@/components/landing/hero';
 import { MargaDirectory } from '@/components/landing/marga-directory';
 import { NewsletterSection } from '@/components/landing/newsletter-section';
 import { SiteFooter } from '@/components/landing/site-footer';
-import { SiteHeader } from '@/components/landing/site-header';
 import { StoriesSection } from '@/components/landing/stories-section';
 import { TestimonialsSection } from '@/components/landing/testimonials-section';
 
@@ -32,18 +31,17 @@ type MargaItem = {
     count: number;
 };
 
-type Props = {
+export type HomeProps = {
     stories: StoryItem[];
     events: EventItem[];
     margas: MargaItem[];
 };
 
-export default function Home({ stories, events, margas }: Props) {
+export default function Home({ stories, events, margas }: HomeProps) {
     return (
         <MotionConfig reducedMotion="user">
             <div className="bg-tb-surface font-body text-tb-on-surface antialiased">
                 <Head title="Tarombo Batak" />
-                <SiteHeader />
                 <main>
                     <Hero />
                     <FeaturesSection />

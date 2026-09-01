@@ -41,6 +41,7 @@ import familyTreeShares from '@/routes/family-tree-shares';
 import familyTrees from '@/routes/family-trees';
 import margaAccessRequests from '@/routes/marga-access-requests';
 import people from '@/routes/people';
+import tarombo from '@/routes/tarombo';
 
 const ITEMS_PER_PAGE = 5;
 
@@ -71,6 +72,14 @@ export type FamilyTreeHistoryEntry = {
     updated_at: string;
 };
 
+export type ApprovedMargaTreeEntry = {
+    id: number;
+    name: string;
+    identity_person_id: number;
+    identity_person_name: string | null;
+    people_count: number;
+};
+
 export function ApprovedMargaTreeList({
     entries,
     title = 'Daftar Silsilah Marga',
@@ -78,7 +87,7 @@ export function ApprovedMargaTreeList({
     headerAction,
     asCard = false,
 }: {
-    entries: FamilyTreeHistoryEntry[];
+    entries: ApprovedMargaTreeEntry[];
     title?: string;
     description?: string;
     headerAction?: ReactNode;
@@ -126,16 +135,20 @@ export function ApprovedMargaTreeList({
                                 </span>
                                 <div className="min-w-0">
                                     <p className="truncate text-sm font-semibold text-tb-on-surface">
-                                        {entry.name ??
-                                            `Silsilah ${entry.root_name}`}
+                                        Keluarga {entry.identity_person_name ?? entry.name}
                                     </p>
                                     <p className="mt-1 text-xs text-tb-on-surface-variant">
-                                        Akar: {entry.root_name}
+                                        Marga: {entry.name} · {entry.people_count} anggota
                                     </p>
                                 </div>
                             </div>
                             <Link
-                                href={familyTrees.show(entry.id)}
+                                href={tarombo.fullscreen('tree', {
+                                    query: {
+                                        marga_id: entry.id,
+                                        marga_direction: 'lower',
+                                    },
+                                })}
                                 className="text-tb-on-primary inline-flex items-center justify-center gap-1.5 rounded-lg bg-tb-primary px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-90"
                             >
                                 <TreePine className="size-3.5" /> Buka

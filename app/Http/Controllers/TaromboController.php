@@ -24,6 +24,25 @@ class TaromboController extends Controller
      */
     public function index(Request $request): Response
     {
+        if ($request->user() === null) {
+            $service = app(TaromboTreeService::class);
+            $tree = $service->publicRows();
+
+            return Inertia::render('tarombo/public', [
+                'people' => $tree['rows'],
+                'margas' => $service->margas(publicOnly: true),
+                'truncated' => $tree['truncated'],
+                'stats' => [
+                    'totalPeople' => count($tree['rows']),
+                    'totalMargas' => Marga::query()
+                        ->whereHas('people', fn (Builder $query) => $query->where('is_public', true))
+                        ->count(),
+                    'totalGenerations' => app(TaromboStatisticsService::class)
+                        ->maxGenerationDepth(Person::query()->public()),
+                ],
+            ]);
+        }
+
         [$people, $margas, $alternativeTrees, $identity, $familyTreeOptions, $selectedFamilyTreeId, $selectedTreePeople] = $this->treeData($request);
 
         return Inertia::render('tarombo/index', [

@@ -21,7 +21,7 @@ type Props = {
     initialPersonId?: string;
 };
 
-const FULL_PAGE_DEPTH = 4;
+const FULL_PAGE_DEPTH = 11;
 
 export default function TaromboPublicFullscreen({
     people: rows,

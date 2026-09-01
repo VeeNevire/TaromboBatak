@@ -1,10 +1,13 @@
 import { Form, Head, Link, usePage } from '@inertiajs/react';
 import {
+    Bookmark,
     BookOpen,
     CalendarDays,
     ExternalLink,
+    Heart,
     Megaphone,
     MessageCircle,
+    MoreHorizontal,
     Newspaper,
     Send,
 } from 'lucide-react';
@@ -20,6 +23,7 @@ import {
     CardHeader,
 } from '@/components/ui/card';
 import { dashboard } from '@/routes';
+import { login } from '@/routes';
 import newsFeed from '@/routes/news-feed';
 
 type FeedComment = {
@@ -83,64 +87,73 @@ export default function NewsFeed({ items }: NewsFeedProps) {
         <>
             <Head title="News Feed" />
 
-            <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-5 p-4 md:p-6">
-                <div>
-                    <div className="flex items-center gap-2">
+            <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-5 p-4 md:p-8">
+                <div className="border-b border-tb-outline-variant pb-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
                         <Newspaper className="size-6 text-tb-primary" />
                         <h1 className="font-display text-2xl font-bold text-tb-on-surface md:text-3xl">
                             News Feed
                         </h1>
+                        </div>
+                        <span className="text-xs text-tb-on-surface-variant">
+                            Kabar keluarga
+                        </span>
                     </div>
-                    <p className="mt-1 text-sm text-tb-on-surface-variant">
-                        Status keluarga, cerita, dan pengumuman terbaru dalam
-                        satu tempat.
-                    </p>
                 </div>
 
-                <Card className="border-tb-outline-variant bg-tb-surface-bright">
-                    <CardContent className="pt-6">
-                        <Form
-                            {...storeFeedPost.form()}
-                            options={{ preserveScroll: true }}
-                            resetOnSuccess
-                        >
-                            {({ errors, processing }) => (
-                                <div className="grid gap-3">
-                                    <div className="flex items-start gap-3">
-                                        <AppAvatar
-                                            name={auth.user.name}
-                                            className="mt-0.5"
-                                        />
-                                        <textarea
-                                            name="body"
-                                            rows={3}
-                                            maxLength={2000}
-                                            required
-                                            placeholder={`Apa yang ingin Anda bagikan, ${auth.user.name.split(' ')[0]}?`}
-                                            className="min-h-24 flex-1 resize-none rounded-xl border border-tb-outline-variant bg-tb-surface-container/40 px-4 py-3 text-sm text-tb-on-surface outline-none placeholder:text-tb-on-surface-variant focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
-                                        />
+                {auth.user ? (
+                    <Card className="overflow-hidden rounded-xl border-tb-outline-variant bg-tb-surface-bright shadow-sm">
+                        <CardContent className="p-4">
+                            <Form
+                                {...storeFeedPost.form()}
+                                options={{ preserveScroll: true }}
+                                resetOnSuccess
+                            >
+                                {({ errors, processing }) => (
+                                    <div className="grid gap-3">
+                                        <div className="flex items-start gap-3">
+                                            <AppAvatar name={auth.user!.name} className="mt-0.5" />
+                                            <textarea
+                                                name="body"
+                                                rows={3}
+                                                maxLength={2000}
+                                                required
+                                                placeholder={`Apa yang ingin Anda bagikan, ${auth.user!.name.split(' ')[0]}?`}
+                                                className="min-h-20 flex-1 resize-none rounded-2xl border border-tb-outline-variant bg-tb-surface-container/40 px-4 py-3 text-sm text-tb-on-surface outline-none placeholder:text-tb-on-surface-variant focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
+                                            />
+                                        </div>
+                                        <InputError message={errors.body} className="ml-11" />
+                                        <div className="flex justify-end">
+                                            <Button type="submit" disabled={processing} className="rounded-full px-5">
+                                                <Send className="size-4" />
+                                                {processing ? 'Membagikan...' : 'Bagikan Status'}
+                                            </Button>
+                                        </div>
                                     </div>
-                                    <InputError
-                                        message={errors.body}
-                                        className="ml-11"
-                                    />
-                                    <div className="flex justify-end">
-                                        <Button
-                                            type="submit"
-                                            disabled={processing}
-                                            className="rounded-full px-5"
-                                        >
-                                            <Send className="size-4" />
-                                            {processing
-                                                ? 'Membagikan...'
-                                                : 'Bagikan Status'}
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
-                        </Form>
-                    </CardContent>
-                </Card>
+                                )}
+                            </Form>
+                        </CardContent>
+                    </Card>
+                ) : (
+                    <Card className="overflow-hidden rounded-xl border-tb-outline-variant bg-tb-surface-bright shadow-sm">
+                        <CardContent className="p-4">
+                            <Link
+                                href={login()}
+                                className="flex items-center gap-3"
+                            >
+                                <AppAvatar name="Anda" className="shrink-0" />
+                                <span className="flex h-11 flex-1 items-center rounded-2xl border border-tb-outline-variant bg-tb-surface-container/40 px-4 text-sm text-tb-on-surface-variant transition-colors hover:bg-tb-surface-container"
+                                >
+                                    Bagikan cerita Anda...
+                                </span>
+                                <span className="hidden rounded-full bg-tb-primary px-4 py-2 text-xs font-semibold text-white sm:inline-flex">
+                                    Masuk untuk mengirim
+                                </span>
+                            </Link>
+                        </CardContent>
+                    </Card>
+                )}
 
                 {items.length === 0 ? (
                     <Card className="border-dashed border-tb-outline-variant bg-tb-surface-bright">
@@ -170,8 +183,8 @@ function FeedCard({ item }: { item: FeedItem }) {
     const TypeIcon = feedLabel.icon;
 
     return (
-        <Card className="overflow-hidden border-tb-outline-variant bg-tb-surface-bright">
-            <CardHeader className="flex-row items-start gap-3 space-y-0">
+        <Card className="overflow-hidden rounded-xl border-tb-outline-variant bg-tb-surface-bright shadow-sm">
+            <CardHeader className="flex-row items-center gap-3 space-y-0 px-4 py-3">
                 <AppAvatar name={item.author} />
                 <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -189,11 +202,14 @@ function FeedCard({ item }: { item: FeedItem }) {
                         {formatDate(item.created_at)}
                     </p>
                 </div>
+                <Button variant="ghost" size="icon" className="size-8" aria-label="Opsi postingan">
+                    <MoreHorizontal className="size-5" />
+                </Button>
             </CardHeader>
 
-            <CardContent className="grid gap-4">
+            <CardContent className="grid gap-3 px-4 pb-3">
                 {item.title && (
-                    <h2 className="font-display text-xl font-bold text-tb-on-surface">
+                    <h2 className="font-display text-lg font-bold text-tb-on-surface">
                         {item.title}
                     </h2>
                 )}
@@ -204,7 +220,7 @@ function FeedCard({ item }: { item: FeedItem }) {
                     <img
                         src={item.image}
                         alt={item.title ?? 'Gambar cerita'}
-                        className="max-h-[420px] w-full rounded-xl border border-tb-outline-variant object-cover"
+                        className="max-h-[560px] w-full rounded-lg border border-tb-outline-variant object-cover"
                         onError={(event) => {
                             event.currentTarget.hidden = true;
                         }}
@@ -218,11 +234,26 @@ function FeedCard({ item }: { item: FeedItem }) {
                 )}
             </CardContent>
 
+            <div className="flex items-center gap-1 px-3 pb-2">
+                <Button variant="ghost" size="icon" className="size-9" aria-label="Suka">
+                    <Heart className="size-5" />
+                </Button>
+                <Button variant="ghost" size="icon" className="size-9" aria-label="Komentar">
+                    <MessageCircle className="size-5" />
+                </Button>
+                <Button variant="ghost" size="icon" className="size-9" aria-label="Bagikan">
+                    <Send className="size-5" />
+                </Button>
+                <Button variant="ghost" size="icon" className="ml-auto size-9" aria-label="Simpan">
+                    <Bookmark className="size-5" />
+                </Button>
+            </div>
+
             {item.type === 'status' ? (
                 <StatusComments postId={item.id} comments={item.comments} />
             ) : (
                 item.url && (
-                    <CardFooter className="border-t border-tb-outline-variant pt-4">
+                    <CardFooter className="border-t border-tb-outline-variant px-4 pt-3 pb-4">
                         <Button asChild variant="outline" size="sm">
                             <a
                                 href={item.url}
@@ -250,7 +281,7 @@ function StatusComments({
     const { auth } = usePage().props;
 
     return (
-        <CardFooter className="grid gap-3 border-t border-tb-outline-variant bg-tb-surface-container/20 pt-4">
+        <CardFooter className="grid gap-3 border-t border-tb-outline-variant bg-tb-surface-container/20 px-4 pt-3 pb-4">
             {comments.length > 0 && (
                 <div className="grid gap-3">
                     {comments.map((comment) => (
@@ -280,7 +311,7 @@ function StatusComments({
                 </div>
             )}
 
-            <Form
+            {auth.user && <Form
                 {...storeFeedComment.form(postId)}
                 options={{ preserveScroll: true }}
                 resetOnSuccess
@@ -312,7 +343,7 @@ function StatusComments({
                         <InputError message={errors.body} className="ml-11" />
                     </div>
                 )}
-            </Form>
+            </Form>}
         </CardFooter>
     );
 }

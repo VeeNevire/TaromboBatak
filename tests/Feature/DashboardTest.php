@@ -2,9 +2,14 @@
 
 use App\Models\User;
 
-test('guests are redirected to the login page', function () {
-    $response = $this->get(route('dashboard'));
-    $response->assertRedirect(route('login'));
+test('guests can view the landing page dashboard', function () {
+    $this->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('dashboard')
+            ->has('stories')
+            ->has('events')
+            ->has('margas'));
 });
 
 test('authenticated users can visit the dashboard', function () {

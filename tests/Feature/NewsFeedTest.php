@@ -7,9 +7,18 @@ use App\Models\Story;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
-test('guests cannot open the news feed', function () {
+test('guests can open the news feed in read-only mode', function () {
     $this->get(route('news-feed.index'))
-        ->assertRedirect(route('login'));
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('news-feed/index'));
+});
+
+test('the home route opens the public news feed', function () {
+    $this->get(route('home'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('news-feed/index'));
 });
 
 test('authenticated users see statuses and approved published content', function () {

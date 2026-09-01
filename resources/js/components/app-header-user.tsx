@@ -1,5 +1,5 @@
-import { usePage } from '@inertiajs/react';
-import { ChevronsUpDown } from 'lucide-react';
+import { Link, usePage } from '@inertiajs/react';
+import { ChevronsUpDown, User } from 'lucide-react';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -7,12 +7,21 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { UserInfo } from '@/components/user-info';
 import { UserMenuContent } from '@/components/user-menu-content';
+import { login } from '@/routes';
 
 export function AppHeaderUser() {
     const { auth } = usePage().props;
 
     if (!auth.user) {
-        return null;
+        return (
+            <Link
+                href={login()}
+                className="inline-flex items-center gap-2 rounded-full bg-tb-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-tb-primary-light"
+            >
+                <User className="size-4" />
+                <span>Masuk / Daftar</span>
+            </Link>
+        );
     }
 
     return (

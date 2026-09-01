@@ -7,13 +7,14 @@ import { ThemeToggle } from '@/components/landing/theme-toggle';
 import { navLinks } from '@/data/landing';
 import { toUrl } from '@/lib/utils';
 import { home, login } from '@/routes';
+import { dashboard } from '@/routes';
 import marga from '@/routes/marga';
 import tarombo from '@/routes/tarombo';
 
 function pageHref(label: string): string {
     switch (label) {
         case 'Beranda':
-            return toUrl(home());
+            return toUrl(dashboard());
         case 'Tarombo':
             return toUrl(tarombo.view());
         case 'Marga':
@@ -32,6 +33,7 @@ function pageHref(label: string): string {
 export function SiteHeader() {
     const { url } = usePage();
     const pathname = url.split('?')[0];
+    const isDashboardLanding = pathname === '/dashboard';
 
     const activeKey = navLinks.find(
         (l) => pageHref(l.label) === pathname,
@@ -114,12 +116,14 @@ export function SiteHeader() {
                 </nav>
                 <div className="flex items-center gap-3">
                     <ThemeToggle />
-                    <Link
-                        href={login()}
-                        className="flex items-center gap-2 rounded-full bg-tb-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-tb-primary-light"
-                    >
-                        <User className="h-4 w-4" /> Masuk / Daftar
-                    </Link>
+                    {!isDashboardLanding && (
+                        <Link
+                            href={login()}
+                            className="flex items-center gap-2 rounded-full bg-tb-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-tb-primary-light"
+                        >
+                            <User className="h-4 w-4" /> Masuk / Daftar
+                        </Link>
+                    )}
                 </div>
             </div>
         </header>

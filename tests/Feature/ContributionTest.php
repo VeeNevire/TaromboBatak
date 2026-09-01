@@ -207,6 +207,7 @@ test('approved marga access unlocks another users approved family tree as read-o
     $owner = User::factory()->withMarga($marga->id)->create();
     $viewer = User::factory()->withMarga($marga->id)->create();
     $root = Person::factory()->create(['marga_id' => $marga->id, 'name' => 'Akar Silaban']);
+    $marga->update(['identity_person_id' => $root->id]);
     $tree = FamilyTree::create([
         'user_id' => $owner->id,
         'root_person_id' => $root->id,
@@ -236,7 +237,8 @@ test('approved marga access unlocks another users approved family tree as read-o
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->has('approvedMargaTrees', 1)
-            ->where('approvedMargaTrees.0.id', $tree->id));
+            ->where('approvedMargaTrees.0.id', $marga->id)
+            ->where('approvedMargaTrees.0.identity_person_name', 'Akar Silaban'));
 
     $this->actingAs($viewer)
         ->get(route('family-trees.show', $tree))
@@ -255,6 +257,7 @@ test('approved marga access exposes a staff tree without contribution approval a
         'marga_id' => $marga->id,
         'created_by' => $admin->id,
     ]);
+    $marga->update(['identity_person_id' => $root->id]);
     $tree = FamilyTree::create([
         'user_id' => $admin->id,
         'root_person_id' => $root->id,
@@ -275,7 +278,7 @@ test('approved marga access exposes a staff tree without contribution approval a
         ->get(route('people.create'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('approvedMargaTrees.0.id', $tree->id));
+            ->where('approvedMargaTrees.0.id', $marga->id));
 
     $this->actingAs($viewer)
         ->get(route('family-trees.show', $tree))
@@ -303,6 +306,7 @@ test('a contributor sees trees from every managed marga in the family form', fun
     $contributor->managedMargas()->attach($managedMarga);
     $admin = User::factory()->asAdmin()->create();
     $root = Person::factory()->create(['marga_id' => $managedMarga->id]);
+    $managedMarga->update(['identity_person_id' => $root->id]);
     $tree = FamilyTree::create([
         'user_id' => $admin->id,
         'root_person_id' => $root->id,
@@ -318,5 +322,5 @@ test('a contributor sees trees from every managed marga in the family form', fun
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->where('margas', fn ($margas) => collect($margas)->pluck('id')->contains($managedMarga->id))
-            ->where('approvedMargaTrees.0.id', $tree->id));
+            ->where('approvedMargaTrees.0.id', $managedMarga->id));
 });
