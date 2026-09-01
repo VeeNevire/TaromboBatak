@@ -4174,21 +4174,20 @@ export default function FamilyForm({
                 <DialogContent className="border-tb-outline-variant bg-tb-surface-bright sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle className="text-tb-on-surface">
-                            Pisahkan {removalConfirm?.row.name || 'anggota ini'}{' '}
-                            dari silsilah?
+                            Hapus {removalConfirm?.row.name || 'anggota ini'}{' '}
+                            secara permanen?
                         </DialogTitle>
                         <DialogDescription className="space-y-3">
                             <p>
-                                Nama ini dan seluruh keturunannya tetap
-                                tersimpan di database. Hanya hubungan dengan
-                                orang tuanya yang diputus, sehingga menjadi
-                                pohon silsilah yang berdiri sendiri.
+                                Data ini akan dihapus permanen dari database
+                                dan tidak lagi muncul di keluarga ini.
+                                Tindakan ini tidak dapat dibatalkan.
                             </p>
                             {(removalConfirm?.row.descendant_count ?? 0) >
                                 0 && (
                                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-950 dark:bg-amber-950/40">
                                     <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">
-                                        Keturunan yang ikut ke pohon baru (
+                                        Anggota ini masih memiliki keturunan (
                                         {removalConfirm?.row.descendant_count}
                                         ):
                                     </p>
@@ -4226,7 +4225,9 @@ export default function FamilyForm({
                         <Button variant="outline" onClick={cancelRemove}>
                             Batal
                         </Button>
-                        <Button onClick={confirmRemove}>Ya, pisahkan</Button>
+                        <Button variant="destructive" onClick={confirmRemove}>
+                            Ya, hapus permanen
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
