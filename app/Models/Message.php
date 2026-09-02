@@ -14,6 +14,7 @@ use Illuminate\Support\Carbon;
  * @property int $conversation_id
  * @property int $sender_id
  * @property string|null $body
+ * @property int|null $telegram_message_id
  * @property Carbon|null $read_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -21,7 +22,7 @@ use Illuminate\Support\Carbon;
  * @property-read User $sender
  * @property-read Collection<int, MessageAttachment> $attachments
  */
-#[Fillable(['sender_id', 'body', 'read_at'])]
+#[Fillable(['sender_id', 'body', 'read_at', 'telegram_message_id'])]
 class Message extends Model
 {
     /**

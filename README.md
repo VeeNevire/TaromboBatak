@@ -42,6 +42,24 @@ Hitung ulang seluruh chain silsilah setelah import atau perbaikan data:
 php artisan people:recompute-chain
 ```
 
+### Production Telegram MTProto
+
+Gunakan Supervisor untuk menjalankan listener MTProto secara paralel. Mode
+`--all` membuat child process untuk setiap akun yang memiliki `session_path`
+MTProto dan `connection_status=connected`, lalu otomatis mengambil user baru
+yang connect tanpa membutuhkan ID user.
+
+```bash
+sudo cp deploy/supervisor/tarombobatak.conf /etc/supervisor/conf.d/tarombobatak.conf
+sudo supervisorctl reread
+sudo supervisorctl update
+sudo supervisorctl status
+```
+
+Pastikan `directory`, `user`, storage/session Telegram, dan permission log
+disesuaikan dengan server production. Worker MTProto dan queue akan restart
+otomatis jika proses berhenti.
+
 Jangan deploy file `public/hot`. Deployment production harus menjalankan `npm run build` dan menggunakan asset dari `public/build`.
 
 ## Audit

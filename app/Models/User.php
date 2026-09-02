@@ -9,9 +9,9 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -99,7 +99,8 @@ class User extends Authenticatable
         return ! $this->isAdmin()
             && ! $contact->isAdmin()
             && $this->id !== $contact->id
-            && (($this->marga_id !== null && $this->marga_id === $contact->marga_id)
+            && ($contact->hasActiveMtprotoSession()
+                || ($this->marga_id !== null && $this->marga_id === $contact->marga_id)
                 || ContactRequest::query()
                     ->where('status', ContactRequest::STATUS_APPROVED)
                     ->where(function ($query) use ($contact) {
@@ -110,6 +111,18 @@ class User extends Authenticatable
                         });
                     })
                     ->exists());
+    }
+
+    public function hasActiveMtprotoSession(): bool
+    {
+        if ($this->relationLoaded('telegramAccount')) {
+            return $this->telegramAccount?->isMtprotoConnected() ?? false;
+        }
+
+        return $this->telegramAccount()
+            ->whereNotNull('session_path')
+            ->where('connection_status', TelegramAccount::STATUS_CONNECTED)
+            ->exists();
     }
 
     public function canUseGroups(): bool

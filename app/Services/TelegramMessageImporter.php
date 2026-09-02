@@ -2,7 +2,10 @@
 
 namespace App\Services;
 
+use App\Events\MessageSent;
 use App\Events\TelegramMessageReceived;
+use App\Models\Conversation;
+use App\Models\Message as WebMessage;
 use App\Models\TelegramAccount;
 use App\Models\TelegramDialog;
 use App\Models\TelegramMessage;
@@ -79,8 +82,47 @@ class TelegramMessageImporter
         if ($stored->wasRecentlyCreated && ! $isOutgoing) {
             $dialog->increment('unread_count');
             TelegramMessageReceived::dispatch($stored->load('account'));
+            $this->importToWebConversation($account, $stored, $peerId, $message);
         }
         $account->update(['last_seen_at' => now(), 'last_error' => null]);
+    }
+
+    /** @param array<string, mixed> $message */
+    private function importToWebConversation(TelegramAccount $account, TelegramMessage $telegramMessage, int $peerId, array $message): void
+    {
+        if ($telegramMessage->dialog?->type !== 'private' || ! filled($telegramMessage->body)) {
+            return;
+        }
+
+        $senderTelegram = TelegramAccount::query()
+            ->where('telegram_user_id', $this->senderId($message['from_id'] ?? null) ?: $peerId)
+            ->with('user')
+            ->first();
+        $recipient = $account->user;
+        $sender = $senderTelegram?->user;
+
+        if (! $sender || ! $recipient || ! $recipient->canChatWith($sender)) {
+            return;
+        }
+
+        $conversation = Conversation::query()->firstOrCreate(
+            Conversation::participantAttributes($recipient, $sender),
+        );
+
+        $webMessage = WebMessage::query()->firstOrCreate(
+            [
+                'conversation_id' => $conversation->id,
+                'sender_id' => $sender->id,
+                'telegram_message_id' => $telegramMessage->telegram_message_id,
+            ],
+            [
+                'body' => $telegramMessage->body,
+            ],
+        );
+
+        if ($webMessage->wasRecentlyCreated) {
+            MessageSent::dispatch($webMessage->load('conversation', 'attachments'));
+        }
     }
 
     private function senderId(mixed $sender): ?int

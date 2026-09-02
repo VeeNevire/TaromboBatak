@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreChatGroupRequest;
 use App\Models\ChatGroup;
 use App\Models\ChatGroupMember;
+use App\Models\ContactRequest;
 use App\Models\GroupMessage;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -64,7 +65,7 @@ class ChatGroupController extends Controller
                 'owner_name' => $chatGroup->owner->name,
                 'telegram_title' => $chatGroup->telegram_title,
                 'telegram_linked' => $chatGroup->telegram_chat_id !== null,
-                'telegram_account_linked' => $request->user()->telegramAccount()->exists(),
+                'telegram_account_linked' => $request->user()->telegramAccount?->isMtprotoConnected() ?? false,
                 'can_manage' => $request->user()->can('update', $chatGroup),
                 'can_announce' => $request->user()->can('announce', $chatGroup),
                 'members' => $chatGroup->memberships->map(fn (ChatGroupMember $membership): array => [
@@ -109,20 +110,34 @@ class ChatGroupController extends Controller
             ])->all();
     }
 
-    /** @return array<int, array{id: int, name: string}> */
+    /** @return array<int, array{id: int, name: string, telegram_linked: bool}> */
     private function contactsFor(User $user): array
     {
-        if ($user->marga_id === null) {
-            return [];
-        }
-
         return User::query()
-            ->where('marga_id', $user->marga_id)
+            ->with('telegramAccount')
+            ->where(function ($query) use ($user): void {
+                $query->when($user->marga_id !== null, fn ($query) => $query->where('marga_id', $user->marga_id))
+                    ->when($user->marga_id === null, fn ($query) => $query->whereRaw('1 = 0'))
+                    ->orWhereIn('id', ContactRequest::query()
+                        ->where('status', ContactRequest::STATUS_APPROVED)
+                        ->where(function ($requests) use ($user): void {
+                            $requests->where('requester_id', $user->id)
+                                ->orWhere('recipient_id', $user->id);
+                        })
+                        ->get()
+                        ->map(fn (ContactRequest $request): int => $request->requester_id === $user->id
+                            ? $request->recipient_id
+                            : $request->requester_id));
+            })
             ->where('id', '!=', $user->id)
             ->where('role', '!=', 'admin')
             ->orderBy('name')
             ->get(['id', 'name'])
-            ->map(fn (User $contact): array => ['id' => $contact->id, 'name' => $contact->name])
+            ->map(fn (User $contact): array => [
+                'id' => $contact->id,
+                'name' => $contact->name,
+                'telegram_linked' => $contact->telegramAccount?->isMtprotoConnected() ?? false,
+            ])
             ->all();
     }
 

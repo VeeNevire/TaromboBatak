@@ -42,7 +42,7 @@ class StoreChatGroupRequest extends FormRequest
             User::query()->whereKey($this->memberIds())->get()
                 ->each(function (User $member) use ($user, $validator): void {
                     if (! $user->canChatWith($member)) {
-                        $validator->errors()->add('member_ids', 'Semua anggota harus berasal dari daftar kontak satu marga.');
+                        $validator->errors()->add('member_ids', 'Semua anggota harus berasal dari daftar kontak atau memiliki session MTProto aktif.');
                     }
                 });
         }];
