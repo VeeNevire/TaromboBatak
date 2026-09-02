@@ -281,6 +281,31 @@ export function TaromboExplorer({
             ),
         ];
     }, [margaIdentity, margaLineagePath, margaTree, selectedFamilyTreePeople]);
+    const margaDetachedRoots = useMemo(() => {
+        if (!margaTree || margaTree.direction !== 'lower' || !margaIdentity) {
+            return [] as TaromboPerson[];
+        }
+
+        const connectedIds = new Set(
+            descendantSubtree(selectedFamilyTreePeople, margaIdentity.id).map(
+                (person) => person.id,
+            ),
+        );
+
+        return selectedFamilyTreePeople.filter(
+            (person) =>
+                person.marga === margaTree.margaName &&
+                !connectedIds.has(person.id) &&
+                !person.parentId,
+        );
+    }, [margaIdentity, margaTree, selectedFamilyTreePeople]);
+    const margaDetachedPeople = useMemo(
+        () =>
+            margaDetachedRoots.flatMap((root) =>
+                descendantSubtree(selectedFamilyTreePeople, root.id),
+            ),
+        [margaDetachedRoots, selectedFamilyTreePeople],
+    );
     const rootPerson = people.find((p) => !p.parentId) ?? people[0];
     const connectedPeople = people.filter((person) =>
         hasMargaAncestor(people, person.id),
@@ -437,7 +462,9 @@ export function TaromboExplorer({
         verticalPeople.find((person) => !person.parentId) ??
         verticalPeople[0];
     const treeCenterId = treeCenterPerson?.id ?? '';
-    const renderedTreePeople = margaTree ? margaTreePeople : treePeople;
+    const renderedTreePeople = margaTree
+        ? [...margaTreePeople, ...margaDetachedPeople]
+        : treePeople;
     const renderedTreeCenterId = margaTree
         ? (margaTreePeople[0]?.id ?? '')
         : treeCenterId;
@@ -842,10 +869,9 @@ export function TaromboExplorer({
                         markFemaleLineage={
                             margaTree ? false : showFemaleLineage
                         }
-                         collapseDepth={
-                             margaTree?.direction === 'lower' ? 6 : undefined
-                         }
-                         compact={fullscreen && fullscreenView === 'tree'}
+                        collapseDepth={undefined}
+                        detachedPeople={margaDetachedRoots}
+                        compact={fullscreen && fullscreenView === 'tree'}
                         nodeIdPrefix={
                             fullscreen
                                 ? 'tarombo-fullscreen-tree-node'
@@ -1174,11 +1200,9 @@ export function TaromboExplorer({
                                                 markFemaleLineage={
                                                     showFemaleLineage
                                                 }
-                                                collapseDepth={
-                                                    margaTree?.direction ===
-                                                    'lower'
-                                                        ? 6
-                                                        : undefined
+                                                collapseDepth={undefined}
+                                                detachedPeople={
+                                                    margaDetachedRoots
                                                 }
                                                 nodeIdPrefix="tarombo-mobile-tree-node"
                                             />

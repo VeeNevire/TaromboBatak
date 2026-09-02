@@ -94,6 +94,13 @@ class TaromboController extends Controller
             );
             $people = collect($people)
                 ->merge($identityRows)
+                ->when($direction === 'lower', fn (Collection $rows) => $rows->merge(
+                    $service->rows(
+                        Person::query()
+                            ->where('marga_id', $marga->id)
+                            ->orderBy('id'),
+                    ),
+                ))
                 ->unique('id')
                 ->values()
                 ->all();

@@ -23,6 +23,7 @@ type Props = {
     markFemaleLineage?: boolean;
     collapseDepth?: number;
     compact?: boolean;
+    detachedPeople?: TaromboPerson[];
 };
 
 type LineageLine = {
@@ -94,6 +95,7 @@ function TreeBranch({
     femaleLineage: boolean;
     markFemaleLineage: boolean;
     collapseDepth?: number;
+    compact?: boolean;
 }) {
     const [activeAlternativeId, setActiveAlternativeId] = useState<
         number | null
@@ -160,7 +162,13 @@ function TreeBranch({
                 </button>
             )}
             {(children.length > 0 || personAlternatives.length > 0) && (
-                    <div className={compact ? 'mt-0.5 flex items-center gap-1' : 'mt-1 flex items-center gap-1.5'}>
+                <div
+                    className={
+                        compact
+                            ? 'mt-0.5 flex items-center gap-1'
+                            : 'mt-1 flex items-center gap-1.5'
+                    }
+                >
                     {children.length > 0 && !activeAlternative && (
                         <button
                             type="button"
@@ -170,7 +178,11 @@ function TreeBranch({
                                     ? 'Bentangkan cabang'
                                     : 'Ciutkan cabang'
                             }
-                            className={compact ? 'flex size-4 items-center justify-center rounded-full border border-[#a79e8c]/60 bg-white text-[#5B6A61] transition-colors hover:bg-[#EFE2C9]' : 'flex size-5 items-center justify-center rounded-full border border-[#a79e8c]/60 bg-white text-[#5B6A61] transition-colors hover:bg-[#EFE2C9]'}
+                            className={
+                                compact
+                                    ? 'flex size-4 items-center justify-center rounded-full border border-[#a79e8c]/60 bg-white text-[#5B6A61] transition-colors hover:bg-[#EFE2C9]'
+                                    : 'flex size-5 items-center justify-center rounded-full border border-[#a79e8c]/60 bg-white text-[#5B6A61] transition-colors hover:bg-[#EFE2C9]'
+                            }
                         >
                             {isCollapsed ? (
                                 <ChevronRight className="size-3.5" />
@@ -201,7 +213,11 @@ function TreeBranch({
                                     ? 'Kembali ke versi utama'
                                     : 'Buka versi alternatif'
                             }
-                            className={compact ? 'hover:text-tb-on-primary inline-flex h-5 min-w-5 items-center justify-center gap-0.5 rounded-full border border-dashed border-tb-primary bg-tb-primary/10 px-1 text-[9px] font-bold text-tb-primary transition-colors hover:bg-tb-primary focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none' : 'hover:text-tb-on-primary inline-flex h-6 min-w-6 items-center justify-center gap-0.5 rounded-full border border-dashed border-tb-primary bg-tb-primary/10 px-1.5 text-[10px] font-bold text-tb-primary transition-colors hover:bg-tb-primary focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none'}
+                            className={
+                                compact
+                                    ? 'hover:text-tb-on-primary inline-flex h-5 min-w-5 items-center justify-center gap-0.5 rounded-full border border-dashed border-tb-primary bg-tb-primary/10 px-1 text-[9px] font-bold text-tb-primary transition-colors hover:bg-tb-primary focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none'
+                                    : 'hover:text-tb-on-primary inline-flex h-6 min-w-6 items-center justify-center gap-0.5 rounded-full border border-dashed border-tb-primary bg-tb-primary/10 px-1.5 text-[10px] font-bold text-tb-primary transition-colors hover:bg-tb-primary focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none'
+                            }
                         >
                             <ChevronDown className="size-3.5" />
                             {personAlternatives.length > 1 && (
@@ -320,6 +336,7 @@ export function DescendantsTree({
     markFemaleLineage = false,
     collapseDepth,
     compact = false,
+    detachedPeople = [],
 }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [profilePerson, setProfilePerson] = useState<TaromboPerson | null>(
@@ -504,6 +521,9 @@ export function DescendantsTree({
     const visibleRoots = hideRoot
         ? (childrenOf.get(center.id) ?? [])
         : [center];
+    const detachedRoots = detachedPeople.filter(
+        (person) => person.id !== center.id,
+    );
 
     return (
         <div ref={containerRef} className="relative w-max min-w-full pb-4">
@@ -528,7 +548,9 @@ export function DescendantsTree({
                 </svg>
             )}
             {visibleRoots.length > 0 ? (
-                <ul className={compact ? 'tb-tree tb-tree--compact' : 'tb-tree'}>
+                <ul
+                    className={compact ? 'tb-tree tb-tree--compact' : 'tb-tree'}
+                >
                     {visibleRoots.map((root) => (
                         <TreeBranch
                             key={root.id}
@@ -559,6 +581,46 @@ export function DescendantsTree({
                 <p className="px-3 py-2 text-xs text-tb-on-surface-variant italic">
                     Versi ini belum memiliki keturunan berbeda.
                 </p>
+            )}
+            {detachedRoots.length > 0 && (
+                <div className="mt-6 border-t border-dashed border-tb-outline-variant pt-4">
+                    <p className="mb-3 text-center text-xs font-semibold text-tb-on-surface-variant">
+                        Anggota marga tanpa jalur ayah tersambung
+                    </p>
+                    <ul
+                        className={
+                            compact ? 'tb-tree tb-tree--compact' : 'tb-tree'
+                        }
+                    >
+                        {detachedRoots.map((root) => (
+                            <TreeBranch
+                                key={root.id}
+                                person={root}
+                                childrenOf={childrenOf}
+                                centerId={centerId}
+                                highlightId={highlightId}
+                                numberById={numberById}
+                                collapsed={collapsed}
+                                onToggle={handleToggle}
+                                onSelect={onSelect}
+                                editNodes={editNodes}
+                                selectOnClick={selectOnClick}
+                                showProfileOnName={showProfileOnName}
+                                readOnly={readOnly}
+                                onOpenProfile={setProfilePerson}
+                                alternativeTrees={alternativeTrees}
+                                nodeIdPrefix={nodeIdPrefix}
+                                lineageIds={lineageIds}
+                                femaleLineage={
+                                    root.gender?.toUpperCase() === 'P'
+                                }
+                                markFemaleLineage={markFemaleLineage}
+                                collapseDepth={collapseDepth}
+                                compact={compact}
+                            />
+                        ))}
+                    </ul>
+                </div>
             )}
             {showProfileOnName && (
                 <PersonSummaryDialog
