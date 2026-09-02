@@ -354,7 +354,7 @@
     }
 
     .tb-tree--compact li {
-        padding: 4px 1px 0;
+        padding: 3px 0 0;
     }
 
     /* Keep broad descendant branches from pushing their siblings too far apart. */
