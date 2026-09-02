@@ -24,8 +24,17 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class TelegramAccount extends Model
 {
     public const STATUS_CONNECTED = 'connected';
+
     public const STATUS_DISCONNECTED = 'disconnected';
+
     public const STATUS_ERROR = 'error';
+
+    public function isMtprotoConnected(): bool
+    {
+        return filled($this->session_path)
+            && $this->connection_status === self::STATUS_CONNECTED;
+    }
+
     /** @use HasFactory<TelegramAccountFactory> */
     use HasFactory;
 

@@ -8,6 +8,7 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\User;
+use App\Services\TelegramMtproto;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -73,6 +74,28 @@ class MessageController extends Controller
             // Pesan sudah tersimpan; kegagalan broadcast tidak boleh
             // membuat pengirim mengira pesannya gagal terkirim.
             report($exception);
+        }
+
+        $senderTelegram = $sender->telegramAccount;
+        $recipientTelegram = $contact->telegramAccount;
+
+        if ($senderTelegram?->isMtprotoConnected()
+            && $recipientTelegram?->isMtprotoConnected()
+            && filled($message->body)) {
+            try {
+                $telegramMessage = app(TelegramMtproto::class)->sendMessage(
+                    $senderTelegram,
+                    $recipientTelegram->telegram_user_id,
+                    $message->body,
+                );
+
+                if (isset($telegramMessage['id'])) {
+                    $message->update(['telegram_message_id' => (int) $telegramMessage['id']]);
+                }
+            } catch (Throwable $exception) {
+                // Pesan web tetap berhasil dikirim meskipun Telegram sedang offline.
+                report($exception);
+            }
         }
 
         return to_route('contacts.show', $contact);

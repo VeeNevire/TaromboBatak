@@ -60,6 +60,7 @@ type Contact = {
     latest_message: string | null;
     latest_message_at: string | null;
     unread_count: number;
+    telegram_linked: boolean;
 };
 
 type MessageStatus = 'sending' | 'sent' | 'read' | 'failed';
@@ -103,11 +104,17 @@ type Props = {
     contacts: Contact[];
     selectedContact: Contact | null;
     messages: RawMessage[];
-    availableUsers: { id: number; name: string; marga: string | null }[];
+    availableUsers: {
+        id: number;
+        name: string;
+        marga: string | null;
+        telegram_linked: boolean;
+    }[];
     incomingContactRequests: {
         id: number;
         name: string;
         marga: string | null;
+        telegram_linked: boolean;
     }[];
     outgoingContactRequests: number[];
 };
@@ -951,6 +958,13 @@ export default function ContactsIndex({
                                                                         'Not Identified'}
                                                                     )
                                                                 </span>
+                                                                <span
+                                                                    className={`ml-1 text-[10px] font-medium ${contact.telegram_linked ? 'text-emerald-600 dark:text-emerald-400' : 'text-tb-outline'}`}
+                                                                >
+                                                                    {contact.telegram_linked
+                                                                        ? 'connected'
+                                                                        : 'not-connected'}
+                                                                </span>
                                                             </p>
                                                             {contact.latest_message_at && (
                                                                 <time className="shrink-0 text-[11px] text-tb-outline">
@@ -1045,6 +1059,14 @@ export default function ContactsIndex({
                                             )}
                                             <span>
                                                 {selectedContact.role_label}
+                                            </span>
+                                            <span
+                                                className={`font-medium ${selectedContact.telegram_linked ? 'text-emerald-600 dark:text-emerald-400' : 'text-tb-outline'}`}
+                                            >
+                                                ·{' '}
+                                                {selectedContact.telegram_linked
+                                                    ? 'connected'
+                                                    : 'not-connected'}
                                             </span>
                                         </div>
                                     </div>
@@ -1368,6 +1390,13 @@ export default function ContactsIndex({
                                                 {request.marga ??
                                                     'Marga belum dicatat'}
                                             </span>
+                                            <span
+                                                className={`ml-2 text-[10px] font-medium ${request.telegram_linked ? 'text-emerald-600' : 'text-tb-outline'}`}
+                                            >
+                                                {request.telegram_linked
+                                                    ? 'connected'
+                                                    : 'not-connected'}
+                                            </span>
                                         </p>
                                         <div className="flex shrink-0 gap-1">
                                             <Button
@@ -1445,30 +1474,66 @@ export default function ContactsIndex({
                                                 <p className="text-xs text-tb-on-surface-variant">
                                                     {user.marga ??
                                                         'Marga belum dicatat'}
+                                                    <span
+                                                        className={`ml-2 font-medium ${user.telegram_linked ? 'text-emerald-600 dark:text-emerald-400' : 'text-tb-outline'}`}
+                                                    >
+                                                        ·{' '}
+                                                        {user.telegram_linked
+                                                            ? 'connected'
+                                                            : 'not-connected'}
+                                                    </span>
                                                 </p>
                                             </div>
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                variant="outline"
-                                                disabled={
-                                                    isPending ||
-                                                    isContact ||
-                                                    requestingContactId !== null
-                                                }
-                                                onClick={() =>
-                                                    sendContactRequest(user.id)
-                                                }
-                                            >
-                                                {isContact
-                                                    ? 'Sudah kontak'
-                                                    : isPending
-                                                      ? 'Menunggu'
-                                                      : requestingContactId ===
-                                                          user.id
-                                                        ? 'Mengirim...'
-                                                        : 'Tambah'}
-                                            </Button>
+                                            {user.telegram_linked ? (
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    asChild
+                                                >
+                                                    <Link
+                                                        href={contacts.show(
+                                                            user.id,
+                                                        )}
+                                                        onClick={() => {
+                                                            setAddContactOpen(
+                                                                false,
+                                                            );
+                                                            setContactSearch(
+                                                                '',
+                                                            );
+                                                        }}
+                                                    >
+                                                        Chat langsung
+                                                    </Link>
+                                                </Button>
+                                            ) : (
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    disabled={
+                                                        isPending ||
+                                                        isContact ||
+                                                        requestingContactId !==
+                                                            null
+                                                    }
+                                                    onClick={() =>
+                                                        sendContactRequest(
+                                                            user.id,
+                                                        )
+                                                    }
+                                                >
+                                                    {isContact
+                                                        ? 'Sudah kontak'
+                                                        : isPending
+                                                          ? 'Menunggu'
+                                                          : requestingContactId ===
+                                                              user.id
+                                                            ? 'Mengirim...'
+                                                            : 'Tambah'}
+                                                </Button>
+                                            )}
                                         </div>
                                     );
                                 })

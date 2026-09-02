@@ -6,6 +6,7 @@ use App\Events\MessageRead;
 use App\Models\ContactRequest;
 use App\Models\Conversation;
 use App\Models\Message;
+use App\Models\TelegramAccount;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -132,7 +133,7 @@ class ContactController extends Controller
             ? Conversation::between($user, $selectedContact)->first()
             : null;
 
-        $selectedContact?->loadMissing('marga');
+        $selectedContact?->loadMissing('marga', 'telegramAccount');
 
         if ($conversation) {
             $this->markConversationRead($conversation, $user);
@@ -140,7 +141,7 @@ class ContactController extends Controller
 
         $conversations = $this->conversationsFor($user);
         $contacts = User::query()
-            ->with('marga', 'currentPerson')
+            ->with('marga', 'currentPerson', 'telegramAccount')
             ->where(function ($query) use ($user) {
                 $query->when($user->marga_id !== null, fn ($query) => $query->where('marga_id', $user->marga_id))
                     ->when($user->marga_id === null, fn ($query) => $query->whereRaw('1 = 0'))
@@ -153,7 +154,11 @@ class ContactController extends Controller
                         ->get()
                         ->map(fn (ContactRequest $request): int => $request->requester_id === $user->id
                             ? $request->recipient_id
-                            : $request->requester_id));
+                            : $request->requester_id)
+                    )
+                    ->orWhereHas('telegramAccount', fn ($query) => $query
+                        ->whereNotNull('session_path')
+                        ->where('connection_status', TelegramAccount::STATUS_CONNECTED));
             })
             ->where('id', '!=', $user->id)
             ->where('role', '!=', 'admin')
@@ -172,7 +177,7 @@ class ContactController extends Controller
         return Inertia::render('contacts/index', [
             'contacts' => $contacts,
             'availableUsers' => User::query()
-                ->with('marga:id,name')
+                ->with('marga:id,name', 'telegramAccount')
                 ->where('id', '!=', $user->id)
                 ->where('role', '!=', 'admin')
                 ->orderBy('name')
@@ -181,17 +186,19 @@ class ContactController extends Controller
                     'id' => $contact->id,
                     'name' => $contact->name,
                     'marga' => $contact->marga?->name,
+                    'telegram_linked' => $contact->telegramAccount?->isMtprotoConnected() ?? false,
                 ]),
             'incomingContactRequests' => ContactRequest::query()
                 ->where('recipient_id', $user->id)
                 ->where('status', ContactRequest::STATUS_PENDING)
-                ->with('requester:id,name,marga_id', 'requester.marga:id,name')
+                ->with('requester:id,name,marga_id', 'requester.marga:id,name', 'requester.telegramAccount')
                 ->latest()
                 ->get()
                 ->map(fn (ContactRequest $request): array => [
                     'id' => $request->id,
                     'name' => $request->requester->name,
                     'marga' => $request->requester->marga?->name,
+                    'telegram_linked' => $request->requester->telegramAccount?->isMtprotoConnected() ?? false,
                 ]),
             'outgoingContactRequests' => ContactRequest::query()
                 ->where('requester_id', $user->id)
@@ -239,6 +246,7 @@ class ContactController extends Controller
                     : null),
             'latest_message_at' => $conversation?->latestMessage?->created_at?->toISOString(),
             'unread_count' => (int) ($conversation?->getAttribute('unread_count') ?? 0),
+            'telegram_linked' => $contact->telegramAccount?->isMtprotoConnected() ?? false,
         ];
     }
 

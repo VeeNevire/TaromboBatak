@@ -19,7 +19,7 @@ type Group = {
     latest_message: string | null;
 };
 
-type Contact = { id: number; name: string };
+type Contact = { id: number; name: string; telegram_linked: boolean };
 
 export default function GroupsIndex({
     groups: items,
@@ -173,6 +173,13 @@ export default function GroupsIndex({
                                                 <span className="text-sm">
                                                     {contact.name}
                                                 </span>
+                                                <Badge
+                                                    className={`ml-auto text-[10px] ${contact.telegram_linked ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' : 'bg-tb-surface-container text-tb-outline'}`}
+                                                >
+                                                    {contact.telegram_linked
+                                                        ? 'connected'
+                                                        : 'not-connected'}
+                                                </Badge>
                                             </label>
                                         ))}
                                         {contacts.length === 0 && (
