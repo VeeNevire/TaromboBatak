@@ -322,6 +322,7 @@ class PersonController extends Controller
                 ),
                 $user,
             ),
+            'regions' => IndonesiaRegions::all(),
             'margas' => $user->isStaff() ? $this->margaOptions() : $this->margaOptionsForUser($user),
             'nameSuggestions' => $this->nameSuggestions($user->isContributor() ? $user->accessibleMargaIds() : null),
             'fatherSuggestions' => $this->fatherSuggestions($person, $user->isContributor() ? $person->marga_id : null),
