@@ -601,7 +601,7 @@ export default function ContactsIndex({
         );
     };
 
-    const addAttachments = (files: FileList | null) => {
+    const addAttachments = (files: FileList | readonly File[] | null) => {
         if (!files) {
             return;
         }
@@ -643,6 +643,22 @@ export default function ContactsIndex({
         if (attachmentInputRef.current) {
             attachmentInputRef.current.value = '';
         }
+    };
+
+    const pasteAttachments = (
+        event: React.ClipboardEvent<HTMLTextAreaElement>,
+    ) => {
+        const files = Array.from(event.clipboardData.items)
+            .filter((item) => item.kind === 'file')
+            .map((item) => item.getAsFile())
+            .filter((file): file is File => file !== null);
+
+        if (files.length === 0) {
+            return;
+        }
+
+        event.preventDefault();
+        addAttachments(files);
     };
 
     const removeAttachment = (index: number) => {
@@ -1266,6 +1282,7 @@ export default function ContactsIndex({
                                                     event.currentTarget.form?.requestSubmit();
                                                 }
                                             }}
+                                            onPaste={pasteAttachments}
                                             maxLength={2000}
                                             rows={1}
                                             placeholder="Tulis pesan..."
