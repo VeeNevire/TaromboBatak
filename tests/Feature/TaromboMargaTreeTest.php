@@ -72,11 +72,25 @@ test('approved users receive the complete ancestor path for an upper marga tree'
         'father_id' => $root->id,
         'gender' => 'L',
     ]);
+    $ancestorSibling = Person::factory()->create([
+        'name' => 'Saudara Tuan Sorimangaraja',
+        'marga_id' => $otherMarga->id,
+        'father_id' => $root->id,
+        'gender' => 'L',
+        'birth_order' => 2,
+    ]);
     $identity = Person::factory()->create([
         'name' => 'Borsak Junjungan',
         'marga_id' => $marga->id,
         'father_id' => $ancestor->id,
         'gender' => 'L',
+    ]);
+    $identitySibling = Person::factory()->create([
+        'name' => 'Saudara Borsak Junjungan',
+        'marga_id' => $marga->id,
+        'father_id' => $ancestor->id,
+        'gender' => 'L',
+        'birth_order' => 2,
     ]);
     $marga->update(['identity_person_id' => $identity->id]);
 
@@ -100,7 +114,7 @@ test('approved users receive the complete ancestor path for an upper marga tree'
                 ->pluck('id')
                 ->sort()
                 ->values()
-                ->all() === collect([$root, $ancestor, $identity])
+                ->all() === collect([$root, $ancestor, $identity, $ancestorSibling, $identitySibling])
                 ->pluck('id')
                 ->map(fn (int $id) => (string) $id)
                 ->sort()

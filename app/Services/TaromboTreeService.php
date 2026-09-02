@@ -239,9 +239,20 @@ class TaromboTreeService
      */
     public function rowsForPersonWithAncestors(Person $person): array
     {
-        $ids = $person->lineage()
-            ->push($person)
-            ->pluck('id');
+        $lineage = $person->lineage()->push($person);
+        $ids = $lineage->pluck('id');
+        $fatherIds = $lineage->pluck('father_id')->filter()->unique();
+
+        // The upper tree renders the ancestor path together with each path
+        // member's siblings. Include those siblings in one query so the
+        // frontend can build the corresponding branches at every level.
+        if ($fatherIds->isNotEmpty()) {
+            $ids = $ids->merge(
+                Person::query()
+                    ->whereIn('father_id', $fatherIds)
+                    ->pluck('id'),
+            )->unique()->values();
+        }
 
         return $this->rows(
             Person::query()
