@@ -18,6 +18,7 @@ use App\Http\Controllers\IdentityRequestController;
 use App\Http\Controllers\IndonesiaRegionController;
 use App\Http\Controllers\KomunitasController;
 use App\Http\Controllers\MargaController;
+use App\Http\Controllers\MessageAttachmentController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\NewsFeedController;
 use App\Http\Controllers\PersonController;
@@ -102,6 +103,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('contacts/{contact}/messages', [MessageController::class, 'store'])
         ->middleware('throttle:60,1')
         ->name('contacts.messages.store');
+    Route::get('message-attachments/{messageAttachment}', [MessageAttachmentController::class, 'show'])
+        ->middleware('throttle:120,1')
+        ->name('message-attachments.show');
     Route::post('contact-requests', [ContactRequestController::class, 'store'])
         ->name('contact-requests.store');
     Route::patch('contact-requests/{contactRequest}', [ContactRequestController::class, 'update'])

@@ -27,14 +27,20 @@ class StoreMessageRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'body' => ['required', 'string', 'max:2000'],
+            'body' => ['nullable', 'string', 'max:2000', 'required_without:attachments'],
+            'attachments' => ['nullable', 'array', 'max:5', 'required_without:body'],
+            'attachments.*' => [
+                'file',
+                'max:25600',
+                'mimes:jpg,jpeg,png,webp,gif,mp4,webm,mp3,m4a,wav,ogg,pdf,doc,docx,xls,xlsx,ppt,pptx,txt,zip,rar',
+            ],
         ];
     }
 
     protected function prepareForValidation(): void
     {
-        $this->merge([
-            'body' => trim((string) $this->input('body')),
-        ]);
+        $body = trim((string) $this->input('body'));
+
+        $this->merge(['body' => $body !== '' ? $body : null]);
     }
 }

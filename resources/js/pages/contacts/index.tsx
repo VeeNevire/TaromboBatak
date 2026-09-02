@@ -8,6 +8,7 @@ import {
     ChevronUp,
     Clock,
     Copy,
+    FilePlus2,
     Loader2,
     MessageCircle,
     Megaphone,
@@ -17,6 +18,7 @@ import {
     Send,
     ShieldCheck,
     Users,
+    X,
 } from 'lucide-react';
 import {
     useDeferredValue,
@@ -27,6 +29,11 @@ import {
 } from 'react';
 import type { CSSProperties } from 'react';
 import { AppAvatar } from '@/components/app-avatar';
+import {
+    categoryForFile,
+    MessageAttachmentCard,
+} from '@/components/chat/message-attachment-card';
+import type { ChatAttachment } from '@/components/chat/message-attachment-card';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -72,6 +79,8 @@ type ChatItem = {
     contact_id: number;
     sender_id: number;
     body: string;
+    attachments: ChatAttachment[];
+    progress?: number;
     created_at: string | null;
     read_at: string | null;
     is_mine: boolean;
@@ -83,7 +92,8 @@ type Store = Record<number, ChatItem[]>;
 type RawMessage = {
     id: number;
     sender_id: number;
-    body: string;
+    body: string | null;
+    attachments?: ChatAttachment[];
     created_at: string | null;
     read_at?: string | null;
     is_mine: boolean;
@@ -104,6 +114,9 @@ type Props = {
 
 const createUid = () =>
     `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+const ACCEPTED_ATTACHMENTS =
+    '.jpg,.jpeg,.png,.webp,.gif,.mp4,.webm,.mp3,.m4a,.wav,.ogg,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar';
 
 /** Urutan tampil: pesan persisten naik by id; milik klien menempel di akhir. */
 const compareItems = (a: ChatItem, b: ChatItem): number => {
@@ -148,6 +161,11 @@ export default function ContactsIndex({
     const [requestingContactId, setRequestingContactId] = useState<
         number | null
     >(null);
+    const [selectedAttachments, setSelectedAttachments] = useState<
+        ChatAttachment[]
+    >([]);
+    const [attachmentError, setAttachmentError] = useState<string | null>(null);
+    const [uploading, setUploading] = useState(false);
 
     const storeRef = useRef<Store>({});
     const contactItemsRef = useRef<Contact[]>(contactItems);
@@ -155,6 +173,7 @@ export default function ContactsIndex({
     const messageContainerRef = useRef<HTMLDivElement>(null);
     const messageEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const attachmentInputRef = useRef<HTMLInputElement>(null);
     const prevContactIdRef = useRef<number | null | undefined>(undefined);
     const fetchingRef = useRef<Set<number>>(new Set());
 
@@ -204,7 +223,8 @@ export default function ContactsIndex({
                         uid: `s${raw.id}`,
                         contact_id: contactId,
                         sender_id: raw.sender_id,
-                        body: raw.body,
+                        body: raw.body ?? '',
+                        attachments: raw.attachments ?? [],
                         created_at: raw.created_at,
                         read_at: raw.read_at ?? null,
                         is_mine: raw.is_mine,
@@ -263,8 +283,9 @@ export default function ContactsIndex({
     useEcho<{
         id: number;
         sender_id: number;
-        body: string;
+        body: string | null;
         created_at: string | null;
+        attachments: ChatAttachment[];
     }>(
         `users.${auth.user.id}`,
         '.message.sent',
@@ -274,6 +295,7 @@ export default function ContactsIndex({
                     id: message.id,
                     sender_id: message.sender_id,
                     body: message.body,
+                    attachments: message.attachments,
                     created_at: message.created_at,
                     read_at: null,
                     is_mine: false,
@@ -372,14 +394,7 @@ export default function ContactsIndex({
                 }
 
                 const data = (await response.json()) as {
-                    messages?: Array<{
-                        id: number;
-                        sender_id: number;
-                        body: string;
-                        created_at: string | null;
-                        read_at: string | null;
-                        is_mine: boolean;
-                    }>;
+                    messages?: RawMessage[];
                 };
 
                 const fresh = (data.messages ?? []).filter(
@@ -483,6 +498,7 @@ export default function ContactsIndex({
     const submitBody = (
         contactId: number,
         body: string,
+        attachments: ChatAttachment[],
         replacingUid?: string,
     ) => {
         const uid = createUid();
@@ -504,6 +520,8 @@ export default function ContactsIndex({
                         contact_id: contactId,
                         sender_id: auth.user.id,
                         body,
+                        attachments,
+                        progress: attachments.length > 0 ? 0 : undefined,
                         created_at: new Date().toISOString(),
                         read_at: null,
                         is_mine: true,
@@ -513,24 +531,130 @@ export default function ContactsIndex({
             };
         });
 
-        messageForm.post(contacts.messages.store(contactId).url, {
-            preserveScroll: true,
-            preserveState: true,
-            onError: () => {
-                setStore((current) => ({
-                    ...current,
-                    [contactId]: (current[contactId] ?? []).map((item) =>
-                        item.uid === uid && item.id === null
-                            ? { ...item, status: 'failed' }
-                            : item,
-                    ),
-                }));
-            },
-        });
+        setUploading(true);
+        messageForm.clearErrors();
+        setAttachmentError(null);
 
-        // Konfirmasi: ambil pesan persisten (berisi id) dari server lalu
-        // biarkan merge menggantikan gelembung pending secara FIFO.
-        window.setTimeout(() => void fetchNewMessages(contactId), 350);
+        router.post(
+            contacts.messages.store(contactId).url,
+            {
+                body: body || null,
+                attachments: attachments
+                    .map((attachment) => attachment.file)
+                    .filter((file): file is File => file instanceof File),
+            },
+            {
+                forceFormData: true,
+                preserveScroll: true,
+                preserveState: true,
+                onProgress: (progress) => {
+                    setStore((current) => ({
+                        ...current,
+                        [contactId]: (current[contactId] ?? []).map((item) =>
+                            item.uid === uid && item.id === null
+                                ? {
+                                      ...item,
+                                      progress: progress?.percentage ?? 0,
+                                  }
+                                : item,
+                        ),
+                    }));
+                },
+                onError: (errors) => {
+                    if (errors.body) {
+                        messageForm.setError('body', String(errors.body));
+                    }
+
+                    const attachmentValidationError = Object.entries(
+                        errors,
+                    ).find(
+                        ([field]) =>
+                            field === 'attachments' ||
+                            field.startsWith('attachments.'),
+                    );
+
+                    if (attachmentValidationError) {
+                        setAttachmentError(
+                            String(attachmentValidationError[1]),
+                        );
+                    }
+
+                    setStore((current) => ({
+                        ...current,
+                        [contactId]: (current[contactId] ?? []).map((item) =>
+                            item.uid === uid && item.id === null
+                                ? { ...item, status: 'failed' }
+                                : item,
+                        ),
+                    }));
+                },
+                onSuccess: () => {
+                    // Konfirmasi: ambil pesan persisten (berisi id) dari server lalu
+                    // biarkan merge menggantikan gelembung pending secara FIFO.
+                    window.setTimeout(
+                        () => void fetchNewMessages(contactId),
+                        350,
+                    );
+                },
+                onFinish: () => setUploading(false),
+            },
+        );
+    };
+
+    const addAttachments = (files: FileList | null) => {
+        if (!files) {
+            return;
+        }
+
+        const incoming = Array.from(files);
+        const tooLarge = incoming.find((file) => file.size > 25 * 1024 * 1024);
+
+        if (tooLarge) {
+            setAttachmentError(`${tooLarge.name} melebihi batas 25 MB.`);
+
+            return;
+        }
+
+        if (selectedAttachments.length + incoming.length > 5) {
+            setAttachmentError('Maksimal 5 lampiran dalam satu pesan.');
+
+            return;
+        }
+
+        setAttachmentError(null);
+        setSelectedAttachments((current) => [
+            ...current,
+            ...incoming.map((file) => {
+                const url = URL.createObjectURL(file);
+
+                return {
+                    id: null,
+                    name: file.name,
+                    mime_type: file.type || 'application/octet-stream',
+                    size: file.size,
+                    category: categoryForFile(file),
+                    url,
+                    download_url: url,
+                    file,
+                } satisfies ChatAttachment;
+            }),
+        ]);
+
+        if (attachmentInputRef.current) {
+            attachmentInputRef.current.value = '';
+        }
+    };
+
+    const removeAttachment = (index: number) => {
+        setSelectedAttachments((current) => {
+            const attachment = current[index];
+
+            if (attachment?.url.startsWith('blob:')) {
+                URL.revokeObjectURL(attachment.url);
+            }
+
+            return current.filter((_, itemIndex) => itemIndex !== index);
+        });
     };
 
     const autoGrow = (element: HTMLTextAreaElement) => {
@@ -544,12 +668,13 @@ export default function ContactsIndex({
         const body = messageForm.data.body.trim();
         const contactId = selectedContact?.id;
 
-        if (contactId == null || !body) {
+        if (contactId == null || (!body && selectedAttachments.length === 0)) {
             return;
         }
 
-        submitBody(contactId, body);
+        submitBody(contactId, body, selectedAttachments);
         messageForm.reset('body');
+        setSelectedAttachments([]);
 
         if (textareaRef.current) {
             textareaRef.current.style.height = '';
@@ -561,7 +686,7 @@ export default function ContactsIndex({
             return;
         }
 
-        submitBody(selectedContact.id, item.body, item.uid);
+        submitBody(selectedContact.id, item.body, item.attachments, item.uid);
     };
 
     const openContact = (contactId: number) => {
@@ -958,9 +1083,45 @@ export default function ContactsIndex({
                                                                 : 'rounded-[1rem_1rem_1rem_0.25rem] border border-tb-outline-variant bg-tb-surface-bright text-tb-on-surface'
                                                         }`}
                                                     >
-                                                        <p className="leading-relaxed break-words whitespace-pre-wrap">
-                                                            {item.body}
-                                                        </p>
+                                                        {item.attachments
+                                                            .length > 0 && (
+                                                            <div className="mb-1.5 flex flex-col gap-1.5">
+                                                                {item.attachments.map(
+                                                                    (
+                                                                        attachment,
+                                                                        index,
+                                                                    ) => (
+                                                                        <MessageAttachmentCard
+                                                                            key={`${attachment.id ?? 'local'}-${index}`}
+                                                                            attachment={
+                                                                                attachment
+                                                                            }
+                                                                            mine={
+                                                                                item.is_mine
+                                                                            }
+                                                                        />
+                                                                    ),
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        {item.body && (
+                                                            <p className="leading-relaxed break-words whitespace-pre-wrap">
+                                                                {item.body}
+                                                            </p>
+                                                        )}
+                                                        {item.status ===
+                                                            'sending' &&
+                                                            item.progress !=
+                                                                null && (
+                                                                <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/20">
+                                                                    <div
+                                                                        className="h-full rounded-full bg-white/80 transition-[width]"
+                                                                        style={{
+                                                                            width: `${item.progress}%`,
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                            )}
                                                         <div
                                                             className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${item.is_mine && item.status !== 'failed' ? 'text-white/70' : 'text-tb-outline'}`}
                                                         >
@@ -1021,7 +1182,64 @@ export default function ContactsIndex({
                                     onSubmit={sendMessage}
                                     className="shrink-0 border-t border-tb-outline-variant bg-tb-surface-bright p-3 md:px-5 md:py-4"
                                 >
+                                    {selectedAttachments.length > 0 && (
+                                        <div className="mx-auto mb-2 flex max-w-3xl gap-2 overflow-x-auto pb-1">
+                                            {selectedAttachments.map(
+                                                (attachment, index) => (
+                                                    <div
+                                                        key={`${attachment.name}-${index}`}
+                                                        className="bg-tb-surface-container-low relative w-44 shrink-0 rounded-xl border border-tb-outline-variant p-1.5"
+                                                    >
+                                                        <MessageAttachmentCard
+                                                            attachment={
+                                                                attachment
+                                                            }
+                                                            mine={false}
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                removeAttachment(
+                                                                    index,
+                                                                )
+                                                            }
+                                                            aria-label={`Hapus ${attachment.name}`}
+                                                            className="absolute -top-1.5 -right-1.5 grid size-6 place-items-center rounded-full bg-red-600 text-white shadow-sm hover:bg-red-700"
+                                                        >
+                                                            <X className="size-3.5" />
+                                                        </button>
+                                                    </div>
+                                                ),
+                                            )}
+                                        </div>
+                                    )}
                                     <div className="mx-auto flex max-w-3xl items-end gap-2">
+                                        <input
+                                            ref={attachmentInputRef}
+                                            type="file"
+                                            multiple
+                                            accept={ACCEPTED_ATTACHMENTS}
+                                            className="sr-only"
+                                            onChange={(event) =>
+                                                addAttachments(
+                                                    event.target.files,
+                                                )
+                                            }
+                                        />
+                                        <Button
+                                            type="button"
+                                            size="icon"
+                                            variant="outline"
+                                            disabled={uploading}
+                                            onClick={() =>
+                                                attachmentInputRef.current?.click()
+                                            }
+                                            aria-label="Tambahkan foto atau file"
+                                            title="Tambahkan foto atau file"
+                                            className="size-10 shrink-0 rounded-full border-tb-outline-variant"
+                                        >
+                                            <FilePlus2 className="size-4" />
+                                        </Button>
                                         <label
                                             htmlFor="message-body"
                                             className="sr-only"
@@ -1062,8 +1280,10 @@ export default function ContactsIndex({
                                             type="submit"
                                             size="icon"
                                             disabled={
-                                                messageForm.processing ||
-                                                !messageForm.data.body.trim()
+                                                uploading ||
+                                                (!messageForm.data.body.trim() &&
+                                                    selectedAttachments.length ===
+                                                        0)
                                             }
                                             aria-label="Kirim pesan"
                                             className="size-10 rounded-full bg-tb-primary text-white hover:bg-tb-primary-light"
@@ -1075,6 +1295,11 @@ export default function ContactsIndex({
                                         message={messageForm.errors.body}
                                         className="mx-auto mt-1 max-w-3xl"
                                     />
+                                    {attachmentError && (
+                                        <p className="mx-auto mt-1 max-w-3xl text-sm text-red-600 dark:text-red-400">
+                                            {attachmentError}
+                                        </p>
+                                    )}
                                 </form>
                             </>
                         ) : (
@@ -1320,7 +1545,7 @@ ContactsIndex.layout = {
  * Masukkan satu pesan ke store satu percakapan:
  * - dedupe by id (persisten) / uid (milik klien),
  * - pesan persisten milik sendiri menggantikan gelembung pending
- *   ber-body sama secara FIFO (konfirmasi kirim),
+ *   berisi teks dan nama lampiran sama secara FIFO (konfirmasi kirim),
  * - hasil selalu terurut naik by id dengan pesan lokal di ekor.
  */
 function upsertMessage(
@@ -1360,15 +1585,30 @@ function upsertMessage(
             continue;
         }
 
-        const index = pendingQueue.findIndex(
-            (pending) => pending.body === persisted.body,
-        );
+        const persistedNames = persisted.attachments
+            .map((attachment) => attachment.name)
+            .join('|');
+        const index = pendingQueue.findIndex((pending) => {
+            const pendingNames = pending.attachments
+                .map((attachment) => attachment.name)
+                .join('|');
+
+            return (
+                pending.body === persisted.body &&
+                pendingNames === persistedNames
+            );
+        });
 
         if (index === -1) {
             continue;
         }
 
         const [matched] = pendingQueue.splice(index, 1);
+        matched.attachments.forEach((attachment) => {
+            if (attachment.url.startsWith('blob:')) {
+                URL.revokeObjectURL(attachment.url);
+            }
+        });
         const position = merged.indexOf(matched);
 
         if (position !== -1) {
