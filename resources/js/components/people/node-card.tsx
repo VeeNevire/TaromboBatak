@@ -52,7 +52,9 @@ export function NodeCard({
         <div
             className={cn(
                 'flex flex-col items-center',
-                compact ? 'max-w-[110px] min-w-[64px]' : 'max-w-[150px] min-w-[96px]',
+                compact
+                    ? 'max-w-[88px] min-w-[48px]'
+                    : 'max-w-[150px] min-w-[96px]',
             )}
         >
             <div
