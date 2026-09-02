@@ -55,7 +55,7 @@ class ContactController extends Controller
         $beforeId = (int) $request->query('before_id', 0);
         $limit = max(1, min(200, (int) $request->query('limit', 50)));
 
-        $query = $conversation->messages();
+        $query = $conversation->messages()->with('attachments');
 
         if ($afterId > 0) {
             $messages = $query->where('id', '>', $afterId)
@@ -142,30 +142,30 @@ class ContactController extends Controller
         $contacts = User::query()
             ->with('marga', 'currentPerson')
             ->where(function ($query) use ($user) {
-                    $query->when($user->marga_id !== null, fn ($query) => $query->where('marga_id', $user->marga_id))
-                        ->when($user->marga_id === null, fn ($query) => $query->whereRaw('1 = 0'))
-                        ->orWhereIn('id', ContactRequest::query()
-                            ->where('status', ContactRequest::STATUS_APPROVED)
-                            ->where(function ($requests) use ($user) {
-                                $requests->where('requester_id', $user->id)
-                                    ->orWhere('recipient_id', $user->id);
-                            })
-                            ->get()
-                            ->map(fn (ContactRequest $request): int => $request->requester_id === $user->id
-                                ? $request->recipient_id
-                                : $request->requester_id));
-                })
-                ->where('id', '!=', $user->id)
-                ->where('role', '!=', 'admin')
-                ->orderBy('name')
-                ->get()
-                ->map(fn (User $contact): array => $this->contactPayload(
-                    $contact,
-                    $conversations->first(fn (Conversation $item): bool => $item->includes($contact)),
-                ));
+                $query->when($user->marga_id !== null, fn ($query) => $query->where('marga_id', $user->marga_id))
+                    ->when($user->marga_id === null, fn ($query) => $query->whereRaw('1 = 0'))
+                    ->orWhereIn('id', ContactRequest::query()
+                        ->where('status', ContactRequest::STATUS_APPROVED)
+                        ->where(function ($requests) use ($user) {
+                            $requests->where('requester_id', $user->id)
+                                ->orWhere('recipient_id', $user->id);
+                        })
+                        ->get()
+                        ->map(fn (ContactRequest $request): int => $request->requester_id === $user->id
+                            ? $request->recipient_id
+                            : $request->requester_id));
+            })
+            ->where('id', '!=', $user->id)
+            ->where('role', '!=', 'admin')
+            ->orderBy('name')
+            ->get()
+            ->map(fn (User $contact): array => $this->contactPayload(
+                $contact,
+                $conversations->first(fn (Conversation $item): bool => $item->includes($contact)),
+            ));
 
         $messages = $conversation
-            ? $conversation->messages()->latest()->limit(100)->get()->reverse()->values()
+            ? $conversation->messages()->with('attachments')->latest()->limit(100)->get()->reverse()->values()
                 ->map(fn (Message $message): array => $this->messagePayload($message, $user))
             : collect();
 
@@ -213,7 +213,7 @@ class ContactController extends Controller
             ->where(fn (Builder $query) => $query
                 ->where('user_one_id', $user->id)
                 ->orWhere('user_two_id', $user->id))
-            ->with('latestMessage')
+            ->with('latestMessage.attachments')
             ->withCount(['messages as unread_count' => fn (Builder $query) => $query
                 ->where('sender_id', '!=', $user->id)
                 ->whereNull('read_at')])
@@ -233,14 +233,17 @@ class ContactController extends Controller
                 : null,
             'color' => $contact->marga?->color,
             'role_label' => $contact->isSubAdmin() ? 'Pengurus Marga' : 'Anggota Marga',
-            'latest_message' => $conversation?->latestMessage?->body,
+            'latest_message' => $conversation?->latestMessage?->body
+                ?: ($conversation?->latestMessage?->attachments->first()?->original_name
+                    ? '📎 '.$conversation->latestMessage->attachments->first()->original_name
+                    : null),
             'latest_message_at' => $conversation?->latestMessage?->created_at?->toISOString(),
             'unread_count' => (int) ($conversation?->getAttribute('unread_count') ?? 0),
         ];
     }
 
     /**
-     * @return array<string, bool|int|string|null>
+     * @return array<string, mixed>
      */
     private function messagePayload(Message $message, User $user): array
     {
@@ -251,6 +254,10 @@ class ContactController extends Controller
             'created_at' => $message->created_at?->toISOString(),
             'read_at' => $message->read_at?->toISOString(),
             'is_mine' => $message->sender_id === $user->id,
+            'attachments' => $message->attachments
+                ->map(fn ($attachment) => $attachment->payload())
+                ->values()
+                ->all(),
         ];
     }
 }

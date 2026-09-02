@@ -3,20 +3,23 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
  * @property int $conversation_id
  * @property int $sender_id
- * @property string $body
+ * @property string|null $body
  * @property Carbon|null $read_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Conversation $conversation
  * @property-read User $sender
+ * @property-read Collection<int, MessageAttachment> $attachments
  */
 #[Fillable(['sender_id', 'body', 'read_at'])]
 class Message extends Model
@@ -35,6 +38,12 @@ class Message extends Model
     public function sender(): BelongsTo
     {
         return $this->belongsTo(User::class, 'sender_id');
+    }
+
+    /** @return HasMany<MessageAttachment, $this> */
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(MessageAttachment::class);
     }
 
     protected function casts(): array

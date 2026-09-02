@@ -32,15 +32,17 @@ class TelegramMessagesController extends Controller
             });
         }
         $search = trim((string) $request->query('search', ''));
-        $dialogs = $account?->dialogs()
-            ->when($search !== '', fn ($query) => $query->where(function ($query) use ($search): void {
-                $query->where('title', 'like', "%{$search}%")
-                    ->orWhere('username', 'like', "%{$search}%")
-                    ->orWhereHas('messages', fn ($messages) => $messages->where('body', 'like', "%{$search}%"));
-            }))
-            ->orderByDesc('last_message_at')
-            ->paginate(10, ['id', 'type', 'title', 'username', 'last_message_at', 'unread_count'])
-            ->withQueryString();
+        $dialogs = $account
+            ? $account->dialogs()
+                ->when($search !== '', fn ($query) => $query->where(function ($query) use ($search): void {
+                    $query->where('title', 'like', "%{$search}%")
+                        ->orWhere('username', 'like', "%{$search}%")
+                        ->orWhereHas('messages', fn ($messages) => $messages->where('body', 'like', "%{$search}%"));
+                }))
+                ->orderByDesc('last_message_at')
+                ->paginate(10, ['id', 'type', 'title', 'username', 'last_message_at', 'unread_count'])
+                ->withQueryString()
+            : TelegramDialog::query()->whereKey(0)->paginate(10);
 
         $selectedDialog = $account
             ? $account->dialogs()->find($request->integer('dialog_id')) ?? $dialogs->first()

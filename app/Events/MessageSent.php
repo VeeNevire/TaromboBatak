@@ -37,7 +37,7 @@ class MessageSent implements ShouldBroadcast
     }
 
     /**
-     * @return array<string, int|string|null>
+     * @return array<string, mixed>
      */
     public function broadcastWith(): array
     {
@@ -47,6 +47,10 @@ class MessageSent implements ShouldBroadcast
             'sender_id' => $this->message->sender_id,
             'body' => $this->message->body,
             'created_at' => $this->message->created_at?->toISOString(),
+            'attachments' => $this->message->attachments
+                ->map(fn ($attachment) => $attachment->payload())
+                ->values()
+                ->all(),
         ];
     }
 }

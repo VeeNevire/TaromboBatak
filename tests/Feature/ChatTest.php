@@ -5,10 +5,13 @@ use App\Events\MessageSent;
 use App\Models\Conversation;
 use App\Models\Marga;
 use App\Models\Message;
+use App\Models\MessageAttachment;
 use App\Models\Person;
 use App\Models\User;
 use Illuminate\Broadcasting\PrivateChannel;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('contacts only contain other non-admin accounts from the same marga', function () {
@@ -191,6 +194,65 @@ test('a user can send a validated message to a contact in the same marga', funct
         ->and($message->body)->toBe('Horas, amang!');
 
     Event::assertDispatched(MessageSent::class, fn (MessageSent $event) => $event->message->is($message));
+});
+
+test('a user can send a private image attachment without message text', function () {
+    Storage::fake('local');
+
+    $marga = Marga::factory()->create();
+    $sender = User::factory()->withMarga($marga->id)->create();
+    $recipient = User::factory()->withMarga($marga->id)->create();
+    Event::fake([MessageSent::class]);
+
+    $this->actingAs($sender)
+        ->post(route('contacts.messages.store', $recipient), [
+            'body' => '',
+            'attachments' => [UploadedFile::fake()->image('keluarga.jpg', 800, 600)],
+        ])
+        ->assertRedirect(route('contacts.show', $recipient));
+
+    $message = Message::query()->with('attachments')->firstOrFail();
+    $attachment = $message->attachments->firstOrFail();
+
+    expect($message->body)->toBeNull()
+        ->and($attachment->original_name)->toBe('keluarga.jpg')
+        ->and($attachment->category)->toBe('image');
+    Storage::disk('local')->assertExists($attachment->path);
+    Event::assertDispatched(MessageSent::class);
+
+    $this->actingAs($recipient)
+        ->get(route('message-attachments.show', $attachment))
+        ->assertSuccessful()
+        ->assertHeader('content-type', 'image/jpeg');
+});
+
+test('message attachments are private and executable files are rejected', function () {
+    Storage::fake('local');
+
+    $marga = Marga::factory()->create();
+    $sender = User::factory()->withMarga($marga->id)->create();
+    $recipient = User::factory()->withMarga($marga->id)->create();
+    $outsider = User::factory()->withMarga($marga->id)->create();
+
+    $this->actingAs($sender)->post(route('contacts.messages.store', $recipient), [
+        'attachments' => [UploadedFile::fake()->create('dokumen.pdf', 10, 'application/pdf')],
+    ]);
+
+    $attachment = MessageAttachment::query()->firstOrFail();
+
+    $this->actingAs($outsider)
+        ->get(route('message-attachments.show', $attachment))
+        ->assertForbidden();
+
+    $this->actingAs($sender)
+        ->from(route('contacts.show', $recipient))
+        ->post(route('contacts.messages.store', $recipient), [
+            'attachments' => [UploadedFile::fake()->create('program.exe', 10, 'application/x-msdownload')],
+        ])
+        ->assertRedirect(route('contacts.show', $recipient))
+        ->assertSessionHasErrors('attachments.0');
+
+    expect(Message::query()->count())->toBe(1);
 });
 
 test('repeated messages reuse one conversation between the same contacts', function () {
