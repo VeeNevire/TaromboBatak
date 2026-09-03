@@ -145,7 +145,7 @@ class TelegramMtproto
         }
 
         if (filled($recipient->phone)) {
-            $resolved = $api->contacts->resolvePhone((string) $recipient->phone);
+            $resolved = $api->contacts->resolvePhone(phone: (string) $recipient->phone);
 
             $resolvedPeer = $resolved['peer'] ?? null;
 
