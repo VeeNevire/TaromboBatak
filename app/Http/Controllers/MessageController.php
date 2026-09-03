@@ -81,19 +81,38 @@ class MessageController extends Controller
 
         if ($senderTelegram?->isMtprotoConnected()
             && $recipientTelegram?->isMtprotoConnected()
-            && filled($message->body)) {
+            && ($message->attachments->isNotEmpty() || filled($message->body))) {
             try {
-                $peer = app(TelegramMtproto::class)->resolvePeer(
+                $telegram = app(TelegramMtproto::class);
+                $peer = $telegram->resolvePeer(
                     $senderTelegram,
                     $recipientTelegram,
                 );
-                $telegramMessage = app(TelegramMtproto::class)->sendMessage(
-                    $senderTelegram,
-                    $peer,
-                    $message->body,
-                );
 
-                if (isset($telegramMessage['id'])) {
+                $telegramMessage = null;
+
+                if ($message->attachments->isNotEmpty()) {
+                    foreach ($message->attachments as $index => $attachment) {
+                        $sentAttachment = $telegram->sendDocument(
+                            $senderTelegram,
+                            $peer,
+                            Storage::disk($attachment->disk)->path($attachment->path),
+                            $attachment->original_name,
+                            $attachment->mime_type,
+                            $index === 0 ? (string) $message->body : '',
+                        );
+
+                        $telegramMessage ??= $sentAttachment;
+                    }
+                } else {
+                    $telegramMessage = $telegram->sendMessage(
+                        $senderTelegram,
+                        $peer,
+                        (string) $message->body,
+                    );
+                }
+
+                if (is_array($telegramMessage) && isset($telegramMessage['id'])) {
                     $message->update(['telegram_message_id' => (int) $telegramMessage['id']]);
                 }
             } catch (Throwable $exception) {

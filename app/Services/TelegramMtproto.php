@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Exceptions\TelegramNotConfigured;
 use App\Models\TelegramAccount;
 use App\Models\TelegramAuthSession;
+use danog\MadelineProto\LocalFile;
 use danog\MadelineProto\Logger;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\File;
@@ -127,6 +128,31 @@ class TelegramMtproto
     public function sendMessage(TelegramAccount $account, int|string $peer, string $body): array
     {
         $message = $this->api($account->session_path)->sendMessage($peer, $body);
+
+        return [
+            'id' => $message->id,
+            'message' => $message->message,
+            'date' => $message->date,
+            'out' => true,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public function sendDocument(
+        TelegramAccount $account,
+        int|string $peer,
+        string $path,
+        string $fileName,
+        string $mimeType,
+        string $caption = '',
+    ): array {
+        $message = $this->api($account->session_path)->sendDocument(
+            peer: $peer,
+            file: new LocalFile($path),
+            caption: $caption,
+            fileName: $fileName,
+            mimeType: $mimeType,
+        );
 
         return [
             'id' => $message->id,

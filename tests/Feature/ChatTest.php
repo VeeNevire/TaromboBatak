@@ -7,7 +7,9 @@ use App\Models\Marga;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\Person;
+use App\Models\TelegramAccount;
 use App\Models\User;
+use App\Services\TelegramMtproto;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Event;
@@ -224,6 +226,55 @@ test('a user can send a private image attachment without message text', function
         ->get(route('message-attachments.show', $attachment))
         ->assertSuccessful()
         ->assertHeader('content-type', 'image/jpeg');
+});
+
+test('private attachments are also sent to the connected recipient on Telegram', function () {
+    Storage::fake('local');
+
+    $marga = Marga::factory()->create();
+    $sender = User::factory()->withMarga($marga->id)->create();
+    $recipient = User::factory()->withMarga($marga->id)->create();
+    TelegramAccount::create([
+        'user_id' => $sender->id,
+        'telegram_user_id' => 101,
+        'private_chat_id' => 101,
+        'display_name' => $sender->name,
+        'session_path' => 'sessions/sender',
+        'connection_status' => TelegramAccount::STATUS_CONNECTED,
+        'linked_at' => now(),
+    ]);
+    TelegramAccount::create([
+        'user_id' => $recipient->id,
+        'telegram_user_id' => 202,
+        'private_chat_id' => 202,
+        'display_name' => $recipient->name,
+        'username' => 'recipient',
+        'session_path' => 'sessions/recipient',
+        'connection_status' => TelegramAccount::STATUS_CONNECTED,
+        'linked_at' => now(),
+    ]);
+
+    $telegram = Mockery::mock(TelegramMtproto::class);
+    $telegram->shouldReceive('resolvePeer')->once()->andReturn(202);
+    $telegram->shouldReceive('sendDocument')
+        ->once()
+        ->withArgs(fn ($account, $peer, $path, $name, $mime, $caption) => $account->is($sender->telegramAccount) &&
+            $peer === 202 &&
+            str_ends_with($path, '.pdf') &&
+            $name === 'silsilah.pdf' &&
+            $mime === 'application/pdf' &&
+            $caption === 'Dokumen keluarga')
+        ->andReturn(['id' => 777]);
+    app()->instance(TelegramMtproto::class, $telegram);
+
+    $this->actingAs($sender)
+        ->post(route('contacts.messages.store', $recipient), [
+            'body' => 'Dokumen keluarga',
+            'attachments' => [UploadedFile::fake()->create('silsilah.pdf', 10, 'application/pdf')],
+        ])
+        ->assertRedirect(route('contacts.show', $recipient));
+
+    expect(Message::query()->firstOrFail()->telegram_message_id)->toBe(777);
 });
 
 test('message attachments are private and executable files are rejected', function () {

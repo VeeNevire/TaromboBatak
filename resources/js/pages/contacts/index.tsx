@@ -1309,7 +1309,7 @@ export default function ContactsIndex({
                                             onPaste={pasteAttachments}
                                             maxLength={2000}
                                             rows={1}
-                                            placeholder="Tulis pesan..."
+                                            placeholder="Tulis pesan atau Ctrl+V untuk file..."
                                             style={
                                                 {
                                                     height: '42px',
