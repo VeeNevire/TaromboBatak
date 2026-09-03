@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Loader2, Mail, MapPin, Shapes, User } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { BrandLogo } from '@/components/brand-logo';
+import TurnstileWidget from '@/components/turnstile-widget';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
 import { Button } from '@/components/ui/button';
@@ -34,11 +35,17 @@ type Props = {
     canResetPassword: boolean;
     margas: MargaOption[];
     regions: RegionOption[];
+    turnstileSiteKey: string | null;
 };
 
 type FormMode = 'login' | 'register';
 
-export default function Login({ canResetPassword, margas, regions }: Props) {
+export default function Login({
+    canResetPassword,
+    margas,
+    regions,
+    turnstileSiteKey,
+}: Props) {
     const { url } = usePage();
     const initialMode = new URLSearchParams(url.split('?')[1] ?? '').get(
         'mode',
@@ -138,6 +145,7 @@ export default function Login({ canResetPassword, margas, regions }: Props) {
                             margas={margas}
                             regions={regions}
                             canResetPassword={canResetPassword}
+                            turnstileSiteKey={turnstileSiteKey}
                         />
                     </div>
 
@@ -178,12 +186,14 @@ function SlideSwap({
     margas,
     regions,
     canResetPassword,
+    turnstileSiteKey,
 }: {
     mode: FormMode;
     direction: 1 | -1;
     margas: MargaOption[];
     regions: RegionOption[];
     canResetPassword: boolean;
+    turnstileSiteKey: string | null;
 }) {
     const boxRef = useRef<HTMLDivElement>(null);
     const [height, setHeight] = useState<number>();
@@ -216,7 +226,10 @@ function SlideSwap({
                     transition={{ duration: 0.25, ease: 'easeInOut' }}
                 >
                     {mode === 'login' ? (
-                        <LoginForm canResetPassword={canResetPassword} />
+                        <LoginForm
+                            canResetPassword={canResetPassword}
+                            turnstileSiteKey={turnstileSiteKey}
+                        />
                     ) : (
                         <RegisterForm margas={margas} regions={regions} />
                     )}
@@ -226,7 +239,13 @@ function SlideSwap({
     );
 }
 
-function LoginForm({ canResetPassword }: { canResetPassword: boolean }) {
+function LoginForm({
+    canResetPassword,
+    turnstileSiteKey,
+}: {
+    canResetPassword: boolean;
+    turnstileSiteKey: string | null;
+}) {
     return (
         <Form
             {...loginStore.form()}
@@ -309,6 +328,14 @@ function LoginForm({ canResetPassword }: { canResetPassword: boolean }) {
                             >
                                 Ingat saya
                             </Label>
+                        </div>
+
+                        <div className="grid gap-1.5">
+                            <TurnstileWidget siteKey={turnstileSiteKey} />
+                            <InputError
+                                message={errors.turnstile}
+                                className="text-sm text-red-600"
+                            />
                         </div>
 
                         <Button
