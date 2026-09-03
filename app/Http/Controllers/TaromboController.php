@@ -90,7 +90,11 @@ class TaromboController extends Controller
             $identityRows = collect(
                 $direction === 'upper'
                     ? $service->rowsForPersonWithAncestors($marga->identityPerson)
-                    : $service->rowsForPerson($marga->identityPerson),
+                    : $service->rowsForPerson(
+                        $marga->identityPerson,
+                        maxDepth: (int) config('tarombo.public_max_depth'),
+                        maxNodes: (int) config('tarombo.public_max_nodes'),
+                    ),
             );
             $people = collect($people)
                 ->merge($identityRows)
