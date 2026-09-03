@@ -326,7 +326,7 @@ class PersonController extends Controller
             'margas' => $user->isStaff() ? $this->margaOptions() : $this->margaOptionsForUser($user),
             'nameSuggestions' => $this->nameSuggestions($user->isContributor() ? $user->accessibleMargaIds() : null),
             'fatherSuggestions' => $this->fatherSuggestions($person, $user->isContributor() ? $person->marga_id : null),
-            'familyTrees' => $this->familyTrees($user),
+            'familyTrees' => $versionTrees,
             'approvedMargaTrees' => $this->approvedMargaTrees($user),
             'margaAccessMargaId' => $user->isStaff() || $user->isContributor() ? null : $user->marga_id,
             'margaAccessStatus' => $this->margaAccessStatus($user, $user->marga_id),
@@ -376,7 +376,7 @@ class PersonController extends Controller
                 $isStaff ? null : ($user->isContributor() ? $person->marga_id : $user->marga_id),
             ),
             'lockedMarga' => $isStaff || $user->isContributor() ? null : $this->lockedMarga($user),
-            'familyTrees' => $this->familyTrees($user),
+            'familyTrees' => $versionTrees,
             'approvedMargaTrees' => $this->approvedMargaTrees($user),
             'margaAccessMargaId' => $user->isStaff() || $user->isContributor() ? null : $user->marga_id,
             'margaAccessStatus' => $this->margaAccessStatus($user, $user->marga_id),
@@ -1443,9 +1443,9 @@ class PersonController extends Controller
                     ->whereBelongsTo($user, 'recipient')
                     ->where('status', FamilyTreeShare::STATUS_ACCEPTED))))
             ->whereNotNull('root_person_id')
-            ->when($focus !== null, fn ($query) => $query->whereHas(
-                'nodes',
-                fn ($nodes) => $nodes->where('person_id', $focus->id),
+            ->when($focus !== null, fn ($query) => $query->where(
+                'root_person_id',
+                $focus->id,
             ))
             ->with(['user:id,name', 'rootPerson:id,name,marga_id', 'nodes.person:id,name', 'shares.recipient:id,name,email', 'contributionRequests:id,family_tree_id,status'])
             ->withExists(['deletionRequests as deletion_pending' => fn ($query) => $query

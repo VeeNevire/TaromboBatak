@@ -1074,6 +1074,46 @@ test('the create form lists each family tree created by the signed in account', 
             ->missing('familyTrees.2'));
 });
 
+test('connected families reuse the existing tree while disconnected families create a new tree', function () {
+    $marga = Marga::factory()->create(['name' => 'Batak']);
+    $root = Person::factory()->create([
+        'name' => 'Si Raja Batak',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+    ]);
+    $tree = FamilyTree::create([
+        'user_id' => $this->admin->id,
+        'root_person_id' => $root->id,
+        'name' => 'Keluarga Si Raja Batak',
+    ]);
+    $tree->nodes()->create(['person_id' => $root->id]);
+
+    $this->actingAs($this->admin)->post(route('people.store'), [
+        'name' => 'Keturunan Si Raja Batak',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'birth_order' => 1,
+        'sibling_count' => 1,
+        'father' => ['id' => $root->id, 'name' => $root->name],
+        'children' => [['name' => 'Keturunan Si Raja Batak', 'gender' => 'L']],
+    ])->assertRedirect(route('people.index'));
+
+    expect(FamilyTree::query()->count())->toBe(1)
+        ->and($tree->fresh()->people()->where('name', 'Keturunan Si Raja Batak')->exists())->toBeTrue();
+
+    $this->actingAs($this->admin)->post(route('people.store'), [
+        'name' => 'Rumpun Baru',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'birth_order' => 1,
+        'sibling_count' => 1,
+        'children' => [['name' => 'Rumpun Baru', 'gender' => 'L']],
+    ])->assertRedirect(route('people.index'));
+
+    expect(FamilyTree::query()->count())->toBe(2)
+        ->and(FamilyTree::query()->where('root_person_id', '!=', $root->id)->exists())->toBeTrue();
+});
+
 test('the create form does not expose another accounts approved marga tree', function () {
     $marga = Marga::factory()->create(['name' => 'Simare']);
     $otherMarga = Marga::factory()->create();
@@ -1159,7 +1199,7 @@ test('the family history card displays the topmost father node as its root', fun
             ->where('familyTrees.0.root_name', 'Ayah Jaya Silaban'));
 });
 
-test('the admin family tree card lists all trees while version actions stay focused', function () {
+test('the person family form lists only versions rooted at the focused person', function () {
     $admin = User::factory()->asAdmin()->create();
     $user = User::factory()->create();
     $focus = Person::factory()->create(['name' => 'Fokus Admin']);
@@ -1183,6 +1223,7 @@ test('the admin family tree card lists all trees while version actions stay focu
     $adminTree->nodes()->create(['person_id' => $focus->id]);
     $userTree->nodes()->create(['person_id' => $focus->id]);
     $otherTree->nodes()->create(['person_id' => $otherRoot->id]);
+    $otherTree->nodes()->create(['person_id' => $focus->id]);
 
     $this->actingAs($admin)
         ->get(route('people.create'))
@@ -1194,11 +1235,18 @@ test('the admin family tree card lists all trees while version actions stay focu
         ->get(route('people.edit', $focus))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->has('familyTrees', 3)
+            ->has('familyTrees', 2)
             ->has('versionTrees', 2)
             ->where('versionTrees', fn ($trees) => collect($trees)
                 ->every(fn (array $tree) => $tree['root_person_id'] === $focus->id
                     && $tree['root_name'] === 'Fokus Admin')));
+
+    $this->actingAs($admin)
+        ->get(route('people.show', $focus))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('familyTrees', 2)
+            ->has('versionTrees', 2));
 });
 
 test('family tree entries expose every member for alternative version actions', function () {
