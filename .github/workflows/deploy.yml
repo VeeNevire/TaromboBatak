@@ -1,4 +1,4 @@
-name: Deploy Laravel TaromboBatak to VPS
+name: Deploy TaromboBatak to VPS
 
 on:
   push:

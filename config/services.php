@@ -43,4 +43,9 @@ return [
         'mtproto_session_path' => env('TELEGRAM_MTPROTO_SESSION_PATH', storage_path('app/private/telegram/sessions')),
     ],
 
+    'turnstile' => [
+        'site_key' => env('TURNSTILE_SITE_KEY'),
+        'secret_key' => env('TURNSTILE_SECRET_KEY'),
+    ],
+
 ];
