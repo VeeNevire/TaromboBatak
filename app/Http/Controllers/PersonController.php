@@ -185,6 +185,7 @@ class PersonController extends Controller
             ),
             'lockedMarga' => $isStaff || $user->isContributor() ? null : $this->lockedMarga($user),
             'lineage' => $this->createLineage($user, $isStaff),
+            'margaLineage' => $this->createMargaLineage($user, $isStaff),
             'familyTrees' => $this->familyTrees($user),
             'approvedMargaTrees' => $this->approvedMargaTrees($user),
             'margaAccessMargaId' => $user->isStaff() || $user->isContributor() ? null : $user->marga_id,
@@ -249,6 +250,78 @@ class PersonController extends Controller
                     ->values()
                     ->all(),
             ])
+            ->all();
+    }
+
+    /**
+     * Build the marga's lower-tree context from the same identity person used
+     * by the public marga tree. This keeps the form's numbering and branches
+     * aligned with Daftar Marga.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function createMargaLineage(User $user, bool $isStaff): array
+    {
+        $canBrowseMarga = $isStaff || $user->isContributor();
+        $margaIds = $isStaff ? null : $user->accessibleMargaIds();
+        $treeService = app(TaromboTreeService::class);
+
+        return Marga::query()
+            ->when($margaIds !== null, fn ($query) => $query->whereIn('id', $margaIds))
+            ->whereNotNull('identity_person_id')
+            ->with('identityPerson.marga')
+            ->orderBy('name')
+            ->get()
+            ->map(function (Marga $marga) use ($treeService, $canBrowseMarga, $user, $margaIds) {
+                $identity = $marga->identityPerson;
+
+                if ($identity === null) {
+                    return null;
+                }
+
+                $rows = collect($treeService->rowsForPerson($identity))
+                    ->filter(fn (array $row) => ($row['gender'] ?? null) === 'L' || ($row['gender'] ?? null) === null);
+
+                if (! $canBrowseMarga) {
+                    $visibleIds = Person::query()
+                        ->whereKey($rows->pluck('id')->map(fn ($id) => (int) $id))
+                        ->when($margaIds !== null, fn ($query) => $query->whereIn('marga_id', $margaIds))
+                        ->tap(fn ($query) => $this->scopePeopleVisibleToUser($query, $user))
+                        ->pluck('id')
+                        ->map(fn ($id) => (string) $id)
+                        ->all();
+                    $rows = $rows->whereIn('id', $visibleIds);
+                }
+
+                $root = $rows->firstWhere('id', (string) $identity->id);
+
+                if ($root === null) {
+                    return null;
+                }
+
+                return [
+                    'id' => (int) $root['id'],
+                    'name' => $root['name'],
+                    'marga_id' => $marga->id,
+                    'marga' => $root['marga'],
+                    'chain' => $root['chain'],
+                    'children' => $rows
+                        ->filter(fn (array $row) => $row['parentId'] === (string) $identity->id)
+                        ->sortBy(fn (array $row) => [$row['birthOrder'] ?? PHP_INT_MAX, (int) $row['id']])
+                        ->map(fn (array $child) => [
+                            'id' => (int) $child['id'],
+                            'name' => $child['name'],
+                            'gender' => $child['gender'],
+                            'marga' => $child['marga'],
+                            'chain' => $child['chain'],
+                            'birth_order' => $child['birthOrder'],
+                        ])
+                        ->values()
+                        ->all(),
+                ];
+            })
+            ->filter()
+            ->values()
             ->all();
     }
 
@@ -376,6 +449,7 @@ class PersonController extends Controller
                 $isStaff ? null : ($user->isContributor() ? $person->marga_id : $user->marga_id),
             ),
             'lockedMarga' => $isStaff || $user->isContributor() ? null : $this->lockedMarga($user),
+            'margaLineage' => $this->createMargaLineage($user, $isStaff),
             'familyTrees' => $versionTrees,
             'approvedMargaTrees' => $this->approvedMargaTrees($user),
             'margaAccessMargaId' => $user->isStaff() || $user->isContributor() ? null : $user->marga_id,

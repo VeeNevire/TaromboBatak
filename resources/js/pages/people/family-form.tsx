@@ -184,6 +184,7 @@ type Props = {
     fatherSuggestions: NameSuggestion[];
     lockedMarga?: { id: number; name: string } | null;
     lineage?: MargaLineageEntry[];
+    margaLineage?: MargaLineageEntry[];
     familyTrees?: FamilyTreeHistoryEntry[];
     approvedMargaTrees?: ApprovedMargaTreeEntry[];
     margaAccessMargaId?: number | null;
@@ -431,6 +432,7 @@ function treeBelongsToFamily(
 
 export function SilsilahListCard({
     lineage,
+    margaLineage = [],
     selfId,
     familyTrees,
 }: {
@@ -2047,7 +2049,12 @@ setVillagesLoading(false);
     };
 
     const fatherName = data.father?.name?.trim() ?? '';
-    const lineageEntries = (lineage ?? []).flatMap((entry) => [
+    const selectedMargaLineage = data.marga_id
+        ? margaLineage.filter(
+              (entry) => Number(entry.marga_id) === Number(data.marga_id),
+          )
+        : [];
+    const lineageEntries = selectedMargaLineage.flatMap((entry) => [
         entry,
         ...(entry.children ?? []),
     ]);
@@ -2064,7 +2071,7 @@ setVillagesLoading(false);
         predictedFatherChain && data.name.trim()
             ? `${predictedFatherChain}-${birthOrder}`
             : null;
-    const highlightedLineage: MargaLineageEntry[] = (lineage ?? []).map(
+    const highlightedLineage: MargaLineageEntry[] = selectedMargaLineage.map(
         (entry) => ({
             ...entry,
             isAyah:
@@ -3012,7 +3019,7 @@ setVillagesLoading(false);
                                     />
                                 ) : (
                                     <MargaLineageCard
-                                        entries={isEdit ? highlightedLineage : []}
+                                        entries={highlightedLineage}
                                         fatherChain={predictedFatherChain}
                                         focusChain={predictedFocusChain}
                                         familyTrees={listFamilyTrees}
