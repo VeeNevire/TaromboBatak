@@ -45,6 +45,7 @@ class MessageSent implements ShouldBroadcast
             'id' => $this->message->id,
             'conversation_id' => $this->message->conversation_id,
             'sender_id' => $this->message->sender_id,
+            'telegram_message_id' => $this->message->telegram_message_id,
             'body' => $this->message->body,
             'created_at' => $this->message->created_at?->toISOString(),
             'attachments' => $this->message->attachments

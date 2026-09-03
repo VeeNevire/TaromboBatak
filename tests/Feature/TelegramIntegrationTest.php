@@ -4,12 +4,14 @@ use App\Actions\CreateTelegramLinkToken;
 use App\Jobs\ProcessTelegramUpdate;
 use App\Jobs\SendGroupMessageToTelegram;
 use App\Models\ChatGroup;
+use App\Models\Conversation;
 use App\Models\GroupMessage;
 use App\Models\Marga;
 use App\Models\TelegramAccount;
 use App\Models\TelegramLinkToken;
 use App\Models\TelegramUpdate;
 use App\Models\User;
+use App\Services\TelegramMessageImporter;
 use App\Services\TelegramUpdateProcessor;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -181,4 +183,60 @@ test('the polling command persists updates and queues their processing without a
 
     expect(TelegramUpdate::query()->where('update_id', 7788)->exists())->toBeTrue();
     Queue::assertPushed(ProcessTelegramUpdate::class);
+});
+
+test('an outgoing Telegram update reconciles the pending web message instead of duplicating it', function () {
+    $marga = Marga::factory()->create();
+    $sender = User::factory()->withMarga($marga->id)->create();
+    $recipient = User::factory()->withMarga($marga->id)->create();
+    $senderTelegram = TelegramAccount::query()->create([
+        'user_id' => $sender->id,
+        'telegram_user_id' => 1001,
+        'private_chat_id' => 1001,
+        'display_name' => $sender->name,
+        'linked_at' => now(),
+        'session_path' => 'telegram/sender.madeline',
+        'connection_status' => TelegramAccount::STATUS_CONNECTED,
+    ]);
+    $recipientTelegram = TelegramAccount::query()->create([
+        'user_id' => $recipient->id,
+        'telegram_user_id' => 1002,
+        'private_chat_id' => 1002,
+        'display_name' => $recipient->name,
+        'linked_at' => now(),
+        'session_path' => 'telegram/recipient.madeline',
+        'connection_status' => TelegramAccount::STATUS_CONNECTED,
+    ]);
+
+    $conversation = Conversation::query()->create(
+        Conversation::participantAttributes($sender, $recipient),
+    );
+    $pending = $conversation->messages()->create([
+        'sender_id' => $sender->id,
+        'body' => 'Pesan yang hanya boleh tampil sekali',
+    ]);
+
+    app(TelegramMessageImporter::class)->import($senderTelegram, ['message' => [
+        'id' => 500,
+        'peer_id' => ['user_id' => 1002],
+        'from_id' => ['user_id' => 1001],
+        'message' => $pending->body,
+        'date' => now()->timestamp,
+        'out' => true,
+    ]]);
+
+    // The other authenticated account sees the same Telegram message as
+    // incoming and may expose a different message ID. It must not create a
+    // second web row.
+    app(TelegramMessageImporter::class)->import($recipientTelegram, ['message' => [
+        'id' => 501,
+        'peer_id' => ['user_id' => 1001],
+        'from_id' => ['user_id' => 1001],
+        'message' => $pending->body,
+        'date' => now()->timestamp,
+        'out' => false,
+    ]]);
+
+    expect($conversation->messages()->count())->toBe(1)
+        ->and($pending->fresh()->telegram_message_id)->toBe(500);
 });

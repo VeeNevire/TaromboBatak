@@ -258,6 +258,7 @@ class ContactController extends Controller
         return [
             'id' => $message->id,
             'sender_id' => $message->sender_id,
+            'telegram_message_id' => $message->telegram_message_id,
             'body' => $message->body,
             'created_at' => $message->created_at?->toISOString(),
             'read_at' => $message->read_at?->toISOString(),

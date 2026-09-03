@@ -79,30 +79,29 @@ class TelegramMessageImporter
             ],
         );
         $dialog->update(['last_message_at' => $sentAt]);
-        if (! $isOutgoing) {
-            if ($stored->wasRecentlyCreated) {
-                $dialog->increment('unread_count');
-                TelegramMessageReceived::dispatch($stored->load('account'));
-            }
-
-            $this->importToWebConversation($account, $stored, $peerId, $message);
+        if (! $isOutgoing && $stored->wasRecentlyCreated) {
+            $dialog->increment('unread_count');
+            TelegramMessageReceived::dispatch($stored->load('account'));
         }
+        $this->importToWebConversation($account, $stored, $peerId, $message, $isOutgoing);
         $account->update(['last_seen_at' => now(), 'last_error' => null]);
     }
 
     /** @param array<string, mixed> $message */
-    private function importToWebConversation(TelegramAccount $account, TelegramMessage $telegramMessage, int $peerId, array $message): void
+    private function importToWebConversation(TelegramAccount $account, TelegramMessage $telegramMessage, int $peerId, array $message, bool $isOutgoing): void
     {
         if ($telegramMessage->dialog?->type !== 'private' || ! filled($telegramMessage->body)) {
             return;
         }
 
-        $senderTelegram = TelegramAccount::query()
-            ->where('telegram_user_id', $this->senderId($message['from_id'] ?? null) ?: $peerId)
+        $otherTelegram = TelegramAccount::query()
+            ->where('telegram_user_id', $isOutgoing
+                ? $peerId
+                : ($this->senderId($message['from_id'] ?? null) ?: $peerId))
             ->with('user')
             ->first();
-        $recipient = $account->user;
-        $sender = $senderTelegram?->user;
+        $sender = $isOutgoing ? $account->user : $otherTelegram?->user;
+        $recipient = $isOutgoing ? $otherTelegram?->user : $account->user;
 
         if (! $sender || ! $recipient || ! $recipient->canChatWith($sender)) {
             return;
@@ -112,18 +111,65 @@ class TelegramMessageImporter
             Conversation::participantAttributes($recipient, $sender),
         );
 
-        $webMessage = WebMessage::query()->firstOrCreate(
-            [
+        // A message sent from the web is inserted before Telegram confirms it.
+        // The MTProto update for that same outgoing message can arrive before
+        // MessageController has stored telegram_message_id. Reconcile it with
+        // the pending web row instead of creating a second visible message.
+        $webMessage = WebMessage::query()
+            ->where('conversation_id', $conversation->id)
+            ->where('telegram_message_id', $telegramMessage->telegram_message_id)
+            ->first();
+        $created = false;
+
+        if ($webMessage === null && $isOutgoing) {
+            $sentAt = $telegramMessage->sent_at ?? now();
+            $webMessage = WebMessage::query()
+                ->where('conversation_id', $conversation->id)
+                ->where('sender_id', $sender->id)
+                ->whereNull('telegram_message_id')
+                ->where('body', $telegramMessage->body)
+                ->whereBetween('created_at', [
+                    $sentAt->copy()->subMinutes(2),
+                    $sentAt->copy()->addMinutes(2),
+                ])
+                ->latest('id')
+                ->first();
+
+            if ($webMessage !== null) {
+                $webMessage->update([
+                    'telegram_message_id' => $telegramMessage->telegram_message_id,
+                ]);
+            }
+        }
+
+        // Telegram sessions may expose different message IDs for the same
+        // private message. When the other linked account imports that update,
+        // reconcile it by body and a narrow timestamp window as well.
+        if ($webMessage === null) {
+            $sentAt = $telegramMessage->sent_at ?? now();
+            $webMessage = WebMessage::query()
+                ->where('conversation_id', $conversation->id)
+                ->where('body', $telegramMessage->body)
+                ->whereNotNull('telegram_message_id')
+                ->whereBetween('created_at', [
+                    $sentAt->copy()->subSeconds(30),
+                    $sentAt->copy()->addSeconds(30),
+                ])
+                ->latest('id')
+                ->first();
+        }
+
+        if ($webMessage === null) {
+            $webMessage = WebMessage::query()->create([
                 'conversation_id' => $conversation->id,
                 'sender_id' => $sender->id,
-                'telegram_message_id' => $telegramMessage->telegram_message_id,
-            ],
-            [
                 'body' => $telegramMessage->body,
-            ],
-        );
+                'telegram_message_id' => $telegramMessage->telegram_message_id,
+            ]);
+            $created = true;
+        }
 
-        if ($webMessage->wasRecentlyCreated) {
+        if ($created) {
             MessageSent::dispatch($webMessage->load('conversation', 'attachments'));
         }
     }

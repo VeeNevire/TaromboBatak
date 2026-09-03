@@ -79,6 +79,7 @@ type ChatItem = {
     uid: string;
     contact_id: number;
     sender_id: number;
+    telegram_message_id?: number | null;
     body: string;
     attachments: ChatAttachment[];
     progress?: number;
@@ -93,6 +94,7 @@ type Store = Record<number, ChatItem[]>;
 type RawMessage = {
     id: number;
     sender_id: number;
+    telegram_message_id?: number | null;
     body: string | null;
     attachments?: ChatAttachment[];
     created_at: string | null;
@@ -230,6 +232,7 @@ export default function ContactsIndex({
                         uid: `s${raw.id}`,
                         contact_id: contactId,
                         sender_id: raw.sender_id,
+                        telegram_message_id: raw.telegram_message_id ?? null,
                         body: raw.body ?? '',
                         attachments: raw.attachments ?? [],
                         created_at: raw.created_at,
@@ -290,6 +293,7 @@ export default function ContactsIndex({
     useEcho<{
         id: number;
         sender_id: number;
+        telegram_message_id?: number | null;
         body: string | null;
         created_at: string | null;
         attachments: ChatAttachment[];
@@ -301,6 +305,7 @@ export default function ContactsIndex({
                 {
                     id: message.id,
                     sender_id: message.sender_id,
+                    telegram_message_id: message.telegram_message_id ?? null,
                     body: message.body,
                     attachments: message.attachments,
                     created_at: message.created_at,
@@ -1635,16 +1640,28 @@ function upsertMessage(
     const existing = current[contactId] ?? [];
     const merged: ChatItem[] = [];
     const seenPersisted = new Set<string>();
+    const seenTelegramFingerprints = new Set<string>();
 
     for (const candidate of [...existing, item]) {
         if (candidate.id !== null) {
-            const key = `m${candidate.id}`;
+            const key = candidate.telegram_message_id != null
+                ? `t${candidate.telegram_message_id}`
+                : `m${candidate.id}`;
+            const fingerprint = candidate.telegram_message_id != null && candidate.created_at
+                ? `${candidate.body.trim()}|${candidate.created_at.slice(0, 19)}`
+                : null;
 
-            if (seenPersisted.has(key)) {
+            if (
+                seenPersisted.has(key) ||
+                (fingerprint !== null && seenTelegramFingerprints.has(fingerprint))
+            ) {
                 continue;
             }
 
             seenPersisted.add(key);
+            if (fingerprint !== null) {
+                seenTelegramFingerprints.add(fingerprint);
+            }
             merged.push(candidate);
 
             continue;

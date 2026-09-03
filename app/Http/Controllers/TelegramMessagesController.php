@@ -10,7 +10,6 @@ use App\Services\TelegramMessageImporter;
 use App\Services\TelegramMtproto;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Inertia\Response;
 use Throwable;
@@ -20,19 +19,9 @@ class TelegramMessagesController extends Controller
     public function index(Request $request): Response
     {
         $account = $request->user()->telegramAccount;
-        $syncError = null;
-        if ($account) {
-            try {
-                Cache::remember("telegram-dialogs-refresh:v2:{$account->id}", now()->addMinute(), function () use ($account): bool {
-                    $this->syncAccount($account, app(TelegramMtproto::class), app(TelegramMessageImporter::class), false);
-
-                    return true;
-                });
-            } catch (Throwable $exception) {
-                report($exception);
-                $syncError = $this->handleSyncFailure($account, $exception);
-            }
-        }
+        $syncError = $account?->connection_status === TelegramAccount::STATUS_ERROR
+            ? 'Sesi Telegram perlu diperiksa. Hubungkan ulang akun jika sinkronisasi gagal.'
+            : null;
         $search = trim((string) $request->query('search', ''));
         $dialogs = $account
             ? $account->dialogs()

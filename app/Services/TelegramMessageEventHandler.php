@@ -7,7 +7,6 @@ namespace App\Services;
 use App\Models\TelegramAccount;
 use danog\MadelineProto\EventHandler\Attributes\Handler;
 use danog\MadelineProto\EventHandler\Message;
-use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
 use danog\MadelineProto\SimpleEventHandler;
 
 final class TelegramMessageEventHandler extends SimpleEventHandler
@@ -20,7 +19,7 @@ final class TelegramMessageEventHandler extends SimpleEventHandler
     }
 
     #[Handler]
-    public function handle(Incoming&Message $update): void
+    public function handle(Message $update): void
     {
         $account = TelegramAccount::query()->find(self::$accountId ?? 0);
         if (! $account) {
