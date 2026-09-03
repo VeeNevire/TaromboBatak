@@ -58,7 +58,16 @@ class FamilyEntryService
             $matchedFather = $deferExistingFatherMatch && $fatherGiven
                 ? $this->findExistingFatherMatch($data, $fatherMargaId, $ineligibleFatherIds)
                 : null;
-            $pending = ! $fatherGiven || $matchedFather !== null;
+            // A blank father means "pending" for a new/detached family, but
+            // an existing root ancestor must not become pending merely
+            // because its edit form naturally has no father value.
+            $pending = $matchedFather !== null || (
+                ! $fatherGiven && (
+                    $focusPerson === null
+                    || $focusPerson->father_id !== null
+                    || (bool) $focusPerson->pending_father
+                )
+            );
 
             $father = $fatherGiven && $matchedFather === null
                 ? $this->resolveParent(
