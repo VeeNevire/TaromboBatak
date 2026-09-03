@@ -3012,7 +3012,7 @@ setVillagesLoading(false);
                                     />
                                 ) : (
                                     <MargaLineageCard
-                                        entries={highlightedLineage}
+                                        entries={isEdit ? highlightedLineage : []}
                                         fatherChain={predictedFatherChain}
                                         focusChain={predictedFocusChain}
                                         familyTrees={listFamilyTrees}

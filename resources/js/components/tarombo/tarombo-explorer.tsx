@@ -858,7 +858,7 @@ export function TaromboExplorer({
                         highlightId={renderedHighlightId}
                         editNodes={!margaTree}
                         selectOnClick={!margaTree}
-                        showProfileOnName={!margaTree}
+                        showProfileOnName
                         readOnly={Boolean(margaTree)}
                         alternativeTrees={descendantAlternativeTrees}
                         lineagePath={

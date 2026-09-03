@@ -340,7 +340,8 @@ class FamilyEntryService
             ->whereNull('based_on_id')
             ->where(function ($query) use ($focus, $connectedPersonIds) {
                 $query->where('root_person_id', $focus->id)
-                    ->orWhereHas('people', fn ($people) => $people->whereKey($connectedPersonIds->all()));
+                    ->orWhereHas('people', fn ($people) => $people->whereKey($connectedPersonIds->all()))
+                    ->orWhereHas('nodes', fn ($nodes) => $nodes->whereIn('person_id', $connectedPersonIds));
             })
             ->oldest('id')
             ->first()
