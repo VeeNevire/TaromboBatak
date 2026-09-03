@@ -2,6 +2,7 @@ import { Form, Head, Link, router, usePage } from '@inertiajs/react';
 import { useEcho } from '@laravel/echo-react';
 import {
     ArrowLeft,
+    AlertTriangle,
     CheckCheck,
     MessageCircle,
     RefreshCw,
@@ -16,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import telegramMessages from '@/routes/telegram-messages';
+import telegramMtproto from '@/routes/telegram-mtproto';
 
 type Dialog = {
     id: number;
@@ -46,6 +48,7 @@ type Paginated<T> = {
 };
 type Props = {
     connected: boolean;
+    syncError: string | null;
     dialogs: Paginated<Dialog>;
     selectedDialog: SelectedDialog | null;
     messages: Paginated<Message>;
@@ -69,6 +72,7 @@ const date = (value: string | null) =>
 
 export default function TelegramMessages({
     connected,
+    syncError,
     dialogs,
     selectedDialog,
     messages,
@@ -84,16 +88,16 @@ export default function TelegramMessages({
 
     useEffect(() => {
         if (!selectedDialog) {
-return;
-}
+            return;
+        }
 
         if (selectedDialog.unread_count > 0) {
-router.post(
+            router.post(
                 telegramMessages.read(selectedDialog.id).url,
                 {},
                 { preserveScroll: true, preserveState: true },
             );
-}
+        }
 
         bottomRef.current?.scrollIntoView({ behavior: 'instant' });
     }, [selectedDialog?.id]);
@@ -112,8 +116,8 @@ router.post(
 
     useEffect(() => {
         if (!selectedDialog) {
-return;
-}
+            return;
+        }
 
         const timer = window.setInterval(
             () =>
@@ -134,18 +138,18 @@ return;
         }).url;
     const paginationUrl = (value: string | null) => {
         if (!value) {
-return null;
-}
+            return null;
+        }
 
         const next = new URL(value, window.location.origin);
 
         if (selectedDialog) {
-next.searchParams.set('dialog_id', String(selectedDialog.id));
-}
+            next.searchParams.set('dialog_id', String(selectedDialog.id));
+        }
 
         if (query) {
-next.searchParams.set('search', query);
-}
+            next.searchParams.set('search', query);
+        }
 
         return next.toString();
     };
@@ -165,6 +169,26 @@ next.searchParams.set('search', query);
                     title="Pesan Telegram"
                     description="Baca dan balas pesan dari chat, grup, dan channel Telegram Anda."
                 />
+                {syncError && (
+                    <div className="flex flex-col gap-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950 sm:flex-row sm:items-center sm:justify-between dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+                        <div className="flex items-start gap-3">
+                            <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-300" />
+                            <div className="space-y-1">
+                                <p className="font-semibold">
+                                    Koneksi Telegram perlu diperbarui
+                                </p>
+                                <p className="text-sm text-amber-800 dark:text-amber-200">
+                                    {syncError}
+                                </p>
+                            </div>
+                        </div>
+                        <Button asChild className="shrink-0">
+                            <Link href={telegramMtproto.index.url()}>
+                                Hubungkan ulang Telegram
+                            </Link>
+                        </Button>
+                    </div>
+                )}
                 {!connected ? (
                     <Card className="flex flex-col items-center gap-3 p-10 text-center">
                         <MessageCircle className="size-10 text-tb-outline" />

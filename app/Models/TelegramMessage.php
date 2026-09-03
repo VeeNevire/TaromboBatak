@@ -18,7 +18,7 @@ class TelegramMessage extends Model
     /** @return BelongsTo<TelegramDialog, $this> */
     public function dialog(): BelongsTo
     {
-        return $this->belongsTo(TelegramDialog::class);
+        return $this->belongsTo(TelegramDialog::class, 'telegram_dialog_id');
     }
 
     protected function casts(): array

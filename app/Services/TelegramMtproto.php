@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Exceptions\TelegramNotConfigured;
 use App\Models\TelegramAccount;
 use App\Models\TelegramAuthSession;
+use danog\MadelineProto\Logger;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
@@ -135,6 +136,38 @@ class TelegramMtproto
         ];
     }
 
+    public function resolvePeer(TelegramAccount $sender, TelegramAccount $recipient): int|string
+    {
+        $api = $this->api($sender->session_path);
+
+        if (filled($recipient->username)) {
+            return '@'.ltrim((string) $recipient->username, '@');
+        }
+
+        if (filled($recipient->phone)) {
+            $resolved = $api->contacts->resolvePhone((string) $recipient->phone);
+
+            $resolvedPeer = $resolved['peer'] ?? null;
+
+            if (is_array($resolvedPeer)) {
+                $resolvedId = $resolvedPeer['user_id']
+                    ?? $resolvedPeer['chat_id']
+                    ?? $resolvedPeer['channel_id']
+                    ?? null;
+
+                if (is_numeric($resolvedId)) {
+                    return (int) $resolvedId;
+                }
+            }
+
+            if (is_int($resolvedPeer) || is_string($resolvedPeer)) {
+                return $resolvedPeer;
+            }
+        }
+
+        return $recipient->telegram_user_id;
+    }
+
     public function isDeactivatedPeerError(Throwable $exception): bool
     {
         return str_contains(strtoupper($exception->getMessage()), 'INPUT_USER_DEACTIVATED');
@@ -173,6 +206,7 @@ class TelegramMtproto
         File::ensureDirectoryExists(dirname($sessionPath), 0700, true);
 
         $class = 'danog\\MadelineProto\\API';
+
         return new $class($sessionPath, $this->settings());
     }
 
@@ -190,7 +224,7 @@ class TelegramMtproto
         $loggerClass = 'danog\\MadelineProto\\Settings\\Logger';
         $logger = new $loggerClass;
         $logger
-            ->setType(\danog\MadelineProto\Logger::FILE_LOGGER)
+            ->setType(Logger::FILE_LOGGER)
             ->setExtra(storage_path('logs/madelineproto.log'));
         $settings->setLogger($logger);
 

@@ -83,9 +83,13 @@ class MessageController extends Controller
             && $recipientTelegram?->isMtprotoConnected()
             && filled($message->body)) {
             try {
+                $peer = app(TelegramMtproto::class)->resolvePeer(
+                    $senderTelegram,
+                    $recipientTelegram,
+                );
                 $telegramMessage = app(TelegramMtproto::class)->sendMessage(
                     $senderTelegram,
-                    $recipientTelegram->telegram_user_id,
+                    $peer,
                     $message->body,
                 );
 
