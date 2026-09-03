@@ -143,6 +143,13 @@ class TaromboController extends Controller
                 ->merge($user->approvedMargaAccessIds())
                 ->unique()
                 ->values();
+        $requestedMargaId = $request->filled('marga_id')
+            ? $request->integer('marga_id')
+            : null;
+        $alternativeMargaId = $requestedMargaId !== null
+            && $accessibleMargaIds->contains($requestedMargaId)
+                ? $requestedMargaId
+                : $user->marga_id;
         $allowedPersonIds = $isStaff
             ? null
             : ($accessibleMargaIds->isNotEmpty()
@@ -181,7 +188,7 @@ class TaromboController extends Controller
                     ->orWhereHas('contributionRequests', fn (Builder $requests) => $requests
                         ->where('status', ContributionRequest::STATUS_APPROVED)
                         ->whereHas('matchedFather', fn (Builder $father) => $father
-                            ->where('marga_id', $user->marga_id))),
+                            ->where('marga_id', $alternativeMargaId))),
             ))
             ->orderBy('root_person_id')
             ->orderBy('created_at')
