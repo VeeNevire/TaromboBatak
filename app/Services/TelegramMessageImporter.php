@@ -79,9 +79,12 @@ class TelegramMessageImporter
             ],
         );
         $dialog->update(['last_message_at' => $sentAt]);
-        if ($stored->wasRecentlyCreated && ! $isOutgoing) {
-            $dialog->increment('unread_count');
-            TelegramMessageReceived::dispatch($stored->load('account'));
+        if (! $isOutgoing) {
+            if ($stored->wasRecentlyCreated) {
+                $dialog->increment('unread_count');
+                TelegramMessageReceived::dispatch($stored->load('account'));
+            }
+
             $this->importToWebConversation($account, $stored, $peerId, $message);
         }
         $account->update(['last_seen_at' => now(), 'last_error' => null]);

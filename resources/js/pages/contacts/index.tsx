@@ -363,8 +363,9 @@ export default function ContactsIndex({
 
     // ------------------------------------------------------------------
     // Fallback senyap: fetch JSON murni, di luar router Inertia.
-    // Dipanggil sekali saat percakapan dibuka (gap-fill) lalu berkala
-    // hanya ketika WebSocket terputus.
+    // Dipanggil sekali saat percakapan dibuka (gap-fill) lalu berkala sebagai
+    // fallback ringan. Ini memastikan pesan dari MTProto tetap tampil walau
+    // queue atau WebSocket sedang terlambat.
     // ------------------------------------------------------------------
     const fetchNewMessages = useCallback(
         async (contactId: number) => {
@@ -429,13 +430,9 @@ export default function ContactsIndex({
 
         void fetchNewMessages(contactId);
 
-        if (connectionStatus === 'connected') {
-            return;
-        }
-
         const interval = setInterval(() => {
             void fetchNewMessages(contactId);
-        }, 4000);
+        }, 5000);
 
         return () => clearInterval(interval);
         // eslint-disable-next-line react-hooks/exhaustive-deps

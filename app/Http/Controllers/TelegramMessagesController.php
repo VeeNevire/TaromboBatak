@@ -20,16 +20,18 @@ class TelegramMessagesController extends Controller
     public function index(Request $request): Response
     {
         $account = $request->user()->telegramAccount;
+        $syncError = null;
         if ($account) {
-            Cache::remember("telegram-dialogs-refresh:{$account->id}", now()->addMinute(), function () use ($account): bool {
-                try {
+            try {
+                Cache::remember("telegram-dialogs-refresh:v2:{$account->id}", now()->addMinute(), function () use ($account): bool {
                     $this->syncAccount($account, app(TelegramMtproto::class), app(TelegramMessageImporter::class), false);
-                } catch (Throwable $exception) {
-                    report($exception);
-                }
 
-                return true;
-            });
+                    return true;
+                });
+            } catch (Throwable $exception) {
+                report($exception);
+                $syncError = $this->handleSyncFailure($account, $exception);
+            }
         }
         $search = trim((string) $request->query('search', ''));
         $dialogs = $account
@@ -54,7 +56,8 @@ class TelegramMessagesController extends Controller
             : TelegramMessage::query()->whereKey(0)->paginate(50);
 
         return Inertia::render('telegram/messages', [
-            'connected' => $account !== null,
+            'connected' => $account?->isMtprotoConnected() ?? false,
+            'syncError' => $syncError,
             'dialogs' => $dialogs,
             'selectedDialog' => $selectedDialog,
             'messages' => $messages,
@@ -65,7 +68,22 @@ class TelegramMessagesController extends Controller
     public function sync(Request $request, TelegramMtproto $telegram, TelegramMessageImporter $importer): RedirectResponse
     {
         $account = $this->account($request);
-        $this->syncAccount($account, $telegram, $importer);
+        try {
+            $this->syncAccount($account, $telegram, $importer);
+        } catch (Throwable $exception) {
+            report($exception);
+            $message = $this->handleSyncFailure($account, $exception);
+
+            if ($this->isMissingSessionError($exception)) {
+                Inertia::flash('toast', ['type' => 'error', 'message' => $message]);
+
+                return to_route('telegram-mtproto.index');
+            }
+
+            Inertia::flash('toast', ['type' => 'error', 'message' => $message]);
+
+            return to_route('telegram-messages.index', ['dialog_id' => $request->integer('dialog_id') ?: null]);
+        }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Pesan Telegram berhasil disinkronkan.']);
 
@@ -155,6 +173,37 @@ class TelegramMessagesController extends Controller
     private function account(Request $request): TelegramAccount
     {
         return $request->user()->telegramAccount ?? abort(422, 'Hubungkan akun Telegram terlebih dahulu.');
+    }
+
+    private function handleSyncFailure(TelegramAccount $account, Throwable $exception): string
+    {
+        if ($this->isMissingSessionError($exception)) {
+            $account->update([
+                'connection_status' => TelegramAccount::STATUS_ERROR,
+                'last_error' => $exception->getMessage(),
+            ]);
+
+            return 'Sesi Telegram tidak ditemukan atau sudah kedaluwarsa. Hubungkan ulang akun Telegram untuk melanjutkan sinkronisasi.';
+        }
+
+        return 'Sinkronisasi Telegram gagal sementara. Silakan coba lagi beberapa saat lagi.';
+    }
+
+    private function isMissingSessionError(Throwable $exception): bool
+    {
+        $message = strtoupper($exception->getMessage());
+
+        return str_contains($message, 'SESSION ERROR')
+            || str_contains($message, 'SESSION_NOT_FOUND')
+            || str_contains($message, 'SESSION PATH')
+            || str_contains($message, 'SESSION') && (
+                str_contains($message, 'NOT FOUND')
+                || str_contains($message, 'TIDAK DITEMUKAN')
+                || str_contains($message, 'EXPIRED')
+                || str_contains($message, 'REVOKED')
+            )
+            || str_contains($message, 'AUTH_KEY_UNREGISTERED')
+            || str_contains($message, 'AUTH_KEY_INVALID');
     }
 
     private function dialogType(array $info): string

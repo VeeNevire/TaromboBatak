@@ -20,7 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $session_path
  * @property string $connection_status
  */
-#[Fillable(['user_id', 'telegram_user_id', 'private_chat_id', 'username', 'display_name', 'linked_at', 'session_path', 'connection_status', 'last_error', 'last_seen_at'])]
+#[Fillable(['user_id', 'telegram_user_id', 'private_chat_id', 'phone', 'username', 'display_name', 'linked_at', 'session_path', 'connection_status', 'last_error', 'last_seen_at'])]
 class TelegramAccount extends Model
 {
     public const STATUS_CONNECTED = 'connected';
@@ -52,6 +52,10 @@ class TelegramAccount extends Model
 
     protected function casts(): array
     {
-        return ['linked_at' => 'datetime', 'last_seen_at' => 'datetime'];
+        return [
+            'phone' => 'encrypted',
+            'linked_at' => 'datetime',
+            'last_seen_at' => 'datetime',
+        ];
     }
 }

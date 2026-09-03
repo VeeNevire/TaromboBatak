@@ -9,8 +9,8 @@ use App\Http\Requests\Settings\TelegramPhoneRequest;
 use App\Models\TelegramAccount;
 use App\Models\TelegramAuthSession;
 use App\Services\TelegramMtproto;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\File;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -37,7 +37,9 @@ class TelegramMtprotoController extends Controller
         $user = $request->user();
         $user->telegramAccount?->delete();
         $existing = $user->telegramAuthSession;
-        if ($existing) $this->removeSession($existing);
+        if ($existing) {
+            $this->removeSession($existing);
+        }
 
         $session = TelegramAuthSession::query()->create([
             'user_id' => $user->id,
@@ -51,10 +53,12 @@ class TelegramMtprotoController extends Controller
         } catch (Throwable $exception) {
             $session->delete();
             $this->flashError($exception->getMessage());
+
             return to_route('telegram-mtproto.index');
         }
 
         $this->flashSuccess('Kode verifikasi Telegram sudah dikirim.');
+
         return to_route('telegram-mtproto.index');
     }
 
@@ -132,6 +136,7 @@ class TelegramMtprotoController extends Controller
             if ($status === TelegramAuthSession::STATUS_PASSWORD_REQUIRED) {
                 $session->update(['status' => $status]);
                 $this->flashSuccess('Akun memakai 2FA. Masukkan password Telegram.');
+
                 return to_route('telegram-mtproto.index');
             }
 
@@ -195,13 +200,14 @@ class TelegramMtprotoController extends Controller
         }
 
         $this->flashSuccess('Koneksi Telegram diputuskan dan semua session serta pesan lokal telah dihapus.');
+
         return to_route('telegram-mtproto.index');
     }
 
     private function complete(object $user, TelegramAuthSession $session, TelegramMtproto $telegram): void
     {
         $self = $telegram->self(new TelegramAccount(['session_path' => $session->session_path]));
-        TelegramAccount::query()->updateOrCreate(['user_id' => $user->id], [
+        $accountData = [
             'telegram_user_id' => (int) ($self['id'] ?? 0),
             'private_chat_id' => (int) ($self['id'] ?? 0),
             'username' => $self['username'] ?? null,
@@ -209,7 +215,13 @@ class TelegramMtprotoController extends Controller
             'linked_at' => now(),
             'session_path' => $session->session_path,
             'connection_status' => TelegramAccount::STATUS_CONNECTED,
-        ]);
+        ];
+
+        if (filled($session->phone) || filled($self['phone'] ?? null)) {
+            $accountData['phone'] = $session->phone ?: $self['phone'];
+        }
+
+        TelegramAccount::query()->updateOrCreate(['user_id' => $user->id], $accountData);
         $session->delete();
         $this->flashSuccess('Akun Telegram berhasil terhubung melalui MTProto.');
     }
@@ -259,8 +271,15 @@ class TelegramMtprotoController extends Controller
         }
     }
 
-    private function flashSuccess(string $message): void { Inertia::flash('toast', ['type' => 'success', 'message' => $message]); }
-    private function flashError(string $message): void { Inertia::flash('toast', ['type' => 'error', 'message' => $message]); }
+    private function flashSuccess(string $message): void
+    {
+        Inertia::flash('toast', ['type' => 'success', 'message' => $message]);
+    }
+
+    private function flashError(string $message): void
+    {
+        Inertia::flash('toast', ['type' => 'error', 'message' => $message]);
+    }
 
     private function loginErrorMessage(Throwable $exception): string
     {

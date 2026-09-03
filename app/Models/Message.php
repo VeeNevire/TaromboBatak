@@ -22,7 +22,7 @@ use Illuminate\Support\Carbon;
  * @property-read User $sender
  * @property-read Collection<int, MessageAttachment> $attachments
  */
-#[Fillable(['sender_id', 'body', 'read_at', 'telegram_message_id'])]
+#[Fillable(['conversation_id', 'sender_id', 'body', 'read_at', 'telegram_message_id'])]
 class Message extends Model
 {
     /**
