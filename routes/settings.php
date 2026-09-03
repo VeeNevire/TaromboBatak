@@ -20,7 +20,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('settings/telegram/mtproto', [TelegramMtprotoController::class, 'index'])->name('telegram-mtproto.index');
     Route::post('settings/telegram/mtproto', [TelegramMtprotoController::class, 'store'])->middleware('throttle:5,3')->name('telegram-mtproto.store');
     Route::post('settings/telegram/mtproto/qr', [TelegramMtprotoController::class, 'qr'])->middleware('throttle:5,3')->name('telegram-mtproto.qr');
-    Route::get('settings/telegram/mtproto/qr/status', [TelegramMtprotoController::class, 'qrStatus'])->middleware('throttle:120,3')->name('telegram-mtproto.qr-status');
+    Route::get('settings/telegram/mtproto/qr/status', [TelegramMtprotoController::class, 'qrStatus'])->middleware('throttle:8,1')->name('telegram-mtproto.qr-status');
     Route::post('settings/telegram/mtproto/code', [TelegramMtprotoController::class, 'verifyCode'])->middleware('throttle:5,3')->name('telegram-mtproto.code');
     Route::post('settings/telegram/mtproto/resend', [TelegramMtprotoController::class, 'resendCode'])->middleware('throttle:5,3')->name('telegram-mtproto.resend');
     Route::post('settings/telegram/mtproto/password', [TelegramMtprotoController::class, 'verifyPassword'])->middleware('throttle:5,3')->name('telegram-mtproto.password');

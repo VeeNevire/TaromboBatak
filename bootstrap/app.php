@@ -47,6 +47,24 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->respond(function (Response $response, Throwable $exception, Request $request): Response {
             $status = $response->getStatusCode();
 
+            if ($status === 429) {
+                $message = 'Terlalu banyak permintaan. Silakan coba lagi beberapa saat lagi.';
+
+                if ($request->expectsJson()) {
+                    return response()->json(['message' => $message], 429, [
+                        'Retry-After' => $response->headers->get('Retry-After', '60'),
+                    ]);
+                }
+
+                Inertia::flash('toast', [
+                    'type' => 'warning',
+                    'message' => $message,
+                    'center' => true,
+                ]);
+
+                return redirect()->back(303);
+            }
+
             if ($status === 419 && ! $request->expectsJson()) {
                 $authenticated = $request->user() !== null;
 

@@ -23,7 +23,7 @@ type Props = {
     qrExpiresAt: string | null;
 };
 
-const QR_POLL_INTERVAL_MS = 5000;
+const QR_POLL_INTERVAL_MS = 8000;
 const DEFAULT_RATE_LIMIT_SECONDS = 60;
 
 export default function TelegramSettings({
