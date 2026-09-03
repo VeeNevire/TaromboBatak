@@ -121,3 +121,49 @@ test('approved users receive the complete ancestor path for an upper marga tree'
                 ->values()
                 ->all()));
 });
+
+test('approved users receive lower marga descendants beyond the person preview depth', function () {
+    config()->set('tarombo.person_max_depth', 5);
+    config()->set('tarombo.public_max_depth', 11);
+
+    $marga = Marga::factory()->create(['name' => 'Silaban']);
+    $descendantMarga = Marga::factory()->create(['name' => 'Silaban Sitio']);
+    $viewerMarga = Marga::factory()->create(['name' => 'Sagala']);
+    $viewer = User::factory()->withMarga($viewerMarga->id)->create();
+    $root = Person::factory()->create([
+        'name' => 'Borsak Junjungan',
+        'marga_id' => $marga->id,
+        'gender' => 'L',
+    ]);
+    $parent = $root;
+
+    foreach (range(2, 7) as $generation) {
+        $parent = Person::factory()->create([
+            'name' => "Generasi {$generation}",
+            'marga_id' => $generation >= 6 ? $descendantMarga->id : $marga->id,
+            'father_id' => $parent->id,
+            'gender' => 'L',
+            'birth_order' => 1,
+        ]);
+    }
+
+    $marga->update(['identity_person_id' => $root->id]);
+    MargaAccessRequest::create([
+        'requester_id' => $viewer->id,
+        'marga_id' => $marga->id,
+        'status' => MargaAccessRequest::STATUS_APPROVED,
+    ]);
+
+    $this->actingAs($viewer)
+        ->get(route('tarombo.fullscreen', [
+            'view' => 'tree',
+            'marga_id' => $marga->id,
+            'marga_direction' => 'lower',
+        ]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('people', fn ($people) => collect($people)->contains(
+                fn (array $person) => $person['id'] === (string) $parent->id
+                    && $person['name'] === 'Generasi 7',
+            )));
+});

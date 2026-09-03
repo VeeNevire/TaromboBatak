@@ -210,10 +210,14 @@ class TaromboTreeService
      *
      * @return array<int, array<string, mixed>>
      */
-    public function rowsForPerson(Person $person): array
+    public function rowsForPerson(
+        Person $person,
+        ?int $maxDepth = null,
+        ?int $maxNodes = null,
+    ): array
     {
-        $maxDepth = max(1, (int) config('tarombo.person_max_depth'));
-        $maxNodes = max(1, (int) config('tarombo.person_max_nodes'));
+        $maxDepth = max(1, $maxDepth ?? (int) config('tarombo.person_max_depth'));
+        $maxNodes = max(1, $maxNodes ?? (int) config('tarombo.person_max_nodes'));
         $ids = collect([$person->id]);
         $frontier = collect([$person->id]);
 
