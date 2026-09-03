@@ -1074,6 +1074,35 @@ test('the create form lists each family tree created by the signed in account', 
             ->missing('familyTrees.2'));
 });
 
+test('the create form uses the marga identity tree for its lower lineage list', function () {
+    $marga = Marga::factory()->create(['name' => 'Junjungan']);
+    $root = Person::factory()->create([
+        'name' => 'Borsak Junjungan',
+        'marga_id' => $marga->id,
+        'father_id' => null,
+        'pending_father' => false,
+        'chain' => '1',
+    ]);
+    $child = Person::factory()->create([
+        'name' => 'Ompu Ratus',
+        'marga_id' => $marga->id,
+        'father_id' => $root->id,
+        'pending_father' => false,
+        'chain' => '2',
+        'birth_order' => 1,
+    ]);
+    $marga->update(['identity_person_id' => $root->id]);
+
+    $this->actingAs($this->admin)
+        ->get(route('people.create'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('margaLineage.0.id', $root->id)
+            ->where('margaLineage.0.marga_id', $marga->id)
+            ->where('margaLineage.0.chain', '1')
+            ->where('margaLineage.0.children.0.id', $child->id)
+            ->where('margaLineage.0.children.0.chain', '2'));
+});
+
 test('connected families reuse the existing tree while disconnected families create a new tree', function () {
     $marga = Marga::factory()->create(['name' => 'Batak']);
     $root = Person::factory()->create([
