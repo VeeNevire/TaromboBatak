@@ -4,6 +4,7 @@ use App\Models\ContributionRequest;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeNode;
 use App\Models\Marga;
+use App\Models\MargaAccessRequest;
 use App\Models\Person;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -157,6 +158,71 @@ test('tarombo hides an unapproved alternative tree owned by another account', fu
         ->assertInertia(fn (Assert $page) => $page
             ->component('tarombo/index')
             ->has('alternativeTrees', 0));
+});
+
+test('approved marga viewers receive approved alternative descendants for the marga being opened', function () {
+    $accountMarga = Marga::factory()->create(['name' => 'Sagala']);
+    $viewedMarga = Marga::factory()->create(['name' => 'Silaban']);
+    $owner = User::factory()->withMarga($viewedMarga->id)->create();
+    $viewer = User::factory()->withMarga($accountMarga->id)->create();
+    $root = Person::factory()->create([
+        'name' => 'Borsak Junjungan',
+        'gender' => 'L',
+        'marga_id' => $viewedMarga->id,
+    ]);
+    $child = Person::factory()->create([
+        'name' => 'Keturunan Alternatif',
+        'gender' => 'L',
+        'marga_id' => $viewedMarga->id,
+    ]);
+    $viewedMarga->update(['identity_person_id' => $root->id]);
+
+    MargaAccessRequest::create([
+        'requester_id' => $viewer->id,
+        'marga_id' => $viewedMarga->id,
+        'status' => MargaAccessRequest::STATUS_APPROVED,
+    ]);
+
+    $source = FamilyTree::create([
+        'user_id' => $owner->id,
+        'root_person_id' => $root->id,
+        'name' => 'Versi Utama Silaban',
+    ]);
+    $alternative = FamilyTree::create([
+        'user_id' => $owner->id,
+        'root_person_id' => $root->id,
+        'based_on_id' => $source->id,
+        'name' => 'Versi Lanjutan Silaban',
+    ]);
+    $rootNode = FamilyTreeNode::create([
+        'family_tree_id' => $alternative->id,
+        'person_id' => $root->id,
+        'chain' => '1',
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $alternative->id,
+        'person_id' => $child->id,
+        'father_node_id' => $rootNode->id,
+        'chain' => '1-1',
+    ]);
+    ContributionRequest::factory()->approved()->create([
+        'requester_id' => $owner->id,
+        'matched_father_id' => $root->id,
+        'subject_person_id' => $child->id,
+        'family_tree_id' => $alternative->id,
+    ]);
+
+    $this->actingAs($viewer)
+        ->get(route('tarombo.fullscreen', [
+            'view' => 'tree',
+            'marga_id' => $viewedMarga->id,
+            'marga_direction' => 'lower',
+        ]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('alternativeTrees', 1)
+            ->where('alternativeTrees.0.id', $alternative->id)
+            ->where('alternativeTrees.0.people.1.id', (string) $child->id));
 });
 
 test('authenticated tarombo rows include related story links for the vertical tree dialog', function () {
