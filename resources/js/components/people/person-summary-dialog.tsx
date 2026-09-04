@@ -113,7 +113,9 @@ export function PersonSummaryDialog({
                                     </div>
                                 )}
                                 {person.location &&
-                                    Object.values(person.location).some(Boolean) && (
+                                    Object.values(person.location).some(
+                                        Boolean,
+                                    ) && (
                                         <div className="flex items-start justify-between gap-4">
                                             <dt className="flex items-center gap-1.5 text-tb-on-surface-variant">
                                                 <MapPin className="size-3.5" />
@@ -139,7 +141,7 @@ export function PersonSummaryDialog({
                                 <h3 className="mb-2 font-semibold text-tb-on-surface">
                                     Biografi
                                 </h3>
-                                <p className="whitespace-pre-line leading-relaxed text-tb-on-surface-variant">
+                                <p className="leading-relaxed whitespace-pre-line text-tb-on-surface-variant">
                                     {person.bio}
                                 </p>
                             </section>
@@ -180,59 +182,64 @@ export function PersonSummaryDialog({
                             </dl>
                         </section>
 
-                        <section id="related-stories" className="rounded-xl border border-tb-outline-variant bg-tb-surface-container/50 p-4">
-                                    <div className="mb-3 flex items-center justify-between gap-3">
-                                        <h3 className="flex items-center gap-2 font-semibold text-tb-on-surface">
-                                        <BookOpen className="size-4 text-tb-primary" />
-                                        Sejarah/Cerita Terkait
-                                        </h3>
-                                        <Button asChild size="sm" variant="outline">
-                                            <Link href={`${peopleRoutes.edit({ person: Number(person.id) })}#related-stories`}>
-                                                Tambah Link
-                                            </Link>
-                                        </Button>
-                                    </div>
-                                    {person.relatedStories &&
-                                    person.relatedStories.length > 0 ? (
-                                        <ol className="grid gap-2">
-                                            {person.relatedStories.map(
-                                            (story, index) => (
-                                                <li
-                                                    key={`${story.url}-${index}`}
-                                                    className="rounded-lg border border-tb-outline-variant bg-tb-surface-bright"
+                        <section
+                            id="related-stories"
+                            className="rounded-xl border border-tb-outline-variant bg-tb-surface-container/50 p-4"
+                        >
+                            <div className="mb-3 flex items-center justify-between gap-3">
+                                <h3 className="flex items-center gap-2 font-semibold text-tb-on-surface">
+                                    <BookOpen className="size-4 text-tb-primary" />
+                                    Sejarah/Cerita Terkait
+                                </h3>
+                                <Button asChild size="sm" variant="outline">
+                                    <Link
+                                        href={`${peopleRoutes.edit({ person: Number(person.id) }).url}#related-stories`}
+                                    >
+                                        Tambah Link
+                                    </Link>
+                                </Button>
+                            </div>
+                            {person.relatedStories &&
+                            person.relatedStories.length > 0 ? (
+                                <ol className="grid gap-2">
+                                    {person.relatedStories.map(
+                                        (story, index) => (
+                                            <li
+                                                key={`${story.url}-${index}`}
+                                                className="rounded-lg border border-tb-outline-variant bg-tb-surface-bright"
+                                            >
+                                                <a
+                                                    href={story.url}
+                                                    target="_blank"
+                                                    rel="noreferrer noopener"
+                                                    className="flex items-center justify-between gap-3 px-3 py-2.5 text-tb-primary transition-colors hover:bg-tb-primary/5 hover:underline"
                                                 >
-                                                    <a
-                                                        href={story.url}
-                                                        target="_blank"
-                                                        rel="noreferrer noopener"
-                                                        className="flex items-center justify-between gap-3 px-3 py-2.5 text-tb-primary transition-colors hover:bg-tb-primary/5 hover:underline"
-                                                    >
-                                                        <span className="min-w-0">
-                                                            <span className="mr-2 text-xs font-semibold text-tb-on-surface-variant">
-                                                                {index + 1}.
-                                                            </span>
-                                                            <span className="font-medium">
-                                                                {story.title}
-                                                            </span>
+                                                    <span className="min-w-0">
+                                                        <span className="mr-2 text-xs font-semibold text-tb-on-surface-variant">
+                                                            {index + 1}.
                                                         </span>
-                                                        <ExternalLink className="size-4 shrink-0" />
-                                                    </a>
-                                                </li>
-                                                ),
-                                            )}
-                                        </ol>
-                                    ) : (
-                                        <p className="text-tb-on-surface-variant">
-                                            Belum ada link sejarah atau cerita.
-                                        </p>
+                                                        <span className="font-medium">
+                                                            {story.title}
+                                                        </span>
+                                                    </span>
+                                                    <ExternalLink className="size-4 shrink-0" />
+                                                </a>
+                                            </li>
+                                        ),
                                     )}
-                                    <p className="mt-3 text-xs text-tb-on-surface-variant">
-                                        Sumber:{' '}
-                                        <span className="font-medium text-tb-on-surface">
-                                            Link ke website lain
-                                        </span>
-                                    </p>
-                                </section>
+                                </ol>
+                            ) : (
+                                <p className="text-tb-on-surface-variant">
+                                    Belum ada link sejarah atau cerita.
+                                </p>
+                            )}
+                            <p className="mt-3 text-xs text-tb-on-surface-variant">
+                                Sumber:{' '}
+                                <span className="font-medium text-tb-on-surface">
+                                    Link ke website lain
+                                </span>
+                            </p>
+                        </section>
                     </div>
 
                     <p className="text-xs text-tb-on-surface-variant">

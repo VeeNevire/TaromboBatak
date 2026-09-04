@@ -376,15 +376,16 @@ export function FamilyTreeHistoryCard({
             aria-modal={expanded ? true : undefined}
             aria-label={expanded ? 'Daftar Silsilah' : undefined}
             className={cn(
+                'w-full max-w-7xl min-w-0',
                 expanded &&
-                    'fixed inset-0 z-50 overflow-y-auto bg-tb-surface p-4 md:p-6',
+                    'fixed inset-0 z-50 overflow-y-auto bg-tb-surface p-4 md:max-w-none md:p-6',
             )}
         >
             <Card
                 className={cn(
-                    'border-tb-outline-variant bg-tb-surface-bright',
+                    'w-full max-w-full min-w-0 overflow-hidden border-tb-outline-variant bg-tb-surface-bright',
                     expanded &&
-                        'min-h-[calc(100dvh-2rem)] md:min-h-[calc(100dvh-3rem)]',
+                        'min-h-[calc(100dvh-2rem)] md:min-h-[calc(100dvh-3rem)] md:max-w-none',
                 )}
             >
                 <CardHeader>
@@ -464,7 +465,7 @@ export function FamilyTreeHistoryCard({
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent className="grid gap-6">
+                <CardContent className="grid min-w-0 gap-6">
                     {pendingTreeShares.length > 0 && (
                         <section className="grid gap-3 rounded-xl border border-tb-primary/25 bg-tb-primary/5 p-4">
                             <div>

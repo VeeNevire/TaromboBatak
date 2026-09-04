@@ -1,7 +1,10 @@
 import { Head, Link } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
 import { FamilyTreeHistoryCard } from '@/components/people/family-tree-history-card';
-import type { FamilyTreeHistoryEntry } from '@/components/people/family-tree-history-card';
+import type {
+    ApprovedMargaTreeEntry,
+    FamilyTreeHistoryEntry,
+} from '@/components/people/family-tree-history-card';
 import { Button } from '@/components/ui/button';
 import type { NameSuggestion } from '@/components/ui/name-combobox';
 import FamilyForm from '@/pages/people/family-form';
@@ -16,14 +19,18 @@ import people from '@/routes/people';
 
 type Props = {
     person: FamilyData | null;
-    regions: { code: string; name: string; regencies: { code: string; name: string }[] }[];
+    regions: {
+        code: string;
+        name: string;
+        regencies: { code: string; name: string }[];
+    }[];
     margas: { id: number; name: string }[];
     nameSuggestions: NameSuggestion[];
     fatherSuggestions: NameSuggestion[];
     lockedMarga?: { id: number; name: string } | null;
     lineage?: MargaLineageEntry[];
     familyTrees?: FamilyTreeHistoryEntry[];
-    approvedMargaTrees?: FamilyTreeHistoryEntry[];
+    approvedMargaTrees?: ApprovedMargaTreeEntry[];
     margaAccessMargaId?: number | null;
     margaAccessStatus?: 'pending' | 'approved' | 'rejected' | null;
     versionTrees?: FamilyTreeHistoryEntry[];

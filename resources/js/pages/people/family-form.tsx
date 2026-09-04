@@ -171,10 +171,7 @@ type MargaOption = { id: number; name: string };
 type RegionOption = { code: string; name: string };
 type ProvinceOption = RegionOption & { regencies: RegionOption[] };
 type LocationField =
-    | 'province_code'
-    | 'regency_code'
-    | 'district_code'
-    | 'village_code';
+    'province_code' | 'regency_code' | 'district_code' | 'village_code';
 
 type Props = {
     person: FamilyData | null;
@@ -1280,21 +1277,24 @@ export default function FamilyForm({
             headers: { Accept: 'application/json' },
             signal: controller.signal,
         })
-            .then((response) => response.json() as Promise<{ data: RegionOption[] }>)
+            .then(
+                (response) =>
+                    response.json() as Promise<{ data: RegionOption[] }>,
+            )
             .then((payload) => {
                 if (!controller.signal.aborted) {
-setDistrictOptions(payload.data);
-}
+                    setDistrictOptions(payload.data);
+                }
             })
             .catch(() => {
                 if (!controller.signal.aborted) {
-setDistrictOptions([]);
-}
+                    setDistrictOptions([]);
+                }
             })
             .finally(() => {
                 if (!controller.signal.aborted) {
-setDistrictsLoading(false);
-}
+                    setDistrictsLoading(false);
+                }
             });
 
         return () => controller.abort();
@@ -1310,21 +1310,24 @@ setDistrictsLoading(false);
             headers: { Accept: 'application/json' },
             signal: controller.signal,
         })
-            .then((response) => response.json() as Promise<{ data: RegionOption[] }>)
+            .then(
+                (response) =>
+                    response.json() as Promise<{ data: RegionOption[] }>,
+            )
             .then((payload) => {
                 if (!controller.signal.aborted) {
-setVillageOptions(payload.data);
-}
+                    setVillageOptions(payload.data);
+                }
             })
             .catch(() => {
                 if (!controller.signal.aborted) {
-setVillageOptions([]);
-}
+                    setVillageOptions([]);
+                }
             })
             .finally(() => {
                 if (!controller.signal.aborted) {
-setVillagesLoading(false);
-}
+                    setVillagesLoading(false);
+                }
             });
 
         return () => controller.abort();
@@ -2071,17 +2074,6 @@ setVillagesLoading(false);
         predictedFatherChain && data.name.trim()
             ? `${predictedFatherChain}-${birthOrder}`
             : null;
-    const highlightedLineage: MargaLineageEntry[] = selectedMargaLineage.map(
-        (entry) => ({
-            ...entry,
-            isAyah:
-                entry.id === fatherMatch?.id ||
-                (entry.children ?? []).some(
-                    (child) => child.id === fatherMatch?.id,
-                ),
-        }),
-    );
-
     const renderParentBlock = (
         key: ParentKey,
         label: string,
@@ -2511,7 +2503,7 @@ setVillagesLoading(false);
                                                 </div>
                                             </div>
 
-                                            <div className="rounded-lg border border-tb-outline-variant bg-tb-surface-container-low p-4">
+                                            <div className="bg-tb-surface-container-low rounded-lg border border-tb-outline-variant p-4">
                                                 <div className="mb-3 flex items-center gap-2">
                                                     <MapPin className="size-4 text-tb-primary" />
                                                     <p className="text-sm font-medium text-tb-on-surface">
@@ -2519,64 +2511,163 @@ setVillagesLoading(false);
                                                     </p>
                                                 </div>
                                                 <div className="grid gap-4 md:grid-cols-2">
-                                                    {locationFields.map(([field, label, options, placeholder]) => {
-                                                        const value = data[field];
+                                                    {locationFields.map(
+                                                        ([
+                                                            field,
+                                                            label,
+                                                            options,
+                                                            placeholder,
+                                                        ]) => {
+                                                            const value =
+                                                                data[field];
 
-                                                        return (
-                                                            <div className="grid gap-1.5" key={field}>
-                                                                <Label className="text-tb-on-surface">{label}</Label>
-                                                                <Select
-                                                                    value={value || ''}
-                                                                    onValueChange={(nextValue) => {
-                                                                        if (field === 'province_code') {
-                                                                            setData('province_code', nextValue);
-                                                                            setData('regency_code', '');
-                                                                            setData('district_code', '');
-                                                                            setData('village_code', '');
-                                                                            setDistrictOptions([]);
-                                                                            setVillageOptions([]);
-                                                                            setDistrictsLoading(true);
-                                                                            setVillagesLoading(false);
-                                                                        } else if (field === 'regency_code') {
-                                                                            setData('regency_code', nextValue);
-                                                                            setData('district_code', '');
-                                                                            setData('village_code', '');
-                                                                            setVillageOptions([]);
-                                                                            setDistrictsLoading(true);
-                                                                            setVillagesLoading(false);
-                                                                        } else if (field === 'district_code') {
-                                                                            setData('district_code', nextValue);
-                                                                            setData('village_code', '');
-                                                                            setVillagesLoading(true);
-                                                                        } else {
-                                                                            setData('village_code', nextValue);
-                                                                        }
-                                                                    }}
-                                                                    disabled={
-                                                                        field === 'regency_code'
-                                                                            ? !data.province_code
-                                                                            : field === 'district_code'
-                                                                              ? !data.regency_code
-                                                                              : field === 'village_code'
-                                                                                ? !data.district_code
-                                                                                : false
-                                                                    }
+                                                            return (
+                                                                <div
+                                                                    className="grid gap-1.5"
+                                                                    key={field}
                                                                 >
-                                                                    <SelectTrigger className="w-full border-tb-outline-variant bg-tb-surface-bright">
-                                                                        <SelectValue placeholder={placeholder} />
-                                                                    </SelectTrigger>
-                                                                    <SelectContent>
-                                                                        {options.map((option) => (
-                                                                            <SelectItem key={option.code} value={option.code}>
-                                                                                {option.name}
-                                                                            </SelectItem>
-                                                                        ))}
-                                                                    </SelectContent>
-                                                                </Select>
-                                                                <InputError message={errors[field]} />
-                                                            </div>
-                                                        );
-                                                    })}
+                                                                    <Label className="text-tb-on-surface">
+                                                                        {label}
+                                                                    </Label>
+                                                                    <Select
+                                                                        value={
+                                                                            value ||
+                                                                            ''
+                                                                        }
+                                                                        onValueChange={(
+                                                                            nextValue,
+                                                                        ) => {
+                                                                            if (
+                                                                                field ===
+                                                                                'province_code'
+                                                                            ) {
+                                                                                setData(
+                                                                                    'province_code',
+                                                                                    nextValue,
+                                                                                );
+                                                                                setData(
+                                                                                    'regency_code',
+                                                                                    '',
+                                                                                );
+                                                                                setData(
+                                                                                    'district_code',
+                                                                                    '',
+                                                                                );
+                                                                                setData(
+                                                                                    'village_code',
+                                                                                    '',
+                                                                                );
+                                                                                setDistrictOptions(
+                                                                                    [],
+                                                                                );
+                                                                                setVillageOptions(
+                                                                                    [],
+                                                                                );
+                                                                                setDistrictsLoading(
+                                                                                    true,
+                                                                                );
+                                                                                setVillagesLoading(
+                                                                                    false,
+                                                                                );
+                                                                            } else if (
+                                                                                field ===
+                                                                                'regency_code'
+                                                                            ) {
+                                                                                setData(
+                                                                                    'regency_code',
+                                                                                    nextValue,
+                                                                                );
+                                                                                setData(
+                                                                                    'district_code',
+                                                                                    '',
+                                                                                );
+                                                                                setData(
+                                                                                    'village_code',
+                                                                                    '',
+                                                                                );
+                                                                                setVillageOptions(
+                                                                                    [],
+                                                                                );
+                                                                                setDistrictsLoading(
+                                                                                    true,
+                                                                                );
+                                                                                setVillagesLoading(
+                                                                                    false,
+                                                                                );
+                                                                            } else if (
+                                                                                field ===
+                                                                                'district_code'
+                                                                            ) {
+                                                                                setData(
+                                                                                    'district_code',
+                                                                                    nextValue,
+                                                                                );
+                                                                                setData(
+                                                                                    'village_code',
+                                                                                    '',
+                                                                                );
+                                                                                setVillagesLoading(
+                                                                                    true,
+                                                                                );
+                                                                            } else {
+                                                                                setData(
+                                                                                    'village_code',
+                                                                                    nextValue,
+                                                                                );
+                                                                            }
+                                                                        }}
+                                                                        disabled={
+                                                                            field ===
+                                                                            'regency_code'
+                                                                                ? !data.province_code
+                                                                                : field ===
+                                                                                    'district_code'
+                                                                                  ? !data.regency_code
+                                                                                  : field ===
+                                                                                      'village_code'
+                                                                                    ? !data.district_code
+                                                                                    : false
+                                                                        }
+                                                                    >
+                                                                        <SelectTrigger className="w-full border-tb-outline-variant bg-tb-surface-bright">
+                                                                            <SelectValue
+                                                                                placeholder={
+                                                                                    placeholder
+                                                                                }
+                                                                            />
+                                                                        </SelectTrigger>
+                                                                        <SelectContent>
+                                                                            {options.map(
+                                                                                (
+                                                                                    option,
+                                                                                ) => (
+                                                                                    <SelectItem
+                                                                                        key={
+                                                                                            option.code
+                                                                                        }
+                                                                                        value={
+                                                                                            option.code
+                                                                                        }
+                                                                                    >
+                                                                                        {
+                                                                                            option.name
+                                                                                        }
+                                                                                    </SelectItem>
+                                                                                ),
+                                                                            )}
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                    <InputError
+                                                                        message={
+                                                                            errors[
+                                                                                field
+                                                                            ]
+                                                                        }
+                                                                    />
+                                                                </div>
+                                                            );
+                                                        },
+                                                    )}
                                                 </div>
                                             </div>
 
@@ -2828,7 +2919,10 @@ setVillagesLoading(false);
                                                 />
                                             </div>
 
-                                            <div id="related-stories" className="grid gap-3 rounded-xl border border-tb-outline-variant bg-tb-surface-container/30 p-4">
+                                            <div
+                                                id="related-stories"
+                                                className="grid gap-3 rounded-xl border border-tb-outline-variant bg-tb-surface-container/30 p-4"
+                                            >
                                                 <div className="flex flex-wrap items-start justify-between gap-3">
                                                     <div>
                                                         <h3 className="flex items-center gap-2 text-sm font-semibold text-tb-on-surface">
@@ -3019,9 +3113,9 @@ setVillagesLoading(false);
                                     />
                                 ) : (
                                     <MargaLineageCard
-                                        entries={highlightedLineage}
-                                        fatherChain={predictedFatherChain}
-                                        focusChain={predictedFocusChain}
+                                        entries={[]}
+                                        fatherChain={null}
+                                        focusChain={null}
                                         familyTrees={listFamilyTrees}
                                     />
                                 )}
@@ -4369,9 +4463,9 @@ setVillagesLoading(false);
                         </DialogTitle>
                         <DialogDescription className="space-y-3">
                             <p>
-                                Data ini akan dihapus permanen dari database
-                                dan tidak lagi muncul di keluarga ini.
-                                Tindakan ini tidak dapat dibatalkan.
+                                Data ini akan dihapus permanen dari database dan
+                                tidak lagi muncul di keluarga ini. Tindakan ini
+                                tidak dapat dibatalkan.
                             </p>
                             {(removalConfirm?.row.descendant_count ?? 0) >
                                 0 && (
