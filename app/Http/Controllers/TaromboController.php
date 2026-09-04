@@ -166,18 +166,26 @@ class TaromboController extends Controller
                 ->orderBy('id'),
         );
         $selectableFamilyTrees = $this->selectableFamilyTrees($user);
-        $selectedFamilyTreeId = $request->filled('family_tree')
+        $requestedFamilyTreeId = $request->filled('family_tree')
             ? $request->integer('family_tree')
             : null;
-        $selectedFamilyTree = $selectedFamilyTreeId !== null
-            ? $selectableFamilyTrees->firstWhere('id', $selectedFamilyTreeId)
-            : null;
+        $selectedFamilyTree = $requestedFamilyTreeId !== null
+            ? $selectableFamilyTrees->firstWhere('id', $requestedFamilyTreeId)
+            : $selectableFamilyTrees
+                ->where('user_id', $user->id)
+                ->sortBy([
+                    ['is_primary', 'desc'],
+                    ['updated_at', 'desc'],
+                    ['id', 'desc'],
+                ])
+                ->first();
 
         abort_if(
-            $selectedFamilyTreeId !== null && $selectedFamilyTree === null,
+            $requestedFamilyTreeId !== null && $selectedFamilyTree === null,
             403,
             'Anda tidak memiliki akses ke silsilah yang dipilih.',
         );
+        $selectedFamilyTreeId = $selectedFamilyTree?->id;
         $selectedTreePeople = $selectedFamilyTree instanceof FamilyTree
             ? $service->rowsForFamilyTree($selectedFamilyTree)
             : null;
@@ -331,6 +339,7 @@ class TaromboController extends Controller
                     }
                 });
             })
+            ->select(['id', 'user_id', 'root_person_id', 'name', 'is_primary', 'updated_at'])
             ->with(['rootPerson:id,name'])
             ->withExists(['contributionRequests as approved_for_selection' => function (Builder $requests) use ($user): void {
                 $requests->where('status', ContributionRequest::STATUS_APPROVED)
@@ -346,7 +355,7 @@ class TaromboController extends Controller
                     );
             }])
             ->latest('updated_at')
-            ->get(['id', 'user_id', 'root_person_id', 'name', 'updated_at']);
+            ->get();
     }
 
     /** @return Collection<int, int> */

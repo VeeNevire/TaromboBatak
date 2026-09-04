@@ -9,6 +9,81 @@ use App\Models\Person;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
+test('tarombo defaults to the signed in accounts primary family tree', function () {
+    $owner = User::factory()->asAdmin()->create();
+    $primaryRoot = Person::factory()->create(['name' => 'Akar Utama']);
+    $otherRoot = Person::factory()->create(['name' => 'Akar Lain']);
+    $primary = FamilyTree::create([
+        'user_id' => $owner->id,
+        'root_person_id' => $primaryRoot->id,
+        'name' => 'Silsilah Utama',
+        'is_primary' => true,
+    ]);
+    FamilyTree::create([
+        'user_id' => $owner->id,
+        'root_person_id' => $otherRoot->id,
+        'name' => 'Silsilah Lain',
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $primary->id,
+        'person_id' => $primaryRoot->id,
+        'chain' => '1',
+    ]);
+
+    $this->actingAs($owner)
+        ->get(route('tarombo.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('selectedFamilyTreeId', $primary->id)
+            ->has('selectedTreePeople', 1)
+            ->where('selectedTreePeople.0.id', (string) $primaryRoot->id));
+
+    $this->actingAs($owner)
+        ->get(route('tarombo.fullscreen', ['view' => 'tree']))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('selectedFamilyTreeId', $primary->id)
+            ->has('selectedTreePeople', 1));
+});
+
+test('tarombo defaults to the most recently updated account family tree when no primary exists', function () {
+    $owner = User::factory()->asAdmin()->create();
+    $olderRoot = Person::factory()->create();
+    $newerRoot = Person::factory()->create();
+    $older = FamilyTree::create([
+        'user_id' => $owner->id,
+        'root_person_id' => $olderRoot->id,
+        'name' => 'Silsilah Lama',
+        'updated_at' => now()->subDay(),
+    ]);
+    $newer = FamilyTree::create([
+        'user_id' => $owner->id,
+        'root_person_id' => $newerRoot->id,
+        'name' => 'Silsilah Baru',
+        'updated_at' => now(),
+    ]);
+    FamilyTreeNode::create(['family_tree_id' => $older->id, 'person_id' => $olderRoot->id, 'chain' => '1']);
+    FamilyTreeNode::create(['family_tree_id' => $newer->id, 'person_id' => $newerRoot->id, 'chain' => '1']);
+
+    $this->actingAs($owner)
+        ->get(route('tarombo.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('selectedFamilyTreeId', $newer->id)
+            ->where('selectedTreePeople.0.id', (string) $newerRoot->id));
+});
+
+test('tarombo keeps the default tree when the account has no family tree', function () {
+    $owner = User::factory()->asAdmin()->create();
+
+    $this->actingAs($owner)
+        ->get(route('tarombo.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('selectedFamilyTreeId', null)
+            ->where('selectedTreePeople', null));
+});
+
 test('tarombo includes female branches from alternative tree versions for the vertical toggle', function () {
     $marga = Marga::factory()->create();
     $admin = User::factory()->asAdmin()->create();
