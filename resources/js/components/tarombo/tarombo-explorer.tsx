@@ -85,6 +85,12 @@ const ANCESTOR_DEPTH = 4;
 
 const MY_PERSON_STORAGE_KEY = 'tarombo-my-person-id';
 
+type StoredMyPerson = {
+    id: string;
+    name: string;
+    marga: string;
+};
+
 function hasMargaAncestor(people: TaromboPerson[], personId: string): boolean {
     const byId = new Map(people.map((person) => [person.id, person]));
     const visited = new Set<string>();
@@ -105,9 +111,34 @@ function hasMargaAncestor(people: TaromboPerson[], personId: string): boolean {
     return false;
 }
 
-function readStoredMyPersonId(): string | null {
+function readStoredMyPerson(): StoredMyPerson | null {
     try {
-        return window.localStorage.getItem(MY_PERSON_STORAGE_KEY);
+        const raw = window.localStorage.getItem(MY_PERSON_STORAGE_KEY);
+
+        if (!raw) {
+            return null;
+        }
+
+        try {
+            const parsed: unknown = JSON.parse(raw);
+
+            if (
+                typeof parsed === 'object' &&
+                parsed !== null &&
+                'id' in parsed &&
+                'name' in parsed &&
+                'marga' in parsed &&
+                typeof parsed.id === 'string' &&
+                typeof parsed.name === 'string' &&
+                typeof parsed.marga === 'string'
+            ) {
+                return parsed as StoredMyPerson;
+            }
+        } catch {
+            // Migrate the previous ID-only value through the server identity fallback.
+        }
+
+        return { id: raw, name: '', marga: 'Batak' };
     } catch {
         return null;
     }
@@ -121,9 +152,18 @@ function removeStoredMyPersonId(): void {
     }
 }
 
-function storeMyPersonId(personId: string): void {
+function storeMyPerson(
+    person: Pick<TaromboPerson, 'id' | 'name' | 'marga'>,
+): void {
     try {
-        window.localStorage.setItem(MY_PERSON_STORAGE_KEY, personId);
+        window.localStorage.setItem(
+            MY_PERSON_STORAGE_KEY,
+            JSON.stringify({
+                id: person.id,
+                name: person.name,
+                marga: person.marga,
+            } satisfies StoredMyPerson),
+        );
     } catch {
         return;
     }
@@ -326,7 +366,8 @@ export function TaromboExplorer({
         !eligiblePeople.some((person) => person.id === requestedPerson.id)
             ? [...eligiblePeople, requestedPerson]
             : eligiblePeople;
-    const storedMyId = readStoredMyPersonId();
+    const storedMyPerson = readStoredMyPerson();
+    const storedMyId = storedMyPerson?.id ?? null;
     const initialMyId = identity
         ? (identity.currentPersonId ??
           (identity.request?.status === 'pending'
@@ -478,8 +519,21 @@ export function TaromboExplorer({
     const treeHasChildren = treePeople.some(
         (person) => person.parentId === treeCenterId,
     );
-    const myPerson =
+    const myPersonFromTree =
         myId !== null ? people.find((person) => person.id === myId) : undefined;
+    const storedSelectedPerson =
+        myId !== null && storedMyPerson?.id === myId
+            ? storedMyPerson
+            : undefined;
+    const myPerson =
+        myPersonFromTree ??
+        (identity?.currentPersonId === myId && identity.currentPersonName
+            ? {
+                  id: myId,
+                  name: identity.currentPersonName,
+                  marga: storedSelectedPerson?.marga ?? 'Batak',
+              }
+            : storedSelectedPerson);
 
     const searchSelect = (person: TaromboPerson) => {
         if (person.id !== centerPersonId) {
@@ -502,7 +556,7 @@ export function TaromboExplorer({
                 onSuccess: () => {
                     setPickerOpen(false);
                     setMyId(person.id);
-                    storeMyPersonId(person.id);
+                    storeMyPerson(person);
 
                     if (person.id !== centerPersonId) {
                         setHistory((prev) => [...prev, centerPersonId]);
@@ -976,7 +1030,6 @@ export function TaromboExplorer({
                 <div
                     className={cn(
                         'flex flex-wrap items-center gap-x-3 gap-y-2',
-                        margaTree && 'hidden',
                     )}
                 >
                     <span className="text-sm font-medium text-tb-on-surface">

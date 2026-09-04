@@ -1,7 +1,10 @@
 import { Head, Link } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
 import { FamilyTreeHistoryCard } from '@/components/people/family-tree-history-card';
-import type { FamilyTreeHistoryEntry } from '@/components/people/family-tree-history-card';
+import type {
+    ApprovedMargaTreeEntry,
+    FamilyTreeHistoryEntry,
+} from '@/components/people/family-tree-history-card';
 import { Button } from '@/components/ui/button';
 import type { NameSuggestion } from '@/components/ui/name-combobox';
 import FamilyForm from '@/pages/people/family-form';
@@ -24,7 +27,7 @@ type Props = {
     nameSuggestions: NameSuggestion[];
     fatherSuggestions: NameSuggestion[];
     familyTrees: FamilyTreeHistoryEntry[];
-    approvedMargaTrees: FamilyTreeHistoryEntry[];
+    approvedMargaTrees: ApprovedMargaTreeEntry[];
     margaAccessMargaId: number | null;
     margaAccessStatus: 'pending' | 'approved' | 'rejected' | null;
     versionTrees: FamilyTreeHistoryEntry[];
@@ -53,9 +56,7 @@ export default function PersonShow({
     readOnly = false,
 }: Props) {
     const activeMargaName =
-        margas.find((marga) => marga.id === person.marga_id)?.name ??
-        person.marga ??
-        null;
+        margas.find((marga) => marga.id === person.marga_id)?.name ?? null;
 
     return (
         <>
