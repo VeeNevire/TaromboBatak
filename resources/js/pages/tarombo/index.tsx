@@ -1,9 +1,6 @@
 import { Head } from '@inertiajs/react';
-import {
-    TaromboExplorer
-    
-} from '@/components/tarombo/tarombo-explorer';
-import type {TaromboIdentity} from '@/components/tarombo/tarombo-explorer';
+import { TaromboExplorer } from '@/components/tarombo/tarombo-explorer';
+import type { TaromboIdentity } from '@/components/tarombo/tarombo-explorer';
 import type {
     MargaInfo,
     TaromboAlternativeTreeRow,
@@ -19,11 +16,18 @@ type Props = {
     identity: TaromboIdentity;
     familyTreeOptions: TaromboFamilyTreeOption[];
     selectedFamilyTreeId: number | null;
+    selectedMargaId: number | null;
     selectedTreePeople: TaromboPersonRow[] | null;
+    margaTree: {
+        margaName: string;
+        identityPersonId: string;
+        direction: 'upper' | 'lower';
+    } | null;
 };
 
 export type TaromboFamilyTreeOption = {
     id: number;
+    value: string;
     name: string;
     rootName: string;
     group: 'account' | 'marga';
@@ -36,7 +40,9 @@ export default function TaromboIndex({
     identity,
     familyTreeOptions,
     selectedFamilyTreeId,
+    selectedMargaId,
     selectedTreePeople,
+    margaTree,
 }: Props) {
     return (
         <>
@@ -48,7 +54,9 @@ export default function TaromboIndex({
                 identity={identity}
                 familyTreeOptions={familyTreeOptions}
                 selectedFamilyTreeId={selectedFamilyTreeId}
+                selectedMargaId={selectedMargaId}
                 selectedTreePeople={selectedTreePeople}
+                margaTree={margaTree}
             />
         </>
     );

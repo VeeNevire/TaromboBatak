@@ -3,6 +3,7 @@
 use App\Models\ContributionRequest;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeNode;
+use App\Models\FamilyTreeShare;
 use App\Models\Marga;
 use App\Models\MargaAccessRequest;
 use App\Models\Person;
@@ -73,7 +74,7 @@ test('tarombo defaults to the most recently updated account family tree when no 
             ->where('selectedTreePeople.0.id', (string) $newerRoot->id));
 });
 
-test('tarombo keeps the default tree when the account has no family tree', function () {
+test('tarombo is empty when the account has no account or approved marga tree', function () {
     $owner = User::factory()->asAdmin()->create();
 
     $this->actingAs($owner)
@@ -81,7 +82,91 @@ test('tarombo keeps the default tree when the account has no family tree', funct
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->where('selectedFamilyTreeId', null)
-            ->where('selectedTreePeople', null));
+            ->where('selectedMargaId', null)
+            ->where('familyTreeOptions', [])
+            ->where('selectedTreePeople', [])
+            ->where('people', []));
+});
+
+test('tarombo sources exactly match account trees and approved marga trees', function () {
+    $approvedMarga = Marga::factory()->create(['name' => 'Silaban']);
+    $unapprovedMarga = Marga::factory()->create(['name' => 'Sagala']);
+    $viewer = User::factory()->withMarga($approvedMarga->id)->create();
+    $otherOwner = User::factory()->create();
+    $ownedRoot = Person::factory()->create(['name' => 'Akar Milik Akun']);
+    $sharedRoot = Person::factory()->create(['name' => 'Akar Dibagikan']);
+    $pendingRoot = Person::factory()->create(['name' => 'Akar Pending']);
+    $approvedIdentity = Person::factory()->create([
+        'name' => 'Borsak Junjungan',
+        'marga_id' => $approvedMarga->id,
+    ]);
+    $unapprovedIdentity = Person::factory()->create([
+        'name' => 'Sagala Raja',
+        'marga_id' => $unapprovedMarga->id,
+    ]);
+    $approvedMarga->update(['identity_person_id' => $approvedIdentity->id]);
+    $unapprovedMarga->update(['identity_person_id' => $unapprovedIdentity->id]);
+
+    $ownedTree = FamilyTree::create([
+        'user_id' => $viewer->id,
+        'root_person_id' => $ownedRoot->id,
+        'name' => 'Keluarga Saya',
+        'is_primary' => true,
+    ]);
+    $sharedTree = FamilyTree::create([
+        'user_id' => $otherOwner->id,
+        'root_person_id' => $sharedRoot->id,
+        'name' => 'Dari Akun Lain',
+    ]);
+    $pendingTree = FamilyTree::create([
+        'user_id' => $otherOwner->id,
+        'root_person_id' => $pendingRoot->id,
+        'name' => 'Belum Diterima',
+    ]);
+
+    foreach ([[$ownedTree, $ownedRoot], [$sharedTree, $sharedRoot], [$pendingTree, $pendingRoot]] as [$tree, $root]) {
+        FamilyTreeNode::create([
+            'family_tree_id' => $tree->id,
+            'person_id' => $root->id,
+            'chain' => '1',
+        ]);
+    }
+
+    FamilyTreeShare::create([
+        'family_tree_id' => $sharedTree->id,
+        'sender_id' => $otherOwner->id,
+        'recipient_id' => $viewer->id,
+        'status' => FamilyTreeShare::STATUS_ACCEPTED,
+    ]);
+    FamilyTreeShare::create([
+        'family_tree_id' => $pendingTree->id,
+        'sender_id' => $otherOwner->id,
+        'recipient_id' => $viewer->id,
+        'status' => FamilyTreeShare::STATUS_PENDING,
+    ]);
+    MargaAccessRequest::create([
+        'requester_id' => $viewer->id,
+        'marga_id' => $approvedMarga->id,
+        'status' => MargaAccessRequest::STATUS_APPROVED,
+    ]);
+
+    $expectedValues = collect([
+        'account:'.$ownedTree->id,
+        'account:'.$sharedTree->id,
+        'marga:'.$approvedMarga->id,
+    ])->sort()->values()->all();
+
+    $this->actingAs($viewer)
+        ->get(route('tarombo.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('selectedFamilyTreeId', $ownedTree->id)
+            ->where('people.0.id', (string) $ownedRoot->id)
+            ->where('familyTreeOptions', fn ($options) => collect($options)
+                ->pluck('value')
+                ->sort()
+                ->values()
+                ->all() === $expectedValues));
 });
 
 test('tarombo includes female branches from alternative tree versions for the vertical toggle', function () {
@@ -166,7 +251,7 @@ test('tarombo includes female branches from alternative tree versions for the ve
             ->where('alternativeTrees.0.people.3.parentId', (string) $daughter->id));
 });
 
-test('a marga account receives descendants from its female branch without receiving unrelated margas', function () {
+test('an account tree includes only people stored in that tree', function () {
     $marga = Marga::factory()->create();
     $spouseMarga = Marga::factory()->create();
     $viewer = User::factory()->withMarga($marga->id)->create();
@@ -189,6 +274,34 @@ test('a marga account receives descendants from its female branch without receiv
     $unrelated = Person::factory()->create([
         'gender' => 'L',
         'marga_id' => $spouseMarga->id,
+    ]);
+    $tree = FamilyTree::create([
+        'user_id' => $viewer->id,
+        'root_person_id' => $root->id,
+        'name' => 'Silsilah Milik Akun',
+    ]);
+    $rootNode = FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $root->id,
+        'chain' => '1',
+    ]);
+    $daughterNode = FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $daughter->id,
+        'father_node_id' => $rootNode->id,
+        'chain' => '1-1',
+    ]);
+    $grandsonNode = FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $grandson->id,
+        'father_node_id' => $daughterNode->id,
+        'chain' => '1-1-1',
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $greatGranddaughter->id,
+        'father_node_id' => $grandsonNode->id,
+        'chain' => '1-1-1-1',
     ]);
 
     $this->actingAs($viewer)
@@ -235,7 +348,7 @@ test('tarombo hides an unapproved alternative tree owned by another account', fu
             ->has('alternativeTrees', 0));
 });
 
-test('approved marga viewers receive approved alternative descendants for the marga being opened', function () {
+test('approved marga trees do not expose another accounts family tree versions', function () {
     $accountMarga = Marga::factory()->create(['name' => 'Sagala']);
     $viewedMarga = Marga::factory()->create(['name' => 'Silaban']);
     $owner = User::factory()->withMarga($viewedMarga->id)->create();
@@ -295,9 +408,10 @@ test('approved marga viewers receive approved alternative descendants for the ma
         ]))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
-            ->has('alternativeTrees', 1)
-            ->where('alternativeTrees.0.id', $alternative->id)
-            ->where('alternativeTrees.0.people.1.id', (string) $child->id));
+            ->has('alternativeTrees', 0)
+            ->where('familyTreeOptions', fn ($options) => collect($options)
+                ->where('value', 'account:'.$alternative->id)
+                ->isEmpty()));
 });
 
 test('authenticated tarombo rows include related story links for the vertical tree dialog', function () {
@@ -307,6 +421,16 @@ test('authenticated tarombo rows include related story links for the vertical tr
         'related_stories' => [
             ['title' => 'Sejarah Sangkar Toba', 'url' => 'https://example.com/sejarah'],
         ],
+    ]);
+    $tree = FamilyTree::create([
+        'user_id' => $admin->id,
+        'root_person_id' => $person->id,
+        'name' => 'Silsilah Sangkar Toba',
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $person->id,
+        'chain' => '1',
     ]);
 
     $this->actingAs($admin)
@@ -321,7 +445,7 @@ test('authenticated tarombo rows include related story links for the vertical tr
             )));
 });
 
-test('vertical tarombo can select account and approved marga family trees', function () {
+test('vertical tarombo lists account and approved marga sources separately', function () {
     $marga = Marga::factory()->create();
     $owner = User::factory()->withMarga($marga->id)->create();
     $root = Person::factory()->create(['name' => 'Akar Pilihan', 'marga_id' => $marga->id]);
@@ -342,11 +466,11 @@ test('vertical tarombo can select account and approved marga family trees', func
         'father_node_id' => $rootNode->id,
         'chain' => '1-1',
     ]);
-    ContributionRequest::factory()->approved()->create([
+    $marga->update(['identity_person_id' => $root->id]);
+    MargaAccessRequest::create([
         'requester_id' => $owner->id,
-        'matched_father_id' => $root->id,
-        'subject_person_id' => $root->id,
-        'family_tree_id' => $tree->id,
+        'marga_id' => $marga->id,
+        'status' => MargaAccessRequest::STATUS_APPROVED,
     ]);
 
     $this->actingAs($owner)
@@ -355,12 +479,15 @@ test('vertical tarombo can select account and approved marga family trees', func
         ->assertInertia(fn (Assert $page) => $page
             ->where('selectedFamilyTreeId', $tree->id)
             ->where('familyTreeOptions.0.id', $tree->id)
-            ->where('familyTreeOptions.0.group', 'marga')
+            ->where('familyTreeOptions.0.value', 'account:'.$tree->id)
+            ->where('familyTreeOptions.0.group', 'account')
+            ->where('familyTreeOptions.1.value', 'marga:'.$marga->id)
+            ->where('familyTreeOptions.1.group', 'marga')
             ->has('selectedTreePeople', 2)
             ->where('selectedTreePeople.1.parentId', (string) $root->id));
 });
 
-test('vertical tarombo only lists top level and alternative family trees', function () {
+test('vertical tarombo lists every tree shown in the admin account list', function () {
     $admin = User::factory()->asAdmin()->create();
     $root = Person::factory()->create(['name' => 'Si Raja Batak']);
     $branchRoot = Person::factory()->create(['name' => 'Raja Isumbaon']);
@@ -400,7 +527,7 @@ test('vertical tarombo only lists top level and alternative family trees', funct
                 ->pluck('id')
                 ->sort()
                 ->values()
-                ->all() === collect([$topLevelTree->id, $alternativeTree->id])
+                ->all() === collect([$topLevelTree->id, $branchTree->id, $alternativeTree->id])
                 ->sort()
                 ->values()
                 ->all()));

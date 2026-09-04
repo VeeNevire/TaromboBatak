@@ -72,6 +72,7 @@ type Props = {
     initialPersonId?: string;
     familyTreeOptions: TaromboFamilyTreeOption[];
     selectedFamilyTreeId: number | null;
+    selectedMargaId: number | null;
     selectedTreePeople: TaromboPersonRow[] | null;
     margaTree?: {
         margaName: string;
@@ -211,6 +212,7 @@ export function TaromboExplorer({
     initialPersonId,
     familyTreeOptions,
     selectedFamilyTreeId,
+    selectedMargaId,
     selectedTreePeople,
     margaTree = null,
 }: Props) {
@@ -645,6 +647,11 @@ export function TaromboExplorer({
                             query: {
                                 person: centerPersonId,
                                 family_tree: selectedFamilyTreeId ?? undefined,
+                                marga_id: selectedMargaId ?? undefined,
+                                marga_direction:
+                                    selectedMargaId === null
+                                        ? undefined
+                                        : (margaTree?.direction ?? 'lower'),
                             },
                         },
                     ).url,
@@ -666,6 +673,12 @@ export function TaromboExplorer({
     const approvedMargaTrees = familyTreeOptions.filter(
         (tree) => tree.group === 'marga',
     );
+    const selectedOptionValue =
+        selectedMargaId !== null
+            ? `marga:${selectedMargaId}`
+            : selectedFamilyTreeId !== null
+              ? `account:${selectedFamilyTreeId}`
+              : undefined;
     const familyTreeSelector = (
         <div
             className={cn(
@@ -677,26 +690,32 @@ export function TaromboExplorer({
                 Silsilah:
             </span>
             <Select
-                value={
-                    selectedFamilyTreeId === null
-                        ? undefined
-                        : String(selectedFamilyTreeId)
-                }
+                value={selectedOptionValue}
                 onValueChange={(value) => {
-                    const familyTreeId = Number(value);
+                    const selectedOption = familyTreeOptions.find(
+                        (option) => option.value === value,
+                    );
+
+                    if (!selectedOption) {
+                        return;
+                    }
+
+                    const query =
+                        selectedOption.group === 'account'
+                            ? {
+                                  person: centerPersonId,
+                                  family_tree: selectedOption.id,
+                              }
+                            : {
+                                  marga_id: selectedOption.id,
+                                  marga_direction: 'lower' as const,
+                              };
                     const destination = fullscreen
                         ? tarombo.fullscreen(
                               { view: fullscreenView },
-                              {
-                                  query: {
-                                      person: centerPersonId,
-                                      family_tree: familyTreeId,
-                                  },
-                              },
+                              { query },
                           )
-                        : tarombo.index({
-                              query: { family_tree: familyTreeId },
-                          });
+                        : tarombo.index({ query });
 
                     router.get(destination.url, {}, { preserveScroll: true });
                 }}
@@ -709,10 +728,7 @@ export function TaromboExplorer({
                         <SelectGroup>
                             <SelectLabel>Silsilah Milik Akun</SelectLabel>
                             {accountFamilyTrees.map((tree) => (
-                                <SelectItem
-                                    key={tree.id}
-                                    value={String(tree.id)}
-                                >
+                                <SelectItem key={tree.value} value={tree.value}>
                                     {tree.name}
                                 </SelectItem>
                             ))}
@@ -720,12 +736,9 @@ export function TaromboExplorer({
                     )}
                     {approvedMargaTrees.length > 0 && (
                         <SelectGroup>
-                            <SelectLabel>Silsilah Marga Disetujui</SelectLabel>
+                            <SelectLabel>Daftar Silsilah Marga</SelectLabel>
                             {approvedMargaTrees.map((tree) => (
-                                <SelectItem
-                                    key={tree.id}
-                                    value={String(tree.id)}
-                                >
+                                <SelectItem key={tree.value} value={tree.value}>
                                     {tree.name}
                                 </SelectItem>
                             ))}
@@ -841,7 +854,7 @@ export function TaromboExplorer({
                         </p>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
-                        {!margaTree && familyTreeSelector}
+                        {(!margaTree || !fullscreen) && familyTreeSelector}
                         {!margaTree && femaleLineageToggle}
                     </div>
                 </div>
@@ -896,8 +909,8 @@ export function TaromboExplorer({
                         Pohon Tarombo
                     </h1>
                     <p className="mt-2 text-sm text-tb-on-surface-variant">
-                        Belum ada data tarombo. Tambahkan anggota terlebih
-                        dahulu.
+                        Belum ada Silsilah Milik Akun atau Daftar Silsilah Marga
+                        yang dapat ditampilkan.
                     </p>
                 </div>
             </div>
@@ -1161,7 +1174,8 @@ export function TaromboExplorer({
                                             </p>
                                             <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
                                                 {familyTreeSelector}
-                                                {femaleLineageToggle}
+                                                {!margaTree &&
+                                                    femaleLineageToggle}
                                             </div>
                                         </div>
                                         <div style={{ zoom: treeZoom }}>
