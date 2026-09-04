@@ -679,12 +679,11 @@ export function TaromboExplorer({
             <Select
                 value={
                     selectedFamilyTreeId === null
-                        ? 'default'
+                        ? undefined
                         : String(selectedFamilyTreeId)
                 }
                 onValueChange={(value) => {
-                    const familyTreeId =
-                        value === 'default' ? undefined : Number(value);
+                    const familyTreeId = Number(value);
                     const destination = fullscreen
                         ? tarombo.fullscreen(
                               { view: fullscreenView },
@@ -706,9 +705,6 @@ export function TaromboExplorer({
                     <SelectValue placeholder="Pilih silsilah" />
                 </SelectTrigger>
                 <SelectContent>
-                    <SelectItem value="default">
-                        Pohon Tarombo Default
-                    </SelectItem>
                     {accountFamilyTrees.length > 0 && (
                         <SelectGroup>
                             <SelectLabel>Silsilah Milik Akun</SelectLabel>
