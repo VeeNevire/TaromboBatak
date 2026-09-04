@@ -8,9 +8,50 @@ use App\Models\Marga;
 use App\Models\TelegramAccount;
 use App\Models\TelegramAnnouncement;
 use App\Models\User;
+use App\Services\TelegramMtproto;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
+
+use function Pest\Laravel\mock;
+
+test('a connected Telegram account syncs only ten groups with twenty messages each', function () {
+    $owner = User::factory()->withMarga(Marga::factory()->create()->id)->create();
+    TelegramAccount::query()->create([
+        'user_id' => $owner->id,
+        'telegram_user_id' => 901,
+        'private_chat_id' => 901,
+        'display_name' => $owner->name,
+        'linked_at' => now(),
+        'session_path' => 'telegram/user-1',
+        'connection_status' => TelegramAccount::STATUS_CONNECTED,
+    ]);
+
+    mock(TelegramMtproto::class, function ($mock): void {
+        $mock->shouldReceive('dialogs')->once()->andReturn(range(1, 20));
+        $mock->shouldReceive('info')->times(10)->andReturnUsing(fn (TelegramAccount $account, int $peer): array => [
+            'type' => 'chat',
+            'Chat' => ['title' => 'Telegram Group '.$peer],
+        ]);
+        $mock->shouldReceive('history')->times(10)->withArgs(function (TelegramAccount $account, int $peer, int $limit): bool {
+            return $limit === 20;
+        })->andReturnUsing(function (TelegramAccount $account, int $peer): array {
+            return collect(range(1, 20))->map(fn (int $messageId): array => [
+                'id' => ($peer * 100) + $messageId,
+                'peer_id' => ['chat_id' => $peer],
+                'message' => 'Pesan '.$messageId,
+                'date' => now()->timestamp,
+            ])->all();
+        });
+    });
+
+    $this->actingAs($owner)
+        ->post(route('groups.telegram.sync'))
+        ->assertRedirect(route('groups.index'));
+
+    expect($owner->telegramAccount->dialogs()->where('type', 'group')->count())->toBe(10)
+        ->and($owner->telegramAccount->dialogs()->first()->messages()->count())->toBe(20);
+});
 
 test('a user can create a group with contacts from the same marga', function () {
     $marga = Marga::factory()->create();

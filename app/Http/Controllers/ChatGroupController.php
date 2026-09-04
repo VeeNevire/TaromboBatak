@@ -7,12 +7,16 @@ use App\Models\ChatGroup;
 use App\Models\ChatGroupMember;
 use App\Models\ContactRequest;
 use App\Models\GroupMessage;
+use App\Models\TelegramDialog;
+use App\Models\TelegramMessage;
 use App\Models\User;
+use App\Services\TelegramGroupSync;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
+use Throwable;
 
 class ChatGroupController extends Controller
 {
@@ -23,7 +27,33 @@ class ChatGroupController extends Controller
         return Inertia::render('groups/index', [
             'groups' => $this->groupsFor($request->user()),
             'contacts' => $this->contactsFor($request->user()),
+            'telegramConnected' => $request->user()->telegramAccount?->isMtprotoConnected() ?? false,
+            'telegramGroups' => $this->telegramGroupsFor($request->user()),
         ]);
+    }
+
+    public function syncTelegram(Request $request, TelegramGroupSync $sync): RedirectResponse
+    {
+        $account = $request->user()->telegramAccount;
+        abort_unless($account?->isMtprotoConnected(), 422, 'Hubungkan akun Telegram terlebih dahulu.');
+
+        try {
+            $count = $sync->syncNext($account);
+            Inertia::flash('toast', [
+                'type' => 'success',
+                'message' => $count > 0
+                    ? $count.' grup/channel Telegram berhasil dimuat.'
+                    : 'Tidak ada grup/channel Telegram baru yang ditemukan.',
+            ]);
+        } catch (Throwable $exception) {
+            report($exception);
+            Inertia::flash('toast', [
+                'type' => 'error',
+                'message' => 'Telegram belum dapat dimuat. Coba lagi dengan batch berikutnya.',
+            ]);
+        }
+
+        return to_route('groups.index');
     }
 
     public function store(StoreChatGroupRequest $request): RedirectResponse
@@ -139,6 +169,50 @@ class ChatGroupController extends Controller
                 'telegram_linked' => $contact->telegramAccount?->isMtprotoConnected() ?? false,
             ])
             ->all();
+    }
+
+    /** @return array{items: array<int, array<string, mixed>>, has_more: bool} */
+    private function telegramGroupsFor(User $user): array
+    {
+        $account = $user->telegramAccount;
+        if (! $account) {
+            return ['items' => [], 'has_more' => false];
+        }
+
+        $dialogs = $account->dialogs()
+            ->whereIn('type', ['group', 'channel'])
+            ->orderByDesc('last_message_at')
+            ->orderByDesc('id')
+            ->limit(TelegramGroupSync::MAX_DIALOGS)
+            ->get(['id', 'type', 'title', 'username', 'telegram_peer_id', 'last_message_at']);
+
+        $messages = TelegramMessage::query()
+            ->whereBelongsTo($account, 'account')
+            ->whereIn('telegram_dialog_id', $dialogs->pluck('id'))
+            ->latest('sent_at')
+            ->get(['id', 'telegram_dialog_id', 'body', 'sender_name', 'is_outgoing', 'sent_at'])
+            ->groupBy('telegram_dialog_id');
+
+        return [
+            'items' => $dialogs->map(fn (TelegramDialog $dialog): array => [
+                'id' => $dialog->id,
+                'type' => $dialog->type,
+                'title' => $dialog->title,
+                'username' => $dialog->username,
+                'last_message_at' => $dialog->last_message_at?->toISOString(),
+                'messages' => $messages->get($dialog->id, collect())
+                    ->take(TelegramGroupSync::HISTORY_LIMIT)
+                    ->values()
+                    ->map(fn (TelegramMessage $message): array => [
+                        'id' => $message->id,
+                        'body' => $message->body,
+                        'sender_name' => $message->sender_name,
+                        'is_outgoing' => $message->is_outgoing,
+                        'sent_at' => $message->sent_at?->toISOString(),
+                    ])->all(),
+            ])->all(),
+            'has_more' => $dialogs->count() >= TelegramGroupSync::MAX_DIALOGS,
+        ];
     }
 
     /** @return array<string, int|string|null> */

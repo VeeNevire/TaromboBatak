@@ -1,8 +1,8 @@
 <?php
 
 use App\Http\Controllers\AccountController;
-use App\Http\Controllers\BudayaController;
 use App\Http\Controllers\Auth\GoogleAuthController;
+use App\Http\Controllers\BudayaController;
 use App\Http\Controllers\ChatGroupController;
 use App\Http\Controllers\ChatGroupMemberController;
 use App\Http\Controllers\ContactController;
@@ -122,6 +122,9 @@ Route::middleware(['auth'])->group(function () {
         ->name('identity-requests.store');
 
     Route::get('groups', [ChatGroupController::class, 'index'])->name('groups.index');
+    Route::post('groups/telegram/sync', [ChatGroupController::class, 'syncTelegram'])
+        ->middleware('throttle:6,1')
+        ->name('groups.telegram.sync');
     Route::post('groups', [ChatGroupController::class, 'store'])->name('groups.store');
     Route::get('groups/{chatGroup}', [ChatGroupController::class, 'show'])->name('groups.show');
     Route::delete('groups/{chatGroup}', [ChatGroupController::class, 'destroy'])->name('groups.destroy');

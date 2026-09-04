@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Exceptions\TelegramNotConfigured;
 use App\Models\TelegramAccount;
 use App\Models\TelegramAuthSession;
+use danog\MadelineProto\API;
 use danog\MadelineProto\LocalFile;
 use danog\MadelineProto\Logger;
 use Illuminate\Support\Carbon;
@@ -127,13 +128,20 @@ class TelegramMtproto
     /** @return array<string, mixed> */
     public function sendMessage(TelegramAccount $account, int|string $peer, string $body): array
     {
-        $message = $this->api($account->session_path)->sendMessage($peer, $body);
+        $api = $this->api($account->session_path);
+        $destination = $this->resolveSendDestination($api, $peer);
+        $updates = $api->messages->sendMessage(
+            peer: $destination['input_peer'],
+            message: $body,
+        );
+        $message = $api->extractMessage($updates);
 
         return [
-            'id' => $message->id,
-            'message' => $message->message,
-            'date' => $message->date,
+            'id' => (int) $message['id'],
+            'message' => (string) ($message['message'] ?? $body),
+            'date' => (int) ($message['date'] ?? now()->timestamp),
             'out' => true,
+            'peer_id' => $destination['peer_id'],
         ];
     }
 
@@ -146,7 +154,8 @@ class TelegramMtproto
         string $mimeType,
         string $caption = '',
     ): array {
-        $message = $this->api($account->session_path)->sendDocument(
+        $api = $this->api($account->session_path);
+        $message = $api->sendDocument(
             peer: $peer,
             file: new LocalFile($path),
             caption: $caption,
@@ -160,6 +169,24 @@ class TelegramMtproto
             'date' => $message->date,
             'out' => true,
         ];
+    }
+
+    /** @return array{input_peer: array<string, mixed>, peer_id: int|string} */
+    private function resolveSendDestination(object $api, int|string $peer): array
+    {
+        $info = $api->getInfo($peer);
+        $migratedPeer = $info['Chat']['migrated_to']['channel_id'] ?? null;
+        if (is_int($migratedPeer) || is_string($migratedPeer)) {
+            $peer = $migratedPeer;
+        }
+
+        $resolved = $api->getInfo($peer, API::INFO_TYPE_PEER);
+
+        if (! is_array($resolved)) {
+            throw new RuntimeException('Peer Telegram tidak dapat di-resolve untuk pengiriman pesan.');
+        }
+
+        return ['input_peer' => $resolved, 'peer_id' => $peer];
     }
 
     public function resolvePeer(TelegramAccount $sender, TelegramAccount $recipient): int|string

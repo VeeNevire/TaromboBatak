@@ -1,5 +1,5 @@
 import { Head, Link, useForm } from '@inertiajs/react';
-import { MessageCircle, Plus, Send, Users } from 'lucide-react';
+import { MessageCircle, Plus, RefreshCw, Send, Users } from 'lucide-react';
 import type { FormEvent } from 'react';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import announcements from '@/routes/announcements';
 import groups from '@/routes/groups';
+import telegramMessages from '@/routes/telegram-messages';
 
 type Group = {
     id: number;
@@ -20,18 +21,38 @@ type Group = {
 };
 
 type Contact = { id: number; name: string; telegram_linked: boolean };
+type TelegramMessage = {
+    id: number;
+    body: string | null;
+    sender_name: string | null;
+    is_outgoing: boolean;
+    sent_at: string | null;
+};
+type TelegramGroup = {
+    id: number;
+    type: 'group' | 'channel';
+    title: string;
+    username: string | null;
+    last_message_at: string | null;
+    messages: TelegramMessage[];
+};
 
 export default function GroupsIndex({
     groups: items,
     contacts,
+    telegramConnected,
+    telegramGroups,
 }: {
     groups: Group[];
     contacts: Contact[];
+    telegramConnected: boolean;
+    telegramGroups: { items: TelegramGroup[]; has_more: boolean };
 }) {
     const form = useForm<{ name: string; member_ids: number[] }>({
         name: '',
         member_ids: [],
     });
+    const syncForm = useForm({});
 
     const toggleMember = (id: number, checked: boolean) => {
         form.setData(
@@ -46,6 +67,11 @@ export default function GroupsIndex({
         event.preventDefault();
         form.post(groups.store().url, { onSuccess: () => form.reset() });
     };
+
+    const syncTelegram = () =>
+        syncForm.post(groups.telegram.sync.url(), {
+            preserveScroll: true,
+        });
 
     return (
         <>
@@ -70,8 +96,9 @@ export default function GroupsIndex({
                 </div>
 
                 <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-                    <div className="grid content-start gap-3 sm:grid-cols-2">
-                        {items.map((group) => (
+                    <div className="space-y-6">
+                        <div className="grid content-start gap-3 sm:grid-cols-2">
+                            {items.map((group) => (
                             <Link
                                 key={group.id}
                                 href={groups.show(group.id)}
@@ -109,15 +136,99 @@ export default function GroupsIndex({
                                     </CardContent>
                                 </Card>
                             </Link>
-                        ))}
-                        {items.length === 0 && (
-                            <Card className="sm:col-span-2">
-                                <CardContent className="py-10 text-center text-sm text-tb-on-surface-variant">
-                                    Belum ada grup. Buat grup pertama dari
-                                    formulir di samping.
-                                </CardContent>
-                            </Card>
-                        )}
+                            ))}
+                            {items.length === 0 && (
+                                <Card className="sm:col-span-2">
+                                    <CardContent className="py-10 text-center text-sm text-tb-on-surface-variant">
+                                        Belum ada grup. Buat grup pertama dari
+                                        formulir di samping.
+                                    </CardContent>
+                                </Card>
+                            )}
+                        </div>
+
+                        <Card className="border-tb-outline-variant bg-tb-surface-bright">
+                            <CardHeader>
+                                <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                        <CardTitle className="flex items-center gap-2">
+                                            <MessageCircle className="size-5 text-sky-500" />
+                                            Telegram Saya
+                                        </CardTitle>
+                                        <p className="mt-1 text-sm text-tb-on-surface-variant">
+                                            Grup dan channel yang sudah diikuti akun Telegram Anda.
+                                        </p>
+                                    </div>
+                                    {telegramConnected && telegramGroups.items.length < 20 && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={syncTelegram}
+                                            disabled={syncForm.processing}
+                                        >
+                                            <RefreshCw className={syncForm.processing ? 'size-4 animate-spin' : 'size-4'} />
+                                            {telegramGroups.items.length === 0 ? 'Sinkronkan' : 'Muat lebih banyak'}
+                                        </Button>
+                                    )}
+                                </div>
+                            </CardHeader>
+                            <CardContent>
+                                {!telegramConnected ? (
+                                    <p className="rounded-xl bg-tb-surface-container p-4 text-sm text-tb-on-surface-variant">
+                                        Hubungkan akun Telegram terlebih dahulu untuk melihat grup dan channel Anda.
+                                    </p>
+                                ) : telegramGroups.items.length === 0 ? (
+                                    <p className="rounded-xl bg-tb-surface-container p-4 text-sm text-tb-on-surface-variant">
+                                        Belum ada data Telegram. Klik Sinkronkan untuk memuat maksimal 10 grup atau channel.
+                                    </p>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {telegramGroups.items.map((telegramGroup) => (
+                                            <details key={telegramGroup.id} className="group rounded-xl border border-tb-outline-variant p-3">
+                                                <summary className="flex cursor-pointer list-none items-center gap-3">
+                                                    <div className="grid size-9 shrink-0 place-items-center rounded-full bg-sky-500/10 text-sky-600">
+                                                        <Users className="size-4" />
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="truncate font-semibold">{telegramGroup.title}</p>
+                                                        <p className="text-xs text-tb-on-surface-variant">
+                                                            {telegramGroup.type === 'channel' ? 'Channel' : 'Grup'}
+                                                            {telegramGroup.username ? ` · @${telegramGroup.username}` : ''}
+                                                        </p>
+                                                    </div>
+                                                    <span className="text-xs text-tb-outline">{telegramGroup.messages.length} pesan</span>
+                                                </summary>
+                                                <div className="mt-3 space-y-2 border-t border-tb-outline-variant pt-3">
+                                                    <Button asChild size="sm" variant="outline" className="w-full">
+                                                        <Link href={telegramMessages.index({ query: { dialog_id: telegramGroup.id } })}>
+                                                            <MessageCircle className="size-4" />
+                                                            Buka chat Telegram
+                                                        </Link>
+                                                    </Button>
+                                                    {telegramGroup.messages.length === 0 ? (
+                                                        <p className="text-sm text-tb-outline">Belum ada pesan tersimpan.</p>
+                                                    ) : (
+                                                        telegramGroup.messages.map((message) => (
+                                                            <div key={message.id} className="rounded-lg bg-tb-surface-container px-3 py-2 text-sm">
+                                                                <p className="text-xs font-medium text-tb-primary">
+                                                                    {message.is_outgoing ? 'Anda' : message.sender_name ?? 'Pengguna Telegram'}
+                                                                </p>
+                                                                <p className="mt-1 break-words whitespace-pre-wrap text-tb-on-surface">
+                                                                    {message.body ?? 'Pesan dengan media'}
+                                                                </p>
+                                                            </div>
+                                                        ))
+                                                    )}
+                                                </div>
+                                            </details>
+                                        ))}
+                                        {telegramGroups.items.length >= 20 && (
+                                            <p className="text-center text-xs text-tb-outline">Batas 20 grup/channel sudah tercapai.</p>
+                                        )}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
                     </div>
 
                     <Card className="h-fit border-tb-outline-variant bg-tb-surface-bright">

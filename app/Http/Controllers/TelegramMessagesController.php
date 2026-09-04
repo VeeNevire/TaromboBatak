@@ -134,17 +134,32 @@ class TelegramMessagesController extends Controller
             report($exception);
             Inertia::flash('toast', [
                 'type' => 'error',
-                'message' => $telegram->isDeactivatedPeerError($exception)
-                    ? 'Pesan tidak dapat dikirim karena akun Telegram ini sudah dinonaktifkan.'
-                    : 'Pesan Telegram gagal dikirim. Silakan coba lagi.',
+                'message' => $this->sendErrorMessage($telegram, $exception),
             ]);
 
             return to_route('telegram-messages.index', ['dialog_id' => $dialog->id]);
         }
         if ($message !== []) {
+            $sentPeerId = $message['peer_id'] ?? $dialog->telegram_peer_id;
+            if ((int) $sentPeerId !== (int) $dialog->telegram_peer_id) {
+                    $migratedDialog = TelegramDialog::query()
+                        ->where('telegram_account_id', $account->id)
+                        ->where('telegram_peer_id', $sentPeerId)
+                        ->first();
+
+                    if ($migratedDialog !== null) {
+                        $dialog = $migratedDialog;
+                    } else {
+                        $dialog->update([
+                    'telegram_peer_id' => $sentPeerId,
+                    'type' => 'channel',
+                        ]);
+                    }
+            }
+
             $message['out'] = true;
-            $message['peer_id'] = ['chat_id' => $dialog->telegram_peer_id];
-            $importer->importMessage($account, $dialog, $message);
+            unset($message['peer_id']);
+            $importer->importMessage($account, $dialog->fresh(), $message);
         }
 
         return to_route('telegram-messages.index', ['dialog_id' => $dialog->id]);
@@ -193,6 +208,23 @@ class TelegramMessagesController extends Controller
             )
             || str_contains($message, 'AUTH_KEY_UNREGISTERED')
             || str_contains($message, 'AUTH_KEY_INVALID');
+    }
+
+    private function sendErrorMessage(TelegramMtproto $telegram, Throwable $exception): string
+    {
+        if ($telegram->isDeactivatedPeerError($exception)) {
+            return 'Pesan tidak dapat dikirim karena akun Telegram ini sudah dinonaktifkan.';
+        }
+
+        $message = strtoupper($exception->getMessage());
+
+        return match (true) {
+            str_contains($message, 'CHAT_WRITE_FORBIDDEN'), str_contains($message, 'USER_BANNED_IN_CHANNEL') => 'Akun Telegram Anda tidak memiliki izin untuk mengirim pesan di grup atau channel ini.',
+            str_contains($message, 'CHANNEL_PRIVATE') => 'Grup atau channel ini tidak dapat diakses oleh akun Telegram Anda.',
+            str_contains($message, 'PEER_ID_INVALID') => 'Grup atau channel tidak lagi valid. Klik Sinkronkan Telegram lalu coba lagi.',
+            str_contains($message, 'FLOOD_WAIT') => 'Telegram membatasi pengiriman sementara. Tunggu beberapa saat lalu coba lagi.',
+            default => 'Pesan Telegram gagal dikirim. Silakan coba lagi.',
+        };
     }
 
     private function dialogType(array $info): string
