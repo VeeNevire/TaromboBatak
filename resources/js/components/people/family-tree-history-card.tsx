@@ -45,7 +45,8 @@ import margaAccessRequests from '@/routes/marga-access-requests';
 import people from '@/routes/people';
 import tarombo from '@/routes/tarombo';
 
-const ITEMS_PER_PAGE = 5;
+const APPROVED_MARGA_ITEMS_PER_PAGE = 5;
+const ACCOUNT_FAMILY_TREE_ITEMS_PER_PAGE = 10;
 
 export type FamilyTreeHistoryEntry = {
     id: number;
@@ -96,12 +97,15 @@ export function ApprovedMargaTreeList({
     asCard?: boolean;
 }) {
     const [currentPage, setCurrentPage] = useState(1);
-    const totalPages = Math.max(1, Math.ceil(entries.length / ITEMS_PER_PAGE));
+    const totalPages = Math.max(
+        1,
+        Math.ceil(entries.length / APPROVED_MARGA_ITEMS_PER_PAGE),
+    );
     const safePage = Math.min(currentPage, totalPages);
-    const startIndex = (safePage - 1) * ITEMS_PER_PAGE;
+    const startIndex = (safePage - 1) * APPROVED_MARGA_ITEMS_PER_PAGE;
     const visibleEntries = entries.slice(
         startIndex,
-        startIndex + ITEMS_PER_PAGE,
+        startIndex + APPROVED_MARGA_ITEMS_PER_PAGE,
     );
 
     const content = (
@@ -277,7 +281,7 @@ export function FamilyTreeHistoryCard({
         year: 'numeric',
     });
 
-    const showSearch = entries.length > ITEMS_PER_PAGE;
+    const showSearch = entries.length > ACCOUNT_FAMILY_TREE_ITEMS_PER_PAGE;
 
     const filteredEntries = useMemo(() => {
         const query = searchQuery.trim().toLowerCase();
@@ -296,13 +300,13 @@ export function FamilyTreeHistoryCard({
 
     const totalPages = Math.max(
         1,
-        Math.ceil(filteredEntries.length / ITEMS_PER_PAGE),
+        Math.ceil(filteredEntries.length / ACCOUNT_FAMILY_TREE_ITEMS_PER_PAGE),
     );
     const safePage = Math.min(currentPage, totalPages);
-    const startIndex = (safePage - 1) * ITEMS_PER_PAGE;
+    const startIndex = (safePage - 1) * ACCOUNT_FAMILY_TREE_ITEMS_PER_PAGE;
     const visibleEntries = filteredEntries.slice(
         startIndex,
-        startIndex + ITEMS_PER_PAGE,
+        startIndex + ACCOUNT_FAMILY_TREE_ITEMS_PER_PAGE,
     );
     const margaRequestEntry =
         entries.find((entry) => entry.is_primary) ?? entries[0];
@@ -310,10 +314,11 @@ export function FamilyTreeHistoryCard({
         margaId != null && margaAccessStatus !== 'approved';
     const rangeStart = filteredEntries.length === 0 ? 0 : startIndex + 1;
     const rangeEnd = Math.min(
-        startIndex + ITEMS_PER_PAGE,
+        startIndex + ACCOUNT_FAMILY_TREE_ITEMS_PER_PAGE,
         filteredEntries.length,
     );
-    const showPagination = filteredEntries.length > ITEMS_PER_PAGE;
+    const showPagination =
+        filteredEntries.length > ACCOUNT_FAMILY_TREE_ITEMS_PER_PAGE;
 
     const availableRecipients = useMemo(() => {
         const query = recipientSearch.trim().toLowerCase();
