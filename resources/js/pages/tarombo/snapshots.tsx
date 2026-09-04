@@ -11,6 +11,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { dashboard } from '@/routes';
 import tarombo from '@/routes/tarombo';
 
 type Snapshot = {
@@ -249,3 +250,11 @@ export default function TaromboSnapshots({
         </>
     );
 }
+
+TaromboSnapshots.layout = {
+    breadcrumbs: [
+        { title: 'Dashboard', href: dashboard() },
+        { title: 'Pohon Tarombo', href: tarombo.index() },
+        { title: 'Tarombo Tersimpan', href: tarombo.snapshots.index() },
+    ],
+};

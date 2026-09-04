@@ -126,85 +126,98 @@ export function ApprovedMargaTreeList({
             ) : (
                 <>
                     <ol className="grid gap-3">
-                     {visibleEntries.map((entry, index) => (
-                        <li
-                            key={entry.id}
-                            className="flex flex-col gap-4 rounded-xl border border-tb-outline-variant bg-tb-surface-container/35 p-4 sm:flex-row sm:items-center sm:justify-between"
-                        >
-                            <div className="flex min-w-0 items-start gap-3">
-                                <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-tb-surface-bright text-sm font-bold text-tb-on-surface-variant ring-1 ring-tb-outline-variant">
-                                     {startIndex + index + 1}
-                                </span>
-                                <div className="min-w-0">
-                                    <p className="truncate text-sm font-semibold text-tb-on-surface">
-                                        Keluarga {entry.identity_person_name ?? entry.name}
-                                    </p>
-                                    <p className="mt-1 text-xs text-tb-on-surface-variant">
-                                        Marga: {entry.name} · {entry.people_count} anggota
-                                    </p>
+                        {visibleEntries.map((entry, index) => (
+                            <li
+                                key={entry.id}
+                                className="flex flex-col gap-4 rounded-xl border border-tb-outline-variant bg-tb-surface-container/35 p-4 sm:flex-row sm:items-center sm:justify-between"
+                            >
+                                <div className="flex min-w-0 items-start gap-3">
+                                    <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-tb-surface-bright text-sm font-bold text-tb-on-surface-variant ring-1 ring-tb-outline-variant">
+                                        {startIndex + index + 1}
+                                    </span>
+                                    <div className="min-w-0">
+                                        <p className="truncate text-sm font-semibold text-tb-on-surface">
+                                            Keluarga{' '}
+                                            {entry.identity_person_name ??
+                                                entry.name}
+                                        </p>
+                                        <p className="mt-1 text-xs text-tb-on-surface-variant">
+                                            Marga: {entry.name} ·{' '}
+                                            {entry.people_count} anggota
+                                        </p>
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-2">
-                                <Link
-                                    href={tarombo.fullscreen('tree', {
-                                        query: {
-                                            marga_id: entry.id,
-                                            marga_direction: 'upper',
-                                        },
-                                    })}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    aria-label={`Pohon Silsilah Atas ${entry.name}`}
-                                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
-                                >
-                                    <ArrowUp className="size-3.5" /> Pohon Atas
-                                </Link>
-                                <Link
-                                    href={tarombo.fullscreen('tree', {
-                                        query: {
-                                            marga_id: entry.id,
-                                            marga_direction: 'lower',
-                                        },
-                                    })}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    aria-label={`Pohon Silsilah Bawah ${entry.name}`}
-                                    className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-tb-primary px-3 py-2 text-xs font-semibold text-tb-on-primary transition-opacity hover:opacity-90"
-                                >
-                                    <ArrowDown className="size-3.5" /> Pohon Bawah
-                                </Link>
-                            </div>
-                        </li>
-                    ))}
+                                <div className="grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-2">
+                                    <Link
+                                        href={tarombo.fullscreen('tree', {
+                                            query: {
+                                                marga_id: entry.id,
+                                                marga_direction: 'upper',
+                                            },
+                                        })}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        aria-label={`Pohon Silsilah Atas ${entry.name}`}
+                                        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
+                                    >
+                                        <ArrowUp className="size-3.5" /> Pohon
+                                        Atas
+                                    </Link>
+                                    <Link
+                                        href={tarombo.fullscreen('tree', {
+                                            query: {
+                                                marga_id: entry.id,
+                                                marga_direction: 'lower',
+                                            },
+                                        })}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        aria-label={`Pohon Silsilah Bawah ${entry.name}`}
+                                        className="text-tb-on-primary inline-flex items-center justify-center gap-1.5 rounded-lg bg-tb-primary px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-90"
+                                    >
+                                        <ArrowDown className="size-3.5" /> Pohon
+                                        Bawah
+                                    </Link>
+                                </div>
+                            </li>
+                        ))}
                     </ol>
                     {totalPages > 1 && (
-                     <div className="flex items-center justify-between gap-3 pt-1">
-                         <p className="text-xs text-tb-on-surface-variant">
-                             Halaman {safePage} dari {totalPages}
-                         </p>
-                         <div className="flex items-center gap-1">
-                             <Button
-                                 type="button"
-                                 variant="outline"
-                                 size="icon"
-                                 aria-label="Halaman silsilah marga sebelumnya"
-                                 disabled={safePage === 1}
-                                 onClick={() => setCurrentPage(Math.max(1, safePage - 1))}
-                             >
-                                 <ChevronLeft className="size-4" />
-                             </Button>
-                             <Button
-                                 type="button"
-                                 variant="outline"
-                                 size="icon"
-                                 aria-label="Halaman silsilah marga berikutnya"
-                                 disabled={safePage === totalPages}
-                                 onClick={() => setCurrentPage(Math.min(totalPages, safePage + 1))}
-                             >
-                                 <ChevronRight className="size-4" />
-                             </Button>
-                         </div>
-                     </div>
+                        <div className="flex items-center justify-between gap-3 pt-1">
+                            <p className="text-xs text-tb-on-surface-variant">
+                                Halaman {safePage} dari {totalPages}
+                            </p>
+                            <div className="flex items-center gap-1">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    aria-label="Halaman silsilah marga sebelumnya"
+                                    disabled={safePage === 1}
+                                    onClick={() =>
+                                        setCurrentPage(
+                                            Math.max(1, safePage - 1),
+                                        )
+                                    }
+                                >
+                                    <ChevronLeft className="size-4" />
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    aria-label="Halaman silsilah marga berikutnya"
+                                    disabled={safePage === totalPages}
+                                    onClick={() =>
+                                        setCurrentPage(
+                                            Math.min(totalPages, safePage + 1),
+                                        )
+                                    }
+                                >
+                                    <ChevronRight className="size-4" />
+                                </Button>
+                            </div>
+                        </div>
                     )}
                 </>
             )}
@@ -398,8 +411,8 @@ export function FamilyTreeHistoryCard({
                                     variant="outline"
                                     disabled={margaAccessStatus === 'pending'}
                                     onClick={() =>
-                                            router.post(
-                                                margaAccessRequests.store().url,
+                                        router.post(
+                                            margaAccessRequests.store().url,
                                             {},
                                             { preserveScroll: true },
                                         )
@@ -415,14 +428,18 @@ export function FamilyTreeHistoryCard({
                             )}
                             <button
                                 type="button"
-                                onClick={() => setExpanded((current) => !current)}
+                                onClick={() =>
+                                    setExpanded((current) => !current)
+                                }
                                 aria-expanded={expanded}
                                 aria-label={
                                     expanded
                                         ? 'Kembali ke form Tambah Keluarga'
                                         : 'Perbesar Daftar Silsilah'
                                 }
-                                title={expanded ? 'Kembali ke Form' : 'Perbesar'}
+                                title={
+                                    expanded ? 'Kembali ke Form' : 'Perbesar'
+                                }
                                 className={cn(
                                     'inline-flex shrink-0 items-center justify-center rounded-lg border border-tb-outline-variant text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none',
                                     expanded
@@ -674,6 +691,25 @@ export function FamilyTreeHistoryCard({
                                                             <TreePine className="size-3.5" />{' '}
                                                             Buka
                                                         </Link>
+                                                        {entry.access ===
+                                                            'owner' && (
+                                                            <Link
+                                                                href={tarombo.fullscreen(
+                                                                    'tree',
+                                                                    {
+                                                                        query: {
+                                                                            family_tree:
+                                                                                entry.id,
+                                                                            person: entry.root_person_id,
+                                                                        },
+                                                                    },
+                                                                )}
+                                                                className="inline-flex items-center gap-1.5 rounded-lg border border-tb-primary px-3 py-2 text-xs font-semibold text-tb-primary transition-colors hover:bg-tb-primary/10"
+                                                            >
+                                                                <Maximize2 className="size-3.5" />{' '}
+                                                                Buka Full
+                                                            </Link>
+                                                        )}
                                                         {entry.can_manage && (
                                                             <Button
                                                                 type="button"
