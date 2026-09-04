@@ -50,6 +50,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, TaromboSnapshot> $taromboSnapshots
  * @property-read Collection<int, FamilyTreeShare> $receivedFamilyTreeShares
  * @property-read TelegramAccount|null $telegramAccount
+ * @property-read Collection<int, OAuthAccount> $oauthAccounts
  * @property-read Collection<int, ChatGroup> $ownedChatGroups
  * @property-read Collection<int, ChatGroupMember> $chatGroupMemberships
  */
@@ -140,6 +141,12 @@ class User extends Authenticatable
     public function telegramAuthSession(): HasOne
     {
         return $this->hasOne(TelegramAuthSession::class);
+    }
+
+    /** @return HasMany<OAuthAccount, $this> */
+    public function oauthAccounts(): HasMany
+    {
+        return $this->hasMany(OAuthAccount::class);
     }
 
     /** @return HasMany<ChatGroup, $this> */

@@ -38,6 +38,7 @@ function baseLayout(
         case name === 'komunitas/index':
         case name === 'tentang/index':
         case name === 'auth/login':
+        case name === 'auth/complete-google-registration':
             return null;
         case name.startsWith('Error/'):
             return null;

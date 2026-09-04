@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\BudayaController;
+use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\ChatGroupController;
 use App\Http\Controllers\ChatGroupMemberController;
 use App\Http\Controllers\ContactController;
@@ -34,6 +35,13 @@ use App\Http\Controllers\TentangController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [NewsFeedController::class, 'index'])->name('home');
+
+Route::middleware('guest')->group(function (): void {
+    Route::get('auth/google/redirect', [GoogleAuthController::class, 'redirect'])->name('auth.google.redirect');
+    Route::get('auth/google/callback', [GoogleAuthController::class, 'callback'])->name('auth.google.callback');
+    Route::get('auth/google/complete', [GoogleAuthController::class, 'create'])->name('google.registration.create');
+    Route::post('auth/google/complete', [GoogleAuthController::class, 'store'])->name('google.registration.store');
+});
 
 Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 

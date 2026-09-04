@@ -432,7 +432,6 @@ function treeBelongsToFamily(
 
 export function SilsilahListCard({
     lineage,
-    margaLineage = [],
     selfId,
     familyTrees,
 }: {
@@ -1125,6 +1124,7 @@ export default function FamilyForm({
     fatherSuggestions,
     lockedMarga = null,
     lineage,
+    margaLineage = lineage ?? [],
     familyTrees = [],
     approvedMargaTrees = [],
     margaAccessMargaId = null,

@@ -77,6 +77,7 @@ class FortifyServiceProvider extends ServiceProvider
                 ->get(['id', 'name']),
             'regions' => IndonesiaRegions::all(),
             'turnstileSiteKey' => config('services.turnstile.site_key'),
+            'googleAuthEnabled' => filled(config('services.google.client_id')) && filled(config('services.google.client_secret')),
         ]));
 
         Fortify::resetPasswordView(fn (Request $request) => Inertia::render('auth/reset-password', [
