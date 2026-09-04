@@ -17,6 +17,7 @@ type Props = {
     initialPersonId?: string;
     familyTreeOptions: TaromboFamilyTreeOption[];
     selectedFamilyTreeId: number | null;
+    selectedMargaId: number | null;
     selectedTreePeople: TaromboPersonRow[] | null;
     margaTree: {
         margaName: string;
@@ -34,6 +35,7 @@ export default function TaromboFullscreen({
     initialPersonId,
     familyTreeOptions,
     selectedFamilyTreeId,
+    selectedMargaId,
     selectedTreePeople,
     margaTree,
 }: Props) {
@@ -50,6 +52,7 @@ export default function TaromboFullscreen({
                 initialPersonId={initialPersonId}
                 familyTreeOptions={familyTreeOptions}
                 selectedFamilyTreeId={selectedFamilyTreeId}
+                selectedMargaId={selectedMargaId}
                 selectedTreePeople={selectedTreePeople}
                 margaTree={margaTree}
             />

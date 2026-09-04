@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ContributionRequest;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeShare;
 use App\Models\IdentityRequest;
@@ -43,7 +42,7 @@ class TaromboController extends Controller
             ]);
         }
 
-        [$people, $margas, $alternativeTrees, $identity, $familyTreeOptions, $selectedFamilyTreeId, $selectedTreePeople] = $this->treeData($request);
+        [$people, $margas, $alternativeTrees, $identity, $familyTreeOptions, $selectedFamilyTreeId, $selectedMargaId, $selectedTreePeople, $margaTree] = $this->treeData($request);
 
         return Inertia::render('tarombo/index', [
             'people' => $people,
@@ -52,7 +51,9 @@ class TaromboController extends Controller
             'identity' => $identity,
             'familyTreeOptions' => $familyTreeOptions,
             'selectedFamilyTreeId' => $selectedFamilyTreeId,
+            'selectedMargaId' => $selectedMargaId,
             'selectedTreePeople' => $selectedTreePeople,
+            'margaTree' => $margaTree,
         ]);
     }
 
@@ -61,60 +62,7 @@ class TaromboController extends Controller
      */
     public function fullscreen(Request $request, string $view): Response
     {
-        [$people, $margas, $alternativeTrees, $identity, $familyTreeOptions, $selectedFamilyTreeId, $selectedTreePeople] = $this->treeData($request);
-        $service = app(TaromboTreeService::class);
-
-        $margaTree = null;
-
-        if ($request->filled('marga_id') || $request->filled('marga_direction')) {
-            $requestedMargaId = $request->integer('marga_id');
-            abort_unless(
-                $request->user()->isStaff()
-                || ($request->user()->isContributor()
-                    && $request->user()->accessibleMargaIds()->contains($requestedMargaId))
-                || (! $request->user()->isContributor()
-                    && $request->user()->approvedMargaAccessIds()->contains($requestedMargaId)),
-                403,
-            );
-
-            $direction = $request->string('marga_direction')->toString();
-            abort_unless(in_array($direction, ['upper', 'lower'], true), 404);
-
-            $marga = Marga::query()->with('identityPerson')->findOrFail($requestedMargaId);
-            abort_if($marga->identity_person_id === null || $marga->identityPerson === null, 404, 'Identitas marga belum dipilih.');
-
-            // The normal scoped payload can omit the marga identity for a
-            // non-staff account. A marga tree must always contain its own
-            // identity and the branch required by the selected direction,
-            // otherwise the React tree cannot resolve its visual root/path.
-            $identityRows = collect(
-                $direction === 'upper'
-                    ? $service->rowsForPersonWithAncestors($marga->identityPerson)
-                    : $service->rowsForPerson(
-                        $marga->identityPerson,
-                        maxDepth: (int) config('tarombo.public_max_depth'),
-                        maxNodes: (int) config('tarombo.public_max_nodes'),
-                    ),
-            );
-            $people = collect($people)
-                ->merge($identityRows)
-                ->when($direction === 'lower', fn (Collection $rows) => $rows->merge(
-                    $service->rows(
-                        Person::query()
-                            ->where('marga_id', $marga->id)
-                            ->orderBy('id'),
-                    ),
-                ))
-                ->unique('id')
-                ->values()
-                ->all();
-
-            $margaTree = [
-                'margaName' => $marga->name,
-                'identityPersonId' => (string) $marga->identity_person_id,
-                'direction' => $direction,
-            ];
-        }
+        [$people, $margas, $alternativeTrees, $identity, $familyTreeOptions, $selectedFamilyTreeId, $selectedMargaId, $selectedTreePeople, $margaTree] = $this->treeData($request);
 
         return Inertia::render('tarombo/fullscreen', [
             'people' => $people,
@@ -125,6 +73,7 @@ class TaromboController extends Controller
             'initialPersonId' => $request->query('person'),
             'familyTreeOptions' => $familyTreeOptions,
             'selectedFamilyTreeId' => $selectedFamilyTreeId,
+            'selectedMargaId' => $selectedMargaId,
             'selectedTreePeople' => $selectedTreePeople,
             'margaTree' => $margaTree,
         ]);
@@ -133,46 +82,48 @@ class TaromboController extends Controller
     /**
      * Build the scoped tarombo rows and marga legend for the current user.
      *
-     * @return array{0: mixed, 1: mixed, 2: mixed, 3: array<string, mixed>, 4: array<int, array<string, mixed>>, 5: int|null, 6: array<int, array<string, mixed>>|null}
+     * @return array{0: array<int, array<string, mixed>>, 1: array<int, array<string, mixed>>, 2: array<int, array<string, mixed>>, 3: array<string, mixed>, 4: array<int, array<string, mixed>>, 5: int|null, 6: int|null, 7: array<int, array<string, mixed>>, 8: array<string, mixed>|null}
      */
     private function treeData(Request $request): array
     {
         $user = $request->user();
         $user->loadMissing('currentPerson');
-        $isStaff = $user->isStaff();
         $service = app(TaromboTreeService::class);
-        $accessibleMargaIds = $isStaff || $user->isContributor()
-            ? $user->accessibleMargaIds()
-            : $user->accessibleMargaIds()
-                ->merge($user->approvedMargaAccessIds())
-                ->unique()
-                ->values();
-        $requestedMargaId = $request->filled('marga_id')
-            ? $request->integer('marga_id')
-            : null;
-        $alternativeMargaId = $requestedMargaId !== null
-            && $accessibleMargaIds->contains($requestedMargaId)
-                ? $requestedMargaId
-                : $user->marga_id;
-        $allowedPersonIds = $isStaff
-            ? null
-            : ($accessibleMargaIds->isNotEmpty()
-                ? $this->personIdsForMargaAndFemaleBranches($accessibleMargaIds)
-                : collect());
-
-        $rows = $service->rows(
-            Person::query()
-                ->when($allowedPersonIds !== null, fn (Builder $query) => $query->whereKey($allowedPersonIds))
-                ->orderBy('id'),
-        );
-        $selectableFamilyTrees = $this->selectableFamilyTrees($user);
+        $accountFamilyTrees = $this->accountFamilyTrees($user);
+        $approvedMargas = $this->approvedMargas($user);
         $requestedFamilyTreeId = $request->filled('family_tree')
             ? $request->integer('family_tree')
             : null;
+        $requestedMargaId = $request->filled('marga_id')
+            ? $request->integer('marga_id')
+            : null;
+
+        abort_if(
+            $requestedFamilyTreeId !== null && $requestedMargaId !== null,
+            422,
+            'Pilih satu sumber silsilah.',
+        );
+
         $selectedFamilyTree = $requestedFamilyTreeId !== null
-            ? $selectableFamilyTrees->firstWhere('id', $requestedFamilyTreeId)
-            : $selectableFamilyTrees
-                ->where('user_id', $user->id)
+            ? $accountFamilyTrees->firstWhere('id', $requestedFamilyTreeId)
+            : null;
+        $selectedMarga = $requestedMargaId !== null
+            ? $approvedMargas->firstWhere('id', $requestedMargaId)
+            : null;
+
+        abort_if(
+            $requestedFamilyTreeId !== null && $selectedFamilyTree === null,
+            403,
+            'Silsilah ini tidak tersedia di Silsilah Milik Akun.',
+        );
+        abort_if(
+            $requestedMargaId !== null && $selectedMarga === null,
+            403,
+            'Marga ini tidak tersedia di Daftar Silsilah Marga.',
+        );
+
+        if ($requestedFamilyTreeId === null && $requestedMargaId === null) {
+            $selectedFamilyTree = $accountFamilyTrees
                 ->sortBy([
                     ['is_primary', 'desc'],
                     ['updated_at', 'desc'],
@@ -180,40 +131,32 @@ class TaromboController extends Controller
                 ])
                 ->first();
 
-        abort_if(
-            $requestedFamilyTreeId !== null && $selectedFamilyTree === null,
-            403,
-            'Anda tidak memiliki akses ke silsilah yang dipilih.',
-        );
-        $selectedFamilyTreeId = $selectedFamilyTree?->id;
-        $selectedTreePeople = $selectedFamilyTree instanceof FamilyTree
-            ? $service->rowsForFamilyTree($selectedFamilyTree)
-            : null;
+            if ($selectedFamilyTree === null) {
+                $selectedMarga = $approvedMargas->first();
+            }
+        }
 
-        $visiblePersonIds = collect($rows)->pluck('id')->map(fn (string $id) => (int) $id);
-        $alternativeTrees = FamilyTree::query()
-            ->whereNotNull('based_on_id')
-            ->whereIn('root_person_id', $visiblePersonIds)
-            ->when(! $isStaff, fn (Builder $query) => $query->where(
-                fn (Builder $access) => $access
-                    ->whereBelongsTo($user)
-                    ->orWhereHas('contributionRequests', fn (Builder $requests) => $requests
-                        ->where('status', ContributionRequest::STATUS_APPROVED)
-                        ->whereHas('matchedFather', fn (Builder $father) => $father
-                            ->where('marga_id', $alternativeMargaId))),
-            ))
-            ->orderBy('root_person_id')
-            ->orderBy('created_at')
-            ->get()
-            ->map(function (FamilyTree $tree) use ($service, $allowedPersonIds): ?array {
-                $people = collect($service->rowsForFamilyTree($tree))
-                    ->when(
-                        $allowedPersonIds !== null,
-                        fn (Collection $rows) => $rows->whereIn(
-                            'id',
-                            $allowedPersonIds->map(fn (int $id) => (string) $id),
-                        ),
-                    );
+        $direction = $request->string('marga_direction', 'lower')->toString();
+        abort_if(
+            $selectedMarga !== null && ! in_array($direction, ['upper', 'lower'], true),
+            404,
+        );
+
+        $selectedFamilyTreeId = $selectedFamilyTree?->id;
+        $selectedMargaId = $selectedMarga?->id;
+        $selectedTreePeople = match (true) {
+            $selectedFamilyTree instanceof FamilyTree => $service->rowsForFamilyTree($selectedFamilyTree),
+            $selectedMarga instanceof Marga => $this->rowsForMarga($service, $selectedMarga, $direction),
+            default => [],
+        };
+        $rows = $selectedTreePeople;
+        $visiblePersonIds = collect($rows)->pluck('id');
+
+        $alternativeTrees = $accountFamilyTrees
+            ->filter(fn (FamilyTree $tree) => $tree->based_on_id !== null
+                && $visiblePersonIds->contains((string) $tree->root_person_id))
+            ->map(function (FamilyTree $tree) use ($service): ?array {
+                $people = collect($service->rowsForFamilyTree($tree));
                 $rootId = (string) $tree->root_person_id;
 
                 if (! $people->contains('id', $rootId)) {
@@ -253,6 +196,12 @@ class TaromboController extends Controller
             ->values()
             ->all();
 
+        $margaTree = $selectedMarga instanceof Marga ? [
+            'margaName' => $selectedMarga->name,
+            'identityPersonId' => (string) $selectedMarga->identity_person_id,
+            'direction' => $direction,
+        ] : null;
+
         $identityRequest = IdentityRequest::query()
             ->with(['person:id,name', 'reviewer:id,name'])
             ->where('requester_id', $user->id)
@@ -261,7 +210,7 @@ class TaromboController extends Controller
 
         return [
             $rows,
-            $service->margas($isStaff ? null : $accessibleMargaIds->all()),
+            $service->margas(),
             $alternativeTrees,
             [
                 'canSelectAnyPerson' => $user->isAdmin(),
@@ -277,114 +226,95 @@ class TaromboController extends Controller
                     'reason' => $identityRequest->rejection_reason,
                 ] : null,
             ],
-            $selectableFamilyTrees
+            $accountFamilyTrees
                 ->map(fn (FamilyTree $tree) => [
                     'id' => $tree->id,
+                    'value' => 'account:'.$tree->id,
                     'name' => $tree->name ?? $tree->rootPerson?->name ?? 'Silsilah',
                     'rootName' => $tree->rootPerson?->name ?? 'Akar belum ditentukan',
-                    'group' => $tree->approved_for_selection ? 'marga' : 'account',
+                    'group' => 'account',
                 ])
+                ->concat($approvedMargas->map(fn (Marga $marga) => [
+                    'id' => $marga->id,
+                    'value' => 'marga:'.$marga->id,
+                    'name' => 'Keluarga '.($marga->identityPerson?->name ?? $marga->name),
+                    'rootName' => $marga->identityPerson?->name ?? $marga->name,
+                    'group' => 'marga',
+                ]))
                 ->values()
                 ->all(),
             $selectedFamilyTreeId,
+            $selectedMargaId,
             $selectedTreePeople,
+            $margaTree,
         ];
     }
 
     /** @return \Illuminate\Database\Eloquent\Collection<int, FamilyTree> */
-    private function selectableFamilyTrees(User $user): \Illuminate\Database\Eloquent\Collection
+    private function accountFamilyTrees(User $user): \Illuminate\Database\Eloquent\Collection
     {
         return FamilyTree::query()
+            ->when(! $user->isAdmin(), fn (Builder $query) => $query->where(
+                fn (Builder $access) => $access
+                    ->whereBelongsTo($user)
+                    ->orWhereHas('shares', fn (Builder $shares) => $shares
+                        ->whereBelongsTo($user, 'recipient')
+                        ->where('status', FamilyTreeShare::STATUS_ACCEPTED)),
+            ))
             ->whereNotNull('root_person_id')
-            ->where(function (Builder $selectable): void {
-                $selectable
-                    ->whereNotNull('based_on_id')
-                    ->orWhereHas('rootPerson', fn (Builder $root) => $root
-                        ->whereNull('father_id')
-                        ->whereNull('mother_id')
-                        ->whereDoesntHave('familyTreeNodes', fn (Builder $nodes) => $nodes
-                            ->where(fn (Builder $parentage) => $parentage
-                                ->whereNotNull('father_node_id')
-                                ->orWhereNotNull('mother_node_id'))));
-            })
-            ->when(! $user->isAdmin(), function (Builder $query) use ($user): void {
-                $query->where(function (Builder $access) use ($user): void {
-                    $access->whereBelongsTo($user)
-                        ->orWhereHas('shares', fn (Builder $shares) => $shares
-                            ->whereBelongsTo($user, 'recipient')
-                            ->where('status', FamilyTreeShare::STATUS_ACCEPTED));
-
-                    if ($user->isContributor()) {
-                        $access->orWhereHas('contributionRequests', fn (Builder $requests) => $requests
-                            ->where('status', ContributionRequest::STATUS_APPROVED)
-                            ->whereHas('matchedFather', fn (Builder $father) => $father
-                                ->where('marga_id', $user->marga_id)));
-                    } elseif (! $user->isStaff() && ! $user->isContributor()) {
-                        $access->orWhereHas('contributionRequests', fn (Builder $requests) => $requests
-                            ->where('status', ContributionRequest::STATUS_APPROVED)
-                            ->whereHas('matchedFather', fn (Builder $father) => $father
-                                ->whereIn('marga_id', $user->approvedMargaAccessIds())));
-                    }
-
-                    if (! $user->isStaff()) {
-                        $margaIds = $user->isContributor()
-                            ? $user->accessibleMargaIds()
-                            : $user->approvedMargaAccessIds();
-
-                        $access->orWhere(function (Builder $adminTree) use ($margaIds): void {
-                            $adminTree
-                                ->whereHas('user', fn (Builder $owner) => $owner->whereIn('role', ['admin', 'subadmin']))
-                                ->whereHas('nodes.person', fn (Builder $person) => $person->whereIn('marga_id', $margaIds));
-                        });
-                    }
-                });
-            })
-            ->select(['id', 'user_id', 'root_person_id', 'name', 'is_primary', 'updated_at'])
             ->with(['rootPerson:id,name'])
-            ->withExists(['contributionRequests as approved_for_selection' => function (Builder $requests) use ($user): void {
-                $requests->where('status', ContributionRequest::STATUS_APPROVED)
-                    ->when(
-                        ! $user->isAdmin() && ! $user->isContributor(),
-                        fn (Builder $query) => $query->whereHas('matchedFather', fn (Builder $father) => $father
-                            ->whereIn('marga_id', $user->approvedMargaAccessIds())),
-                    )
-                    ->when(
-                        $user->isContributor(),
-                        fn (Builder $query) => $query->whereHas('matchedFather', fn (Builder $father) => $father
-                            ->where('marga_id', $user->marga_id)),
-                    );
-            }])
             ->latest('updated_at')
-            ->get();
+            ->get(['id', 'user_id', 'root_person_id', 'based_on_id', 'name', 'is_primary', 'updated_at'])
+            ->filter(fn (FamilyTree $tree) => $tree->rootPerson !== null)
+            ->values();
     }
 
-    /** @return Collection<int, int> */
-    private function personIdsForMargaAndFemaleBranches(Collection $margaIds): Collection
+    /** @return \Illuminate\Database\Eloquent\Collection<int, Marga> */
+    private function approvedMargas(User $user): \Illuminate\Database\Eloquent\Collection
     {
-        $visibleIds = Person::query()
-            ->whereIn('marga_id', $margaIds)
-            ->pluck('id')
-            ->map(fn (int $id) => $id);
-        $frontier = Person::query()
-            ->whereIn('marga_id', $margaIds)
-            ->where('gender', 'P')
-            ->pluck('id');
+        $margaIds = $user->isStaff()
+            ? null
+            : ($user->isContributor() ? $user->accessibleMargaIds() : $user->approvedMargaAccessIds());
 
-        while ($frontier->isNotEmpty()) {
-            $children = Person::query()
-                ->whereIn('father_id', $frontier)
-                ->whereNotIn('id', $visibleIds)
-                ->pluck('id');
-
-            if ($children->isEmpty()) {
-                break;
-            }
-
-            $visibleIds = $visibleIds->merge($children)->unique()->values();
-            $frontier = $children;
+        if (! $user->isStaff() && $margaIds->isEmpty()) {
+            return new \Illuminate\Database\Eloquent\Collection;
         }
 
-        return $visibleIds->values();
+        return Marga::query()
+            ->whereNotNull('identity_person_id')
+            ->when($margaIds !== null, fn (Builder $query) => $query->whereKey($margaIds))
+            ->with('identityPerson:id,name,father_id,marga_id')
+            ->orderBy('name')
+            ->get(['id', 'name', 'identity_person_id']);
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function rowsForMarga(TaromboTreeService $service, Marga $marga, string $direction): array
+    {
+        $identity = $marga->identityPerson;
+        abort_if($identity === null, 404, 'Identitas marga belum dipilih.');
+
+        $identityRows = collect(
+            $direction === 'upper'
+                ? $service->rowsForPersonWithAncestors($identity)
+                : $service->rowsForPerson(
+                    $identity,
+                    maxDepth: (int) config('tarombo.public_max_depth'),
+                    maxNodes: (int) config('tarombo.public_max_nodes'),
+                ),
+        );
+
+        return $identityRows
+            ->when($direction === 'lower', fn (Collection $rows) => $rows->merge(
+                $service->rows(
+                    Person::query()
+                        ->where('marga_id', $marga->id)
+                        ->orderBy('id'),
+                ),
+            ))
+            ->unique('id')
+            ->values()
+            ->all();
     }
 
     /**

@@ -31,8 +31,7 @@ test('staff can open an upper or lower marga tree for its identity person', func
                 ->where('margaTree.margaName', $marga->name)
                 ->where('margaTree.identityPersonId', (string) $identity->id)
                 ->where('margaTree.direction', $direction)
-                ->where('people.0.id', (string) $root->id)
-                ->where('people.1.id', (string) $identity->id));
+                ->where('people.0.id', (string) ($direction === 'upper' ? $root->id : $identity->id)));
     }
 });
 
@@ -54,7 +53,7 @@ test('marga tree requires a valid identity and staff access', function () {
             'marga_id' => $marga->id,
             'marga_direction' => 'lower',
         ]))
-        ->assertNotFound();
+        ->assertForbidden();
 });
 
 test('approved users receive the complete ancestor path for an upper marga tree', function () {

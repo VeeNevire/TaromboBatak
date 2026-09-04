@@ -247,7 +247,7 @@ export function FamilyTreeHistoryCard({
     pendingTreeShares = [],
 }: {
     entries: FamilyTreeHistoryEntry[];
-    approvedEntries?: FamilyTreeHistoryEntry[];
+    approvedEntries?: ApprovedMargaTreeEntry[];
     margaName?: string | null;
     margaId?: number | null;
     margaAccessStatus?: 'pending' | 'approved' | 'rejected' | null;
@@ -696,25 +696,22 @@ export function FamilyTreeHistoryCard({
                                                             <TreePine className="size-3.5" />{' '}
                                                             Buka
                                                         </Link>
-                                                        {entry.access ===
-                                                            'owner' && (
-                                                            <Link
-                                                                href={tarombo.fullscreen(
-                                                                    'tree',
-                                                                    {
-                                                                        query: {
-                                                                            family_tree:
-                                                                                entry.id,
-                                                                            person: entry.root_person_id,
-                                                                        },
+                                                        <Link
+                                                            href={tarombo.fullscreen(
+                                                                'tree',
+                                                                {
+                                                                    query: {
+                                                                        family_tree:
+                                                                            entry.id,
+                                                                        person: entry.root_person_id,
                                                                     },
-                                                                )}
-                                                                className="inline-flex items-center gap-1.5 rounded-lg border border-tb-primary px-3 py-2 text-xs font-semibold text-tb-primary transition-colors hover:bg-tb-primary/10"
-                                                            >
-                                                                <Maximize2 className="size-3.5" />{' '}
-                                                                Buka Full
-                                                            </Link>
-                                                        )}
+                                                                },
+                                                            )}
+                                                            className="inline-flex items-center gap-1.5 rounded-lg border border-tb-primary px-3 py-2 text-xs font-semibold text-tb-primary transition-colors hover:bg-tb-primary/10"
+                                                        >
+                                                            <Maximize2 className="size-3.5" />{' '}
+                                                            Buka Full
+                                                        </Link>
                                                         {entry.can_manage && (
                                                             <Button
                                                                 type="button"
