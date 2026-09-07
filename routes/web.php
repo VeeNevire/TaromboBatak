@@ -228,3 +228,5 @@ Route::middleware('auth')->post(
 )->name('marga-access-requests.store');
 
 require __DIR__.'/settings.php';
+
+Route::fallback(fn () => abort(404));

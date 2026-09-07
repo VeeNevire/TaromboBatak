@@ -87,19 +87,22 @@ class ContributionController extends Controller
             'Akar silsilah harus berasal dari marga akun Anda.',
         );
 
-        $alreadySubmitted = $familyTree->contributionRequests()
-            ->whereIn('status', [ContributionRequest::STATUS_PENDING, ContributionRequest::STATUS_APPROVED])
-            ->exists();
+        $contribution = DB::transaction(function () use ($familyTree, $user, $root) {
+            $familyTree = FamilyTree::query()->lockForUpdate()->findOrFail($familyTree->id);
+            $alreadySubmitted = $familyTree->contributionRequests()
+                ->whereIn('status', [ContributionRequest::STATUS_PENDING, ContributionRequest::STATUS_APPROVED])
+                ->exists();
 
-        abort_if($alreadySubmitted, 409, 'Silsilah ini sudah diajukan atau telah disetujui.');
+            abort_if($alreadySubmitted, 409, 'Silsilah ini sudah diajukan atau telah disetujui.');
 
-        $contribution = ContributionRequest::create([
-            'requester_id' => $user->id,
-            'matched_father_id' => $root->id,
-            'subject_person_id' => $root->id,
-            'family_tree_id' => $familyTree->id,
-            'affected_person_ids' => [],
-        ]);
+            return ContributionRequest::create([
+                'requester_id' => $user->id,
+                'matched_father_id' => $root->id,
+                'subject_person_id' => $root->id,
+                'family_tree_id' => $familyTree->id,
+                'affected_person_ids' => [],
+            ]);
+        });
         $contribution->load(['requester', 'subjectPerson', 'matchedFather']);
 
         User::query()
@@ -378,7 +381,9 @@ class ContributionController extends Controller
                 'rejection_reason' => null,
             ]);
 
-            if ($contribution->familyTree !== null) {
+            // A whole-tree submission reviews its existing version nodes.
+            // Only legacy father-match submissions need global ancestry synced.
+            if ($contribution->familyTree !== null && $affectedIds !== []) {
                 $ancestorIds = [];
                 $current = $contribution->matchedFather;
                 $seen = [];

@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
 
 /**
  * @property int $id
@@ -34,6 +35,22 @@ use Illuminate\Support\Carbon;
 #[Fillable(['user_id', 'root_person_id', 'name', 'description', 'source_name', 'source_url', 'based_on_id', 'is_primary'])]
 class FamilyTree extends Model
 {
+    public function structureIsLocked(): bool
+    {
+        return $this->based_on_id !== null && $this->contributionRequests()
+            ->whereIn('status', [ContributionRequest::STATUS_PENDING, ContributionRequest::STATUS_APPROVED])
+            ->exists();
+    }
+
+    public function ensureStructureIsEditable(): void
+    {
+        if ($this->structureIsLocked()) {
+            throw ValidationException::withMessages([
+                'entries' => 'Versi ini sedang ditinjau atau sudah disetujui. Buat versi alternatif baru untuk mengubah strukturnya.',
+            ]);
+        }
+    }
+
     /**
      * @return BelongsTo<User, $this>
      */

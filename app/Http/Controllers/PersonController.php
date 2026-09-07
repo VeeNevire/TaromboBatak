@@ -386,13 +386,19 @@ class PersonController extends Controller
             collect($versionTrees)->firstWhere('id', $request->integer('version_tree')),
             'name',
         );
+        abort_if(
+            $request->filled('version_tree') && $selectedVersionName === null,
+            404,
+            'Versi silsilah tidak tersedia untuk orang ini.',
+        );
+        $selectedVersionId = $selectedVersionName !== null ? $request->integer('version_tree') : null;
+        $personMargaScope = $user->isStaff() ? null : ($user->isContributor() ? $person->marga_id : $user->marga_id);
 
         return Inertia::render('people/show', [
             'person' => $this->familyPayloadVisibleToUser(
-                $this->familyPayload(
-                    $person,
-                    $user->isStaff() ? null : ($user->isContributor() ? $person->marga_id : $user->marga_id),
-                ),
+                $selectedVersionId !== null
+                    ? $this->familyPayloadForVersion($person, $selectedVersionId, $personMargaScope)
+                    : $this->familyPayload($person, $personMargaScope),
                 $user,
             ),
             'regions' => IndonesiaRegions::all(),
@@ -405,6 +411,7 @@ class PersonController extends Controller
             'margaAccessStatus' => $this->margaAccessStatus($user, $user->marga_id),
             'versionTrees' => $versionTrees,
             'selectedVersionName' => $selectedVersionName,
+            'selectedVersionId' => $selectedVersionId,
             ...$this->familyTreeSharingPayload($user),
             'canPublish' => $user->isStaff(),
             'readOnly' => ! $user->isStaff(),
@@ -626,7 +633,7 @@ class PersonController extends Controller
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Versi alternatif berhasil dibuat.')]);
 
-        return to_route('family-trees.show', $copy);
+        return to_route('people.edit', ['person' => $copy->root_person_id, 'version_tree' => $copy->id]);
     }
 
     /** Create the first alternative for a family whose V1 is the main graph. */
@@ -875,7 +882,7 @@ class PersonController extends Controller
 
             Inertia::flash('toast', ['type' => 'success', 'message' => __('Versi silsilah berhasil diperbarui.')]);
 
-            return to_route('people.show', $person);
+            return to_route('people.show', ['person' => $person, 'version_tree' => $familyTree->id]);
         }
 
         if (! $isStaff) {

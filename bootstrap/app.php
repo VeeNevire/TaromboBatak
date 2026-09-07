@@ -120,6 +120,14 @@ return Application::configure(basePath: dirname(__DIR__))
             if ($renderBranded) {
                 return Inertia::render('Error/Page', [
                     'status' => $status,
+                    // Exception responses bypass the normal Inertia shared
+                    // props, but an authenticated error page still needs the
+                    // sidebar's session context.
+                    'auth' => ['user' => $request->user()],
+                    'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+                    'unreadContributionCount' => 0,
+                    'unreadEventCount' => 0,
+                    'unreadStoryCount' => 0,
                 ])->toResponse($request)->setStatusCode($status);
             }
 

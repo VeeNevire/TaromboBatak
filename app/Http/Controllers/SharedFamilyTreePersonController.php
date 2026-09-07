@@ -67,6 +67,8 @@ class SharedFamilyTreePersonController extends Controller
         }
 
         $person = DB::transaction(function () use ($validated, $request, $familyTree, $fatherNode, $motherNode, $numbering): Person {
+            $familyTree = FamilyTree::query()->lockForUpdate()->findOrFail($familyTree->id);
+            $familyTree->ensureStructureIsEditable();
             $birthOrder = $validated['birth_order'] ?? ((int) $familyTree->nodes()
                 ->where('father_node_id', $fatherNode->id)
                 ->max('birth_order') + 1);

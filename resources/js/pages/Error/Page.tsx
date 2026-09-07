@@ -1,14 +1,17 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import { MotionConfig, motion } from 'framer-motion';
 import { BookOpen, Home, Network, TreePine, Users } from 'lucide-react';
 import { Reveal } from '@/components/landing/reveal';
 import { SiteFooter } from '@/components/landing/site-footer';
 import { SiteHeader } from '@/components/landing/site-header';
+import AppLayout from '@/layouts/app-layout';
+import { dashboard } from '@/routes';
 import { home } from '@/routes';
 import budaya from '@/routes/budaya';
 import komunitas from '@/routes/komunitas';
 import marga from '@/routes/marga';
 import tarombo from '@/routes/tarombo';
+import type { User } from '@/types';
 
 type ErrorCopy = {
     label: string;
@@ -118,6 +121,9 @@ function LostAncestorMotif() {
 }
 
 export default function ErrorPage({ status }: { status: number }) {
+    const { auth } = usePage<{
+        auth?: { user?: User | null };
+    }>().props;
     const copy: ErrorCopy = errorCopy[status] ?? {
         label: String(status),
         title: 'Terjadi Kesalahan',
@@ -125,83 +131,97 @@ export default function ErrorPage({ status }: { status: number }) {
             'Ada sesuatu yang tidak beres. Silakan coba lagi beberapa saat.',
     };
 
+    const content = (
+        <main className="relative flex-1 overflow-hidden">
+            <div
+                aria-hidden="true"
+                className="bg-tb-gorga absolute inset-0 opacity-60"
+            />
+            <div
+                aria-hidden="true"
+                className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(179,75,30,0.08),transparent_60%)]"
+            />
+
+            <section className="relative mx-auto flex min-h-[68vh] max-w-3xl flex-col items-center px-6 py-16 text-center md:py-24">
+                <Reveal variant="scaleUp">
+                    <LostAncestorMotif />
+                </Reveal>
+
+                <Reveal delay={0.1}>
+                    <div className="mt-8 inline-flex items-center gap-2 rounded-full border border-tb-primary/20 bg-tb-primary/10 px-4 py-1.5 text-sm font-semibold tracking-wide text-tb-primary">
+                        {copy.label} · Halaman Tidak Ditemukan
+                    </div>
+                </Reveal>
+
+                <Reveal delay={0.15}>
+                    <h1 className="mt-6 font-display text-4xl leading-tight font-bold md:text-5xl">
+                        {copy.title}
+                    </h1>
+                </Reveal>
+
+                <Reveal delay={0.2}>
+                    <p className="mt-5 max-w-xl text-lg leading-relaxed text-tb-on-surface-variant">
+                        {copy.description}
+                    </p>
+                </Reveal>
+
+                <Reveal delay={0.3}>
+                    <div className="mt-9 flex flex-wrap items-center justify-center gap-4">
+                        <Link
+                            href={home()}
+                            className="flex items-center gap-2 rounded-full bg-tb-primary px-7 py-3 font-medium text-white transition-colors hover:bg-tb-primary-light"
+                        >
+                            <Home className="h-4 w-4" />
+                            Kembali ke Beranda
+                        </Link>
+                        <Link
+                            href={tarombo.view()}
+                            className="flex items-center gap-2 rounded-full border border-tb-outline bg-tb-surface-bright px-7 py-3 font-medium transition-colors hover:border-tb-primary hover:text-tb-primary"
+                        >
+                            <Network className="h-4 w-4" />
+                            Telusuri Tarombo
+                        </Link>
+                    </div>
+                </Reveal>
+
+                <Reveal delay={0.35}>
+                    <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+                        {quickLinks.map((link) => (
+                            <Link
+                                key={link.label}
+                                href={link.href}
+                                className="inline-flex items-center gap-2 rounded-full border border-tb-outline-variant bg-tb-surface-bright/70 px-4 py-2 text-sm font-medium text-tb-on-surface-variant transition-colors hover:text-tb-primary"
+                            >
+                                <link.icon className="h-4 w-4" />
+                                {link.label}
+                            </Link>
+                        ))}
+                    </div>
+                </Reveal>
+            </section>
+        </main>
+    );
+
     return (
         <MotionConfig reducedMotion="user">
             <div className="bg-tb-surface font-body text-tb-on-surface antialiased">
                 <Head title={copy.title} />
-
-                <SiteHeader />
-
-                <main className="relative overflow-hidden">
-                    <div
-                        aria-hidden="true"
-                        className="bg-tb-gorga absolute inset-0 opacity-60"
-                    />
-                    <div
-                        aria-hidden="true"
-                        className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(179,75,30,0.08),transparent_60%)]"
-                    />
-
-                    <section className="relative mx-auto flex min-h-[68vh] max-w-3xl flex-col items-center px-6 py-16 text-center md:py-24">
-                        <Reveal variant="scaleUp">
-                            <LostAncestorMotif />
-                        </Reveal>
-
-                        <Reveal delay={0.1}>
-                            <div className="mt-8 inline-flex items-center gap-2 rounded-full border border-tb-primary/20 bg-tb-primary/10 px-4 py-1.5 text-sm font-semibold tracking-wide text-tb-primary">
-                                {copy.label} · Halaman Tidak Ditemukan
-                            </div>
-                        </Reveal>
-
-                        <Reveal delay={0.15}>
-                            <h1 className="mt-6 font-display text-4xl leading-tight font-bold md:text-5xl">
-                                {copy.title}
-                            </h1>
-                        </Reveal>
-
-                        <Reveal delay={0.2}>
-                            <p className="mt-5 max-w-xl text-lg leading-relaxed text-tb-on-surface-variant">
-                                {copy.description}
-                            </p>
-                        </Reveal>
-
-                        <Reveal delay={0.3}>
-                            <div className="mt-9 flex flex-wrap items-center justify-center gap-4">
-                                <Link
-                                    href={home()}
-                                    className="flex items-center gap-2 rounded-full bg-tb-primary px-7 py-3 font-medium text-white transition-colors hover:bg-tb-primary-light"
-                                >
-                                    <Home className="h-4 w-4" />
-                                    Kembali ke Beranda
-                                </Link>
-                                <Link
-                                    href={tarombo.view()}
-                                    className="flex items-center gap-2 rounded-full border border-tb-outline bg-tb-surface-bright px-7 py-3 font-medium transition-colors hover:border-tb-primary hover:text-tb-primary"
-                                >
-                                    <Network className="h-4 w-4" />
-                                    Telusuri Tarombo
-                                </Link>
-                            </div>
-                        </Reveal>
-
-                        <Reveal delay={0.35}>
-                            <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-                                {quickLinks.map((link) => (
-                                    <Link
-                                        key={link.label}
-                                        href={link.href}
-                                        className="inline-flex items-center gap-2 rounded-full border border-tb-outline-variant bg-tb-surface-bright/70 px-4 py-2 text-sm font-medium text-tb-on-surface-variant transition-colors hover:text-tb-primary"
-                                    >
-                                        <link.icon className="h-4 w-4" />
-                                        {link.label}
-                                    </Link>
-                                ))}
-                            </div>
-                        </Reveal>
-                    </section>
-                </main>
-
-                <SiteFooter />
+                {auth?.user ? (
+                    <AppLayout
+                        breadcrumbs={[
+                            { title: 'Dashboard', href: dashboard() },
+                            { title: copy.title, href: '#' },
+                        ]}
+                    >
+                        {content}
+                    </AppLayout>
+                ) : (
+                    <>
+                        <SiteHeader />
+                        {content}
+                        <SiteFooter />
+                    </>
+                )}
             </div>
         </MotionConfig>
     );
