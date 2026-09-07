@@ -735,8 +735,8 @@ export function FamilyTreeHistoryCard({
                                                         )}
                                                         {entry.can_manage && (
                                                             <Link
-                                                                href={people.familyVersion.duplicate(
-                                                                    entry.root_person_id,
+                                                                href={familyTrees.duplicate(
+                                                                    entry.id,
                                                                 )}
                                                                 method="post"
                                                                 as="button"

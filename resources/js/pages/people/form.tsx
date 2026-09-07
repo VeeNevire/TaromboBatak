@@ -35,6 +35,7 @@ type Props = {
     margaAccessStatus?: 'pending' | 'approved' | 'rejected' | null;
     versionTrees?: FamilyTreeHistoryEntry[];
     selectedVersionName?: string | null;
+    selectedVersionId?: number | null;
     shareableAccounts?: ShareableAccount[];
     pendingTreeShares?: PendingTreeShare[];
     canPublish: boolean;
@@ -54,6 +55,7 @@ export default function PersonForm({
     margaAccessStatus,
     versionTrees,
     selectedVersionName,
+    selectedVersionId,
     shareableAccounts,
     pendingTreeShares,
     canPublish,
@@ -118,6 +120,7 @@ export default function PersonForm({
                     margaAccessStatus={margaAccessStatus}
                     versionTrees={versionTrees}
                     selectedVersionName={selectedVersionName}
+                    selectedVersionId={selectedVersionId}
                     showFamilyTreeHistory={false}
                     canPublish={canPublish}
                 />

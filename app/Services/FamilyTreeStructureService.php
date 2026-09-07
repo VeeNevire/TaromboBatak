@@ -19,6 +19,8 @@ class FamilyTreeStructureService
     public function update(FamilyTree $tree, array $entries): void
     {
         DB::transaction(function () use ($tree, $entries): void {
+            $tree = FamilyTree::query()->lockForUpdate()->findOrFail($tree->id);
+            $tree->ensureStructureIsEditable();
             $nodes = $tree->nodes()->get()->keyBy('id');
             $parents = $nodes->mapWithKeys(fn (FamilyTreeNode $node) => [$node->id => $node->father_node_id])->all();
             $orders = [];
@@ -68,6 +70,10 @@ class FamilyTreeStructureService
      */
     public function updateFromFamilyForm(FamilyTree $tree, Person $focus, array $data): void
     {
+        if (($data['name'] ?? $focus->name) !== $focus->name) {
+            throw ValidationException::withMessages(['name' => 'Biodata tidak diubah pada versi alternatif.']);
+        }
+
         $nodes = $tree->nodes()->get()->keyBy('person_id');
         $focusNode = $nodes->get($focus->id);
 
@@ -87,6 +93,9 @@ class FamilyTreeStructureService
 
         $entries = [];
         $fatherNode = $nodeForPerson(data_get($data, 'father.id'));
+        if (filled(data_get($data, 'father.id')) && $fatherNode === null) {
+            throw ValidationException::withMessages(['father.id' => 'Ayah harus berasal dari versi silsilah yang sama.']);
+        }
         $entries[$focusNode->id] = [
             'id' => $focusNode->id,
             'father_node_id' => $fatherNode?->id,
@@ -97,7 +106,17 @@ class FamilyTreeStructureService
 
         foreach (['children', 'ownChildren'] as $group) {
             foreach (($data[$group] ?? []) as $index => $row) {
-                if (! is_array($row) || ! filled($row['id'] ?? null)) {
+                if (! is_array($row)) {
+                    continue;
+                }
+
+                if (! filled($row['id'] ?? null)) {
+                    if (filled($row['name'] ?? null)) {
+                        throw ValidationException::withMessages([
+                            $group.'.'.$index.'.id' => 'Tambahkan anggota baru pada silsilah utama terlebih dahulu, lalu buat versi alternatifnya.',
+                        ]);
+                    }
+
                     continue;
                 }
 

@@ -108,7 +108,7 @@ export default function PersonSilsilah(props: Props) {
                                         Alternatif
                                     </Link>
                                     <Link
-                                        href={`${people.edit(props.familyTree.rootPersonId).url}#daftar-silsilah`}
+                                        href={`${people.edit(props.familyTree.rootPersonId, { query: { version_tree: props.familyTree.id } }).url}#daftar-silsilah`}
                                         className="inline-flex items-center gap-1.5 rounded-lg border border-tb-outline-variant px-3 py-1.5 text-sm font-medium text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
                                     >
                                         <Pencil className="size-3.5" /> Ubah

@@ -104,7 +104,7 @@ test('the existing family form updates an alternative version without changing g
                 ['id' => $firstChild->id, 'name' => $firstChild->name, 'gender' => 'L'],
             ],
         ])
-        ->assertRedirect(route('people.show', $root));
+        ->assertRedirect(route('people.show', ['person' => $root, 'version_tree' => $alternative->id]));
 
     expect($tree->nodes()->where('person_id', $firstChild->id)->value('birth_order'))->toBe(1)
         ->and($tree->nodes()->where('person_id', $secondChild->id)->value('birth_order'))->toBe(2)

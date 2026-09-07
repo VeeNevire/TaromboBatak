@@ -2,13 +2,21 @@
 
 namespace App\Http\Requests;
 
+use App\Support\IndonesiaRegions;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use App\Support\IndonesiaRegions;
 
 class UpdatePersonRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        // Old open tabs may submit a null form value despite a selected URL.
+        if ($this->query->has('version_tree')) {
+            $this->merge(['version_tree' => $this->query('version_tree')]);
+        }
+    }
+
     /**
      * Get the validation rules that apply to the request.
      *
