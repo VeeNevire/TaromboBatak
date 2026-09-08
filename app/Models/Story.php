@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -71,6 +72,12 @@ class Story extends Model
     public function marga(): BelongsTo
     {
         return $this->belongsTo(Marga::class);
+    }
+
+    /** @return BelongsToMany<Marga, $this> */
+    public function relatedMargas(): BelongsToMany
+    {
+        return $this->belongsToMany(Marga::class, 'marga_story');
     }
 
     /** @return BelongsTo<User, $this> */

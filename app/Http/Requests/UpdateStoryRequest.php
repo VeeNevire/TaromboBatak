@@ -16,6 +16,8 @@ class UpdateStoryRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'related_marga_ids' => ['sometimes', 'array'],
+            'related_marga_ids.*' => ['required', 'integer', 'distinct', 'exists:margas,id'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string'],
             'image' => ['nullable', 'url'],

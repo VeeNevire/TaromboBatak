@@ -3,10 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
@@ -19,10 +21,38 @@ use Illuminate\Support\Carbon;
  * @property-read User $author
  * @property-read Collection<int, FeedComment> $comments
  */
-#[Fillable(['user_id', 'body'])]
+#[Fillable(['user_id', 'body', 'audience'])]
 class FeedPost extends Model
 {
     use HasFactory;
+
+    protected $attributes = ['audience' => 'public'];
+
+    /** @return BelongsToMany<Marga, $this> */
+    public function audienceMargas(): BelongsToMany
+    {
+        return $this->belongsToMany(Marga::class, 'feed_post_marga');
+    }
+
+    /** @param Builder<FeedPost> $query */
+    public function scopeVisibleTo(Builder $query, ?User $user): void
+    {
+        if ($user === null) {
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+
+        $query->where(function (Builder $query) use ($user) {
+            $query->where('audience', 'public')->orWhere('user_id', $user->id);
+            if ($user->marga_id !== null) {
+                $query->orWhere(function (Builder $query) use ($user) {
+                    $query->where('audience', 'marga')
+                        ->whereHas('audienceMargas', fn (Builder $margas) => $margas->whereKey($user->marga_id));
+                });
+            }
+        });
+    }
 
     /** @return BelongsTo<User, $this> */
     public function author(): BelongsTo

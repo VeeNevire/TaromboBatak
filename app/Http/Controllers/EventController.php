@@ -134,16 +134,22 @@ class EventController extends Controller
         $user = $request->user();
         Gate::authorize('create', Event::class);
         $requiresApproval = ! $user->isStaff() && ! $user->isContributor();
-        $margaId = $user->isStaff() ? $request->integer('marga_id') : $user->marga_id;
+        $relatedMargaIds = $request->validated('related_marga_ids');
+        $margaId = $user->isStaff() ? ($relatedMargaIds[0] ?? $request->integer('marga_id')) : $user->marga_id;
         abort_if($margaId === null, 403, 'Akun Anda belum memiliki marga.');
 
-        $event = Event::create([
-            ...$request->validated(),
-            'created_by' => $user->id,
-            'marga_id' => $margaId,
-            'status' => $requiresApproval ? Event::STATUS_PENDING : Event::STATUS_APPROVED,
-            'published' => $requiresApproval ? false : $request->boolean('published'),
-        ]);
+        $event = DB::transaction(function () use ($request, $user, $margaId, $requiresApproval, $relatedMargaIds) {
+            $event = Event::create([
+                ...$request->safe()->except('related_marga_ids'),
+                'created_by' => $user->id,
+                'marga_id' => $margaId,
+                'status' => $requiresApproval ? Event::STATUS_PENDING : Event::STATUS_APPROVED,
+                'published' => $requiresApproval ? false : $request->boolean('published'),
+            ]);
+            $event->relatedMargas()->sync($relatedMargaIds ?? [$margaId]);
+
+            return $event;
+        });
 
         if ($requiresApproval) {
             $this->notifyContributors($event);
@@ -165,6 +171,7 @@ class EventController extends Controller
     public function edit(Request $request, Event $event): Response
     {
         Gate::authorize('update', $event);
+        $relatedMargaIds = $event->relatedMargas()->allRelatedIds()->all();
 
         return Inertia::render('events/form', [
             'event' => [
@@ -176,6 +183,7 @@ class EventController extends Controller
                 'date' => $event->date->format('Y-m-d'),
                 'published' => $event->published,
                 'marga_id' => $event->marga_id,
+                'related_marga_ids' => $relatedMargaIds ?: ($event->marga_id ? [$event->marga_id] : []),
                 'status' => $event->status,
                 'rejection_reason' => $event->rejection_reason,
             ],
@@ -196,7 +204,11 @@ class EventController extends Controller
 
             $requiresApproval = ! $user->isStaff() && ! $user->isContributor();
             $canApproveDirectly = $user->isAdmin() || $user->isContributor();
-            $margaId = $user->isStaff() ? $request->integer('marga_id') : $user->marga_id;
+            $relatedMargaIds = $request->validated('related_marga_ids');
+            $margaId = $user->isStaff()
+                ? ($relatedMargaIds === null ? $request->integer('marga_id')
+                    : (in_array($event->marga_id, $relatedMargaIds) ? $event->marga_id : $relatedMargaIds[0]))
+                : $user->marga_id;
             abort_if($margaId === null, 403, 'Akun Anda belum memiliki marga.');
             $nextStatus = $requiresApproval
                 ? Event::STATUS_PENDING
@@ -204,7 +216,7 @@ class EventController extends Controller
             $notifyReviewers = $requiresApproval
                 || ($event->status === Event::STATUS_PENDING && $event->marga_id !== $margaId);
             $updates = [
-                ...$request->validated(),
+                ...$request->safe()->except('related_marga_ids'),
                 'marga_id' => $margaId,
                 'status' => $nextStatus,
                 'published' => $nextStatus === Event::STATUS_APPROVED && $request->boolean('published'),
@@ -221,6 +233,9 @@ class EventController extends Controller
             }
 
             $event->update($updates);
+            if ($relatedMargaIds !== null) {
+                $event->relatedMargas()->sync($relatedMargaIds);
+            }
 
             return [$event, $requiresApproval, $notifyReviewers];
         });
@@ -327,7 +342,7 @@ class EventController extends Controller
     protected function formOptions(User $user): array
     {
         return [
-            'margas' => $user->isStaff() ? Marga::query()->orderBy('name')->get(['id', 'name']) : [],
+            'margas' => Marga::query()->orderBy('name')->get(['id', 'name']),
             'lockedMarga' => ! $user->isStaff() ? $user->marga?->only(['id', 'name']) : null,
             'canPublish' => $user->isStaff() || $user->isContributor(),
         ];

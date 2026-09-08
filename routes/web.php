@@ -191,6 +191,7 @@ Route::middleware(['auth', 'role.staff'])->group(function () {
     Route::get('people/{person}/preview', [PersonController::class, 'preview'])->name('people.preview');
     Route::get('people/{person}/silsilah', [PersonController::class, 'silsilah'])->name('people.silsilah');
     Route::get('dashboard/marga', [MargaController::class, 'index'])->name('marga.index');
+    Route::get('dashboard/marga/{marga}/related-content', [MargaController::class, 'relatedContent'])->name('marga.related-content');
     Route::post('dashboard/marga', [MargaController::class, 'store'])->name('marga.store');
     Route::put('dashboard/marga/{marga}', [MargaController::class, 'update'])->name('marga.update');
     Route::delete('dashboard/marga/{marga}', [MargaController::class, 'destroy'])->name('marga.destroy');

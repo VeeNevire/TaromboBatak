@@ -11,6 +11,7 @@ import {
     Newspaper,
     Send,
 } from 'lucide-react';
+import { useState } from 'react';
 import { store as storeFeedComment } from '@/actions/App/Http/Controllers/FeedCommentController';
 import { store as storeFeedPost } from '@/actions/App/Http/Controllers/FeedPostController';
 import { AppAvatar } from '@/components/app-avatar';
@@ -22,6 +23,9 @@ import {
     CardFooter,
     CardHeader,
 } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { dashboard } from '@/routes';
 import { login } from '@/routes';
 import newsFeed from '@/routes/news-feed';
@@ -45,10 +49,12 @@ type FeedItem = {
     meta: string | null;
     created_at: string | null;
     comments: FeedComment[];
+    audience_label?: string;
 };
 
 type NewsFeedProps = {
     items: FeedItem[];
+    margas: { id: number; name: string }[];
 };
 
 const feedLabels = {
@@ -80,8 +86,18 @@ function formatDate(value: string | null): string {
     }).format(new Date(value));
 }
 
-export default function NewsFeed({ items }: NewsFeedProps) {
+export default function NewsFeed({ items, margas }: NewsFeedProps) {
     const { auth } = usePage().props;
+    const [audience, setAudience] = useState<'public' | 'marga'>('public');
+    const [selectedMargas, setSelectedMargas] = useState<number[]>([]);
+    const [margaSearch, setMargaSearch] = useState('');
+    const audienceLabel =
+        audience === 'public'
+            ? 'Publik'
+            : margas
+                  .filter((marga) => selectedMargas.includes(marga.id))
+                  .map((marga) => marga.name)
+                  .join(', ') || 'Pilih marga';
 
     return (
         <>
@@ -91,10 +107,10 @@ export default function NewsFeed({ items }: NewsFeedProps) {
                 <div className="border-b border-tb-outline-variant pb-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                        <Newspaper className="size-6 text-tb-primary" />
-                        <h1 className="font-display text-2xl font-bold text-tb-on-surface md:text-3xl">
-                            News Feed
-                        </h1>
+                            <Newspaper className="size-6 text-tb-primary" />
+                            <h1 className="font-display text-2xl font-bold text-tb-on-surface md:text-3xl">
+                                News Feed
+                            </h1>
                         </div>
                         <span className="text-xs text-tb-on-surface-variant">
                             Kabar keluarga
@@ -107,13 +123,21 @@ export default function NewsFeed({ items }: NewsFeedProps) {
                         <CardContent className="p-4">
                             <Form
                                 {...storeFeedPost.form()}
+                                onSuccess={() => {
+                                    setAudience('public');
+                                    setSelectedMargas([]);
+                                    setMargaSearch('');
+                                }}
                                 options={{ preserveScroll: true }}
                                 resetOnSuccess
                             >
                                 {({ errors, processing }) => (
                                     <div className="grid gap-3">
                                         <div className="flex items-start gap-3">
-                                            <AppAvatar name={auth.user!.name} className="mt-0.5" />
+                                            <AppAvatar
+                                                name={auth.user!.name}
+                                                className="mt-0.5"
+                                            />
                                             <textarea
                                                 name="body"
                                                 rows={3}
@@ -123,13 +147,174 @@ export default function NewsFeed({ items }: NewsFeedProps) {
                                                 className="min-h-20 flex-1 resize-none rounded-2xl border border-tb-outline-variant bg-tb-surface-container/40 px-4 py-3 text-sm text-tb-on-surface outline-none placeholder:text-tb-on-surface-variant focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
                                             />
                                         </div>
-                                        <InputError message={errors.body} className="ml-11" />
-                                        <div className="flex justify-end">
-                                            <Button type="submit" disabled={processing} className="rounded-full px-5">
+                                        <InputError
+                                            message={errors.body}
+                                            className="ml-11"
+                                        />
+                                        <input
+                                            type="hidden"
+                                            name="audience"
+                                            value={audience}
+                                        />
+                                        {audience === 'marga' &&
+                                            selectedMargas.map((id) => (
+                                                <input
+                                                    key={id}
+                                                    type="hidden"
+                                                    name="marga_ids[]"
+                                                    value={id}
+                                                />
+                                            ))}
+                                        <div className="flex flex-wrap items-start justify-end gap-2">
+                                            <details className="w-full rounded-xl border border-tb-outline-variant bg-tb-surface-bright sm:w-64">
+                                                <summary
+                                                    aria-label="Pilih audiens status"
+                                                    className="cursor-pointer px-3 py-2 text-sm text-tb-on-surface focus-visible:outline-2 focus-visible:outline-tb-primary"
+                                                >
+                                                    {audienceLabel}
+                                                </summary>
+                                                <div className="grid gap-3 border-t border-tb-outline-variant p-3">
+                                                    <Label className="flex cursor-pointer items-center gap-2">
+                                                        <Checkbox
+                                                            checked={
+                                                                audience ===
+                                                                'public'
+                                                            }
+                                                            onCheckedChange={(
+                                                                checked,
+                                                            ) => {
+                                                                setAudience(
+                                                                    checked ===
+                                                                        true
+                                                                        ? 'public'
+                                                                        : 'marga',
+                                                                );
+                                                                setSelectedMargas(
+                                                                    [],
+                                                                );
+                                                            }}
+                                                        />
+                                                        Publik
+                                                    </Label>
+                                                    <p className="text-xs text-tb-on-surface-variant">
+                                                        Publik: semua pengguna
+                                                        yang sudah login. Atau
+                                                        centang marga tertentu
+                                                        di bawah.
+                                                    </p>
+                                                    <Input
+                                                        aria-label="Cari marga audiens"
+                                                        placeholder="Cari marga..."
+                                                        value={margaSearch}
+                                                        onChange={(event) =>
+                                                            setMargaSearch(
+                                                                event.target
+                                                                    .value,
+                                                            )
+                                                        }
+                                                        onKeyDown={(event) => {
+                                                            if (
+                                                                event.key ===
+                                                                'Enter'
+                                                            ) {
+                                                                event.preventDefault();
+                                                            }
+                                                        }}
+                                                    />
+                                                    <div
+                                                        role="group"
+                                                        aria-label="Daftar marga audiens"
+                                                        className="grid max-h-48 gap-2 overflow-y-auto"
+                                                    >
+                                                        {margas
+                                                            .filter((marga) =>
+                                                                marga.name
+                                                                    .toLocaleLowerCase()
+                                                                    .includes(
+                                                                        margaSearch
+                                                                            .trim()
+                                                                            .toLocaleLowerCase(),
+                                                                    ),
+                                                            )
+                                                            .map((marga) => (
+                                                                <Label
+                                                                    key={
+                                                                        marga.id
+                                                                    }
+                                                                    className="flex cursor-pointer items-center gap-2 py-1"
+                                                                >
+                                                                    <Checkbox
+                                                                        checked={selectedMargas.includes(
+                                                                            marga.id,
+                                                                        )}
+                                                                        onCheckedChange={(
+                                                                            checked,
+                                                                        ) => {
+                                                                            setAudience(
+                                                                                'marga',
+                                                                            );
+                                                                            setSelectedMargas(
+                                                                                checked ===
+                                                                                    true
+                                                                                    ? [
+                                                                                          ...selectedMargas,
+                                                                                          marga.id,
+                                                                                      ]
+                                                                                    : selectedMargas.filter(
+                                                                                          (
+                                                                                              id,
+                                                                                          ) =>
+                                                                                              id !==
+                                                                                              marga.id,
+                                                                                      ),
+                                                                            );
+                                                                        }}
+                                                                    />
+                                                                    {marga.name}
+                                                                </Label>
+                                                            ))}
+                                                        {!margas.some((marga) =>
+                                                            marga.name
+                                                                .toLocaleLowerCase()
+                                                                .includes(
+                                                                    margaSearch
+                                                                        .trim()
+                                                                        .toLocaleLowerCase(),
+                                                                ),
+                                                        ) && (
+                                                            <p className="text-xs text-tb-on-surface-variant">
+                                                                {margas.length ===
+                                                                0
+                                                                    ? 'Daftar Marga belum tersedia.'
+                                                                    : 'Marga tidak ditemukan.'}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </details>
+                                            <Button
+                                                type="submit"
+                                                disabled={processing}
+                                                className="rounded-full px-5"
+                                            >
                                                 <Send className="size-4" />
-                                                {processing ? 'Membagikan...' : 'Bagikan Status'}
+                                                {processing
+                                                    ? 'Membagikan...'
+                                                    : 'Bagikan Status'}
                                             </Button>
                                         </div>
+                                        <InputError
+                                            message={
+                                                errors.audience ??
+                                                Object.entries(errors).find(
+                                                    ([key]) =>
+                                                        key === 'marga_ids' ||
+                                                        key.startsWith(
+                                                            'marga_ids.',
+                                                        ),
+                                                )?.[1]
+                                            }
+                                        />
                                     </div>
                                 )}
                             </Form>
@@ -143,8 +328,7 @@ export default function NewsFeed({ items }: NewsFeedProps) {
                                 className="flex items-center gap-3"
                             >
                                 <AppAvatar name="Anda" className="shrink-0" />
-                                <span className="flex h-11 flex-1 items-center rounded-2xl border border-tb-outline-variant bg-tb-surface-container/40 px-4 text-sm text-tb-on-surface-variant transition-colors hover:bg-tb-surface-container"
-                                >
+                                <span className="flex h-11 flex-1 items-center rounded-2xl border border-tb-outline-variant bg-tb-surface-container/40 px-4 text-sm text-tb-on-surface-variant transition-colors hover:bg-tb-surface-container">
                                     Bagikan cerita Anda...
                                 </span>
                                 <span className="hidden rounded-full bg-tb-primary px-4 py-2 text-xs font-semibold text-white sm:inline-flex">
@@ -200,9 +384,17 @@ function FeedCard({ item }: { item: FeedItem }) {
                     </div>
                     <p className="mt-0.5 text-xs text-tb-on-surface-variant">
                         {formatDate(item.created_at)}
+                        {item.type === 'status' &&
+                            item.audience_label &&
+                            ` · ${item.audience_label}`}
                     </p>
                 </div>
-                <Button variant="ghost" size="icon" className="size-8" aria-label="Opsi postingan">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    aria-label="Opsi postingan"
+                >
                     <MoreHorizontal className="size-5" />
                 </Button>
             </CardHeader>
@@ -235,16 +427,36 @@ function FeedCard({ item }: { item: FeedItem }) {
             </CardContent>
 
             <div className="flex items-center gap-1 px-3 pb-2">
-                <Button variant="ghost" size="icon" className="size-9" aria-label="Suka">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-9"
+                    aria-label="Suka"
+                >
                     <Heart className="size-5" />
                 </Button>
-                <Button variant="ghost" size="icon" className="size-9" aria-label="Komentar">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-9"
+                    aria-label="Komentar"
+                >
                     <MessageCircle className="size-5" />
                 </Button>
-                <Button variant="ghost" size="icon" className="size-9" aria-label="Bagikan">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-9"
+                    aria-label="Bagikan"
+                >
                     <Send className="size-5" />
                 </Button>
-                <Button variant="ghost" size="icon" className="ml-auto size-9" aria-label="Simpan">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="ml-auto size-9"
+                    aria-label="Simpan"
+                >
                     <Bookmark className="size-5" />
                 </Button>
             </div>
@@ -311,39 +523,44 @@ function StatusComments({
                 </div>
             )}
 
-            {auth.user && <Form
-                {...storeFeedComment.form(postId)}
-                options={{ preserveScroll: true }}
-                resetOnSuccess
-            >
-                {({ errors, processing }) => (
-                    <div className="grid gap-1.5">
-                        <div className="flex items-center gap-2.5">
-                            <AppAvatar
-                                name={auth.user.name}
-                                className="size-8"
+            {auth.user && (
+                <Form
+                    {...storeFeedComment.form(postId)}
+                    options={{ preserveScroll: true }}
+                    resetOnSuccess
+                >
+                    {({ errors, processing }) => (
+                        <div className="grid gap-1.5">
+                            <div className="flex items-center gap-2.5">
+                                <AppAvatar
+                                    name={auth.user.name}
+                                    className="size-8"
+                                />
+                                <input
+                                    name="body"
+                                    maxLength={500}
+                                    required
+                                    placeholder="Tulis komentar..."
+                                    className="h-9 min-w-0 flex-1 rounded-full border border-tb-outline-variant bg-tb-surface-bright px-4 text-sm text-tb-on-surface outline-none placeholder:text-tb-on-surface-variant focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
+                                />
+                                <Button
+                                    type="submit"
+                                    size="icon"
+                                    className="size-9 rounded-full"
+                                    disabled={processing}
+                                    aria-label="Kirim komentar"
+                                >
+                                    <Send className="size-4" />
+                                </Button>
+                            </div>
+                            <InputError
+                                message={errors.body}
+                                className="ml-11"
                             />
-                            <input
-                                name="body"
-                                maxLength={500}
-                                required
-                                placeholder="Tulis komentar..."
-                                className="h-9 min-w-0 flex-1 rounded-full border border-tb-outline-variant bg-tb-surface-bright px-4 text-sm text-tb-on-surface outline-none placeholder:text-tb-on-surface-variant focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
-                            />
-                            <Button
-                                type="submit"
-                                size="icon"
-                                className="size-9 rounded-full"
-                                disabled={processing}
-                                aria-label="Kirim komentar"
-                            >
-                                <Send className="size-4" />
-                            </Button>
                         </div>
-                        <InputError message={errors.body} className="ml-11" />
-                    </div>
-                )}
-            </Form>}
+                    )}
+                </Form>
+            )}
         </CardFooter>
     );
 }

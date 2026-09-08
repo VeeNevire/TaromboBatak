@@ -146,12 +146,14 @@ class StoryController extends Controller
 
         DB::transaction(function () use ($request, $user, $margaId, $requiresApproval) {
             $story = Story::create([
-                ...$request->validated(),
+                ...$request->safe()->except('related_marga_ids'),
                 'created_by' => $user->id,
                 'marga_id' => $margaId,
                 'status' => $requiresApproval ? Story::STATUS_PENDING : Story::STATUS_APPROVED,
                 'published' => $requiresApproval ? false : $request->boolean('published'),
             ]);
+
+            $story->relatedMargas()->sync($request->validated('related_marga_ids', []));
 
             if ($requiresApproval) {
                 $this->notifyContributors($story);
@@ -185,6 +187,7 @@ class StoryController extends Controller
                 'published' => $story->published,
                 'classification' => $story->classification,
                 'marga_id' => $story->marga_id,
+                'related_marga_ids' => $story->relatedMargas()->allRelatedIds()->all(),
                 'status' => $story->status,
                 'rejection_reason' => $story->rejection_reason,
             ],
@@ -217,7 +220,7 @@ class StoryController extends Controller
             $scopeChanged = $story->classification !== $classification || $story->marga_id !== $margaId;
             $notifyReviewers = $requiresApproval || ($story->status === Story::STATUS_PENDING && $scopeChanged);
             $updates = [
-                ...$request->validated(),
+                ...$request->safe()->except('related_marga_ids'),
                 'classification' => $classification,
                 'marga_id' => $margaId,
                 'status' => $nextStatus,
@@ -235,6 +238,10 @@ class StoryController extends Controller
             }
 
             $story->update($updates);
+
+            if ($request->has('related_marga_ids')) {
+                $story->relatedMargas()->sync($request->validated('related_marga_ids'));
+            }
 
             if ($notifyReviewers) {
                 $this->clearStoryNotifications($story);
@@ -340,6 +347,7 @@ class StoryController extends Controller
     protected function formOptions(User $user): array
     {
         return [
+            'relatedMargaOptions' => Marga::query()->orderBy('name')->get(['id', 'name']),
             'margas' => $user->isStaff() ? Marga::query()->orderBy('name')->get(['id', 'name']) : [],
             'lockedMarga' => ! $user->isStaff() ? $user->marga?->only(['id', 'name']) : null,
             'canPublish' => $user->isStaff() || $user->isContributor(),

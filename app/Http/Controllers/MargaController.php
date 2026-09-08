@@ -4,10 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreMargaRequest;
 use App\Http\Requests\UpdateMargaRequest;
+use App\Models\Event;
+use App\Models\FeedPost;
 use App\Models\Marga;
 use App\Models\Person;
+use App\Models\Story;
 use App\Services\MargaIdentityPersonService;
 use App\Services\TaromboStatisticsService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -42,6 +46,42 @@ class MargaController extends Controller
         return Inertia::render('marga/index', [
             'margas' => $margas,
             'identityPersonOptions' => app(MargaIdentityPersonService::class)->options()->all(),
+        ]);
+    }
+
+    public function relatedContent(Request $request, Marga $marga): JsonResponse
+    {
+        $validated = $request->validate([
+            'tab' => ['required', 'in:stories,events,statuses'],
+            'page' => ['sometimes', 'integer', 'min:1'],
+        ]);
+        $tab = $validated['tab'];
+        $query = match ($tab) {
+            'stories' => Story::query()->publiclyVisible()->whereHas('relatedMargas', fn ($query) => $query->whereKey($marga->id)),
+            'events' => Event::query()->publiclyVisible()->where(function ($query) use ($marga) {
+                $query->whereHas('relatedMargas', fn ($query) => $query->whereKey($marga->id))
+                    ->orWhere(fn ($query) => $query->whereDoesntHave('relatedMargas')->where('marga_id', $marga->id));
+            }),
+            'statuses' => FeedPost::query()->visibleTo($request->user())->where('audience', 'marga')
+                ->whereHas('audienceMargas', fn ($query) => $query->whereKey($marga->id)),
+        };
+
+        $items = $query->with($tab === 'statuses' ? 'author:id,name' : 'creator:id,name')
+            ->latest()->orderByDesc('id')->paginate(10)
+            ->through(fn ($item) => [
+                'id' => $item->id,
+                'title' => $tab === 'statuses' ? null : $item->title,
+                'body' => $tab === 'statuses' ? $item->body : $item->description,
+                'author' => $tab === 'statuses' ? $item->author->name : ($item->creator?->name ?? 'Tim Tarombo Batak'),
+                'date' => $tab === 'events' ? $item->date->format('d M Y') : $item->created_at?->format('d M Y H:i'),
+                'location' => $tab === 'events' ? $item->location : null,
+            ]);
+
+        return response()->json([
+            'items' => $items->items(),
+            'current_page' => $items->currentPage(),
+            'last_page' => $items->lastPage(),
+            'total' => $items->total(),
         ]);
     }
 

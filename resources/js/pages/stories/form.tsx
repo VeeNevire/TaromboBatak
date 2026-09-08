@@ -1,5 +1,6 @@
 import { Head, Link, useForm } from '@inertiajs/react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, X } from 'lucide-react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
@@ -32,6 +33,7 @@ type StoryFormValue = {
     published: boolean;
     classification: 'umum' | 'marga';
     marga_id: number | null;
+    related_marga_ids: number[];
     status: 'pending' | 'approved' | 'rejected';
     rejection_reason: string | null;
 };
@@ -39,6 +41,7 @@ type StoryFormValue = {
 type Props = {
     story: StoryFormValue | null;
     margas: { id: number; name: string }[];
+    relatedMargaOptions: { id: number; name: string }[];
     lockedMarga: { id: number; name: string } | null;
     canPublish: boolean;
     canChooseMarga: boolean;
@@ -48,12 +51,19 @@ type Props = {
 export default function StoryForm({
     story,
     margas,
+    relatedMargaOptions,
     lockedMarga,
     canPublish,
     canChooseMarga,
     canCreateMarga,
 }: Props) {
     const isEdit = story !== null;
+    const [margaSearch, setMargaSearch] = useState('');
+    const filteredMargas = relatedMargaOptions.filter((marga) =>
+        marga.name
+            .toLocaleLowerCase()
+            .includes(margaSearch.trim().toLocaleLowerCase()),
+    );
 
     const { data, setData, post, put, processing, errors } = useForm({
         title: story?.title ?? '',
@@ -63,6 +73,7 @@ export default function StoryForm({
         published: story?.published ?? canPublish,
         classification: story?.classification ?? 'umum',
         marga_id: story?.marga_id ? String(story.marga_id) : '',
+        related_marga_ids: story?.related_marga_ids ?? ([] as number[]),
     });
 
     const submit = (e: React.FormEvent) => {
@@ -252,6 +263,131 @@ export default function StoryForm({
                                     className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                 />
                                 <InputError message={errors.title} />
+                            </div>
+
+                            <div className="grid gap-1.5">
+                                <span
+                                    id="related-margas-label"
+                                    className="text-sm font-medium text-tb-on-surface"
+                                >
+                                    Marga Terkait
+                                </span>
+                                <details className="rounded-md border border-tb-outline-variant bg-tb-surface-bright">
+                                    <summary className="cursor-pointer px-3 py-2 text-sm text-tb-on-surface focus-visible:outline-2 focus-visible:outline-tb-primary">
+                                        {data.related_marga_ids.length > 0
+                                            ? `${data.related_marga_ids.length} marga dipilih`
+                                            : 'Pilih marga terkait'}
+                                    </summary>
+                                    <div className="grid gap-3 border-t border-tb-outline-variant p-3">
+                                        <Input
+                                            aria-label="Cari marga terkait"
+                                            placeholder="Cari nama marga..."
+                                            value={margaSearch}
+                                            onChange={(event) =>
+                                                setMargaSearch(
+                                                    event.target.value,
+                                                )
+                                            }
+                                            onKeyDown={(event) => {
+                                                if (event.key === 'Enter') {
+                                                    event.preventDefault();
+                                                }
+                                            }}
+                                        />
+                                        <div
+                                            role="group"
+                                            aria-labelledby="related-margas-label"
+                                            className="grid max-h-52 gap-1 overflow-y-auto"
+                                        >
+                                            {filteredMargas.map((marga) => (
+                                                <Label
+                                                    key={marga.id}
+                                                    className="flex cursor-pointer items-center gap-3 rounded px-2 py-2 hover:bg-tb-surface-container"
+                                                >
+                                                    <Checkbox
+                                                        checked={data.related_marga_ids.includes(
+                                                            marga.id,
+                                                        )}
+                                                        onCheckedChange={(
+                                                            checked,
+                                                        ) =>
+                                                            setData(
+                                                                'related_marga_ids',
+                                                                checked === true
+                                                                    ? [
+                                                                          ...data.related_marga_ids,
+                                                                          marga.id,
+                                                                      ]
+                                                                    : data.related_marga_ids.filter(
+                                                                          (
+                                                                              id,
+                                                                          ) =>
+                                                                              id !==
+                                                                              marga.id,
+                                                                      ),
+                                                            )
+                                                        }
+                                                    />
+                                                    {marga.name}
+                                                </Label>
+                                            ))}
+                                            {filteredMargas.length === 0 && (
+                                                <p className="px-2 py-2 text-sm text-tb-on-surface-variant">
+                                                    {relatedMargaOptions.length ===
+                                                    0
+                                                        ? 'Daftar Marga belum tersedia.'
+                                                        : 'Marga tidak ditemukan.'}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </details>
+                                {data.related_marga_ids.length > 0 && (
+                                    <div className="flex flex-wrap gap-2">
+                                        {relatedMargaOptions
+                                            .filter((marga) =>
+                                                data.related_marga_ids.includes(
+                                                    marga.id,
+                                                ),
+                                            )
+                                            .map((marga) => (
+                                                <button
+                                                    key={marga.id}
+                                                    type="button"
+                                                    aria-label={`Hapus marga ${marga.name}`}
+                                                    onClick={() =>
+                                                        setData(
+                                                            'related_marga_ids',
+                                                            data.related_marga_ids.filter(
+                                                                (id) =>
+                                                                    id !==
+                                                                    marga.id,
+                                                            ),
+                                                        )
+                                                    }
+                                                    className="inline-flex items-center gap-1 rounded-full bg-tb-surface-container px-3 py-1 text-sm text-tb-on-surface hover:bg-tb-primary/10 focus-visible:outline-2 focus-visible:outline-tb-primary"
+                                                >
+                                                    {marga.name}
+                                                    <X className="size-3.5" />
+                                                </button>
+                                            ))}
+                                    </div>
+                                )}
+                                <p className="text-xs text-tb-on-surface-variant">
+                                    Opsional. Pilih satu atau beberapa marga
+                                    yang berkaitan dengan isi cerita.
+                                </p>
+                                <InputError
+                                    message={
+                                        Object.entries(errors).find(
+                                            ([key]) =>
+                                                key === 'related_marga_ids' ||
+                                                key.startsWith(
+                                                    'related_marga_ids.',
+                                                ),
+                                        )?.[1]
+                                    }
+                                />
                             </div>
 
                             <div className="grid gap-1.5">

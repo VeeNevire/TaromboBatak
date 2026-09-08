@@ -177,6 +177,7 @@ type Props = {
     person: FamilyData | null;
     regions: ProvinceOption[];
     margas: MargaOption[];
+    spouseMargas?: MargaOption[];
     nameSuggestions: NameSuggestion[];
     fatherSuggestions: NameSuggestion[];
     lockedMarga?: { id: number; name: string } | null;
@@ -1117,6 +1118,7 @@ export default function FamilyForm({
     person,
     regions,
     margas,
+    spouseMargas = margas,
     nameSuggestions,
     fatherSuggestions,
     lockedMarga = null,
@@ -1469,7 +1471,7 @@ export default function FamilyForm({
             return newMarga.trim();
         }
 
-        return margas.find((marga) => marga.id === margaId)?.name ?? '—';
+        return spouseMargas.find((marga) => marga.id === margaId)?.name ?? '—';
     };
     const activeMargaName =
         data.new_marga.trim() ||
@@ -2180,7 +2182,7 @@ export default function FamilyForm({
                             onNewMarga={(value) =>
                                 setParentNewMarga(key, value)
                             }
-                            margas={margas}
+                            margas={key === 'father' ? margas : spouseMargas}
                             placeholder={`Marga ${label.toLowerCase()}`}
                             disabled={lockMarga}
                         />

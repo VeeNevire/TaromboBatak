@@ -6,17 +6,20 @@ use App\Models\Event;
 use App\Models\FeedComment;
 use App\Models\FeedPost;
 use App\Models\Story;
+use App\Models\User;
 use Illuminate\Support\Collection;
 
 class NewsFeedService
 {
     /** @return Collection<int, array<string, mixed>> */
-    public function latestItems(): Collection
+    public function latestItems(?User $user = null): Collection
     {
         $statuses = FeedPost::query()
-            ->select(['id', 'user_id', 'body', 'created_at'])
+            ->select(['id', 'user_id', 'body', 'audience', 'created_at'])
+            ->visibleTo($user)
             ->with([
                 'author:id,name',
+                'audienceMargas:id,name',
                 'comments' => fn ($query) => $query
                     ->select(['id', 'feed_post_id', 'user_id', 'body', 'created_at'])
                     ->with('author:id,name')
@@ -32,6 +35,7 @@ class NewsFeedService
                 'author' => $post->author->name,
                 'title' => null,
                 'body' => $post->body,
+                'audience_label' => $post->audience === 'public' ? 'Publik' : $post->audienceMargas->pluck('name')->join(', '),
                 'image' => null,
                 'url' => null,
                 'meta' => null,

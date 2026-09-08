@@ -177,6 +177,7 @@ class PersonController extends Controller
             'person' => null,
             'regions' => IndonesiaRegions::all(),
             'margas' => $isStaff ? $this->margaOptions() : $this->margaOptionsForUser($user),
+            'spouseMargas' => $this->margaOptions(),
             'nameSuggestions' => $this->nameSuggestions(
                 $isStaff ? null : ($user->isContributor() ? $user->accessibleMargaIds() : $user->marga_id),
             ),
@@ -403,6 +404,7 @@ class PersonController extends Controller
             ),
             'regions' => IndonesiaRegions::all(),
             'margas' => $user->isStaff() ? $this->margaOptions() : $this->margaOptionsForUser($user),
+            'spouseMargas' => $this->margaOptions(),
             'nameSuggestions' => $this->nameSuggestions($user->isContributor() ? $user->accessibleMargaIds() : null),
             'fatherSuggestions' => $this->fatherSuggestions($person, $user->isContributor() ? $person->marga_id : null),
             'familyTrees' => $versionTrees,
@@ -448,6 +450,7 @@ class PersonController extends Controller
             'person' => $this->familyPayloadVisibleToUser($familyPayload, $user),
             'regions' => IndonesiaRegions::all(),
             'margas' => $isStaff ? $this->margaOptions() : $this->margaOptionsForUser($user),
+            'spouseMargas' => $this->margaOptions(),
             'nameSuggestions' => $this->nameSuggestions(
                 $isStaff ? null : ($user->isContributor() ? $user->accessibleMargaIds() : $user->marga_id),
             ),
