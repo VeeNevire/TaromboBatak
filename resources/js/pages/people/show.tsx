@@ -24,6 +24,7 @@ type Props = {
         regencies: { code: string; name: string }[];
     }[];
     margas: { id: number; name: string }[];
+    spouseMargas?: { id: number; name: string }[];
     nameSuggestions: NameSuggestion[];
     fatherSuggestions: NameSuggestion[];
     familyTrees: FamilyTreeHistoryEntry[];
@@ -43,6 +44,7 @@ export default function PersonShow({
     person,
     regions,
     margas,
+    spouseMargas,
     nameSuggestions,
     fatherSuggestions,
     familyTrees,
@@ -102,6 +104,7 @@ export default function PersonShow({
                     person={person}
                     regions={regions}
                     margas={margas}
+                    spouseMargas={spouseMargas}
                     nameSuggestions={nameSuggestions}
                     fatherSuggestions={fatherSuggestions}
                     familyTrees={familyTrees}

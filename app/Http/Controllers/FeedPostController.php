@@ -4,13 +4,17 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreFeedPostRequest;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class FeedPostController extends Controller
 {
     public function store(StoreFeedPostRequest $request): RedirectResponse
     {
-        $request->user()->feedPosts()->create($request->validated());
+        DB::transaction(function () use ($request) {
+            $post = $request->user()->feedPosts()->create($request->safe()->except('marga_ids'));
+            $post->audienceMargas()->sync($request->validated('marga_ids', []));
+        });
 
         Inertia::flash('toast', [
             'type' => 'success',

@@ -1681,3 +1681,31 @@ test('a person photo upload rejects non image files', function () {
         ])
         ->assertSessionHasErrors('image_file');
 });
+
+test('ordinary users can select all registered margas for wives while paternal options remain scoped', function () {
+    $marga = Marga::factory()->create(['name' => 'Silaban']);
+    $wifeMarga = Marga::factory()->create(['name' => 'Panjaitan']);
+    $otherWifeMarga = Marga::factory()->create(['name' => 'Sinaga']);
+    $user = User::factory()->withMarga($marga->id)->create();
+    $this->actingAs($user)->get(route('people.create'))->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('margas', 1)->where('margas.0.id', $marga->id)
+            ->has('spouseMargas', 3)->where('spouseMargas.0.id', $wifeMarga->id)
+            ->where('lockedMarga.id', $marga->id));
+    $this->post(route('people.store'), [
+        'name' => 'Anak Silaban', 'gender' => 'L', 'marga_id' => $marga->id,
+        'birth_order' => 1, 'sibling_count' => 1,
+        'father' => ['name' => 'Ayah Silaban'],
+        'mothers' => [
+            ['name' => 'Istri Panjaitan', 'marga_id' => $wifeMarga->id],
+            ['name' => 'Istri Sinaga', 'marga_id' => $otherWifeMarga->id],
+        ],
+        'children' => [['name' => 'Anak Silaban', 'gender' => 'L']],
+    ])->assertSessionHasNoErrors()->assertRedirect(route('people.index'));
+    $focus = Person::where('name', 'Anak Silaban')->firstOrFail();
+    expect(Person::where('name', 'Istri Panjaitan')->firstOrFail()->marga_id)->toBe($wifeMarga->id)
+        ->and(Person::where('name', 'Istri Sinaga')->firstOrFail()->marga_id)->toBe($otherWifeMarga->id)
+        ->and($focus->marga_id)->toBe($marga->id);
+    $this->get(route('people.edit', $focus))->assertOk()->assertInertia(fn (Assert $page) => $page
+        ->has('spouseMargas', 3)->has('margas', 1)->has('person.mothers', 2));
+});

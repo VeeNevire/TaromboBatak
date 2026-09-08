@@ -16,6 +16,8 @@ class StoreEventRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'related_marga_ids' => ['sometimes', 'array', 'min:1'],
+            'related_marga_ids.*' => ['required', 'integer', 'distinct', 'exists:margas,id'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string'],
             'location' => ['nullable', 'string', 'max:255'],
@@ -23,7 +25,7 @@ class StoreEventRequest extends FormRequest
             'date' => ['required', 'date'],
             'published' => ['boolean'],
             'marga_id' => [
-                Rule::requiredIf(fn () => $this->user()?->isStaff() ?? false),
+                Rule::requiredIf(fn () => $this->user()?->isStaff() && ! $this->has('related_marga_ids')),
                 'nullable',
                 'integer',
                 'exists:margas,id',

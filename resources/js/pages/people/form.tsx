@@ -25,6 +25,7 @@ type Props = {
         regencies: { code: string; name: string }[];
     }[];
     margas: { id: number; name: string }[];
+    spouseMargas?: { id: number; name: string }[];
     nameSuggestions: NameSuggestion[];
     fatherSuggestions: NameSuggestion[];
     lockedMarga?: { id: number; name: string } | null;
@@ -45,6 +46,7 @@ export default function PersonForm({
     person,
     regions,
     margas,
+    spouseMargas,
     nameSuggestions,
     fatherSuggestions,
     lockedMarga,
@@ -110,6 +112,7 @@ export default function PersonForm({
                     person={person}
                     regions={regions}
                     margas={margas}
+                    spouseMargas={spouseMargas}
                     nameSuggestions={nameSuggestions}
                     fatherSuggestions={fatherSuggestions}
                     lockedMarga={lockedMarga}

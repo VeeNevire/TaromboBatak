@@ -12,6 +12,8 @@ class FeedCommentController extends Controller
         StoreFeedCommentRequest $request,
         FeedPost $feedPost,
     ): RedirectResponse {
+        abort_unless(FeedPost::query()->whereKey($feedPost->id)->visibleTo($request->user())->exists(), 404);
+
         $feedPost->comments()->create([
             ...$request->validated(),
             'user_id' => $request->user()->id,

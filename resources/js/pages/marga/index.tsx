@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import InputError from '@/components/input-error';
+import MargaDetailDialog from '@/components/marga-detail-dialog';
 import { PersonTreePickerDialog } from '@/components/tarombo/person-tree-picker-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -205,6 +206,7 @@ function ImageInput({
 
 export default function MargaIndex({ margas, identityPersonOptions }: Props) {
     const [dialog, setDialog] = useState<null | 'create' | MargaItem>(null);
+    const [detailMarga, setDetailMarga] = useState<MargaItem | null>(null);
     const [toDelete, setToDelete] = useState<MargaItem | null>(null);
     const [identityPickerOpen, setIdentityPickerOpen] = useState(false);
     const [search, setSearch] = useState('');
@@ -308,6 +310,13 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
     return (
         <>
             <Head title="Daftar Marga" />
+            {detailMarga && (
+                <MargaDetailDialog
+                    key={detailMarga.id}
+                    marga={detailMarga}
+                    onClose={() => setDetailMarga(null)}
+                />
+            )}
 
             <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
                 <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -317,7 +326,7 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
                         </h1>
                         <p className="mt-1 text-sm text-tb-on-surface-variant">
                             Marga Batak yang tercatat beserta jumlah anggotanya.
-                            Klik kartu untuk mengubah.
+                            Klik kartu untuk melihat konten terkait.
                         </p>
                     </div>
                     <Button
@@ -377,112 +386,125 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
                                 <Card
                                     role="button"
                                     tabIndex={0}
-                                    onClick={() => openEdit(m)}
+                                    onClick={() => setDetailMarga(m)}
                                     onKeyDown={(e) => {
-                                        if (e.key === 'Enter' || e.key === ' ') {
+                                        if (
+                                            e.target === e.currentTarget &&
+                                            (e.key === 'Enter' || e.key === ' ')
+                                        ) {
                                             e.preventDefault();
-                                            openEdit(m);
+                                            setDetailMarga(m);
                                         }
                                     }}
                                     className="group h-full cursor-pointer border-tb-outline-variant bg-tb-surface-bright transition-shadow hover:shadow-md"
                                 >
-                            <CardContent className="gap-4 py-5">
-                                <div className="flex items-start justify-between">
-                                    <MargaAvatar
-                                        m={m}
-                                        className="h-11 w-11 rounded-xl"
-                                    />
-                                    <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            disabled={
-                                                m.identity_person_id === null
-                                            }
-                                            className="size-8 text-emerald-700 hover:text-emerald-800 disabled:opacity-40"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                openMargaTree(m, 'upper');
-                                            }}
-                                            aria-label={`Pohon Silsilah Atas ${m.name}`}
-                                            title={
-                                                m.identity_person_id === null
-                                                    ? 'Pilih identitas marga terlebih dahulu'
-                                                    : 'Pohon Silsilah Atas'
-                                            }
-                                        >
-                                            <ArrowUp className="size-4" />
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            disabled={
-                                                m.identity_person_id === null
-                                            }
-                                            className="size-8 text-emerald-700 hover:text-emerald-800 disabled:opacity-40"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                openMargaTree(m, 'lower');
-                                            }}
-                                            aria-label={`Pohon Silsilah Bawah ${m.name}`}
-                                            title={
-                                                m.identity_person_id === null
-                                                    ? 'Pilih identitas marga terlebih dahulu'
-                                                    : 'Pohon Silsilah Bawah'
-                                            }
-                                        >
-                                            <ArrowDown className="size-4" />
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="size-8 text-tb-on-surface-variant hover:text-tb-primary"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                openEdit(m);
-                                            }}
-                                        >
-                                            <Pencil className="size-4" />
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="size-8 text-tb-on-surface-variant hover:text-red-600"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setToDelete(m);
-                                            }}
-                                        >
-                                            <Trash2 className="size-4" />
-                                        </Button>
-                                    </div>
-                                </div>
-                                <div>
-                                    <h3 className="font-display text-lg font-bold text-tb-on-surface">
-                                        {m.name}
-                                    </h3>
-                                    {m.description && (
-                                        <p className="mt-0.5 line-clamp-2 text-sm text-tb-on-surface-variant">
-                                            {m.description}
+                                    <CardContent className="gap-4 py-5">
+                                        <div className="flex items-start justify-between">
+                                            <MargaAvatar
+                                                m={m}
+                                                className="h-11 w-11 rounded-xl"
+                                            />
+                                            <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    disabled={
+                                                        m.identity_person_id ===
+                                                        null
+                                                    }
+                                                    className="size-8 text-emerald-700 hover:text-emerald-800 disabled:opacity-40"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        openMargaTree(
+                                                            m,
+                                                            'upper',
+                                                        );
+                                                    }}
+                                                    aria-label={`Pohon Silsilah Atas ${m.name}`}
+                                                    title={
+                                                        m.identity_person_id ===
+                                                        null
+                                                            ? 'Pilih identitas marga terlebih dahulu'
+                                                            : 'Pohon Silsilah Atas'
+                                                    }
+                                                >
+                                                    <ArrowUp className="size-4" />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    disabled={
+                                                        m.identity_person_id ===
+                                                        null
+                                                    }
+                                                    className="size-8 text-emerald-700 hover:text-emerald-800 disabled:opacity-40"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        openMargaTree(
+                                                            m,
+                                                            'lower',
+                                                        );
+                                                    }}
+                                                    aria-label={`Pohon Silsilah Bawah ${m.name}`}
+                                                    title={
+                                                        m.identity_person_id ===
+                                                        null
+                                                            ? 'Pilih identitas marga terlebih dahulu'
+                                                            : 'Pohon Silsilah Bawah'
+                                                    }
+                                                >
+                                                    <ArrowDown className="size-4" />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="size-8 text-tb-on-surface-variant hover:text-tb-primary"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        openEdit(m);
+                                                    }}
+                                                >
+                                                    <Pencil className="size-4" />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="size-8 text-tb-on-surface-variant hover:text-red-600"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setToDelete(m);
+                                                    }}
+                                                >
+                                                    <Trash2 className="size-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <h3 className="font-display text-lg font-bold text-tb-on-surface">
+                                                {m.name}
+                                            </h3>
+                                            {m.description && (
+                                                <p className="mt-0.5 line-clamp-2 text-sm text-tb-on-surface-variant">
+                                                    {m.description}
+                                                </p>
+                                            )}
+                                        </div>
+                                        <p className="text-xs font-medium text-tb-primary">
+                                            {m.people_count} anggota
                                         </p>
-                                    )}
-                                </div>
-                                <p className="text-xs font-medium text-tb-primary">
-                                    {m.people_count} anggota
-                                </p>
-                                <span
-                                    className={cn(
-                                        'w-fit rounded-full px-2 py-0.5 text-[10px] font-semibold',
-                                        m.identity_person_id !== null
-                                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
-                                            : 'bg-tb-surface-container text-tb-on-surface-variant',
-                                    )}
-                                >
-                                    {m.identity_person_id !== null
-                                        ? 'Connected'
-                                        : 'Not Connected'}
-                                </span>
-                            </CardContent>
+                                        <span
+                                            className={cn(
+                                                'w-fit rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                                                m.identity_person_id !== null
+                                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                                                    : 'bg-tb-surface-container text-tb-on-surface-variant',
+                                            )}
+                                        >
+                                            {m.identity_person_id !== null
+                                                ? 'Connected'
+                                                : 'Not Connected'}
+                                        </span>
+                                    </CardContent>
                                 </Card>
                             </motion.div>
                         ))}
