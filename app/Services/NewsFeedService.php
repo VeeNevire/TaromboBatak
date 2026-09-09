@@ -23,9 +23,11 @@ class NewsFeedService
                 'comments' => fn ($query) => $query
                     ->select(['id', 'feed_post_id', 'user_id', 'body', 'created_at'])
                     ->with('author:id,name')
-                    ->oldest(),
+                    ->oldest()
+                    ->oldest('id'),
             ])
             ->latest()
+            ->latest('id')
             ->limit(30)
             ->get()
             ->map(fn (FeedPost $post) => [
@@ -53,6 +55,7 @@ class NewsFeedService
             ->with(['creator:id,name', 'marga:id,name'])
             ->publiclyVisible()
             ->latest()
+            ->latest('id')
             ->limit(20)
             ->get()
             ->map(fn (Story $story) => [
@@ -74,6 +77,7 @@ class NewsFeedService
             ->with('creator:id,name')
             ->publiclyVisible()
             ->latest()
+            ->latest('id')
             ->limit(20)
             ->get()
             ->map(fn (Event $event) => [

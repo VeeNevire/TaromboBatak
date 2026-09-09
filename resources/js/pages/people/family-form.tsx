@@ -1,4 +1,4 @@
-import { Link, useForm } from '@inertiajs/react';
+import { Link, useForm, usePage } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
     ChevronDown,
@@ -428,6 +428,13 @@ function treeBelongsToFamily(
     return Number(tree.root_person_id) === Number(personId);
 }
 
+/** Chain codes are an internal numbering aid, so only staff see them. */
+function useCanSeeChain(): boolean {
+    const role = usePage().props.auth.user?.role;
+
+    return role === 'admin' || role === 'subadmin';
+}
+
 export function SilsilahListCard({
     lineage,
     selfId,
@@ -437,6 +444,7 @@ export function SilsilahListCard({
     selfId?: number | null;
     familyTrees: FamilyTreeHistoryEntry[];
 }) {
+    const canSeeChain = useCanSeeChain();
     const [expanded, setExpanded] = useState<Set<number>>(() => {
         const selfIndex = lineage.findIndex((entry) => entry.is_self);
 
@@ -512,9 +520,11 @@ export function SilsilahListCard({
                                             )}
                                         </button>
                                         <div className="min-w-0 flex-1">
-                                            <span className="inline-flex min-h-6 max-w-full min-w-6 items-center justify-center overflow-x-auto rounded-full bg-tb-surface-container px-2 py-1 text-center text-xs leading-tight font-bold whitespace-nowrap text-tb-on-surface-variant">
-                                                {entry.chain ?? '—'}
-                                            </span>
+                                            {canSeeChain && (
+                                                <span className="inline-flex min-h-6 max-w-full min-w-6 items-center justify-center overflow-x-auto rounded-full bg-tb-surface-container px-2 py-1 text-center text-xs leading-tight font-bold whitespace-nowrap text-tb-on-surface-variant">
+                                                    {entry.chain ?? '—'}
+                                                </span>
+                                            )}
                                             <div className="mt-1 flex items-start gap-1.5">
                                                 <Link
                                                     href={people.show(entry.id)}
@@ -581,10 +591,12 @@ export function SilsilahListCard({
                                                                             )}
                                                                             className="flex min-w-0 flex-1 flex-col items-start rounded-md"
                                                                         >
-                                                                            <span className="inline-flex min-h-5 max-w-full min-w-5 items-center justify-center overflow-x-auto rounded-full bg-tb-surface-container px-1.5 py-0.5 text-center text-[10px] leading-tight font-semibold whitespace-nowrap text-tb-on-surface-variant">
-                                                                                {child.chain ??
-                                                                                    ''}
-                                                                            </span>
+                                                                            {canSeeChain && (
+                                                                                <span className="inline-flex min-h-5 max-w-full min-w-5 items-center justify-center overflow-x-auto rounded-full bg-tb-surface-container px-1.5 py-0.5 text-center text-[10px] leading-tight font-semibold whitespace-nowrap text-tb-on-surface-variant">
+                                                                                    {child.chain ??
+                                                                                        ''}
+                                                                                </span>
+                                                                            )}
                                                                             <span className="mt-1 flex w-full min-w-0 items-start gap-1.5">
                                                                                 <span
                                                                                     className={cn(
@@ -651,6 +663,7 @@ export function MargaLineageCard({
     focusChain?: string | null;
     familyTrees: FamilyTreeHistoryEntry[];
 }) {
+    const canSeeChain = useCanSeeChain();
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
     const toggle = (key: string) => {
@@ -730,9 +743,11 @@ export function MargaLineageCard({
                                             <span className="size-6 shrink-0" />
                                         )}
                                         <div className="min-w-0 flex-1">
-                                            <span className="inline-flex min-h-6 max-w-full min-w-6 items-center justify-center overflow-x-auto rounded-full bg-tb-surface-container px-2 py-1 text-center text-xs leading-tight font-bold whitespace-nowrap text-tb-on-surface-variant">
-                                                {entry.chain ?? '—'}
-                                            </span>
+                                            {canSeeChain && (
+                                                <span className="inline-flex min-h-6 max-w-full min-w-6 items-center justify-center overflow-x-auto rounded-full bg-tb-surface-container px-2 py-1 text-center text-xs leading-tight font-bold whitespace-nowrap text-tb-on-surface-variant">
+                                                    {entry.chain ?? '—'}
+                                                </span>
+                                            )}
                                             <div className="mt-1 flex items-start gap-1.5">
                                                 <Link
                                                     href={people.show(entry.id)}
@@ -791,10 +806,12 @@ export function MargaLineageCard({
                                                                             )}
                                                                             className="flex min-w-0 flex-1 flex-col items-start rounded-md"
                                                                         >
-                                                                            <span className="inline-flex min-h-5 max-w-full min-w-5 items-center justify-center overflow-x-auto rounded-full bg-tb-surface-container px-1.5 py-0.5 text-center text-[10px] leading-tight font-semibold whitespace-nowrap text-tb-on-surface-variant">
-                                                                                {child.chain ??
-                                                                                    ''}
-                                                                            </span>
+                                                                            {canSeeChain && (
+                                                                                <span className="inline-flex min-h-5 max-w-full min-w-5 items-center justify-center overflow-x-auto rounded-full bg-tb-surface-container px-1.5 py-0.5 text-center text-[10px] leading-tight font-semibold whitespace-nowrap text-tb-on-surface-variant">
+                                                                                    {child.chain ??
+                                                                                        ''}
+                                                                                </span>
+                                                                            )}
                                                                             <span className="mt-1 w-full min-w-0 text-sm leading-snug break-words whitespace-normal text-tb-on-surface">
                                                                                 {displayRowName(
                                                                                     child.name,
@@ -830,7 +847,7 @@ export function MargaLineageCard({
                     </ul>
                 )}
 
-                {(fatherChain || focusChain) && (
+                {canSeeChain && (fatherChain || focusChain) && (
                     <div className="mt-4 rounded-lg border border-tb-primary/40 bg-tb-primary/5 p-3 text-sm">
                         {fatherChain && (
                             <p className="text-tb-on-surface-variant">
@@ -2363,7 +2380,7 @@ export default function FamilyForm({
                                             <div className="flex items-start justify-between gap-3">
                                                 <div>
                                                     <CardTitle className="font-display text-lg text-tb-on-surface">
-                                                        Informasi Pribadi
+                                                        Informasi Anggota
                                                     </CardTitle>
                                                     <CardDescription>
                                                         Data dasar anggota yang
@@ -3241,7 +3258,7 @@ export default function FamilyForm({
                                                             Ini Anda — nama,
                                                             jenis kelamin, marga
                                                             diisi lewat
-                                                            Informasi Pribadi.
+                                                            Informasi Anggota.
                                                         </p>
                                                     )}
 

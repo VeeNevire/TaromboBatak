@@ -24,6 +24,7 @@ class StoreMargaRequest extends FormRequest
             'color' => ['nullable', 'string', 'max:32'],
             'image' => ['nullable', $this->imageRule()],
             'identity_person_id' => ['nullable', 'integer', 'exists:people,id'],
+            'is_public' => ['sometimes', 'boolean'],
         ];
     }
 

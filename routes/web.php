@@ -52,6 +52,7 @@ Route::get('dashboard/tarombo', [TaromboController::class, 'index'])
     ->name('tarombo.index');
 
 Route::get('silsilah-saya', [PersonController::class, 'publicPreview'])
+    ->middleware('auth')
     ->name('people.public-preview');
 
 Route::get('people', [PersonController::class, 'index'])->name('people.index');
@@ -62,6 +63,13 @@ Route::get('tarombo/full', [TaromboController::class, 'publicFullscreen'])
     ->name('tarombo.full');
 
 Route::get('marga', [MargaController::class, 'public'])->name('marga.view');
+
+Route::get('dashboard/marga', [MargaController::class, 'index'])->name('marga.index');
+Route::get('dashboard/marga/{marga}/related-content', [MargaController::class, 'relatedContent'])
+    ->name('marga.related-content');
+Route::get('dashboard/marga/{marga}/silsilah/{direction}', [MargaController::class, 'tree'])
+    ->where('direction', 'upper|lower')
+    ->name('marga.public-tree');
 
 Route::get('budaya', [BudayaController::class, 'index'])->name('budaya.view');
 
@@ -190,8 +198,6 @@ Route::middleware(['auth', 'role.staff'])->group(function () {
 
     Route::get('people/{person}/preview', [PersonController::class, 'preview'])->name('people.preview');
     Route::get('people/{person}/silsilah', [PersonController::class, 'silsilah'])->name('people.silsilah');
-    Route::get('dashboard/marga', [MargaController::class, 'index'])->name('marga.index');
-    Route::get('dashboard/marga/{marga}/related-content', [MargaController::class, 'relatedContent'])->name('marga.related-content');
     Route::post('dashboard/marga', [MargaController::class, 'store'])->name('marga.store');
     Route::put('dashboard/marga/{marga}', [MargaController::class, 'update'])->name('marga.update');
     Route::delete('dashboard/marga/{marga}', [MargaController::class, 'destroy'])->name('marga.destroy');
@@ -199,6 +205,8 @@ Route::middleware(['auth', 'role.staff'])->group(function () {
 });
 
 Route::middleware(['auth', 'role.admin'])->group(function () {
+    Route::get('dashboard/silsilah-akun', [PersonController::class, 'familyTreeIndex'])
+        ->name('family-trees.index');
     Route::resource('accounts', AccountController::class)->except(['show']);
     Route::get('accounts/{account}/activity-log', [AccountController::class, 'activityLog'])->name('accounts.activity-log');
     Route::resource('sub-admins', SubAdminController::class)->except(['show']);

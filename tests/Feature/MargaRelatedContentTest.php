@@ -46,12 +46,12 @@ test('marga news feed respects audience access and excludes public and unrelated
     $this->actingAs(User::factory()->asAdmin()->create())->getJson($url)->assertOk()->assertJsonCount(0, 'items');
 });
 
-test('marga content is paginated and rejects unauthorized requests and invalid tabs', function () {
+test('marga content is readable by guests and regular users and rejects invalid tabs', function () {
     $marga = Marga::factory()->create();
     $url = route('marga.related-content', [$marga, 'tab' => 'stories']);
-    $this->getJson($url)->assertUnauthorized();
-    $this->actingAs(User::factory()->create())->getJson($url)->assertForbidden();
-    $this->actingAs(User::factory()->asAdmin()->create())->getJson(route('marga.related-content', [$marga, 'tab' => 'invalid']))->assertUnprocessable();
+    $this->getJson($url)->assertOk();
+    $this->actingAs(User::factory()->create())->getJson($url)->assertOk();
+    $this->getJson(route('marga.related-content', [$marga, 'tab' => 'invalid']))->assertUnprocessable();
     Story::factory()->count(11)->create(['published' => true, 'status' => 'approved'])->each(fn ($story) => $story->relatedMargas()->attach($marga));
     $this->getJson($url)->assertOk()->assertJsonCount(10, 'items')->assertJsonPath('last_page', 2);
     $this->getJson(route('marga.related-content', [$marga, 'tab' => 'stories', 'page' => 2]))->assertOk()->assertJsonCount(1, 'items');

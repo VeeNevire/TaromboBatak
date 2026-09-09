@@ -18,6 +18,7 @@ import MargaDetailDialog from '@/components/marga-detail-dialog';
 import { PersonTreePickerDialog } from '@/components/tarombo/person-tree-picker-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -44,10 +45,12 @@ type MargaItem = {
     people_count: number;
     identity_person_id: number | null;
     identity_person_name: string | null;
+    is_public: boolean;
 };
 
 type Props = {
     margas: MargaItem[];
+    canManage: boolean;
     identityPersonOptions: IdentityPersonOption[];
 };
 
@@ -204,7 +207,11 @@ function ImageInput({
     );
 }
 
-export default function MargaIndex({ margas, identityPersonOptions }: Props) {
+export default function MargaIndex({
+    margas,
+    canManage,
+    identityPersonOptions,
+}: Props) {
     const [dialog, setDialog] = useState<null | 'create' | MargaItem>(null);
     const [detailMarga, setDetailMarga] = useState<MargaItem | null>(null);
     const [toDelete, setToDelete] = useState<MargaItem | null>(null);
@@ -229,20 +236,16 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
         margaItem: MargaItem,
         direction: 'upper' | 'lower',
     ) => {
-        if (margaItem.identity_person_id === null) {
-            return;
-        }
+        const url = canManage
+            ? tarombo.fullscreen('tree', {
+                  query: {
+                      marga_id: margaItem.id,
+                      marga_direction: direction,
+                  },
+              }).url
+            : marga.publicTree({ marga: margaItem.id, direction }).url;
 
-        window.open(
-            tarombo.fullscreen('tree', {
-                query: {
-                    marga_id: margaItem.id,
-                    marga_direction: direction,
-                },
-            }).url,
-            '_blank',
-            'noopener,noreferrer',
-        );
+        window.open(url, '_blank', 'noopener,noreferrer');
     };
 
     const form = useForm({
@@ -251,6 +254,7 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
         color: '#b34b1e',
         image: '' as string | File,
         identity_person_id: null as number | null,
+        is_public: false,
     });
 
     const openCreate = () => {
@@ -266,6 +270,7 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
             color: m.color ?? '#b34b1e',
             image: m.image_url ?? '',
             identity_person_id: m.identity_person_id,
+            is_public: m.is_public,
         });
         setIdentityPickerOpen(false);
         setDialog(m);
@@ -329,12 +334,14 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
                             Klik kartu untuk melihat konten terkait.
                         </p>
                     </div>
-                    <Button
-                        className="rounded-full bg-tb-primary hover:bg-tb-primary-light"
-                        onClick={openCreate}
-                    >
-                        <Plus className="size-4" /> Tambah Marga
-                    </Button>
+                    {canManage && (
+                        <Button
+                            className="rounded-full bg-tb-primary hover:bg-tb-primary-light"
+                            onClick={openCreate}
+                        >
+                            <Plus className="size-4" /> Tambah Marga
+                        </Button>
+                    )}
                 </div>
 
                 <div className="relative max-w-md">
@@ -354,7 +361,9 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
                             <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
                                 <Shapes className="size-8 text-tb-outline" />
                                 <p className="text-sm text-tb-on-surface-variant">
-                                    Belum ada marga yang terdaftar.
+                                    {canManage
+                                        ? 'Belum ada marga yang terdaftar.'
+                                        : 'Belum ada marga yang dipublikasikan.'}
                                 </p>
                             </CardContent>
                         </Card>
@@ -404,15 +413,18 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
                                                 m={m}
                                                 className="h-11 w-11 rounded-xl"
                                             />
-                                            <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                                            <div
+                                                className={cn(
+                                                    'flex gap-1 transition-opacity',
+                                                    canManage
+                                                        ? 'opacity-0 group-hover:opacity-100'
+                                                        : 'opacity-100',
+                                                )}
+                                            >
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    disabled={
-                                                        m.identity_person_id ===
-                                                        null
-                                                    }
-                                                    className="size-8 text-emerald-700 hover:text-emerald-800 disabled:opacity-40"
+                                                    className="size-8 text-emerald-700 hover:text-emerald-800"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         openMargaTree(
@@ -424,59 +436,59 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
                                                     title={
                                                         m.identity_person_id ===
                                                         null
-                                                            ? 'Pilih identitas marga terlebih dahulu'
+                                                            ? 'Pohon Silsilah Atas (semua anggota marga)'
                                                             : 'Pohon Silsilah Atas'
                                                     }
                                                 >
                                                     <ArrowUp className="size-4" />
                                                 </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    disabled={
-                                                        m.identity_person_id ===
-                                                        null
-                                                    }
-                                                    className="size-8 text-emerald-700 hover:text-emerald-800 disabled:opacity-40"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        openMargaTree(
-                                                            m,
-                                                            'lower',
-                                                        );
-                                                    }}
-                                                    aria-label={`Pohon Silsilah Bawah ${m.name}`}
-                                                    title={
-                                                        m.identity_person_id ===
-                                                        null
-                                                            ? 'Pilih identitas marga terlebih dahulu'
-                                                            : 'Pohon Silsilah Bawah'
-                                                    }
-                                                >
-                                                    <ArrowDown className="size-4" />
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="size-8 text-tb-on-surface-variant hover:text-tb-primary"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        openEdit(m);
-                                                    }}
-                                                >
-                                                    <Pencil className="size-4" />
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="size-8 text-tb-on-surface-variant hover:text-red-600"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setToDelete(m);
-                                                    }}
-                                                >
-                                                    <Trash2 className="size-4" />
-                                                </Button>
+                                                {canManage && (
+                                                    <>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="size-8 text-emerald-700 hover:text-emerald-800"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                openMargaTree(
+                                                                    m,
+                                                                    'lower',
+                                                                );
+                                                            }}
+                                                            aria-label={`Pohon Silsilah Bawah ${m.name}`}
+                                                            title={
+                                                                m.identity_person_id ===
+                                                                null
+                                                                    ? 'Pohon Silsilah Bawah (semua anggota marga)'
+                                                                    : 'Pohon Silsilah Bawah'
+                                                            }
+                                                        >
+                                                            <ArrowDown className="size-4" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="size-8 text-tb-on-surface-variant hover:text-tb-primary"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                openEdit(m);
+                                                            }}
+                                                        >
+                                                            <Pencil className="size-4" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="size-8 text-tb-on-surface-variant hover:text-red-600"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setToDelete(m);
+                                                            }}
+                                                        >
+                                                            <Trash2 className="size-4" />
+                                                        </Button>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
                                         <div>
@@ -492,18 +504,35 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
                                         <p className="text-xs font-medium text-tb-primary">
                                             {m.people_count} anggota
                                         </p>
-                                        <span
-                                            className={cn(
-                                                'w-fit rounded-full px-2 py-0.5 text-[10px] font-semibold',
-                                                m.identity_person_id !== null
-                                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
-                                                    : 'bg-tb-surface-container text-tb-on-surface-variant',
+                                        <div className="flex flex-wrap gap-1.5">
+                                            <span
+                                                className={cn(
+                                                    'w-fit rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                                                    m.identity_person_id !==
+                                                        null
+                                                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                                                        : 'bg-tb-surface-container text-tb-on-surface-variant',
+                                                )}
+                                            >
+                                                {m.identity_person_id !== null
+                                                    ? 'Connected'
+                                                    : 'Not Connected'}
+                                            </span>
+                                            {canManage && (
+                                                <span
+                                                    className={cn(
+                                                        'w-fit rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                                                        m.is_public
+                                                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+                                                            : 'bg-tb-surface-container text-tb-on-surface-variant',
+                                                    )}
+                                                >
+                                                    {m.is_public
+                                                        ? 'Public'
+                                                        : 'Private'}
+                                                </span>
                                             )}
-                                        >
-                                            {m.identity_person_id !== null
-                                                ? 'Connected'
-                                                : 'Not Connected'}
-                                        </span>
+                                        </div>
                                     </CardContent>
                                 </Card>
                             </motion.div>
@@ -556,6 +585,28 @@ export default function MargaIndex({ margas, identityPersonOptions }: Props) {
                                         className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                     />
                                     <InputError message={form.errors.name} />
+                                </div>
+
+                                <div className="grid gap-1.5">
+                                    <Label className="flex w-fit cursor-pointer items-center gap-2 text-tb-on-surface">
+                                        <Checkbox
+                                            checked={form.data.is_public}
+                                            onCheckedChange={(checked) =>
+                                                form.setData(
+                                                    'is_public',
+                                                    checked === true,
+                                                )
+                                            }
+                                        />
+                                        Public
+                                    </Label>
+                                    <p className="text-xs text-tb-on-surface-variant">
+                                        Marga Public tampil di Daftar Marga
+                                        untuk tamu dan semua pengguna.
+                                    </p>
+                                    <InputError
+                                        message={form.errors.is_public}
+                                    />
                                 </div>
 
                                 <div className="grid gap-1.5">

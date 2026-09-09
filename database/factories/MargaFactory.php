@@ -21,6 +21,15 @@ class MargaFactory extends Factory
             'name' => fake()->unique()->word(),
             'description' => fake()->sentence(),
             'color' => fake()->hexColor(),
+            'is_public' => false,
         ];
+    }
+
+    /**
+     * Mark the marga as publicly listed.
+     */
+    public function public(): static
+    {
+        return $this->state(fn (): array => ['is_public' => true]);
     }
 }

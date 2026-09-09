@@ -11,8 +11,8 @@ use App\Models\User;
 use App\Services\TaromboStatisticsService;
 use App\Services\TaromboTreeService;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -146,7 +146,7 @@ class TaromboController extends Controller
         $selectedMargaId = $selectedMarga?->id;
         $selectedTreePeople = match (true) {
             $selectedFamilyTree instanceof FamilyTree => $service->rowsForFamilyTree($selectedFamilyTree),
-            $selectedMarga instanceof Marga => $this->rowsForMarga($service, $selectedMarga, $direction),
+            $selectedMarga instanceof Marga => $service->rowsForMarga($selectedMarga, $direction),
             default => [],
         };
         $rows = $selectedTreePeople;
@@ -198,7 +198,9 @@ class TaromboController extends Controller
 
         $margaTree = $selectedMarga instanceof Marga ? [
             'margaName' => $selectedMarga->name,
-            'identityPersonId' => (string) $selectedMarga->identity_person_id,
+            'identityPersonId' => $selectedMarga->identity_person_id !== null
+                ? (string) $selectedMarga->identity_person_id
+                : null,
             'direction' => $direction,
         ] : null;
 
@@ -234,13 +236,15 @@ class TaromboController extends Controller
                     'rootName' => $tree->rootPerson?->name ?? 'Akar belum ditentukan',
                     'group' => 'account',
                 ])
-                ->concat($approvedMargas->map(fn (Marga $marga) => [
-                    'id' => $marga->id,
-                    'value' => 'marga:'.$marga->id,
-                    'name' => 'Keluarga '.($marga->identityPerson?->name ?? $marga->name),
-                    'rootName' => $marga->identityPerson?->name ?? $marga->name,
-                    'group' => 'marga',
-                ]))
+                ->concat($approvedMargas
+                    ->filter(fn (Marga $marga) => $marga->identity_person_id !== null)
+                    ->map(fn (Marga $marga) => [
+                        'id' => $marga->id,
+                        'value' => 'marga:'.$marga->id,
+                        'name' => 'Keluarga '.($marga->identityPerson?->name ?? $marga->name),
+                        'rootName' => $marga->identityPerson?->name ?? $marga->name,
+                        'group' => 'marga',
+                    ]))
                 ->values()
                 ->all(),
             $selectedFamilyTreeId,
@@ -250,8 +254,8 @@ class TaromboController extends Controller
         ];
     }
 
-    /** @return \Illuminate\Database\Eloquent\Collection<int, FamilyTree> */
-    private function accountFamilyTrees(User $user): \Illuminate\Database\Eloquent\Collection
+    /** @return Collection<int, FamilyTree> */
+    private function accountFamilyTrees(User $user): Collection
     {
         return FamilyTree::query()
             ->when(! $user->isAdmin(), fn (Builder $query) => $query->where(
@@ -269,52 +273,22 @@ class TaromboController extends Controller
             ->values();
     }
 
-    /** @return \Illuminate\Database\Eloquent\Collection<int, Marga> */
-    private function approvedMargas(User $user): \Illuminate\Database\Eloquent\Collection
+    /** @return Collection<int, Marga> */
+    private function approvedMargas(User $user): Collection
     {
         $margaIds = $user->isStaff()
             ? null
             : ($user->isContributor() ? $user->accessibleMargaIds() : $user->approvedMargaAccessIds());
 
         if (! $user->isStaff() && $margaIds->isEmpty()) {
-            return new \Illuminate\Database\Eloquent\Collection;
+            return new Collection;
         }
 
         return Marga::query()
-            ->whereNotNull('identity_person_id')
             ->when($margaIds !== null, fn (Builder $query) => $query->whereKey($margaIds))
             ->with('identityPerson:id,name,father_id,marga_id')
             ->orderBy('name')
             ->get(['id', 'name', 'identity_person_id']);
-    }
-
-    /** @return array<int, array<string, mixed>> */
-    private function rowsForMarga(TaromboTreeService $service, Marga $marga, string $direction): array
-    {
-        $identity = $marga->identityPerson;
-        abort_if($identity === null, 404, 'Identitas marga belum dipilih.');
-
-        $identityRows = collect(
-            $direction === 'upper'
-                ? $service->rowsForPersonWithAncestors($identity)
-                : $service->rowsForPerson(
-                    $identity,
-                    maxDepth: (int) config('tarombo.public_max_depth'),
-                    maxNodes: (int) config('tarombo.public_max_nodes'),
-                ),
-        );
-
-        return $identityRows
-            ->when($direction === 'lower', fn (Collection $rows) => $rows->merge(
-                $service->rows(
-                    Person::query()
-                        ->where('marga_id', $marga->id)
-                        ->orderBy('id'),
-                ),
-            ))
-            ->unique('id')
-            ->values()
-            ->all();
     }
 
     /**

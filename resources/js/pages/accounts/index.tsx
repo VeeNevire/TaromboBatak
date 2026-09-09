@@ -1,5 +1,8 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import {
+    ArrowDown,
+    ArrowUp,
+    ChevronsUpDown,
     History,
     Pencil,
     Plus,
@@ -20,6 +23,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import accounts from '@/routes/accounts';
 
@@ -59,32 +63,118 @@ const roleLabels: Record<string, string> = {
     user: 'Pengguna',
 };
 
+type SortColumn =
+    'name' | 'email' | 'role' | 'current_person' | 'marga' | 'created_at';
+
+type Filters = {
+    search: string;
+    role: string;
+    sort: SortColumn;
+    direction: 'asc' | 'desc';
+};
+
+const sortableColumns: { key: SortColumn; label: string }[] = [
+    { key: 'name', label: 'Nama' },
+    { key: 'email', label: 'Email' },
+    { key: 'role', label: 'Peran' },
+    { key: 'current_person', label: 'Saya adalah' },
+    { key: 'marga', label: 'Marga' },
+    { key: 'created_at', label: 'Dibuat' },
+];
+
+function SortableHeader({
+    column,
+    label,
+    filters,
+    onSort,
+}: {
+    column: SortColumn;
+    label: string;
+    filters: Filters;
+    onSort: (column: SortColumn) => void;
+}) {
+    const active = filters.sort === column;
+    const ascending = active && filters.direction === 'asc';
+    const Icon = !active ? ChevronsUpDown : ascending ? ArrowUp : ArrowDown;
+
+    return (
+        <th
+            scope="col"
+            className="px-3 py-3 font-medium"
+            aria-sort={
+                active ? (ascending ? 'ascending' : 'descending') : 'none'
+            }
+        >
+            <button
+                type="button"
+                onClick={() => onSort(column)}
+                title={`Urutkan berdasarkan ${label}`}
+                className={cn(
+                    'inline-flex items-center gap-1 rounded transition-colors hover:text-tb-primary focus-visible:outline-2 focus-visible:outline-tb-primary',
+                    active && 'font-semibold text-tb-primary',
+                )}
+            >
+                {label}
+                <Icon
+                    className={cn(
+                        'size-3.5 shrink-0',
+                        !active && 'text-tb-outline',
+                    )}
+                />
+            </button>
+        </th>
+    );
+}
+
 export default function AccountsIndex({
     accounts: page,
     filters,
 }: {
     accounts: Page;
-    filters: { search: string; role: string };
+    filters: Filters;
 }) {
     const [search, setSearch] = useState(filters.search);
     const [toDelete, setToDelete] = useState<Account | null>(null);
-    const [activityAccount, setActivityAccount] = useState<Account | null>(null);
+    const [activityAccount, setActivityAccount] = useState<Account | null>(
+        null,
+    );
     const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
     const [activityLoading, setActivityLoading] = useState(false);
     const deleteForm = useForm({});
 
-    const applyFilters = (nextSearch = search, nextRole = filters.role) => {
+    const applyFilters = (
+        nextSearch = search,
+        nextRole = filters.role,
+        nextSort = filters.sort,
+        nextDirection = filters.direction,
+    ) => {
         router.get(
             accounts.index(),
-            { search: nextSearch || undefined, role: nextRole || undefined },
+            {
+                search: nextSearch || undefined,
+                role: nextRole || undefined,
+                sort: nextSort,
+                direction: nextDirection,
+            },
             { preserveState: true, replace: true },
+        );
+    };
+
+    const handleSort = (column: SortColumn) => {
+        applyFilters(
+            search,
+            filters.role,
+            column,
+            filters.sort === column && filters.direction === 'asc'
+                ? 'desc'
+                : 'asc',
         );
     };
 
     const confirmDelete = () => {
         if (!toDelete) {
-return;
-}
+            return;
+        }
 
         deleteForm.delete(accounts.destroy(toDelete.id).url, {
             preserveScroll: true,
@@ -179,24 +269,15 @@ return;
                         <table className="w-full min-w-[900px] text-sm">
                             <thead>
                                 <tr className="border-b border-tb-outline-variant text-left text-xs text-tb-on-surface-variant">
-                                    <th className="px-3 py-3 font-medium">
-                                        Nama
-                                    </th>
-                                    <th className="px-3 py-3 font-medium">
-                                        Email
-                                    </th>
-                                    <th className="px-3 py-3 font-medium">
-                                        Peran
-                                    </th>
-                                    <th className="px-3 py-3 font-medium">
-                                        Saya adalah
-                                    </th>
-                                    <th className="px-3 py-3 font-medium">
-                                        Marga
-                                    </th>
-                                    <th className="px-3 py-3 font-medium">
-                                        Dibuat
-                                    </th>
+                                    {sortableColumns.map((column) => (
+                                        <SortableHeader
+                                            key={column.key}
+                                            column={column.key}
+                                            label={column.label}
+                                            filters={filters}
+                                            onSort={handleSort}
+                                        />
+                                    ))}
                                     <th className="px-3 py-3 font-medium">
                                         Log Aktivitas
                                     </th>
@@ -241,9 +322,13 @@ return;
                                         </td>
                                         <td className="px-3 py-3 text-tb-on-surface-variant">
                                             <div>{account.marga ?? '-'}</div>
-                                            {account.managed_margas.length > 0 && (
+                                            {account.managed_margas.length >
+                                                0 && (
                                                 <div className="mt-1 max-w-52 text-xs text-tb-primary">
-                                                    Kelola: {account.managed_margas.join(', ')}
+                                                    Kelola:{' '}
+                                                    {account.managed_margas.join(
+                                                        ', ',
+                                                    )}
                                                 </div>
                                             )}
                                         </td>
@@ -256,7 +341,9 @@ return;
                                                 size="sm"
                                                 title="Lihat Log Aktivitas"
                                                 className="gap-1.5 text-tb-primary hover:bg-tb-surface-container"
-                                                onClick={() => openActivityLog(account)}
+                                                onClick={() =>
+                                                    openActivityLog(account)
+                                                }
                                             >
                                                 <History className="size-4" />
                                                 Lihat Log
@@ -399,7 +486,10 @@ return;
                         <div className="max-h-80 overflow-y-auto rounded-lg border border-tb-outline-variant">
                             <div className="divide-y divide-tb-outline-variant">
                                 {activityLogs.map((log) => (
-                                    <div key={log.id} className="grid gap-1 px-4 py-3">
+                                    <div
+                                        key={log.id}
+                                        className="grid gap-1 px-4 py-3"
+                                    >
                                         <div className="flex flex-wrap items-center justify-between gap-2">
                                             <span className="text-sm font-semibold text-tb-on-surface">
                                                 {log.description}

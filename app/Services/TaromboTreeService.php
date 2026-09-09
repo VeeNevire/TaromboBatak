@@ -214,8 +214,7 @@ class TaromboTreeService
         Person $person,
         ?int $maxDepth = null,
         ?int $maxNodes = null,
-    ): array
-    {
+    ): array {
         $maxDepth = max(1, $maxDepth ?? (int) config('tarombo.person_max_depth'));
         $maxNodes = max(1, $maxNodes ?? (int) config('tarombo.person_max_nodes'));
         $ids = collect([$person->id]);
@@ -263,6 +262,48 @@ class TaromboTreeService
                 ->whereIn('id', $ids)
                 ->orderBy('id'),
         );
+    }
+
+    /**
+     * Build the tarombo rows for a marga's upper (ancestor path) or lower
+     * (descendants) tree, anchored on the marga's identity person. Falls back
+     * to every marga member when no identity has been chosen.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function rowsForMarga(Marga $marga, string $direction): array
+    {
+        $identity = $marga->identityPerson;
+
+        if ($identity === null) {
+            return $this->rows(
+                Person::query()
+                    ->where('marga_id', $marga->id)
+                    ->orderBy('id'),
+            );
+        }
+
+        $identityRows = collect(
+            $direction === 'upper'
+                ? $this->rowsForPersonWithAncestors($identity)
+                : $this->rowsForPerson(
+                    $identity,
+                    maxDepth: (int) config('tarombo.public_max_depth'),
+                    maxNodes: (int) config('tarombo.public_max_nodes'),
+                ),
+        );
+
+        return $identityRows
+            ->when($direction === 'lower', fn (Collection $rows) => $rows->merge(
+                $this->rows(
+                    Person::query()
+                        ->where('marga_id', $marga->id)
+                        ->orderBy('id'),
+                ),
+            ))
+            ->unique('id')
+            ->values()
+            ->all();
     }
 
     /**
