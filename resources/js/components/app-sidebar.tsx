@@ -33,6 +33,7 @@ import announcements from '@/routes/announcements';
 import contacts from '@/routes/contacts';
 import contributions from '@/routes/contributions';
 import events from '@/routes/events';
+import familyTrees from '@/routes/family-trees';
 import groups from '@/routes/groups';
 import marga from '@/routes/marga';
 import newsFeed from '@/routes/news-feed';
@@ -144,6 +145,11 @@ export function AppSidebar() {
                               icon: Users,
                           },
                           {
+                              title: 'Daftar Marga',
+                              href: marga.index(),
+                              icon: Shapes,
+                          },
+                          {
                               title: 'Event & Kegiatan',
                               href: events.index(),
                               icon: CalendarDays,
@@ -165,6 +171,11 @@ export function AppSidebar() {
                               title: 'Data Pengguna',
                               href: accounts.index(),
                               icon: Users,
+                          },
+                          {
+                              title: 'Daftar Silsilah Milik Akun',
+                              href: familyTrees.index(),
+                              icon: TreePine,
                           },
                           {
                               title: 'Sub Admin',

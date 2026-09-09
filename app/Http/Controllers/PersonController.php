@@ -136,31 +136,9 @@ class PersonController extends Controller
         ]);
     }
 
-    public function publicPreview(Request $request): Response|RedirectResponse
+    public function publicPreview(): RedirectResponse
     {
-        if ($request->user() !== null) {
-            return to_route('people.create');
-        }
-
-        $margas = Marga::query()
-            ->whereNotNull('identity_person_id')
-            ->whereHas('people', fn ($query) => $query->public())
-            ->with('identityPerson:id,name')
-            ->withCount(['people as people_count' => fn ($query) => $query->public()])
-            ->orderBy('name')
-            ->get(['id', 'name', 'identity_person_id'])
-            ->map(fn (Marga $marga) => [
-                'id' => $marga->id,
-                'name' => $marga->name,
-                'identity_person_id' => $marga->identity_person_id,
-                'identity_person_name' => $marga->identityPerson?->name,
-                'people_count' => $marga->people_count,
-            ])
-            ->values();
-
-        return Inertia::render('people/public-preview', [
-            'margas' => $margas,
-        ]);
+        return to_route('people.create');
     }
 
     /**
@@ -1648,6 +1626,19 @@ class PersonController extends Controller
                         ->whereHas('nodes.person', fn ($person) => $person
                             ->whereIn('marga_id', $user->approvedMargaAccessIds()));
                 })));
+    }
+
+    /**
+     * Standalone listing of the family trees the account owns or was given.
+     */
+    public function familyTreeIndex(Request $request): Response
+    {
+        $user = $request->user();
+
+        return Inertia::render('family-trees/index', [
+            'familyTrees' => $this->familyTrees($user),
+            ...$this->familyTreeSharingPayload($user),
+        ]);
     }
 
     /** @return array{shareableAccounts: array<int, array<string, mixed>>, pendingTreeShares: array<int, array<string, mixed>>} */

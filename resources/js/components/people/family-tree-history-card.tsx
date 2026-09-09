@@ -245,6 +245,7 @@ export function FamilyTreeHistoryCard({
     margaAccessStatus,
     shareableAccounts = [],
     pendingTreeShares = [],
+    accountTreesOnly = false,
 }: {
     entries: FamilyTreeHistoryEntry[];
     approvedEntries?: ApprovedMargaTreeEntry[];
@@ -262,6 +263,8 @@ export function FamilyTreeHistoryCard({
         tree_name: string;
         sender_name: string;
     }[];
+    /** Render only the account's own trees, without the marga sections. */
+    accountTreesOnly?: boolean;
 }) {
     const [expanded, setExpanded] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -281,7 +284,8 @@ export function FamilyTreeHistoryCard({
         year: 'numeric',
     });
 
-    const showSearch = entries.length > ACCOUNT_FAMILY_TREE_ITEMS_PER_PAGE;
+    const showSearch =
+        accountTreesOnly || entries.length > ACCOUNT_FAMILY_TREE_ITEMS_PER_PAGE;
 
     const filteredEntries = useMemo(() => {
         const query = searchQuery.trim().toLowerCase();
@@ -311,7 +315,9 @@ export function FamilyTreeHistoryCard({
     const margaRequestEntry =
         entries.find((entry) => entry.is_primary) ?? entries[0];
     const canRequestMargaAccess =
-        margaId != null && margaAccessStatus !== 'approved';
+        !accountTreesOnly &&
+        margaId != null &&
+        margaAccessStatus !== 'approved';
     const rangeStart = filteredEntries.length === 0 ? 0 : startIndex + 1;
     const rangeEnd = Math.min(
         startIndex + ACCOUNT_FAMILY_TREE_ITEMS_PER_PAGE,
@@ -396,7 +402,9 @@ export function FamilyTreeHistoryCard({
                             </span>
                             <div className="min-w-0">
                                 <CardTitle className="font-display text-lg text-tb-on-surface">
-                                    Daftar Silsilah
+                                    {accountTreesOnly
+                                        ? 'Daftar Silsilah Milik Akun'
+                                        : 'Daftar Silsilah'}
                                 </CardTitle>
                                 {margaName && (
                                     <p className="mt-1 font-display text-base font-semibold text-tb-primary">
@@ -432,36 +440,40 @@ export function FamilyTreeHistoryCard({
                                           : 'Ajukan Buka Marga'}
                                 </Button>
                             )}
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    setExpanded((current) => !current)
-                                }
-                                aria-expanded={expanded}
-                                aria-label={
-                                    expanded
-                                        ? 'Kembali ke form Tambah Keluarga'
-                                        : 'Perbesar Daftar Silsilah'
-                                }
-                                title={
-                                    expanded ? 'Kembali ke Form' : 'Perbesar'
-                                }
-                                className={cn(
-                                    'inline-flex shrink-0 items-center justify-center rounded-lg border border-tb-outline-variant text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none',
-                                    expanded
-                                        ? 'h-9 gap-2 px-3 text-sm font-medium'
-                                        : 'size-9',
-                                )}
-                            >
-                                {expanded ? (
-                                    <>
-                                        <ArrowLeft className="size-4" />
-                                        Kembali ke Form
-                                    </>
-                                ) : (
-                                    <Maximize2 className="size-4" />
-                                )}
-                            </button>
+                            {!accountTreesOnly && (
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setExpanded((current) => !current)
+                                    }
+                                    aria-expanded={expanded}
+                                    aria-label={
+                                        expanded
+                                            ? 'Kembali ke form Tambah Keluarga'
+                                            : 'Perbesar Daftar Silsilah'
+                                    }
+                                    title={
+                                        expanded
+                                            ? 'Kembali ke Form'
+                                            : 'Perbesar'
+                                    }
+                                    className={cn(
+                                        'inline-flex shrink-0 items-center justify-center rounded-lg border border-tb-outline-variant text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none',
+                                        expanded
+                                            ? 'h-9 gap-2 px-3 text-sm font-medium'
+                                            : 'size-9',
+                                    )}
+                                >
+                                    {expanded ? (
+                                        <>
+                                            <ArrowLeft className="size-4" />
+                                            Kembali ke Form
+                                        </>
+                                    ) : (
+                                        <Maximize2 className="size-4" />
+                                    )}
+                                </button>
+                            )}
                         </div>
                     </div>
                 </CardHeader>
@@ -526,54 +538,58 @@ export function FamilyTreeHistoryCard({
                             ))}
                         </section>
                     )}
-                    <ApprovedMargaTreeList
-                        entries={approvedEntries}
-                        title={`Daftar Silsilah Marga${margaName ? ` ${margaName}` : ''}`}
-                        headerAction={
-                            margaRequestEntry?.can_request_marga_tree && (
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    disabled={
-                                        margaRequestEntry.marga_request_status !==
-                                        null
-                                    }
-                                    className="text-tb-on-primary shrink-0 self-start bg-tb-primary text-xs hover:bg-tb-primary-light"
-                                    onClick={() => {
-                                        if (
-                                            margaRequestEntry.marga_request_status ===
+                    {!accountTreesOnly && (
+                        <ApprovedMargaTreeList
+                            entries={approvedEntries}
+                            title={`Daftar Silsilah Marga${margaName ? ` ${margaName}` : ''}`}
+                            headerAction={
+                                margaRequestEntry?.can_request_marga_tree && (
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        disabled={
+                                            margaRequestEntry.marga_request_status !==
                                             null
-                                        ) {
-                                            router.post(
-                                                contributions.margaTree.store(
-                                                    margaRequestEntry.id,
-                                                ).url,
-                                                {},
-                                                { preserveScroll: true },
-                                            );
                                         }
-                                    }}
-                                >
-                                    <TreePine className="size-3.5" />{' '}
-                                    {margaRequestEntry.marga_request_status ===
-                                    'pending'
-                                        ? 'Menunggu Persetujuan'
-                                        : margaRequestEntry.marga_request_status ===
-                                            'approved'
-                                          ? 'Sudah Disetujui'
-                                          : 'Ajukan Silsilah Marga'}
-                                </Button>
-                            )
-                        }
-                    />
-                    <div className="border-t border-tb-outline-variant pt-6">
-                        <h3 className="font-display text-base font-semibold text-tb-on-surface">
-                            Silsilah Milik Akun
-                        </h3>
-                        <p className="mt-1 text-xs text-tb-on-surface-variant">
-                            Silsilah yang Anda buat dan dapat Anda kelola.
-                        </p>
-                    </div>
+                                        className="text-tb-on-primary shrink-0 self-start bg-tb-primary text-xs hover:bg-tb-primary-light"
+                                        onClick={() => {
+                                            if (
+                                                margaRequestEntry.marga_request_status ===
+                                                null
+                                            ) {
+                                                router.post(
+                                                    contributions.margaTree.store(
+                                                        margaRequestEntry.id,
+                                                    ).url,
+                                                    {},
+                                                    { preserveScroll: true },
+                                                );
+                                            }
+                                        }}
+                                    >
+                                        <TreePine className="size-3.5" />{' '}
+                                        {margaRequestEntry.marga_request_status ===
+                                        'pending'
+                                            ? 'Menunggu Persetujuan'
+                                            : margaRequestEntry.marga_request_status ===
+                                                'approved'
+                                              ? 'Sudah Disetujui'
+                                              : 'Ajukan Silsilah Marga'}
+                                    </Button>
+                                )
+                            }
+                        />
+                    )}
+                    {!accountTreesOnly && (
+                        <div className="border-t border-tb-outline-variant pt-6">
+                            <h3 className="font-display text-base font-semibold text-tb-on-surface">
+                                Silsilah Milik Akun
+                            </h3>
+                            <p className="mt-1 text-xs text-tb-on-surface-variant">
+                                Silsilah yang Anda buat dan dapat Anda kelola.
+                            </p>
+                        </div>
+                    )}
                     <div ref={listTopRef} />
                     {entries.length === 0 ? (
                         <div className="rounded-xl border border-dashed border-tb-outline-variant bg-tb-surface-container/40 px-4 py-6 text-center">

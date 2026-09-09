@@ -64,6 +64,32 @@ test('authenticated users see statuses and approved published content', function
             ->where('items.2.id', $story->id));
 });
 
+test('the newest status is first even when created in the same second', function () {
+    $user = User::factory()->create();
+    $timestamp = now();
+
+    $older = FeedPost::create([
+        'user_id' => $user->id,
+        'body' => 'Status lebih dulu.',
+        'created_at' => $timestamp,
+        'updated_at' => $timestamp,
+    ]);
+    $newer = FeedPost::create([
+        'user_id' => $user->id,
+        'body' => 'Status paling baru.',
+        'created_at' => $timestamp,
+        'updated_at' => $timestamp,
+    ]);
+
+    expect($newer->id)->toBeGreaterThan($older->id);
+
+    $this->actingAs($user)
+        ->get(route('news-feed.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('items.0.id', $newer->id)
+            ->where('items.1.id', $older->id));
+});
+
 test('authenticated users can publish a status', function () {
     $user = User::factory()->create();
 

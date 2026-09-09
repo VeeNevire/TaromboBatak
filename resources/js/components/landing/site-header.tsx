@@ -19,6 +19,8 @@ function pageHref(label: string): string {
             return toUrl(tarombo.view());
         case 'Marga':
             return toUrl(marga.view());
+        case 'Daftar Marga':
+            return toUrl(marga.index());
         case 'Budaya':
             return '/budaya';
         case 'Komunitas':

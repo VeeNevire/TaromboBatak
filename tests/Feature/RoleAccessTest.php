@@ -55,30 +55,9 @@ test('the guest data table paginates public people', function () {
             ->where('people.next_page_url', fn ($url) => is_string($url)));
 });
 
-test('guests can open the Silsilah Saya preview with public marga data', function () {
-    $publicMarga = Marga::factory()->create(['name' => 'Silaban']);
-    $publicRoot = Person::factory()->create([
-        'name' => 'Akar Silaban',
-        'marga_id' => $publicMarga->id,
-        'is_public' => true,
-    ]);
-    $publicMarga->update(['identity_person_id' => $publicRoot->id]);
-
-    $privateMarga = Marga::factory()->create(['name' => 'Marga Privat']);
-    $privateRoot = Person::factory()->create([
-        'marga_id' => $privateMarga->id,
-        'is_public' => false,
-    ]);
-    $privateMarga->update(['identity_person_id' => $privateRoot->id]);
-
+test('guests clicking Silsilah Saya are redirected to login', function () {
     $this->get(route('people.public-preview'))
-        ->assertOk()
-        ->assertInertia(fn (Assert $page) => $page
-            ->component('people/public-preview')
-            ->has('margas', 1)
-            ->where('margas.0.id', $publicMarga->id)
-            ->where('margas.0.identity_person_name', 'Akar Silaban')
-            ->where('margas.0.people_count', 1));
+        ->assertRedirect(route('login'));
 });
 
 test('authenticated users enter their editable Silsilah Saya page', function () {
@@ -219,7 +198,6 @@ test('regular users without a marga cannot create or edit family data', function
     $this->actingAs($user)->get(route('people.edit', $person))
         ->assertRedirect()
         ->assertSessionHas('inertia.flash_data.toast.type', 'error');
-    $this->actingAs($user)->get(route('marga.index'))->assertForbidden();
     $this->actingAs($user)->delete(route('people.destroy', $person))->assertForbidden();
 });
 

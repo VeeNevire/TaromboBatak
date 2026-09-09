@@ -68,7 +68,7 @@ export default function SharedTreePersonForm({
                                     <Card className="border-tb-outline-variant bg-tb-surface-bright">
                                         <CardHeader>
                                             <CardTitle className="font-display text-lg text-tb-on-surface">
-                                                Informasi Pribadi
+                                                Informasi Anggota
                                             </CardTitle>
                                             <CardDescription>
                                                 Data dasar anggota yang sedang

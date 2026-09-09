@@ -35,7 +35,7 @@ test('staff can open an upper or lower marga tree for its identity person', func
     }
 });
 
-test('marga tree requires a valid identity and staff access', function () {
+test('marga tree without an identity falls back to every marga member for staff', function () {
     $marga = Marga::factory()->create();
     $user = User::factory()->create();
 
@@ -47,13 +47,26 @@ test('marga tree requires a valid identity and staff access', function () {
         ]))
         ->assertForbidden();
 
-    $this->actingAs(User::factory()->asAdmin()->create())
-        ->get(route('tarombo.fullscreen', [
-            'view' => 'tree',
-            'marga_id' => $marga->id,
-            'marga_direction' => 'lower',
-        ]))
-        ->assertForbidden();
+    $member = Person::factory()->create([
+        'name' => 'Anggota Marga',
+        'marga_id' => $marga->id,
+        'gender' => 'L',
+    ]);
+
+    foreach (['upper', 'lower'] as $direction) {
+        $this->actingAs(User::factory()->asAdmin()->create())
+            ->get(route('tarombo.fullscreen', [
+                'view' => 'tree',
+                'marga_id' => $marga->id,
+                'marga_direction' => $direction,
+            ]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('tarombo/fullscreen')
+                ->where('margaTree.margaName', $marga->name)
+                ->where('margaTree.identityPersonId', null)
+                ->where('people.0.id', (string) $member->id));
+    }
 });
 
 test('approved users receive the complete ancestor path for an upper marga tree', function () {

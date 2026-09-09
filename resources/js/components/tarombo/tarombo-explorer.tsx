@@ -76,12 +76,15 @@ type Props = {
     selectedTreePeople: TaromboPersonRow[] | null;
     margaTree?: {
         margaName: string;
-        identityPersonId: string;
+        identityPersonId: string | null;
         direction: 'upper' | 'lower';
     } | null;
 };
 
 const ANCESTOR_DEPTH = 4;
+
+// Generations shown before a branch collapses in the lower marga tree.
+const MARGA_LOWER_DEPTH = 5;
 
 const MY_PERSON_STORAGE_KEY = 'tarombo-my-person-id';
 
@@ -383,6 +386,9 @@ export function TaromboExplorer({
     const initialFocusId = initialRequestedPersonId ?? initialMyId;
     const [myId, setMyId] = useState<string | null>(initialMyId);
     const [pickerOpen, setPickerOpen] = useState(false);
+    const [pendingIdentity, setPendingIdentity] =
+        useState<TaromboPerson | null>(null);
+    const [submittingIdentity, setSubmittingIdentity] = useState(false);
     const [selectedId, setSelectedId] = useState<string | null>(initialFocusId);
     const [search, setSearch] = useState('');
     const [searchOpen, setSearchOpen] = useState(false);
@@ -547,14 +553,28 @@ export function TaromboExplorer({
         setSearchOpen(false);
     };
 
+    // Picking a name only stages it; the request reaches the coordinator once
+    // the person presses Submit.
     const handleIdentitySelect = (person: TaromboPerson) => {
+        setPendingIdentity(person);
+        setPickerOpen(false);
+    };
+
+    const handleIdentitySubmit = () => {
+        if (pendingIdentity === null || submittingIdentity) {
+            return;
+        }
+
+        const person = pendingIdentity;
+
+        setSubmittingIdentity(true);
         router.post(
             identityRequests.store().url,
             { person_id: Number(person.id) },
             {
                 preserveScroll: true,
                 onSuccess: () => {
-                    setPickerOpen(false);
+                    setPendingIdentity(null);
                     setMyId(person.id);
                     storeMyPerson(person);
 
@@ -566,6 +586,7 @@ export function TaromboExplorer({
                     setCenterPersonId(person.id);
                     setAncestorFocusId(person.id);
                 },
+                onFinish: () => setSubmittingIdentity(false),
             },
         );
     };
@@ -573,6 +594,7 @@ export function TaromboExplorer({
     const handleIdentityReset = () => {
         removeStoredMyPersonId();
         setMyId(null);
+        setPendingIdentity(null);
     };
 
     const handleBack = () => {
@@ -932,7 +954,11 @@ export function TaromboExplorer({
                         markFemaleLineage={
                             margaTree ? false : showFemaleLineage
                         }
-                        collapseDepth={undefined}
+                        collapseDepth={
+                            margaTree?.direction === 'lower'
+                                ? MARGA_LOWER_DEPTH
+                                : undefined
+                        }
                         detachedPeople={margaDetachedRoots}
                         compact={fullscreen && fullscreenView === 'tree'}
                         nodeIdPrefix={
@@ -1035,7 +1061,9 @@ export function TaromboExplorer({
                     <span className="text-sm font-medium text-tb-on-surface">
                         Saya adalah:
                     </span>
-                    {myPerson || identity?.request?.status === 'pending' ? (
+                    {pendingIdentity ||
+                    myPerson ||
+                    identity?.request?.status === 'pending' ? (
                         <span className="inline-flex items-center gap-2 rounded-full border border-tb-outline-variant bg-tb-surface-bright px-3 py-1 text-sm font-medium text-tb-on-surface">
                             <span
                                 aria-hidden
@@ -1044,12 +1072,15 @@ export function TaromboExplorer({
                                     backgroundColor:
                                         margas.find(
                                             (marga) =>
-                                                marga.name === myPerson?.marga,
+                                                marga.name ===
+                                                (pendingIdentity?.marga ??
+                                                    myPerson?.marga),
                                         )?.color ?? 'var(--color-tb-primary)',
                                 }}
                             />
                             <span className="max-w-48 truncate">
-                                {myPerson?.name ??
+                                {pendingIdentity?.name ??
+                                    myPerson?.name ??
                                     identity?.request?.personName}
                             </span>
                         </span>
@@ -1058,10 +1089,16 @@ export function TaromboExplorer({
                             Belum dipilih
                         </span>
                     )}
-                    {identity?.request?.status === 'pending' && (
-                        <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-                            Menunggu persetujuan
+                    {pendingIdentity ? (
+                        <span className="rounded-full bg-tb-surface-container px-2.5 py-1 text-xs font-semibold text-tb-on-surface-variant">
+                            Belum dikirim
                         </span>
+                    ) : (
+                        identity?.request?.status === 'pending' && (
+                            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                                Menunggu persetujuan
+                            </span>
+                        )
                     )}
                     <Button
                         type="button"
@@ -1072,7 +1109,7 @@ export function TaromboExplorer({
                     >
                         <UserSearch className="size-4" /> Temukan Nama
                     </Button>
-                    {myPerson && (
+                    {(myPerson || pendingIdentity) && (
                         <Button
                             type="button"
                             size="sm"
@@ -1083,6 +1120,17 @@ export function TaromboExplorer({
                             className="text-tb-on-surface-variant hover:text-tb-on-surface"
                         >
                             <X className="size-4" />
+                        </Button>
+                    )}
+                    {pendingIdentity && (
+                        <Button
+                            type="button"
+                            size="sm"
+                            onClick={handleIdentitySubmit}
+                            disabled={submittingIdentity}
+                            className="bg-tb-primary hover:bg-tb-primary-light"
+                        >
+                            {submittingIdentity ? 'Mengirim...' : 'Submit'}
                         </Button>
                     )}
                 </div>
@@ -1263,7 +1311,12 @@ export function TaromboExplorer({
                                                 markFemaleLineage={
                                                     showFemaleLineage
                                                 }
-                                                collapseDepth={undefined}
+                                                collapseDepth={
+                                                    margaTree?.direction ===
+                                                    'lower'
+                                                        ? MARGA_LOWER_DEPTH
+                                                        : undefined
+                                                }
                                                 detachedPeople={
                                                     margaDetachedRoots
                                                 }
@@ -1291,7 +1344,7 @@ export function TaromboExplorer({
                 onOpenChange={setPickerOpen}
                 people={selectablePeople}
                 alternativeTrees={descendantAlternativeTrees}
-                currentId={myId}
+                currentId={pendingIdentity?.id ?? myId}
                 onSelect={handleIdentitySelect}
             />
         </div>

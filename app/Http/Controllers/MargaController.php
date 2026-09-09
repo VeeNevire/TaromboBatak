@@ -11,6 +11,7 @@ use App\Models\Person;
 use App\Models\Story;
 use App\Services\MargaIdentityPersonService;
 use App\Services\TaromboStatisticsService;
+use App\Services\TaromboTreeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,11 +23,15 @@ use Inertia\Response;
 class MargaController extends Controller
 {
     /**
-     * List all marga with their member count.
+     * List marga with their member count. Staff see every marga and management
+     * controls; everyone else (including guests) sees only public marga.
      */
-    public function index(): Response
+    public function index(Request $request): Response
     {
+        $canManage = $request->user()?->isStaff() ?? false;
+
         $margas = Marga::query()
+            ->when(! $canManage, fn ($query) => $query->where('is_public', true))
             ->with('identityPerson:id,name')
             ->withCount('people')
             ->orderBy('name')
@@ -41,11 +46,51 @@ class MargaController extends Controller
                 'identity_person_id' => $marga->identity_person_id,
                 'identity_person_name' => $marga->identityPerson?->name,
                 'people_count' => $marga->people_count,
+                'is_public' => $marga->is_public,
             ]);
 
         return Inertia::render('marga/index', [
             'margas' => $margas,
-            'identityPersonOptions' => app(MargaIdentityPersonService::class)->options()->all(),
+            'canManage' => $canManage,
+            'identityPersonOptions' => $canManage
+                ? app(MargaIdentityPersonService::class)->options()->all()
+                : [],
+        ]);
+    }
+
+    /**
+     * Show a public marga's upper or lower silsilah tree. Open to guests.
+     */
+    public function tree(Marga $marga, string $direction): Response
+    {
+        abort_unless($marga->is_public, 404);
+
+        $service = app(TaromboTreeService::class);
+        $rows = $service->rowsForMarga($marga, $direction);
+
+        return Inertia::render('tarombo/fullscreen', [
+            'people' => $rows,
+            'margas' => $service->margas(),
+            'alternativeTrees' => [],
+            'view' => 'tree',
+            'identity' => [
+                'canSelectAnyPerson' => false,
+                'currentPersonId' => null,
+                'currentPersonName' => null,
+                'request' => null,
+            ],
+            'initialPersonId' => null,
+            'familyTreeOptions' => [],
+            'selectedFamilyTreeId' => null,
+            'selectedMargaId' => $marga->id,
+            'selectedTreePeople' => $rows,
+            'margaTree' => [
+                'margaName' => $marga->name,
+                'identityPersonId' => $marga->identity_person_id !== null
+                    ? (string) $marga->identity_person_id
+                    : null,
+                'direction' => $direction,
+            ],
         ]);
     }
 

@@ -6,11 +6,12 @@ use App\Http\Requests\StoreAccountRequest;
 use App\Http\Requests\UpdateAccountRequest;
 use App\Models\ActivityLog;
 use App\Models\Marga;
+use App\Models\Person;
 use App\Models\User;
 use App\Services\AccountActivityLogger;
 use App\Support\IndonesiaRegions;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -18,8 +19,19 @@ use Inertia\Response;
 
 class AccountController extends Controller
 {
+    /** Columns the account table can be ordered by. */
+    private const SORTABLE = ['name', 'email', 'role', 'current_person', 'marga', 'created_at'];
+
     public function index(Request $request): Response
     {
+        $sort = $request->string('sort')->toString();
+        $direction = $request->string('direction')->toString() === 'desc' ? 'desc' : 'asc';
+
+        if (! in_array($sort, self::SORTABLE, true)) {
+            $sort = 'name';
+            $direction = 'asc';
+        }
+
         $accounts = User::query()
             ->with(['marga:id,name', 'currentPerson:id,name', 'managedMargas:id,name'])
             ->when($request->filled('search'), fn ($query) => $query->where(function ($query) use ($request) {
@@ -28,7 +40,19 @@ class AccountController extends Controller
                     ->orWhere('email', 'like', "%{$search}%");
             }))
             ->when($request->filled('role'), fn ($query) => $query->where('role', $request->string('role')))
-            ->orderBy('name')
+            ->when($sort === 'current_person', fn ($query) => $query->orderBy(
+                Person::query()->select('name')->whereColumn('people.id', 'users.current_person_id'),
+                $direction,
+            ))
+            ->when($sort === 'marga', fn ($query) => $query->orderBy(
+                Marga::query()->select('name')->whereColumn('margas.id', 'users.marga_id'),
+                $direction,
+            ))
+            ->when(
+                ! in_array($sort, ['current_person', 'marga'], true),
+                fn ($query) => $query->orderBy($sort, $direction),
+            )
+            ->orderBy('id')
             ->paginate(10)
             ->withQueryString()
             ->through(fn (User $user) => $this->accountPayload($user));
@@ -38,6 +62,8 @@ class AccountController extends Controller
             'filters' => [
                 'search' => $request->string('search')->toString(),
                 'role' => $request->string('role')->toString(),
+                'sort' => $sort,
+                'direction' => $direction,
             ],
         ]);
     }

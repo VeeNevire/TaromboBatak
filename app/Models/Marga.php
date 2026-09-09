@@ -18,14 +18,25 @@ use Illuminate\Support\Carbon;
  * @property string|null $color
  * @property string|null $image
  * @property int|null $identity_person_id
+ * @property bool $is_public
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'description', 'color', 'image', 'identity_person_id'])]
+#[Fillable(['name', 'description', 'color', 'image', 'identity_person_id', 'is_public'])]
 class Marga extends Model
 {
     /** @use HasFactory<MargaFactory> */
     use HasFactory;
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'is_public' => 'boolean',
+        ];
+    }
 
     /**
      * @return HasMany<Person, $this>

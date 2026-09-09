@@ -20,7 +20,7 @@ type Props = {
     selectedTreePeople: TaromboPersonRow[] | null;
     margaTree: {
         margaName: string;
-        identityPersonId: string;
+        identityPersonId: string | null;
         direction: 'upper' | 'lower';
     } | null;
 };
