@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\ReviewContributionRequest;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeDeletionRequest;
+use App\Models\FamilyTreeShare;
 use App\Models\User;
 use App\Notifications\FamilyTreeDeletionSubmitted;
 use App\Services\FamilyTreeDeletionService;
@@ -21,7 +22,7 @@ class FamilyTreeDeletionController extends Controller
         $user = $request->user();
         abort_unless($user->isAdmin() || $familyTree->user_id === $user->id, 403);
 
-        $result = DB::transaction(function () use ($familyTree, $user) {
+        $result = DB::transaction(function () use ($familyTree, $user): array {
             $tree = FamilyTree::query()->with('rootPerson.marga')->lockForUpdate()->findOrFail($familyTree->id);
             abort_unless($user->isAdmin() || $tree->user_id === $user->id, 403);
 
@@ -31,13 +32,16 @@ class FamilyTreeDeletionController extends Controller
                 ->first();
 
             if ($existing !== null) {
-                return 'pending';
+                return ['status' => 'pending'];
             }
 
             if (! app(FamilyTreeDeletionService::class)->isConnectedToOtherAccount($tree)) {
                 $tree->delete();
 
-                return 'deleted';
+                return [
+                    'status' => 'deleted',
+                    'replacementTreeId' => $this->replacementTreeId($tree, $user),
+                ];
             }
 
             $deletion = FamilyTreeDeletionRequest::create([
@@ -55,19 +59,43 @@ class FamilyTreeDeletionController extends Controller
                 ->where('marga_id', $deletion->marga_id)
                 ->each(fn (User $contributor) => $contributor->notify(new FamilyTreeDeletionSubmitted($deletion)));
 
-            return 'created';
+            return ['status' => 'created'];
         });
 
         Inertia::flash('toast', [
-            'type' => $result === 'pending' ? 'info' : 'success',
-            'message' => match ($result) {
+            'type' => $result['status'] === 'pending' ? 'info' : 'success',
+            'message' => match ($result['status']) {
                 'deleted' => 'Silsilah berhasil dihapus. Data anggota tetap tersimpan.',
                 'created' => 'Penghapusan silsilah diajukan dan menunggu persetujuan Kontributor.',
                 default => 'Penghapusan silsilah ini masih menunggu persetujuan.',
             },
         ]);
 
+        if ($result['status'] === 'deleted') {
+            return $result['replacementTreeId'] !== null
+                ? to_route('family-trees.show', $result['replacementTreeId'])
+                : to_route('family-trees.index');
+        }
+
         return back();
+    }
+
+    private function replacementTreeId(FamilyTree $deletedTree, User $user): ?int
+    {
+        if ($deletedTree->root_person_id === null) {
+            return null;
+        }
+
+        return FamilyTree::query()
+            ->where('root_person_id', $deletedTree->root_person_id)
+            ->when(! $user->isStaff(), fn ($query) => $query->where(fn ($access) => $access
+                ->whereBelongsTo($user)
+                ->orWhereHas('shares', fn ($shares) => $shares
+                    ->whereBelongsTo($user, 'recipient')
+                    ->where('status', FamilyTreeShare::STATUS_ACCEPTED))))
+            ->orderByDesc('is_primary')
+            ->latest('updated_at')
+            ->value('id');
     }
 
     public function approve(Request $request, FamilyTreeDeletionRequest $deletion): RedirectResponse

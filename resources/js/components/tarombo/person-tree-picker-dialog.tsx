@@ -1,5 +1,5 @@
 import { Search } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { DescendantsTree } from '@/components/people/descendants-tree';
 import type { DescendantsAlternativeTree } from '@/components/people/descendants-tree';
 import {
@@ -22,6 +22,33 @@ type Props = {
     description?: string;
 };
 
+function getAncestorPath(people: TaromboPerson[], personId: string): string[] {
+    const peopleById = new Map(people.map((person) => [person.id, person]));
+    const selected = peopleById.get(personId);
+
+    if (!selected) {
+        return [];
+    }
+
+    const path = [selected.id];
+    const visited = new Set(path);
+    let current = selected;
+
+    while (current.parentId) {
+        const parent = peopleById.get(current.parentId);
+
+        if (!parent || visited.has(parent.id)) {
+            break;
+        }
+
+        path.unshift(parent.id);
+        visited.add(parent.id);
+        current = parent;
+    }
+
+    return path;
+}
+
 export function PersonTreePickerDialog({
     open,
     onOpenChange,
@@ -32,6 +59,7 @@ export function PersonTreePickerDialog({
     description = 'Pilih satu nama pada pohon di bawah ini untuk mengatur identitas Anda di Pohon Tarombo.',
 }: Props) {
     const [search, setSearch] = useState('');
+    const [focusedPersonId, setFocusedPersonId] = useState<string | null>(null);
     const rootPerson = people.find((person) => !person.parentId) ?? people[0];
     const normalizedSearch = search.trim().toLowerCase();
     const searchResults = normalizedSearch
@@ -41,12 +69,42 @@ export function PersonTreePickerDialog({
               )
               .slice(0, 8)
         : [];
+    const focusedLineagePath = useMemo(
+        () => (focusedPersonId ? getAncestorPath(people, focusedPersonId) : []),
+        [focusedPersonId, people],
+    );
+
+    useEffect(() => {
+        if (!focusedPersonId) {
+            return;
+        }
+
+        const frame = window.requestAnimationFrame(() => {
+            document
+                .getElementById(`tarombo-picker-node-${focusedPersonId}`)
+                ?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center',
+                    inline: 'center',
+                });
+        });
+
+        return () => window.cancelAnimationFrame(frame);
+    }, [focusedPersonId]);
+
+    const focusSearchResult = (person: TaromboPerson) => {
+        setFocusedPersonId(person.id);
+        setSearch('');
+    };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
                 className="sm:max-w-4xl"
-                onCloseAutoFocus={() => setSearch('')}
+                onCloseAutoFocus={() => {
+                    setSearch('');
+                    setFocusedPersonId(null);
+                }}
             >
                 <DialogHeader>
                     <div className="flex items-start justify-between gap-4">
@@ -74,7 +132,9 @@ export function PersonTreePickerDialog({
                                             <button
                                                 key={person.id}
                                                 type="button"
-                                                onClick={() => onSelect(person)}
+                                                onClick={() =>
+                                                    focusSearchResult(person)
+                                                }
                                                 className="flex items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm text-tb-on-surface transition-colors hover:bg-tb-surface-container"
                                             >
                                                 <span className="min-w-0 truncate font-medium">
@@ -110,7 +170,8 @@ export function PersonTreePickerDialog({
                                     onSelect(person);
                                 }
                             }}
-                            highlightId={currentId}
+                            highlightId={focusedPersonId ?? currentId}
+                            lineagePath={focusedLineagePath}
                             alternativeTrees={alternativeTrees}
                             nodeIdPrefix="tarombo-picker-node"
                         />

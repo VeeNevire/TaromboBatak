@@ -14,6 +14,7 @@ use App\Http\Controllers\FamilyTreeDeletionController;
 use App\Http\Controllers\FamilyTreeShareController;
 use App\Http\Controllers\FeedCommentController;
 use App\Http\Controllers\FeedPostController;
+use App\Http\Controllers\FeedPostLikeController;
 use App\Http\Controllers\GroupMessageController;
 use App\Http\Controllers\IdentityRequestController;
 use App\Http\Controllers\IndonesiaRegionController;
@@ -24,9 +25,11 @@ use App\Http\Controllers\MessageController;
 use App\Http\Controllers\NewsFeedController;
 use App\Http\Controllers\PersonController;
 use App\Http\Controllers\SharedFamilyTreePersonController;
+use App\Http\Controllers\StatusController;
 use App\Http\Controllers\StoryController;
 use App\Http\Controllers\SubAdminController;
 use App\Http\Controllers\TaromboController;
+use App\Http\Controllers\TaromboFrameController;
 use App\Http\Controllers\TaromboSnapshotController;
 use App\Http\Controllers\TelegramAnnouncementController;
 use App\Http\Controllers\TelegramGroupLinkController;
@@ -47,6 +50,9 @@ Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard'
 
 Route::get('dashboard/news-feed', [NewsFeedController::class, 'index'])
     ->name('news-feed.index');
+
+Route::get('status/{feedPost}', [StatusController::class, 'show'])
+    ->name('news-feed.statuses.show');
 
 Route::get('dashboard/tarombo', [TaromboController::class, 'index'])
     ->name('tarombo.index');
@@ -108,6 +114,18 @@ Route::middleware(['auth'])->group(function () {
     Route::post('dashboard/news-feed/statuses', [FeedPostController::class, 'store'])
         ->middleware('throttle:20,1')
         ->name('news-feed.posts.store');
+    Route::put('dashboard/news-feed/statuses/{feedPost}', [FeedPostController::class, 'update'])
+        ->middleware('throttle:20,1')
+        ->name('news-feed.posts.update');
+    Route::delete('dashboard/news-feed/statuses/{feedPost}', [FeedPostController::class, 'destroy'])
+        ->middleware('throttle:20,1')
+        ->name('news-feed.posts.destroy');
+    Route::post('dashboard/news-feed/statuses/{feedPost}/likes', [FeedPostLikeController::class, 'store'])
+        ->middleware('throttle:60,1')
+        ->name('news-feed.posts.likes.store');
+    Route::delete('dashboard/news-feed/statuses/{feedPost}/likes', [FeedPostLikeController::class, 'destroy'])
+        ->middleware('throttle:60,1')
+        ->name('news-feed.posts.likes.destroy');
     Route::post('dashboard/news-feed/statuses/{feedPost}/comments', [FeedCommentController::class, 'store'])
         ->middleware('throttle:60,1')
         ->name('news-feed.posts.comments.store');
@@ -166,6 +184,11 @@ Route::middleware(['auth'])->group(function () {
         ->name('tarombo.snapshots.image');
     Route::delete('dashboard/tarombo/snapshots/{taromboSnapshot}', [TaromboSnapshotController::class, 'destroy'])
         ->name('tarombo.snapshots.destroy');
+    Route::post('dashboard/tarombo/snapshots/generate', [TaromboSnapshotController::class, 'generate'])
+        ->middleware('throttle:10,1')
+        ->name('tarombo.snapshots.generate');
+    Route::get('dashboard/tarombo/frames/{taromboFrame}/image', [TaromboFrameController::class, 'image'])
+        ->name('tarombo-frames.image');
 
     Route::get('people/create', [PersonController::class, 'create'])->name('people.create');
 
@@ -205,6 +228,10 @@ Route::middleware(['auth', 'role.staff'])->group(function () {
 });
 
 Route::middleware(['auth', 'role.admin'])->group(function () {
+    Route::resource('dashboard/tarombo/frames', TaromboFrameController::class)
+        ->except(['create', 'show', 'edit'])
+        ->parameters(['frames' => 'taromboFrame'])
+        ->names('tarombo-frames');
     Route::get('dashboard/silsilah-akun', [PersonController::class, 'familyTreeIndex'])
         ->name('family-trees.index');
     Route::resource('accounts', AccountController::class)->except(['show']);

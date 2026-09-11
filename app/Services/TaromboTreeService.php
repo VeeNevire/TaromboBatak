@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\FamilyTree;
-use App\Models\FamilyTreeNode;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Support\IndonesiaRegions;
@@ -20,63 +19,58 @@ class TaromboTreeService
      */
     public function rowsForFamilyTree(FamilyTree $familyTree, int|Collection|null $margaId = null): array
     {
-        $nodes = $familyTree->nodes()
-            ->when($margaId !== null, fn (Builder $query) => $query->whereHas(
-                'person',
-                fn (Builder $person) => $margaId instanceof Collection
-                    ? $person->whereIn('marga_id', $margaId)
-                    : $person->where('marga_id', $margaId),
-            ))
-            ->with([
-                'person.marga',
-                'person.creator:id,name',
-                'fatherNode',
-                'children' => fn ($query) => $query
-                    ->when($margaId !== null, fn ($children) => $children->whereHas(
-                        'person',
-                        fn ($person) => $margaId instanceof Collection
-                            ? $person->whereIn('marga_id', $margaId)
-                            : $person->where('marga_id', $margaId),
-                    ))
-                    ->with('person'),
-            ])
-            ->orderBy('id')
-            ->get();
+        $nodes = app(FamilyTreeInheritanceService::class)->nodesFor($familyTree);
+        $people = Person::query()
+            ->whereIn('id', $nodes->pluck('person_id'))
+            ->when($margaId !== null, fn (Builder $query) => $margaId instanceof Collection
+                ? $query->whereIn('marga_id', $margaId)
+                : $query->where('marga_id', $margaId))
+            ->with(['marga', 'creator:id,name'])
+            ->get()
+            ->keyBy('id');
+        $nodes = $nodes->filter(fn (array $node) => $people->has($node['person_id']))->values();
         $includedPersonIds = $nodes->pluck('person_id')->flip();
+        $children = $nodes->groupBy('father_person_id');
 
-        return $nodes
-            ->map(fn (FamilyTreeNode $node) => [
-                'id' => (string) $node->person_id,
-                'name' => $node->person->name,
-                'alias' => $node->person->alias,
-                'marga' => $node->person->marga->name ?? 'Batak',
-                'hasMarga' => $node->person->marga_id !== null,
-                'parentId' => $node->pending_father
-                    || $node->fatherNode === null
-                    || ! $includedPersonIds->has($node->fatherNode->person_id)
+        return $nodes->map(function (array $node) use ($people, $includedPersonIds, $children): array {
+            $person = $people->get($node['person_id']);
+
+            return [
+                'id' => (string) $person->id,
+                'name' => $person->name,
+                'alias' => $person->alias,
+                'marga' => $person->marga->name ?? 'Batak',
+                'hasMarga' => $person->marga_id !== null,
+                'parentId' => $node['pending_father']
+                    || $node['father_person_id'] === null
+                    || ! $includedPersonIds->has($node['father_person_id'])
                     ? null
-                    : (string) $node->fatherNode->person_id,
-                'birthYear' => $node->person->birth_year,
-                'birthOrder' => $node->birth_order,
-                'chain' => $node->chain,
-                'pending' => $node->pending_father,
-                'gender' => $node->person->gender,
-                'spouse' => $node->person->spouse,
-                'image' => $node->person->image,
-                'bio' => $node->person->bio,
-                'createdBy' => $node->person->creator?->name,
-                'relatedStories' => $node->person->related_stories ?? [],
-                'location' => $this->locationFor($node->person),
-                'childrenNames' => $node->children
+                    : (string) $node['father_person_id'],
+                'birthYear' => $person->birth_year,
+                'birthOrder' => $node['birth_order'],
+                'chain' => $node['chain'],
+                'pending' => $node['pending_father'],
+                'gender' => $person->gender,
+                'spouse' => $person->spouse,
+                'image' => $person->image,
+                'bio' => $person->bio,
+                'createdBy' => $person->creator?->name,
+                'relatedStories' => $person->related_stories ?? [],
+                'location' => $this->locationFor($person),
+                'childrenNames' => $children->get($person->id, collect())
                     ->sortBy('birth_order')
-                    ->map(fn (FamilyTreeNode $child) => $child->person->birth_year
-                        ? $child->person->name.' ('.$child->person->birth_year.')'
-                        : $child->person->name)
+                    ->map(function (array $child) use ($people): ?string {
+                        $childPerson = $people->get($child['person_id']);
+
+                        return $childPerson?->birth_year
+                            ? $childPerson->name.' ('.$childPerson->birth_year.')'
+                            : $childPerson?->name;
+                    })
+                    ->filter()
                     ->values()
                     ->all(),
-            ])
-            ->values()
-            ->all();
+            ];
+        })->all();
     }
 
     /**

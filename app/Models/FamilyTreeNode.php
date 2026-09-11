@@ -20,12 +20,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int|null $sibling_count
  * @property string|null $chain
  * @property bool $pending_father
+ * @property array<string, int|bool|null>|null $structure_overrides
  * @property-read FamilyTree $familyTree
  * @property-read Person $person
  * @property-read FamilyTreeNode|null $fatherNode
  * @property-read FamilyTreeNode|null $motherNode
  */
-#[Fillable(['family_tree_id', 'person_id', 'father_node_id', 'mother_node_id', 'birth_order', 'sibling_count', 'chain', 'pending_father'])]
+#[Fillable(['family_tree_id', 'person_id', 'father_node_id', 'mother_node_id', 'birth_order', 'sibling_count', 'chain', 'pending_father', 'structure_overrides'])]
 class FamilyTreeNode extends Model
 {
     /** @return BelongsTo<FamilyTree, $this> */
@@ -60,6 +61,9 @@ class FamilyTreeNode extends Model
 
     protected function casts(): array
     {
-        return ['pending_father' => 'boolean'];
+        return [
+            'pending_father' => 'boolean',
+            'structure_overrides' => 'array',
+        ];
     }
 }

@@ -37,6 +37,53 @@ test('an owner directly deletes an unconnected tree without deleting people', fu
         ->and(FamilyTreeDeletionRequest::count())->toBe(0);
 });
 
+test('deleting an alternative version redirects to the remaining version and keeps its own branches', function () {
+    $marga = Marga::factory()->create();
+    $user = User::factory()->withMarga($marga->id)->create();
+    $root = Person::factory()->create(['marga_id' => $marga->id]);
+    $firstChild = Person::factory()->create(['marga_id' => $marga->id]);
+    $secondChild = Person::factory()->create(['marga_id' => $marga->id]);
+    $versionOne = FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $root->id,
+        'name' => 'Versi 1',
+        'is_primary' => true,
+    ]);
+    $versionTwo = FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $root->id,
+        'name' => 'Versi 2',
+        'based_on_id' => $versionOne->id,
+    ]);
+    $versionOneRoot = FamilyTreeNode::create(['family_tree_id' => $versionOne->id, 'person_id' => $root->id]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $versionOne->id,
+        'person_id' => $firstChild->id,
+        'father_node_id' => $versionOneRoot->id,
+    ]);
+    $versionTwoRoot = FamilyTreeNode::create(['family_tree_id' => $versionTwo->id, 'person_id' => $root->id]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $versionTwo->id,
+        'person_id' => $secondChild->id,
+        'father_node_id' => $versionTwoRoot->id,
+    ]);
+
+    $this->actingAs($user)
+        ->delete(route('family-trees.destroy', $versionTwo))
+        ->assertRedirect(route('family-trees.show', $versionOne));
+
+    expect(FamilyTree::find($versionTwo->id))->toBeNull()
+        ->and(FamilyTreeNode::where('family_tree_id', $versionTwo->id)->exists())->toBeFalse();
+
+    $this->actingAs($user)
+        ->get(route('family-trees.show', $versionOne))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('people.0.id', (string) $root->id)
+            ->where('people.1.id', (string) $firstChild->id)
+            ->where('people.1.parentId', (string) $root->id)
+            ->missing('people.2'));
+});
+
 test('deleting a tree connected to another account creates one pending request', function () {
     $marga = Marga::factory()->create();
     $owner = User::factory()->withMarga($marga->id)->create();

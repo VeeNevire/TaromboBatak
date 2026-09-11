@@ -1,96 +1,111 @@
-import { Form, Head, Link, usePage } from '@inertiajs/react';
-import {
-    Bookmark,
-    BookOpen,
-    CalendarDays,
-    ExternalLink,
-    Heart,
-    Megaphone,
-    MessageCircle,
-    MoreHorizontal,
-    Newspaper,
-    Send,
-} from 'lucide-react';
-import { useState } from 'react';
-import { store as storeFeedComment } from '@/actions/App/Http/Controllers/FeedCommentController';
-import { store as storeFeedPost } from '@/actions/App/Http/Controllers/FeedPostController';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { ImagePlus, Newspaper, Send, X } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { AppAvatar } from '@/components/app-avatar';
 import InputError from '@/components/input-error';
+import { FeedCard } from '@/components/news-feed/feed-card';
+import type { FeedItem } from '@/components/news-feed/feed-card';
 import { Button } from '@/components/ui/button';
-import {
-    Card,
-    CardContent,
-    CardFooter,
-    CardHeader,
-} from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
 import { dashboard } from '@/routes';
 import { login } from '@/routes';
 import newsFeed from '@/routes/news-feed';
 
-type FeedComment = {
-    id: number;
-    author: string;
-    body: string;
-    created_at: string | null;
-};
-
-type FeedItem = {
-    key: string;
-    type: 'status' | 'story' | 'announcement';
-    id: number;
-    author: string;
-    title: string | null;
-    body: string;
-    image: string | null;
-    url: string | null;
-    meta: string | null;
-    created_at: string | null;
-    comments: FeedComment[];
-    audience_label?: string;
-};
+type FeedCursor = Record<string, string | null>;
 
 type NewsFeedProps = {
     items: FeedItem[];
+    cursor: FeedCursor | null;
+    hasMore: boolean;
     margas: { id: number; name: string }[];
 };
 
-const feedLabels = {
-    status: {
-        label: 'Status',
-        icon: MessageCircle,
-        className: 'bg-tb-primary/10 text-tb-primary',
-    },
-    story: {
-        label: 'Cerita',
-        icon: BookOpen,
-        className: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
-    },
-    announcement: {
-        label: 'Pengumuman',
-        icon: Megaphone,
-        className: 'bg-blue-500/10 text-blue-700 dark:text-blue-300',
-    },
-} as const;
+const MAX_IMAGES = 4;
 
-function formatDate(value: string | null): string {
-    if (!value) {
-        return 'Baru saja';
-    }
-
-    return new Intl.DateTimeFormat('id-ID', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-    }).format(new Date(value));
-}
-
-export default function NewsFeed({ items, margas }: NewsFeedProps) {
+export default function NewsFeed({
+    items: initialItems,
+    cursor: initialCursor,
+    hasMore: initialHasMore,
+    margas,
+}: NewsFeedProps) {
     const { auth } = usePage().props;
     const [audience, setAudience] = useState<'public' | 'marga'>('public');
     const [selectedMargas, setSelectedMargas] = useState<number[]>([]);
     const [margaSearch, setMargaSearch] = useState('');
+    const [images, setImages] = useState<{ file: File; url: string }[]>([]);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Older pages are kept separately so a fresh server render (new post, like,
+    // delete) refreshes the top of the feed without discarding what was loaded.
+    const [appended, setAppended] = useState<FeedItem[]>([]);
+    const [cursor, setCursor] = useState(initialCursor);
+    const [hasMore, setHasMore] = useState(initialHasMore);
+    const [loadingMore, setLoadingMore] = useState(false);
+
+    const items = useMemo(() => {
+        const seen = new Set<string>();
+
+        return [...initialItems, ...appended].filter((item) => {
+            if (seen.has(item.key)) {
+                return false;
+            }
+
+            seen.add(item.key);
+
+            return true;
+        });
+    }, [initialItems, appended]);
+
+    const form = useForm<{
+        body: string;
+        audience: 'public' | 'marga';
+        marga_ids: number[];
+        images: File[];
+    }>({
+        body: '',
+        audience: 'public',
+        marga_ids: [],
+        images: [],
+    });
+
+    const addImages = (incoming: File[]) => {
+        const pictures = incoming.filter((file) =>
+            file.type.startsWith('image/'),
+        );
+
+        if (pictures.length === 0) {
+            return;
+        }
+
+        setImages((current) => {
+            const room = MAX_IMAGES - current.length;
+
+            if (pictures.length > room) {
+                toast.error(`Maksimal ${MAX_IMAGES} gambar.`);
+            }
+
+            return [
+                ...current,
+                ...pictures.slice(0, room).map((file) => ({
+                    file,
+                    url: URL.createObjectURL(file),
+                })),
+            ];
+        });
+    };
+
+    const removeImage = (index: number) =>
+        setImages((current) => {
+            URL.revokeObjectURL(current[index].url);
+
+            return current.filter((_, position) => position !== index);
+        });
+
     const audienceLabel =
         audience === 'public'
             ? 'Publik'
@@ -98,6 +113,84 @@ export default function NewsFeed({ items, margas }: NewsFeedProps) {
                   .filter((marga) => selectedMargas.includes(marga.id))
                   .map((marga) => marga.name)
                   .join(', ') || 'Pilih marga';
+
+    const submit = (event: React.FormEvent) => {
+        event.preventDefault();
+
+        form.transform((data) => ({
+            ...data,
+            audience,
+            marga_ids: audience === 'marga' ? selectedMargas : [],
+            images: images.map((image) => image.file),
+        }));
+
+        form.post(newsFeed.posts.store().url, {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                form.reset();
+                setAudience('public');
+                setSelectedMargas([]);
+                setMargaSearch('');
+                setImages((current) => {
+                    current.forEach((image) => URL.revokeObjectURL(image.url));
+
+                    return [];
+                });
+
+                if (fileInputRef.current) {
+                    fileInputRef.current.value = '';
+                }
+            },
+        });
+    };
+
+    const loadMore = async () => {
+        if (!cursor || loadingMore) {
+            return;
+        }
+
+        setLoadingMore(true);
+
+        try {
+            const query = new URLSearchParams();
+
+            for (const [source, value] of Object.entries(cursor)) {
+                if (value !== null) {
+                    query.set(`cursor[${source}]`, value);
+                }
+            }
+
+            const response = await fetch(
+                `${newsFeed.index().url}?${query.toString()}`,
+                { headers: { Accept: 'application/json' } },
+            );
+
+            if (!response.ok) {
+                throw new Error('Gagal memuat.');
+            }
+
+            const payload = (await response.json()) as {
+                items: FeedItem[];
+                cursor: FeedCursor | null;
+                has_more: boolean;
+            };
+
+            setAppended((current) => [...current, ...payload.items]);
+            setCursor(payload.cursor);
+            setHasMore(payload.has_more);
+        } catch {
+            toast.error('Gagal memuat kabar lama.');
+        } finally {
+            setLoadingMore(false);
+        }
+    };
+
+    const imageError =
+        form.errors.images ??
+        Object.entries(form.errors).find(([key]) =>
+            key.startsWith('images.'),
+        )?.[1];
 
     return (
         <>
@@ -121,203 +214,267 @@ export default function NewsFeed({ items, margas }: NewsFeedProps) {
                 {auth.user ? (
                     <Card className="overflow-hidden rounded-xl border-tb-outline-variant bg-tb-surface-bright shadow-sm">
                         <CardContent className="p-4">
-                            <Form
-                                {...storeFeedPost.form()}
-                                onSuccess={() => {
-                                    setAudience('public');
-                                    setSelectedMargas([]);
-                                    setMargaSearch('');
-                                }}
-                                options={{ preserveScroll: true }}
-                                resetOnSuccess
+                            <form
+                                onSubmit={submit}
+                                encType="multipart/form-data"
+                                className="grid gap-3"
                             >
-                                {({ errors, processing }) => (
-                                    <div className="grid gap-3">
-                                        <div className="flex items-start gap-3">
-                                            <AppAvatar
-                                                name={auth.user!.name}
-                                                className="mt-0.5"
-                                            />
-                                            <textarea
-                                                name="body"
-                                                rows={3}
-                                                maxLength={2000}
-                                                required
-                                                placeholder={`Apa yang ingin Anda bagikan, ${auth.user!.name.split(' ')[0]}?`}
-                                                className="min-h-20 flex-1 resize-none rounded-2xl border border-tb-outline-variant bg-tb-surface-container/40 px-4 py-3 text-sm text-tb-on-surface outline-none placeholder:text-tb-on-surface-variant focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
-                                            />
-                                        </div>
-                                        <InputError
-                                            message={errors.body}
-                                            className="ml-11"
-                                        />
-                                        <input
-                                            type="hidden"
-                                            name="audience"
-                                            value={audience}
-                                        />
-                                        {audience === 'marga' &&
-                                            selectedMargas.map((id) => (
-                                                <input
-                                                    key={id}
-                                                    type="hidden"
-                                                    name="marga_ids[]"
-                                                    value={id}
-                                                />
-                                            ))}
-                                        <div className="flex flex-wrap items-start justify-end gap-2">
-                                            <details className="w-full rounded-xl border border-tb-outline-variant bg-tb-surface-bright sm:w-64">
-                                                <summary
-                                                    aria-label="Pilih audiens status"
-                                                    className="cursor-pointer px-3 py-2 text-sm text-tb-on-surface focus-visible:outline-2 focus-visible:outline-tb-primary"
-                                                >
-                                                    {audienceLabel}
-                                                </summary>
-                                                <div className="grid gap-3 border-t border-tb-outline-variant p-3">
-                                                    <Label className="flex cursor-pointer items-center gap-2">
-                                                        <Checkbox
-                                                            checked={
-                                                                audience ===
-                                                                'public'
-                                                            }
-                                                            onCheckedChange={(
-                                                                checked,
-                                                            ) => {
-                                                                setAudience(
-                                                                    checked ===
-                                                                        true
-                                                                        ? 'public'
-                                                                        : 'marga',
-                                                                );
-                                                                setSelectedMargas(
-                                                                    [],
-                                                                );
-                                                            }}
-                                                        />
-                                                        Publik
-                                                    </Label>
-                                                    <p className="text-xs text-tb-on-surface-variant">
-                                                        Publik: semua pengguna
-                                                        yang sudah login. Atau
-                                                        centang marga tertentu
-                                                        di bawah.
-                                                    </p>
-                                                    <Input
-                                                        aria-label="Cari marga audiens"
-                                                        placeholder="Cari marga..."
-                                                        value={margaSearch}
-                                                        onChange={(event) =>
-                                                            setMargaSearch(
-                                                                event.target
-                                                                    .value,
-                                                            )
-                                                        }
-                                                        onKeyDown={(event) => {
-                                                            if (
-                                                                event.key ===
-                                                                'Enter'
-                                                            ) {
-                                                                event.preventDefault();
-                                                            }
-                                                        }}
-                                                    />
-                                                    <div
-                                                        role="group"
-                                                        aria-label="Daftar marga audiens"
-                                                        className="grid max-h-48 gap-2 overflow-y-auto"
-                                                    >
-                                                        {margas
-                                                            .filter((marga) =>
-                                                                marga.name
-                                                                    .toLocaleLowerCase()
-                                                                    .includes(
-                                                                        margaSearch
-                                                                            .trim()
-                                                                            .toLocaleLowerCase(),
-                                                                    ),
-                                                            )
-                                                            .map((marga) => (
-                                                                <Label
-                                                                    key={
-                                                                        marga.id
-                                                                    }
-                                                                    className="flex cursor-pointer items-center gap-2 py-1"
-                                                                >
-                                                                    <Checkbox
-                                                                        checked={selectedMargas.includes(
-                                                                            marga.id,
-                                                                        )}
-                                                                        onCheckedChange={(
-                                                                            checked,
-                                                                        ) => {
-                                                                            setAudience(
-                                                                                'marga',
-                                                                            );
-                                                                            setSelectedMargas(
-                                                                                checked ===
-                                                                                    true
-                                                                                    ? [
-                                                                                          ...selectedMargas,
-                                                                                          marga.id,
-                                                                                      ]
-                                                                                    : selectedMargas.filter(
-                                                                                          (
-                                                                                              id,
-                                                                                          ) =>
-                                                                                              id !==
-                                                                                              marga.id,
-                                                                                      ),
-                                                                            );
-                                                                        }}
-                                                                    />
-                                                                    {marga.name}
-                                                                </Label>
-                                                            ))}
-                                                        {!margas.some((marga) =>
-                                                            marga.name
-                                                                .toLocaleLowerCase()
-                                                                .includes(
-                                                                    margaSearch
-                                                                        .trim()
-                                                                        .toLocaleLowerCase(),
-                                                                ),
-                                                        ) && (
-                                                            <p className="text-xs text-tb-on-surface-variant">
-                                                                {margas.length ===
-                                                                0
-                                                                    ? 'Daftar Marga belum tersedia.'
-                                                                    : 'Marga tidak ditemukan.'}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </details>
-                                            <Button
-                                                type="submit"
-                                                disabled={processing}
-                                                className="rounded-full px-5"
-                                            >
-                                                <Send className="size-4" />
-                                                {processing
-                                                    ? 'Membagikan...'
-                                                    : 'Bagikan Status'}
-                                            </Button>
-                                        </div>
-                                        <InputError
-                                            message={
-                                                errors.audience ??
-                                                Object.entries(errors).find(
-                                                    ([key]) =>
-                                                        key === 'marga_ids' ||
-                                                        key.startsWith(
-                                                            'marga_ids.',
-                                                        ),
-                                                )?.[1]
+                                <div className="flex items-start gap-3">
+                                    <AppAvatar
+                                        name={auth.user.name}
+                                        className="mt-0.5"
+                                    />
+                                    <textarea
+                                        value={form.data.body}
+                                        onChange={(event) =>
+                                            form.setData(
+                                                'body',
+                                                event.target.value,
+                                            )
+                                        }
+                                        onPaste={(event) => {
+                                            const pasted = Array.from(
+                                                event.clipboardData.items,
+                                            )
+                                                .filter(
+                                                    (entry) =>
+                                                        entry.kind === 'file',
+                                                )
+                                                .map((entry) =>
+                                                    entry.getAsFile(),
+                                                )
+                                                .filter(
+                                                    (file): file is File =>
+                                                        file !== null,
+                                                );
+
+                                            if (pasted.length > 0) {
+                                                event.preventDefault();
+                                                addImages(pasted);
                                             }
-                                        />
+                                        }}
+                                        onDragOver={(event) =>
+                                            event.preventDefault()
+                                        }
+                                        onDrop={(event) => {
+                                            event.preventDefault();
+                                            addImages(
+                                                Array.from(
+                                                    event.dataTransfer.files,
+                                                ),
+                                            );
+                                        }}
+                                        rows={3}
+                                        maxLength={2000}
+                                        placeholder={`Apa yang ingin Anda bagikan, ${auth.user.name.split(' ')[0]}? Tempel gambar dengan Ctrl+V.`}
+                                        className="min-h-20 flex-1 resize-none rounded-2xl border border-tb-outline-variant bg-tb-surface-container/40 px-4 py-3 text-sm text-tb-on-surface outline-none placeholder:text-tb-on-surface-variant focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
+                                    />
+                                </div>
+                                <InputError
+                                    message={form.errors.body}
+                                    className="ml-11"
+                                />
+
+                                {images.length > 0 && (
+                                    <div className="ml-11 grid grid-cols-4 gap-2">
+                                        {images.map((image, index) => (
+                                            <div
+                                                key={image.url}
+                                                className="relative"
+                                            >
+                                                <img
+                                                    src={image.url}
+                                                    alt={`Pratinjau ${index + 1}`}
+                                                    className="aspect-square w-full rounded-lg border border-tb-outline-variant object-cover"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    aria-label={`Hapus gambar ${index + 1}`}
+                                                    onClick={() =>
+                                                        removeImage(index)
+                                                    }
+                                                    className="absolute top-1 right-1 inline-flex size-6 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80"
+                                                >
+                                                    <X className="size-3.5" />
+                                                </button>
+                                            </div>
+                                        ))}
                                     </div>
                                 )}
-                            </Form>
+                                <InputError
+                                    message={imageError}
+                                    className="ml-11"
+                                />
+
+                                <div className="flex flex-wrap items-start justify-end gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="mr-auto"
+                                        disabled={images.length >= MAX_IMAGES}
+                                        onClick={() =>
+                                            fileInputRef.current?.click()
+                                        }
+                                    >
+                                        <ImagePlus className="size-4" /> Gambar
+                                    </Button>
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp,image/gif"
+                                        multiple
+                                        className="hidden"
+                                        onChange={(event) => {
+                                            addImages(
+                                                Array.from(
+                                                    event.target.files ?? [],
+                                                ),
+                                            );
+                                            event.target.value = '';
+                                        }}
+                                    />
+                                    <details className="w-full rounded-xl border border-tb-outline-variant bg-tb-surface-bright sm:w-64">
+                                        <summary
+                                            aria-label="Pilih audiens status"
+                                            className="cursor-pointer px-3 py-2 text-sm text-tb-on-surface focus-visible:outline-2 focus-visible:outline-tb-primary"
+                                        >
+                                            {audienceLabel}
+                                        </summary>
+                                        <div className="grid gap-3 border-t border-tb-outline-variant p-3">
+                                            <Label className="flex cursor-pointer items-center gap-2">
+                                                <Checkbox
+                                                    checked={
+                                                        audience === 'public'
+                                                    }
+                                                    onCheckedChange={(
+                                                        checked,
+                                                    ) => {
+                                                        setAudience(
+                                                            checked === true
+                                                                ? 'public'
+                                                                : 'marga',
+                                                        );
+                                                        setSelectedMargas([]);
+                                                    }}
+                                                />
+                                                Publik
+                                            </Label>
+                                            <p className="text-xs text-tb-on-surface-variant">
+                                                Publik: terlihat oleh semua
+                                                pengunjung, termasuk yang belum
+                                                login. Atau centang marga
+                                                tertentu di bawah.
+                                            </p>
+                                            <Input
+                                                aria-label="Cari marga audiens"
+                                                placeholder="Cari marga..."
+                                                value={margaSearch}
+                                                onChange={(event) =>
+                                                    setMargaSearch(
+                                                        event.target.value,
+                                                    )
+                                                }
+                                                onKeyDown={(event) => {
+                                                    if (event.key === 'Enter') {
+                                                        event.preventDefault();
+                                                    }
+                                                }}
+                                            />
+                                            <div
+                                                role="group"
+                                                aria-label="Daftar marga audiens"
+                                                className="grid max-h-48 gap-2 overflow-y-auto"
+                                            >
+                                                {margas
+                                                    .filter((marga) =>
+                                                        marga.name
+                                                            .toLocaleLowerCase()
+                                                            .includes(
+                                                                margaSearch
+                                                                    .trim()
+                                                                    .toLocaleLowerCase(),
+                                                            ),
+                                                    )
+                                                    .map((marga) => (
+                                                        <Label
+                                                            key={marga.id}
+                                                            className="flex cursor-pointer items-center gap-2 py-1"
+                                                        >
+                                                            <Checkbox
+                                                                checked={selectedMargas.includes(
+                                                                    marga.id,
+                                                                )}
+                                                                onCheckedChange={(
+                                                                    checked,
+                                                                ) => {
+                                                                    setAudience(
+                                                                        'marga',
+                                                                    );
+                                                                    setSelectedMargas(
+                                                                        checked ===
+                                                                            true
+                                                                            ? [
+                                                                                  ...selectedMargas,
+                                                                                  marga.id,
+                                                                              ]
+                                                                            : selectedMargas.filter(
+                                                                                  (
+                                                                                      id,
+                                                                                  ) =>
+                                                                                      id !==
+                                                                                      marga.id,
+                                                                              ),
+                                                                    );
+                                                                }}
+                                                            />
+                                                            {marga.name}
+                                                        </Label>
+                                                    ))}
+                                                {!margas.some((marga) =>
+                                                    marga.name
+                                                        .toLocaleLowerCase()
+                                                        .includes(
+                                                            margaSearch
+                                                                .trim()
+                                                                .toLocaleLowerCase(),
+                                                        ),
+                                                ) && (
+                                                    <p className="text-xs text-tb-on-surface-variant">
+                                                        {margas.length === 0
+                                                            ? 'Daftar Marga belum tersedia.'
+                                                            : 'Marga tidak ditemukan.'}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </details>
+                                    <Button
+                                        type="submit"
+                                        disabled={
+                                            form.processing ||
+                                            (form.data.body.trim() === '' &&
+                                                images.length === 0)
+                                        }
+                                        className="rounded-full px-5"
+                                    >
+                                        <Send className="size-4" />
+                                        {form.processing
+                                            ? 'Membagikan...'
+                                            : 'Bagikan Status'}
+                                    </Button>
+                                </div>
+                                <InputError
+                                    message={
+                                        form.errors.audience ??
+                                        Object.entries(form.errors).find(
+                                            ([key]) =>
+                                                key === 'marga_ids' ||
+                                                key.startsWith('marga_ids.'),
+                                        )?.[1]
+                                    }
+                                />
+                            </form>
                         </CardContent>
                     </Card>
                 ) : (
@@ -357,211 +514,20 @@ export default function NewsFeed({ items, margas }: NewsFeedProps) {
                 ) : (
                     items.map((item) => <FeedCard key={item.key} item={item} />)
                 )}
+
+                {hasMore && (
+                    <Button
+                        variant="outline"
+                        className="mx-auto w-fit rounded-full"
+                        disabled={loadingMore}
+                        onClick={loadMore}
+                    >
+                        {loadingMore && <Spinner />}
+                        {loadingMore ? 'Memuat...' : 'Muat lebih banyak'}
+                    </Button>
+                )}
             </div>
         </>
-    );
-}
-
-function FeedCard({ item }: { item: FeedItem }) {
-    const feedLabel = feedLabels[item.type];
-    const TypeIcon = feedLabel.icon;
-
-    return (
-        <Card className="overflow-hidden rounded-xl border-tb-outline-variant bg-tb-surface-bright shadow-sm">
-            <CardHeader className="flex-row items-center gap-3 space-y-0 px-4 py-3">
-                <AppAvatar name={item.author} />
-                <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-sm font-semibold text-tb-on-surface">
-                            {item.author}
-                        </p>
-                        <span
-                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${feedLabel.className}`}
-                        >
-                            <TypeIcon className="size-3" />
-                            {feedLabel.label}
-                        </span>
-                    </div>
-                    <p className="mt-0.5 text-xs text-tb-on-surface-variant">
-                        {formatDate(item.created_at)}
-                        {item.type === 'status' &&
-                            item.audience_label &&
-                            ` · ${item.audience_label}`}
-                    </p>
-                </div>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-8"
-                    aria-label="Opsi postingan"
-                >
-                    <MoreHorizontal className="size-5" />
-                </Button>
-            </CardHeader>
-
-            <CardContent className="grid gap-3 px-4 pb-3">
-                {item.title && (
-                    <h2 className="font-display text-lg font-bold text-tb-on-surface">
-                        {item.title}
-                    </h2>
-                )}
-                <p className="text-sm leading-6 whitespace-pre-line text-tb-on-surface">
-                    {item.body}
-                </p>
-                {item.image && (
-                    <img
-                        src={item.image}
-                        alt={item.title ?? 'Gambar cerita'}
-                        className="max-h-[560px] w-full rounded-lg border border-tb-outline-variant object-cover"
-                        onError={(event) => {
-                            event.currentTarget.hidden = true;
-                        }}
-                    />
-                )}
-                {item.meta && (
-                    <p className="flex items-center gap-1.5 text-xs font-medium text-tb-on-surface-variant">
-                        <CalendarDays className="size-3.5" />
-                        {item.meta}
-                    </p>
-                )}
-            </CardContent>
-
-            <div className="flex items-center gap-1 px-3 pb-2">
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-9"
-                    aria-label="Suka"
-                >
-                    <Heart className="size-5" />
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-9"
-                    aria-label="Komentar"
-                >
-                    <MessageCircle className="size-5" />
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-9"
-                    aria-label="Bagikan"
-                >
-                    <Send className="size-5" />
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="ml-auto size-9"
-                    aria-label="Simpan"
-                >
-                    <Bookmark className="size-5" />
-                </Button>
-            </div>
-
-            {item.type === 'status' ? (
-                <StatusComments postId={item.id} comments={item.comments} />
-            ) : (
-                item.url && (
-                    <CardFooter className="border-t border-tb-outline-variant px-4 pt-3 pb-4">
-                        <Button asChild variant="outline" size="sm">
-                            <a
-                                href={item.url}
-                                target="_blank"
-                                rel="noreferrer noopener"
-                            >
-                                Lihat selengkapnya
-                                <ExternalLink className="size-3.5" />
-                            </a>
-                        </Button>
-                    </CardFooter>
-                )
-            )}
-        </Card>
-    );
-}
-
-function StatusComments({
-    postId,
-    comments,
-}: {
-    postId: number;
-    comments: FeedComment[];
-}) {
-    const { auth } = usePage().props;
-
-    return (
-        <CardFooter className="grid gap-3 border-t border-tb-outline-variant bg-tb-surface-container/20 px-4 pt-3 pb-4">
-            {comments.length > 0 && (
-                <div className="grid gap-3">
-                    {comments.map((comment) => (
-                        <div
-                            key={comment.id}
-                            className="flex items-start gap-2.5"
-                        >
-                            <AppAvatar
-                                name={comment.author}
-                                className="size-8"
-                            />
-                            <div className="min-w-0 rounded-xl bg-tb-surface-container px-3 py-2">
-                                <div className="flex flex-wrap items-baseline gap-x-2">
-                                    <p className="text-xs font-semibold text-tb-on-surface">
-                                        {comment.author}
-                                    </p>
-                                    <p className="text-[10px] text-tb-on-surface-variant">
-                                        {formatDate(comment.created_at)}
-                                    </p>
-                                </div>
-                                <p className="mt-0.5 text-sm leading-5 whitespace-pre-line text-tb-on-surface">
-                                    {comment.body}
-                                </p>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {auth.user && (
-                <Form
-                    {...storeFeedComment.form(postId)}
-                    options={{ preserveScroll: true }}
-                    resetOnSuccess
-                >
-                    {({ errors, processing }) => (
-                        <div className="grid gap-1.5">
-                            <div className="flex items-center gap-2.5">
-                                <AppAvatar
-                                    name={auth.user.name}
-                                    className="size-8"
-                                />
-                                <input
-                                    name="body"
-                                    maxLength={500}
-                                    required
-                                    placeholder="Tulis komentar..."
-                                    className="h-9 min-w-0 flex-1 rounded-full border border-tb-outline-variant bg-tb-surface-bright px-4 text-sm text-tb-on-surface outline-none placeholder:text-tb-on-surface-variant focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20"
-                                />
-                                <Button
-                                    type="submit"
-                                    size="icon"
-                                    className="size-9 rounded-full"
-                                    disabled={processing}
-                                    aria-label="Kirim komentar"
-                                >
-                                    <Send className="size-4" />
-                                </Button>
-                            </div>
-                            <InputError
-                                message={errors.body}
-                                className="ml-11"
-                            />
-                        </div>
-                    )}
-                </Form>
-            )}
-        </CardFooter>
     );
 }
 

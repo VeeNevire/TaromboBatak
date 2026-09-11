@@ -22,6 +22,9 @@ class FamilyTreeStructureService
             $tree = FamilyTree::query()->lockForUpdate()->findOrFail($tree->id);
             $tree->ensureStructureIsEditable();
             $nodes = $tree->nodes()->get()->keyBy('id');
+            $sourceNodes = $tree->basedOn !== null
+                ? app(FamilyTreeInheritanceService::class)->nodesFor($tree->basedOn)->keyBy('person_id')
+                : collect();
             $parents = $nodes->mapWithKeys(fn (FamilyTreeNode $node) => [$node->id => $node->father_node_id])->all();
             $orders = [];
 
@@ -49,11 +52,35 @@ class FamilyTreeStructureService
 
             foreach ($entries as $entry) {
                 $node = $nodes[(int) $entry['id']];
-                $node->update([
+                $attributes = [
                     'father_node_id' => $parents[$node->id],
                     'birth_order' => $orders[$node->id],
                     'pending_father' => false,
-                ]);
+                ];
+
+                if ($tree->based_on_id !== null) {
+                    $fatherPersonId = $parents[$node->id] !== null
+                        ? $nodes[$parents[$node->id]]->person_id
+                        : null;
+                    $overrides = $node->structure_overrides ?? [];
+                    $source = $sourceNodes->get($node->person_id);
+
+                    foreach ([
+                        'father_person_id' => $fatherPersonId,
+                        'birth_order' => $orders[$node->id],
+                        'pending_father' => false,
+                    ] as $field => $value) {
+                        if ($source === null || $source[$field] !== $value) {
+                            $overrides[$field] = $value;
+                        } else {
+                            unset($overrides[$field]);
+                        }
+                    }
+
+                    $attributes['structure_overrides'] = $overrides;
+                }
+
+                $node->update($attributes);
             }
 
             app(FamilyTreeChainNumberingService::class)->recompute($tree);

@@ -2,13 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\GenerateTaromboFrameRequest;
 use App\Http\Requests\StoreTaromboSnapshotRequest;
+use App\Models\TaromboFrame;
 use App\Models\TaromboSnapshot;
+use App\Services\TaromboFrameComposer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -32,8 +36,28 @@ class TaromboSnapshotController extends Controller
                 'created_at' => $snapshot->created_at?->toISOString(),
             ]);
 
+        $snapshotOptions = TaromboSnapshot::query()
+            ->whereBelongsTo($request->user())
+            ->with('centerPerson:id,name')
+            ->latest()
+            ->limit(60)
+            ->get()
+            ->map(fn (TaromboSnapshot $snapshot) => $this->snapshotData($snapshot));
+
+        $activeFrames = TaromboFrame::query()
+            ->active()
+            ->latest()
+            ->get()
+            ->map(fn (TaromboFrame $frame) => [
+                'id' => $frame->id,
+                'name' => $frame->name,
+                'image_url' => route('tarombo-frames.image', $frame),
+            ]);
+
         return Inertia::render('tarombo/snapshots', [
             'snapshots' => $snapshots,
+            'snapshotOptions' => $snapshotOptions,
+            'activeFrames' => $activeFrames,
             'accountName' => $request->user()->name,
         ]);
     }
@@ -59,6 +83,43 @@ class TaromboSnapshotController extends Controller
         Inertia::flash('toast', [
             'type' => 'success',
             'message' => 'Pohon berhasil disimpan ke akun.',
+        ]);
+
+        return back();
+    }
+
+    public function generate(
+        GenerateTaromboFrameRequest $request,
+        TaromboFrameComposer $composer,
+    ): RedirectResponse {
+        $snapshot = TaromboSnapshot::query()
+            ->whereBelongsTo($request->user())
+            ->findOrFail($request->integer('snapshot_id'));
+        $frame = TaromboFrame::query()
+            ->active()
+            ->findOrFail($request->integer('frame_id'));
+
+        abort_unless(Storage::disk('local')->exists($snapshot->path), 422, 'Gambar Tarombo sumber tidak tersedia.');
+        abort_unless(Storage::disk('local')->exists($frame->path), 422, 'Template frame tidak tersedia.');
+
+        try {
+            $path = $composer->compose($snapshot, $frame);
+        } catch (\RuntimeException $exception) {
+            throw ValidationException::withMessages([
+                'frame_id' => $exception->getMessage(),
+            ]);
+        }
+
+        $request->user()->taromboSnapshots()->create([
+            'center_person_id' => $snapshot->center_person_id,
+            'tarombo_frame_id' => $frame->id,
+            'view' => $snapshot->view,
+            'path' => $path,
+        ]);
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => 'Gambar Tarombo dengan frame berhasil dibuat oleh AI.',
         ]);
 
         return back();
@@ -93,5 +154,17 @@ class TaromboSnapshotController extends Controller
         ]);
 
         return back();
+    }
+
+    /** @return array<string, mixed> */
+    private function snapshotData(TaromboSnapshot $snapshot): array
+    {
+        return [
+            'id' => $snapshot->id,
+            'view' => $snapshot->view,
+            'center_person_name' => $snapshot->centerPerson?->name,
+            'image_url' => route('tarombo.snapshots.image', $snapshot),
+            'created_at' => $snapshot->created_at?->toISOString(),
+        ];
     }
 }

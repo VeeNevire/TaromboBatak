@@ -6,13 +6,17 @@ use App\Http\Requests\StoreSubAdminRequest;
 use App\Http\Requests\UpdateSubAdminRequest;
 use App\Models\Marga;
 use App\Models\User;
+use App\Services\AccountActivityLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class SubAdminController extends Controller
 {
+    public function __construct(private AccountActivityLogger $activityLogger) {}
+
     /**
      * List all sub-admin accounts.
      */
@@ -54,14 +58,23 @@ class SubAdminController extends Controller
      */
     public function store(StoreSubAdminRequest $request): RedirectResponse
     {
-        User::create([
-            'name' => $request->validated('name'),
-            'email' => $request->validated('email'),
-            'password' => $request->validated('password'),
-            'marga_id' => $request->validated('marga_id'),
-            'role' => 'subadmin',
-            'email_verified_at' => now(),
-        ]);
+        DB::transaction(function () use ($request): void {
+            $subAdmin = User::create([
+                'name' => $request->validated('name'),
+                'email' => $request->validated('email'),
+                'password' => $request->validated('password'),
+                'marga_id' => $request->validated('marga_id'),
+                'role' => 'subadmin',
+                'email_verified_at' => now(),
+            ]);
+            $this->activityLogger->log(
+                $subAdmin,
+                $request->user(),
+                'created',
+                'Akun sub-admin dibuat.',
+                ['role' => $subAdmin->role, 'marga_id' => $subAdmin->marga_id],
+            );
+        });
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Sub admin berhasil ditambahkan.')]);
 
@@ -93,13 +106,33 @@ class SubAdminController extends Controller
     {
         abort_unless($subAdmin->role === 'subadmin', 404);
 
-        $subAdmin->fill($request->safe()->except('password'));
+        DB::transaction(function () use ($request, $subAdmin): void {
+            $before = $subAdmin->only(['name', 'email', 'marga_id']);
+            $passwordChanged = $request->filled('password');
+            $subAdmin->fill($request->safe()->except('password'));
 
-        if ($request->filled('password')) {
-            $subAdmin->password = $request->validated('password');
-        }
+            if ($passwordChanged) {
+                $subAdmin->password = $request->validated('password');
+            }
 
-        $subAdmin->save();
+            $subAdmin->save();
+            $after = $subAdmin->only(['name', 'email', 'marga_id']);
+            $changes = array_keys(array_filter($after, fn ($value, $key) => $value !== $before[$key], ARRAY_FILTER_USE_BOTH));
+
+            if ($passwordChanged) {
+                $changes[] = 'password';
+            }
+
+            if ($changes !== []) {
+                $this->activityLogger->log(
+                    $subAdmin,
+                    $request->user(),
+                    'updated',
+                    'Akun sub-admin diperbarui.',
+                    ['changes' => $changes, 'before' => $before, 'after' => $after],
+                );
+            }
+        });
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Sub admin berhasil diperbarui.')]);
 
@@ -117,7 +150,15 @@ class SubAdminController extends Controller
             abort(403, 'Anda tidak dapat menghapus akun sendiri.');
         }
 
-        $subAdmin->delete();
+        DB::transaction(function () use ($request, $subAdmin): void {
+            $this->activityLogger->log(
+                $subAdmin,
+                $request->user(),
+                'deleted',
+                'Akun sub-admin dihapus.',
+            );
+            $subAdmin->delete();
+        });
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Sub admin berhasil dihapus.')]);
 

@@ -110,7 +110,10 @@ function TreeBranch({
     const alternativePanelId = `${nodeIdPrefix}-${person.id}-alternatives`;
     const isCenter = person.id === centerId;
     const isHighlighted = person.id === highlightId;
-    const isCollapsed = collapsed.has(person.id);
+    // A searched lineage must remain visible even when this branch was
+    // previously collapsed. The target itself is included so every ancestor
+    // required to reach it is rendered for the red path overlay.
+    const isCollapsed = collapsed.has(person.id) && !lineageIds.has(person.id);
     const card = (
         <NodeCard
             node={toNode(person, numberById.get(person.id))}
@@ -587,39 +590,43 @@ export function DescendantsTree({
                     <p className="mb-3 text-center text-xs font-semibold text-tb-on-surface-variant">
                         Anggota marga tanpa jalur ayah tersambung
                     </p>
-                    <ul
-                        className={
-                            compact ? 'tb-tree tb-tree--compact' : 'tb-tree'
-                        }
-                    >
+                    <div className="flex w-max min-w-full flex-wrap items-start justify-center gap-x-10 gap-y-6">
                         {detachedRoots.map((root) => (
-                            <TreeBranch
+                            <ul
                                 key={root.id}
-                                person={root}
-                                childrenOf={childrenOf}
-                                centerId={centerId}
-                                highlightId={highlightId}
-                                numberById={numberById}
-                                collapsed={collapsed}
-                                onToggle={handleToggle}
-                                onSelect={onSelect}
-                                editNodes={editNodes}
-                                selectOnClick={selectOnClick}
-                                showProfileOnName={showProfileOnName}
-                                readOnly={readOnly}
-                                onOpenProfile={setProfilePerson}
-                                alternativeTrees={alternativeTrees}
-                                nodeIdPrefix={nodeIdPrefix}
-                                lineageIds={lineageIds}
-                                femaleLineage={
-                                    root.gender?.toUpperCase() === 'P'
+                                className={
+                                    compact
+                                        ? 'tb-tree tb-tree--compact'
+                                        : 'tb-tree'
                                 }
-                                markFemaleLineage={markFemaleLineage}
-                                collapseDepth={collapseDepth}
-                                compact={compact}
-                            />
+                            >
+                                <TreeBranch
+                                    person={root}
+                                    childrenOf={childrenOf}
+                                    centerId={centerId}
+                                    highlightId={highlightId}
+                                    numberById={numberById}
+                                    collapsed={collapsed}
+                                    onToggle={handleToggle}
+                                    onSelect={onSelect}
+                                    editNodes={editNodes}
+                                    selectOnClick={selectOnClick}
+                                    showProfileOnName={showProfileOnName}
+                                    readOnly={readOnly}
+                                    onOpenProfile={setProfilePerson}
+                                    alternativeTrees={alternativeTrees}
+                                    nodeIdPrefix={nodeIdPrefix}
+                                    lineageIds={lineageIds}
+                                    femaleLineage={
+                                        root.gender?.toUpperCase() === 'P'
+                                    }
+                                    markFemaleLineage={markFemaleLineage}
+                                    collapseDepth={collapseDepth}
+                                    compact={compact}
+                                />
+                            </ul>
                         ))}
-                    </ul>
+                    </div>
                 </div>
             )}
             {showProfileOnName && (

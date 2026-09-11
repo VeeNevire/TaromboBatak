@@ -44,10 +44,18 @@ export default function TaromboIndex({
     selectedTreePeople,
     margaTree,
 }: Props) {
+    const selectedTreeKey =
+        selectedFamilyTreeId !== null
+            ? `account-${selectedFamilyTreeId}`
+            : selectedMargaId !== null
+              ? `marga-${selectedMargaId}`
+              : 'default';
+
     return (
         <>
             <Head title="Pohon Tarombo" />
             <TaromboExplorer
+                key={selectedTreeKey}
                 people={people}
                 margas={margas}
                 alternativeTrees={alternativeTrees}
