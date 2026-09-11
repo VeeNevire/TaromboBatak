@@ -21,6 +21,7 @@ class TaromboSnapshotFactory extends Factory
         return [
             'user_id' => User::factory(),
             'center_person_id' => null,
+            'tarombo_frame_id' => null,
             'view' => fake()->randomElement(['diagram', 'tree']),
             'path' => 'tarombo-snapshots/'.fake()->uuid().'.jpg',
         ];

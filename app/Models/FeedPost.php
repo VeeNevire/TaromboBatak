@@ -16,17 +16,29 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $user_id
  * @property string $body
+ * @property string $audience
+ * @property Carbon|null $edited_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read User $author
  * @property-read Collection<int, FeedComment> $comments
+ * @property-read Collection<int, FeedPostLike> $likes
+ * @property-read Collection<int, FeedPostImage> $images
  */
-#[Fillable(['user_id', 'body', 'audience'])]
+#[Fillable(['user_id', 'body', 'audience', 'edited_at'])]
 class FeedPost extends Model
 {
     use HasFactory;
 
     protected $attributes = ['audience' => 'public'];
+
+    /** @return array<string, string> */
+    protected function casts(): array
+    {
+        return [
+            'edited_at' => 'datetime',
+        ];
+    }
 
     /** @return BelongsToMany<Marga, $this> */
     public function audienceMargas(): BelongsToMany
@@ -38,7 +50,7 @@ class FeedPost extends Model
     public function scopeVisibleTo(Builder $query, ?User $user): void
     {
         if ($user === null) {
-            $query->whereRaw('1 = 0');
+            $query->where('audience', 'public');
 
             return;
         }
@@ -64,5 +76,17 @@ class FeedPost extends Model
     public function comments(): HasMany
     {
         return $this->hasMany(FeedComment::class);
+    }
+
+    /** @return HasMany<FeedPostLike, $this> */
+    public function likes(): HasMany
+    {
+        return $this->hasMany(FeedPostLike::class);
+    }
+
+    /** @return HasMany<FeedPostImage, $this> */
+    public function images(): HasMany
+    {
+        return $this->hasMany(FeedPostImage::class)->orderBy('position');
     }
 }

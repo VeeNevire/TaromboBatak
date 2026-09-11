@@ -170,13 +170,26 @@ test('restricted statuses and comments are visible only to selected marga member
     $this->get(route('news-feed.index'))->assertInertia(fn (Assert $page) => $page->has('items', 0));
 });
 
-test('public status defaults remain visible to signed in users only', function () {
+test('public statuses reach guests while marga statuses stay hidden', function () {
+    $marga = Marga::factory()->create();
     $author = User::factory()->create();
-    $post = FeedPost::create(['user_id' => $author->id, 'body' => 'Status lama']);
-    $this->get(route('news-feed.index'))->assertInertia(fn (Assert $page) => $page->has('items', 0));
+    $public = FeedPost::create(['user_id' => $author->id, 'body' => 'Status lama']);
+    $restricted = FeedPost::create([
+        'user_id' => $author->id,
+        'body' => 'Khusus marga',
+        'audience' => 'marga',
+    ]);
+    $restricted->audienceMargas()->attach($marga);
+
+    expect($public->audience)->toBe('public');
+
+    $this->get(route('news-feed.index'))->assertInertia(fn (Assert $page) => $page
+        ->has('items', 1)
+        ->where('items.0.body', 'Status lama')
+        ->where('items.0.audience_label', 'Publik'));
+
     $this->actingAs(User::factory()->create())->get(route('news-feed.index'))->assertInertia(fn (Assert $page) => $page
         ->has('items', 1)->where('items.0.audience_label', 'Publik'));
-    expect($post->audience)->toBe('public');
 });
 
 test('marga audience requires valid unique selected margas', function (string $kind) {

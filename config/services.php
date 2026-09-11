@@ -2,6 +2,11 @@
 
 return [
 
+    'openai' => [
+        'api_key' => env('OPENAI_API_KEY'),
+        'image_model' => env('OPENAI_IMAGE_MODEL', 'gpt-image-1.5'),
+    ],
+
     'google' => [
         'client_id' => env('GOOGLE_CLIENT_ID'),
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),

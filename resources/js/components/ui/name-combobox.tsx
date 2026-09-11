@@ -24,6 +24,7 @@ type NameComboboxProps = {
     placeholder?: string;
     allowNa?: boolean;
     className?: string;
+    showSiblingPreview?: boolean;
 };
 
 export function NameCombobox({
@@ -34,9 +35,13 @@ export function NameCombobox({
     placeholder,
     allowNa = true,
     className,
+    showSiblingPreview = false,
 }: NameComboboxProps) {
     const [open, setOpen] = useState(false);
     const [highlighted, setHighlighted] = useState(-1);
+    const [hoveredSuggestion, setHoveredSuggestion] =
+        useState<NameSuggestion | null>(null);
+    const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
     const boxRef = useRef<HTMLDivElement>(null);
     const blurTimer = useRef<number | null>(null);
 
@@ -59,15 +64,26 @@ export function NameCombobox({
         });
 
         return matches.slice(0, 12);
-    }, [suggestions, query, value]);
+    }, [suggestions, query]);
 
     const rows: Array<string | NameSuggestion> = allowNa
         ? [...filtered, '__NA__']
         : filtered;
+    const siblingNames = useMemo(() => {
+        if (hoveredSuggestion?.father_id == null) {
+            return [];
+        }
 
-    useEffect(() => {
-        setHighlighted(-1);
-    }, [value]);
+        return suggestions
+            .filter(
+                (suggestion): suggestion is NameSuggestion =>
+                    typeof suggestion !== 'string' &&
+                    suggestion.id !== hoveredSuggestion.id &&
+                    suggestion.father_id === hoveredSuggestion.father_id,
+            )
+            .map((suggestion) => suggestion.name)
+            .slice(0, 8);
+    }, [hoveredSuggestion, suggestions]);
 
     useEffect(() => {
         return () => {
@@ -115,6 +131,7 @@ export function NameCombobox({
                 value={value}
                 onChange={(e) => {
                     onChange(e.target.value);
+                    setHighlighted(-1);
                     setOpen(true);
                 }}
                 onFocus={() => setOpen(true)}
@@ -149,7 +166,27 @@ export function NameCombobox({
                                     e.preventDefault();
                                     choose(row);
                                 }}
-                                onMouseEnter={() => setHighlighted(index)}
+                                onMouseEnter={() => {
+                                    setHighlighted(index);
+                                    setHoveredSuggestion(suggestion);
+                                }}
+                                onMouseMove={(event) => {
+                                    if (!showSiblingPreview || !suggestion) {
+                                        return;
+                                    }
+
+                                    setHoverPosition({
+                                        x: Math.min(
+                                            event.clientX + 16,
+                                            window.innerWidth - 288,
+                                        ),
+                                        y: Math.min(
+                                            event.clientY + 16,
+                                            window.innerHeight - 96,
+                                        ),
+                                    });
+                                }}
+                                onMouseLeave={() => setHoveredSuggestion(null)}
                                 className={cn(
                                     'flex w-full flex-col items-start rounded px-2 py-1.5 text-left text-sm text-tb-on-surface',
                                     highlighted === index && 'bg-tb-surface-container',
@@ -171,6 +208,27 @@ export function NameCombobox({
                             </button>
                         );
                     })}
+                </div>
+            )}
+            {showSiblingPreview && hoveredSuggestion && (
+                <div
+                    role="tooltip"
+                    className="pointer-events-none fixed z-50 w-72 rounded-md border border-tb-primary/30 bg-tb-surface-bright px-3 py-2 shadow-lg"
+                    style={{
+                        left: `${hoverPosition.x}px`,
+                        top: `${hoverPosition.y}px`,
+                    }}
+                >
+                    <p className="text-xs font-semibold text-tb-on-surface">
+                        {hoveredSuggestion.name}
+                    </p>
+                    <p className="mt-0.5 text-xs text-tb-on-surface-variant">
+                        {hoveredSuggestion.father_id == null
+                            ? 'Data ayah belum tersedia, jadi saudara kandung belum dapat ditentukan.'
+                            : siblingNames.length > 0
+                              ? `Saudara kandung: ${siblingNames.join(', ')}`
+                              : 'Belum ada saudara kandung lain yang tercatat.'}
+                    </p>
                 </div>
             )}
         </div>

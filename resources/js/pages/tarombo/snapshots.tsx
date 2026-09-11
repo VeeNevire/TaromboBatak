@@ -1,5 +1,12 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { ArrowLeft, Images, ShieldCheck, Trash2 } from 'lucide-react';
+import {
+    ArrowLeft,
+    Images,
+    PanelsTopLeft,
+    ShieldCheck,
+    Sparkles,
+    Trash2,
+} from 'lucide-react';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -31,16 +38,31 @@ type SnapshotPage = {
     next_page_url: string | null;
 };
 
+type Frame = {
+    id: number;
+    name: string;
+    image_url: string;
+};
+
 export default function TaromboSnapshots({
     snapshots,
+    snapshotOptions,
+    activeFrames,
     accountName,
 }: {
     snapshots: SnapshotPage;
+    snapshotOptions: Snapshot[];
+    activeFrames: Frame[];
     accountName: string;
 }) {
     const [selectedSnapshot, setSelectedSnapshot] = useState<Snapshot | null>(
         null,
     );
+    const [sourceSnapshot, setSourceSnapshot] = useState<Snapshot | null>(null);
+    const [selectedFrame, setSelectedFrame] = useState<Frame | null>(null);
+    const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
+    const [framePickerOpen, setFramePickerOpen] = useState(false);
+    const [generating, setGenerating] = useState(false);
     const dateFormatter = new Intl.DateTimeFormat('id-ID', {
         dateStyle: 'long',
         timeStyle: 'short',
@@ -56,6 +78,35 @@ export default function TaromboSnapshots({
         });
     };
 
+    const generateFrame = () => {
+        if (!sourceSnapshot || !selectedFrame || generating) {
+            return;
+        }
+
+        setGenerating(true);
+        router.post(
+            tarombo.snapshots.generate().url,
+            {
+                snapshot_id: sourceSnapshot.id,
+                frame_id: selectedFrame.id,
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setSourceSnapshot(null);
+                    setSelectedFrame(null);
+                },
+                onError: (errors) => {
+                    window.alert(
+                        errors.frame_id ??
+                            'Generator AI gagal membuat gambar. Silakan coba lagi.',
+                    );
+                },
+                onFinish: () => setGenerating(false),
+            },
+        );
+    };
+
     return (
         <>
             <Head title="Tarombo Tersimpan" />
@@ -64,7 +115,7 @@ export default function TaromboSnapshots({
                 className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6"
                 onContextMenu={(event) => event.preventDefault()}
             >
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                     <div>
                         <h1 className="font-display text-2xl font-bold text-tb-on-surface md:text-3xl">
                             Tarombo Tersimpan
@@ -74,11 +125,49 @@ export default function TaromboSnapshots({
                             Anda.
                         </p>
                     </div>
-                    <Button asChild variant="outline">
-                        <Link href={tarombo.index()}>
-                            <ArrowLeft className="size-4" /> Pohon Tarombo
-                        </Link>
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setSourcePickerOpen(true)}
+                            className="max-w-52 justify-start"
+                        >
+                            <Images className="size-4 shrink-0" />
+                            <span className="truncate">
+                                {sourceSnapshot
+                                    ? (sourceSnapshot.center_person_name ??
+                                      'Pohon Tarombo')
+                                    : 'Pilih Gambar'}
+                            </span>
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setFramePickerOpen(true)}
+                            className="max-w-52 justify-start"
+                        >
+                            <PanelsTopLeft className="size-4 shrink-0" />
+                            <span className="truncate">
+                                {selectedFrame?.name ?? 'Pilih Frame'}
+                            </span>
+                        </Button>
+                        <Button
+                            type="button"
+                            disabled={
+                                !sourceSnapshot || !selectedFrame || generating
+                            }
+                            onClick={generateFrame}
+                            className="bg-tb-primary hover:bg-tb-primary-light"
+                        >
+                            <Sparkles className="size-4" />
+                            {generating ? 'Membuat...' : 'Gen AI'}
+                        </Button>
+                        <Button asChild variant="outline">
+                            <Link href={tarombo.index()}>
+                                <ArrowLeft className="size-4" /> Pohon Tarombo
+                            </Link>
+                        </Button>
+                    </div>
                 </div>
 
                 <div className="flex items-start gap-3 rounded-xl border border-tb-outline-variant bg-tb-surface-container/50 p-4 text-sm text-tb-on-surface-variant">
@@ -86,7 +175,9 @@ export default function TaromboSnapshots({
                     <p>
                         Gambar dilayani melalui akses privat, tanpa tombol
                         download, serta tidak dapat diklik kanan atau ditarik
-                        dari galeri.
+                        dari galeri. Saat Gen AI dipilih, gambar Tarombo dan
+                        frame dikirim sebagai dua referensi ke AI untuk
+                        dianalisis dan disatukan secara proporsional.
                     </p>
                 </div>
 
@@ -245,6 +336,90 @@ export default function TaromboSnapshots({
                             </span>
                         </div>
                     )}
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={sourcePickerOpen} onOpenChange={setSourcePickerOpen}>
+                <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
+                    <DialogHeader>
+                        <DialogTitle>Pilih Gambar Tarombo</DialogTitle>
+                        <DialogDescription>
+                            Hanya gambar Tarombo milik akun Anda yang dapat
+                            digunakan.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+                        {snapshotOptions.map((snapshot) => (
+                            <button
+                                key={snapshot.id}
+                                type="button"
+                                onClick={() => {
+                                    setSourceSnapshot(snapshot);
+                                    setSourcePickerOpen(false);
+                                }}
+                                className="overflow-hidden rounded-xl border border-tb-outline-variant text-left transition-colors hover:border-tb-primary focus-visible:ring-2 focus-visible:ring-tb-primary focus-visible:outline-none"
+                            >
+                                <img
+                                    src={snapshot.image_url}
+                                    alt={
+                                        snapshot.center_person_name ??
+                                        'Pohon Tarombo'
+                                    }
+                                    className="aspect-video w-full bg-tb-surface-container object-contain"
+                                />
+                                <p className="truncate px-3 py-2 text-sm font-medium text-tb-on-surface">
+                                    {snapshot.center_person_name ??
+                                        'Pohon Tarombo'}
+                                </p>
+                            </button>
+                        ))}
+                        {snapshotOptions.length === 0 && (
+                            <p className="col-span-full py-6 text-center text-sm text-tb-on-surface-variant">
+                                Belum ada gambar Tarombo yang dapat dipilih.
+                            </p>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={framePickerOpen} onOpenChange={setFramePickerOpen}>
+                <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
+                    <DialogHeader>
+                        <DialogTitle>Pilih Template Frame</DialogTitle>
+                        <DialogDescription>
+                            AI akan menganalisis area konten dari template ini,
+                            lalu menempatkan gambar Tarombo tanpa menutupi
+                            ornamen frame.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+                        {activeFrames.map((frame) => (
+                            <button
+                                key={frame.id}
+                                type="button"
+                                onClick={() => {
+                                    setSelectedFrame(frame);
+                                    setFramePickerOpen(false);
+                                }}
+                                className="overflow-hidden rounded-xl border border-tb-outline-variant text-left transition-colors hover:border-tb-primary focus-visible:ring-2 focus-visible:ring-tb-primary focus-visible:outline-none"
+                            >
+                                <img
+                                    src={frame.image_url}
+                                    alt={frame.name}
+                                    className="aspect-video w-full bg-tb-surface-container object-contain"
+                                />
+                                <p className="truncate px-3 py-2 text-sm font-medium text-tb-on-surface">
+                                    {frame.name}
+                                </p>
+                            </button>
+                        ))}
+                        {activeFrames.length === 0 && (
+                            <p className="col-span-full py-6 text-center text-sm text-tb-on-surface-variant">
+                                Belum ada frame aktif. Hubungi admin untuk
+                                menambah template.
+                            </p>
+                        )}
+                    </div>
                 </DialogContent>
             </Dialog>
         </>

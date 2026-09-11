@@ -66,6 +66,52 @@ test('an alternative version can change a parent without changing its source ver
         ->and($versionOne->nodes()->where('person_id', $rajaHumirtap->id)->value('person_id'))->toBe($rajaHumirtap->id);
 });
 
+test('an alternative version inherits new primary branches until that branch is overridden', function () {
+    $user = User::factory()->asAdmin()->create();
+    $root = Person::factory()->create(['name' => 'Akar']);
+    $child = Person::factory()->create(['name' => 'Anak Utama']);
+    $newGrandchild = Person::factory()->create(['name' => 'Cucu Baru']);
+    $source = FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $root->id,
+        'name' => 'Versi Utama',
+        'is_primary' => true,
+    ]);
+    $rootNode = FamilyTreeNode::create(['family_tree_id' => $source->id, 'person_id' => $root->id]);
+    $childNode = FamilyTreeNode::create([
+        'family_tree_id' => $source->id,
+        'person_id' => $child->id,
+        'father_node_id' => $rootNode->id,
+    ]);
+    $alternative = app(FamilyTreeVersionService::class)->duplicate($source, $user, 'Versi Alternatif');
+
+    FamilyTreeNode::create([
+        'family_tree_id' => $source->id,
+        'person_id' => $newGrandchild->id,
+        'father_node_id' => $childNode->id,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('family-trees.show', $alternative))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('people', 3)
+            ->where('people.2.id', (string) $newGrandchild->id)
+            ->where('people.2.parentId', (string) $child->id));
+
+    $alternativeRoot = $alternative->nodes()->where('person_id', $root->id)->firstOrFail();
+    FamilyTreeNode::create([
+        'family_tree_id' => $alternative->id,
+        'person_id' => $newGrandchild->id,
+        'father_node_id' => $alternativeRoot->id,
+        'structure_overrides' => ['father_person_id' => $root->id],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('family-trees.show', $alternative))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('people.2.parentId', (string) $root->id));
+});
+
 test('the existing family form updates an alternative version without changing global chains', function () {
     $user = User::factory()->asAdmin()->create();
     $root = Person::factory()->create(['name' => 'Si Raja Batak', 'gender' => 'L', 'chain' => '1']);
@@ -110,6 +156,8 @@ test('the existing family form updates an alternative version without changing g
         ->and($tree->nodes()->where('person_id', $secondChild->id)->value('birth_order'))->toBe(2)
         ->and($alternative->nodes()->where('person_id', $secondChild->id)->value('birth_order'))->toBe(1)
         ->and($alternative->nodes()->where('person_id', $firstChild->id)->value('birth_order'))->toBe(2)
+        ->and($alternative->nodes()->where('person_id', $secondChild->id)->firstOrFail()->structure_overrides)
+        ->toMatchArray(['birth_order' => 1])
         ->and($firstChild->fresh()->chain)->toBe('1-1')
         ->and($secondChild->fresh()->chain)->toBe('1-2');
 });

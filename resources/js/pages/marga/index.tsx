@@ -287,6 +287,7 @@ export default function MargaIndex({
             form.transform((data) => data);
             form.post(marga.store().url, {
                 forceFormData: true,
+                preserveScroll: true,
                 onSuccess: () => setDialog(null),
             });
         } else if (dialog) {
@@ -296,6 +297,7 @@ export default function MargaIndex({
             }));
             form.post(marga.update(dialog.id).url, {
                 forceFormData: true,
+                preserveScroll: true,
                 onSuccess: () => setDialog(null),
             });
         }
@@ -494,6 +496,14 @@ export default function MargaIndex({
                                         <div>
                                             <h3 className="font-display text-lg font-bold text-tb-on-surface">
                                                 {m.name}
+                                                {m.identity_person_name && (
+                                                    <span className="text-emerald-700 dark:text-emerald-300">
+                                                        {' '}
+                                                        (
+                                                        {m.identity_person_name}
+                                                        )
+                                                    </span>
+                                                )}
                                             </h3>
                                             {m.description && (
                                                 <p className="mt-0.5 line-clamp-2 text-sm text-tb-on-surface-variant">
@@ -549,8 +559,12 @@ export default function MargaIndex({
                         }
                     }}
                 >
-                    <DialogContent className="sm:max-w-md">
-                        <form onSubmit={submit} encType="multipart/form-data">
+                    <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] overflow-y-auto sm:max-w-xl">
+                        <form
+                            onSubmit={submit}
+                            encType="multipart/form-data"
+                            className="min-w-0"
+                        >
                             <DialogHeader>
                                 <DialogTitle className="text-tb-on-surface">
                                     {dialog === 'create'

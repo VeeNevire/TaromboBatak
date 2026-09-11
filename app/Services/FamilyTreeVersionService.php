@@ -38,6 +38,7 @@ class FamilyTreeVersionService
                     'sibling_count' => $node->sibling_count,
                     'chain' => $node->chain,
                     'pending_father' => $node->pending_father,
+                    'structure_overrides' => [],
                 ]);
                 $nodeIds[$node->id] = $newNode->id;
             }
@@ -98,6 +99,7 @@ class FamilyTreeVersionService
                     'sibling_count' => $node->sibling_count,
                     'chain' => $node->chain,
                     'pending_father' => $node->pending_father,
+                    'structure_overrides' => [],
                 ]);
                 $nodeIds[$node->id] = $newNode->id;
             }

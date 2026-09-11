@@ -3695,6 +3695,7 @@ export default function FamilyForm({
                                                                 nameSuggestions
                                                             }
                                                             placeholder="Nama anak"
+                                                            showSiblingPreview
                                                         />
                                                     </div>
                                                     <div className="grid gap-1.5 lg:col-span-3">

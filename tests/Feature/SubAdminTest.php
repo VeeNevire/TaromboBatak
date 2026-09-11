@@ -1,6 +1,9 @@
 <?php
 
+use App\Models\ActivityLog;
+use App\Models\FamilyTree;
 use App\Models\Marga;
+use App\Models\Person;
 use App\Models\User;
 
 test('sub-admins can access staff data routes', function () {
@@ -74,6 +77,31 @@ test('admins can create a sub-admin', function () {
         'role' => 'subadmin',
         'marga_id' => $marga->id,
     ]);
+
+    $subAdmin = User::query()->where('email', 'subadmin@example.com')->firstOrFail();
+    expect(ActivityLog::query()->where('account_id', $subAdmin->id)->value('action'))->toBe('created');
+});
+
+test('successful data changes by a sub-admin are recorded on their activity log', function () {
+    $subAdmin = User::factory()->asSubAdmin()->create();
+    $root = Person::factory()->create();
+    $tree = FamilyTree::create([
+        'user_id' => $subAdmin->id,
+        'root_person_id' => $root->id,
+        'name' => 'Nama Lama',
+    ]);
+
+    $this->actingAs($subAdmin)
+        ->patch(route('family-trees.name.update', $tree), ['name' => 'Nama Baru'])
+        ->assertRedirect();
+
+    expect(ActivityLog::query()
+        ->where('account_id', $subAdmin->id)
+        ->where('actor_id', $subAdmin->id)
+        ->latest()
+        ->firstOrFail())
+        ->action->toBe('family-trees.name.update')
+        ->description->toBe('Melakukan perubahan data melalui family-trees.name.update.');
 });
 
 test('admins can update a sub-admin', function () {

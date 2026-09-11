@@ -41,6 +41,7 @@ import people from '@/routes/people';
 import stories from '@/routes/stories';
 import subAdmins from '@/routes/sub-admins';
 import tarombo from '@/routes/tarombo';
+import taromboFrames from '@/routes/tarombo-frames';
 import telegramMessages from '@/routes/telegram-messages';
 import type { NavGroup } from '@/types';
 
@@ -176,6 +177,11 @@ export function AppSidebar() {
                               title: 'Daftar Silsilah Milik Akun',
                               href: familyTrees.index(),
                               icon: TreePine,
+                          },
+                          {
+                              title: 'Template Frame Tarombo',
+                              href: taromboFrames.index(),
+                              icon: Images,
                           },
                           {
                               title: 'Sub Admin',
