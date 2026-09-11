@@ -54,6 +54,8 @@ export default function Profile({
     telegramBotConfigured,
 }: Props) {
     const { auth } = usePage<PageProps>().props;
+    const [name, setName] = useState(auth.user.name);
+    const [email, setEmail] = useState(auth.user.email);
     const [margaId, setMargaId] = useState(
         auth.user.marga_id ? String(auth.user.marga_id) : '',
     );
@@ -80,6 +82,11 @@ export default function Profile({
     const regencies =
         regions.find((region) => region.code === provinceCode)?.regencies ?? [];
 
+    useEffect(() => {
+        setName(auth.user.name);
+        setEmail(auth.user.email);
+    }, [auth.user.email, auth.user.name]);
+
     const selectProvince = (code: string) => {
         const nextCode = code === EMPTY_VALUE ? '' : code;
 
@@ -95,29 +102,32 @@ export default function Profile({
 
     useEffect(() => {
         if (!regencyCode) {
-return;
-}
+            return;
+        }
 
         const controller = new AbortController();
         fetch(regionRoutes.districts(regencyCode).url, {
             headers: { Accept: 'application/json' },
             signal: controller.signal,
         })
-            .then((response) => response.json() as Promise<{ data: AreaOption[] }>)
+            .then(
+                (response) =>
+                    response.json() as Promise<{ data: AreaOption[] }>,
+            )
             .then((payload) => {
                 if (!controller.signal.aborted) {
-setDistricts(payload.data);
-}
+                    setDistricts(payload.data);
+                }
             })
             .catch(() => {
                 if (!controller.signal.aborted) {
-setDistricts([]);
-}
+                    setDistricts([]);
+                }
             })
             .finally(() => {
                 if (!controller.signal.aborted) {
-setDistrictsLoading(false);
-}
+                    setDistrictsLoading(false);
+                }
             });
 
         return () => controller.abort();
@@ -125,29 +135,32 @@ setDistrictsLoading(false);
 
     useEffect(() => {
         if (!districtCode) {
-return;
-}
+            return;
+        }
 
         const controller = new AbortController();
         fetch(regionRoutes.villages(districtCode).url, {
             headers: { Accept: 'application/json' },
             signal: controller.signal,
         })
-            .then((response) => response.json() as Promise<{ data: AreaOption[] }>)
+            .then(
+                (response) =>
+                    response.json() as Promise<{ data: AreaOption[] }>,
+            )
             .then((payload) => {
                 if (!controller.signal.aborted) {
-setVillages(payload.data);
-}
+                    setVillages(payload.data);
+                }
             })
             .catch(() => {
                 if (!controller.signal.aborted) {
-setVillages([]);
-}
+                    setVillages([]);
+                }
             })
             .finally(() => {
                 if (!controller.signal.aborted) {
-setVillagesLoading(false);
-}
+                    setVillagesLoading(false);
+                }
             });
 
         return () => controller.abort();
@@ -200,7 +213,10 @@ setVillagesLoading(false);
                                 <Input
                                     id="name"
                                     className="mt-1 block w-full"
-                                    defaultValue={auth.user.name}
+                                    value={name}
+                                    onChange={(event) =>
+                                        setName(event.target.value)
+                                    }
                                     name="name"
                                     required
                                     autoComplete="name"
@@ -220,7 +236,10 @@ setVillagesLoading(false);
                                     id="email"
                                     type="email"
                                     className="mt-1 block w-full"
-                                    defaultValue={auth.user.email}
+                                    value={email}
+                                    onChange={(event) =>
+                                        setEmail(event.target.value)
+                                    }
                                     name="email"
                                     required
                                     autoComplete="username"
@@ -371,15 +390,22 @@ setVillagesLoading(false);
                                 </div>
 
                                 <div className="grid gap-2">
-                                    <Label htmlFor="district_code">Kecamatan</Label>
+                                    <Label htmlFor="district_code">
+                                        Kecamatan
+                                    </Label>
                                     <div className="relative">
                                         <MapPin className="pointer-events-none absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 text-tb-outline" />
                                         <Select
                                             value={districtCode || EMPTY_VALUE}
                                             onValueChange={selectDistrict}
-                                            disabled={!regencyCode || districtsLoading}
+                                            disabled={
+                                                !regencyCode || districtsLoading
+                                            }
                                         >
-                                            <SelectTrigger id="district_code" className="w-full pl-10">
+                                            <SelectTrigger
+                                                id="district_code"
+                                                className="w-full pl-10"
+                                            >
                                                 <SelectValue
                                                     placeholder={
                                                         districtsLoading
@@ -395,29 +421,49 @@ setVillagesLoading(false);
                                                     Belum memilih kecamatan
                                                 </SelectItem>
                                                 {districts.map((district) => (
-                                                    <SelectItem key={district.code} value={district.code}>
+                                                    <SelectItem
+                                                        key={district.code}
+                                                        value={district.code}
+                                                    >
                                                         {district.name}
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
-                                        <input type="hidden" name="district_code" value={districtCode} />
+                                        <input
+                                            type="hidden"
+                                            name="district_code"
+                                            value={districtCode}
+                                        />
                                     </div>
-                                    <InputError message={errors.district_code} />
+                                    <InputError
+                                        message={errors.district_code}
+                                    />
                                 </div>
 
                                 <div className="grid gap-2">
-                                    <Label htmlFor="village_code">Desa/Kelurahan</Label>
+                                    <Label htmlFor="village_code">
+                                        Desa/Kelurahan
+                                    </Label>
                                     <div className="relative">
                                         <MapPin className="pointer-events-none absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 text-tb-outline" />
                                         <Select
                                             value={villageCode || EMPTY_VALUE}
                                             onValueChange={(value) =>
-                                                setVillageCode(value === EMPTY_VALUE ? '' : value)
+                                                setVillageCode(
+                                                    value === EMPTY_VALUE
+                                                        ? ''
+                                                        : value,
+                                                )
                                             }
-                                            disabled={!districtCode || villagesLoading}
+                                            disabled={
+                                                !districtCode || villagesLoading
+                                            }
                                         >
-                                            <SelectTrigger id="village_code" className="w-full pl-10">
+                                            <SelectTrigger
+                                                id="village_code"
+                                                className="w-full pl-10"
+                                            >
                                                 <SelectValue
                                                     placeholder={
                                                         villagesLoading
@@ -433,13 +479,20 @@ setVillagesLoading(false);
                                                     Belum memilih desa/kelurahan
                                                 </SelectItem>
                                                 {villages.map((village) => (
-                                                    <SelectItem key={village.code} value={village.code}>
+                                                    <SelectItem
+                                                        key={village.code}
+                                                        value={village.code}
+                                                    >
                                                         {village.name}
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
-                                        <input type="hidden" name="village_code" value={villageCode} />
+                                        <input
+                                            type="hidden"
+                                            name="village_code"
+                                            value={villageCode}
+                                        />
                                     </div>
                                     <InputError message={errors.village_code} />
                                 </div>
@@ -499,8 +552,12 @@ setVillagesLoading(false);
                                     Akun ini dapat menerima pengumuman dan
                                     digunakan untuk memasangkan grup Telegram.
                                 </p>
-                                <Link href={telegramMtproto.index()} className="text-sm text-sky-600 hover:underline">
-                                    Kelola koneksi MTProto untuk membaca chat dan channel
+                                <Link
+                                    href={telegramMtproto.index()}
+                                    className="text-sm text-sky-600 hover:underline"
+                                >
+                                    Kelola koneksi MTProto untuk membaca chat
+                                    dan channel
                                 </Link>
                             </>
                         ) : (
@@ -510,7 +567,10 @@ setVillagesLoading(false);
                                     pengumuman dan memasangkan grup Telegram ke
                                     aplikasi.
                                 </p>
-                                <Link href={telegramMtproto.index()} className="text-sm text-sky-600 hover:underline">
+                                <Link
+                                    href={telegramMtproto.index()}
+                                    className="text-sm text-sky-600 hover:underline"
+                                >
                                     Hubungkan akun Telegram dengan MTProto
                                 </Link>
                                 <Form {...telegramConnection.store.form()}>
