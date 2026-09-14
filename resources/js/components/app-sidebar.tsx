@@ -1,6 +1,7 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
     BookOpen,
+    BarChart3,
     BellRing,
     CalendarDays,
     History,
@@ -46,6 +47,7 @@ import stories from '@/routes/stories';
 import subAdmins from '@/routes/sub-admins';
 import tarombo from '@/routes/tarombo';
 import taromboFrames from '@/routes/tarombo-frames';
+import trafficMonitor from '@/routes/traffic-monitor';
 import treeActivityLogs from '@/routes/tree-activity-logs';
 import type { NavGroup } from '@/types';
 
@@ -186,6 +188,11 @@ export function AppSidebar() {
                               title: 'Data Pengguna',
                               href: accounts.index(),
                               icon: Users,
+                          },
+                          {
+                              title: 'Monitor Traffic',
+                              href: trafficMonitor.index(),
+                              icon: BarChart3,
                           },
                           {
                               title: 'Daftar Silsilah Milik Akun',

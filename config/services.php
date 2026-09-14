@@ -11,6 +11,8 @@ return [
         'client_id' => env('GOOGLE_CLIENT_ID'),
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
         'redirect' => env('GOOGLE_REDIRECT_URI', env('APP_URL').'/auth/google/callback'),
+        'analytics_measurement_id' => env('GOOGLE_ANALYTICS_MEASUREMENT_ID'),
+        'analytics_report_embed_url' => env('GOOGLE_ANALYTICS_REPORT_EMBED_URL'),
     ],
 
     /*

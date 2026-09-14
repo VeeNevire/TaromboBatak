@@ -1,4 +1,4 @@
-import { createInertiaApp } from '@inertiajs/react';
+import { createInertiaApp, router } from '@inertiajs/react';
 import { configureEcho } from '@laravel/echo-react';
 import { MotionConfig } from 'framer-motion';
 import type { ComponentType, ReactNode } from 'react';
@@ -9,9 +9,16 @@ import AppDashboardLayout from '@/layouts/app/app-dashboard-layout';
 import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
+import { trackGoogleAnalyticsPageView } from '@/lib/google-analytics';
 configureEcho({
     broadcaster: 'reverb',
 });
+
+router.on('navigate', (event) => {
+    trackGoogleAnalyticsPageView(event.detail.page.url);
+});
+
+trackGoogleAnalyticsPageView(window.location.href);
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
