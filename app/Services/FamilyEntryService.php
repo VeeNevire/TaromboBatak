@@ -190,6 +190,15 @@ class FamilyEntryService
                 $mothers,
             );
 
+            if (
+                $focus !== null
+                && array_key_exists('is_public', $data)
+                && ! filter_var($data['is_public'], FILTER_VALIDATE_BOOL)
+                && filter_var($data['cascade_public_descendants'] ?? false, FILTER_VALIDATE_BOOL)
+            ) {
+                $this->makeDescendantsPrivate($focus);
+            }
+
             $deleted = $this->deleteRemoved(
                 $data['removed_child_ids'] ?? [],
                 $data['removed_own_child_ids'] ?? [],
@@ -256,6 +265,34 @@ class FamilyEntryService
         $result['familyTrees']->each->touch();
 
         return $result;
+    }
+
+    /**
+     * Make every patrilineal descendant private so a public Tarombo path is
+     * never left dangling below a private ancestor.
+     */
+    protected function makeDescendantsPrivate(Person $person): void
+    {
+        $parentIds = [$person->id];
+
+        while ($parentIds !== []) {
+            $children = Person::query()
+                ->whereIn('father_id', $parentIds)
+                ->get(['id']);
+
+            if ($children->isEmpty()) {
+                return;
+            }
+
+            $childIds = $children->pluck('id')->all();
+
+            Person::query()
+                ->whereKey($childIds)
+                ->where('is_public', true)
+                ->update(['is_public' => false]);
+
+            $parentIds = $childIds;
+        }
     }
 
     /**
@@ -652,9 +689,9 @@ class FamilyEntryService
         if (! $isPublic && isset($data['id']) && Person::query()
             ->where('father_id', (int) $data['id'])
             ->public()
-            ->exists()) {
+            ->exists() && ! filter_var($data['cascade_public_descendants'] ?? false, FILTER_VALIDATE_BOOL)) {
             throw ValidationException::withMessages([
-                'is_public' => 'Person ini masih memiliki keturunan publik dan belum dapat dibuat private.',
+                'is_public' => 'Person ini masih memiliki keturunan publik. Konfirmasikan untuk menjadikan seluruh cabang private.',
             ]);
         }
     }

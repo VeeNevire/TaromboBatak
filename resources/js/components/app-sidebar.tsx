@@ -46,6 +46,7 @@ import stories from '@/routes/stories';
 import subAdmins from '@/routes/sub-admins';
 import tarombo from '@/routes/tarombo';
 import taromboFrames from '@/routes/tarombo-frames';
+import treeActivityLogs from '@/routes/tree-activity-logs';
 import type { NavGroup } from '@/types';
 
 export function AppSidebar() {

@@ -1258,6 +1258,9 @@ class PersonController extends Controller
         $descendantMap = $this->descendantMap(
             $siblings->pluck('id')->merge($ownChildrenRows->pluck('id'))->all(),
         );
+        $publicDescendants = $this->descendantsOf($person)
+            ->where('is_public', true)
+            ->values();
 
         return [
             'id' => $person->id,
@@ -1272,6 +1275,8 @@ class PersonController extends Controller
             'chain' => $person->chain,
             'pending' => (bool) $person->pending_father,
             'is_public' => (bool) $person->is_public,
+            'public_descendant_count' => $publicDescendants->count(),
+            'public_descendant_names' => $publicDescendants->take(50)->pluck('name')->all(),
             'birth_year' => $person->birth_year,
             'death_year' => $person->death_year,
             'province_code' => $person->province_code,

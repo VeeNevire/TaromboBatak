@@ -62,6 +62,58 @@ test('a regular user cannot publish family data directly', function () {
     $this->assertDatabaseMissing('people', ['name' => 'Data User']);
 });
 
+test('an admin can make a public family branch private after confirming the cascade', function () {
+    $marga = Marga::factory()->create();
+    $ancestor = Person::factory()->public()->create([
+        'name' => 'Leluhur Publik',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+    ]);
+    $child = Person::factory()->public()->create([
+        'name' => 'Anak Publik',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'father_id' => $ancestor->id,
+        'birth_order' => 1,
+    ]);
+    $grandchild = Person::factory()->public()->create([
+        'name' => 'Cucu Publik',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'father_id' => $child->id,
+        'birth_order' => 1,
+    ]);
+
+    $this->actingAs(User::factory()->asAdmin()->create())
+        ->put(route('people.update', $ancestor), [
+            'name' => $ancestor->name,
+            'gender' => 'L',
+            'marga_id' => $marga->id,
+            'birth_order' => 1,
+            'sibling_count' => 1,
+            'is_public' => false,
+            'cascade_public_descendants' => true,
+            'children' => [[
+                'id' => $ancestor->id,
+                'name' => $ancestor->name,
+                'gender' => 'L',
+                'marga_id' => $marga->id,
+            ]],
+            'ownChildren' => [[
+                'id' => $child->id,
+                'name' => $child->name,
+                'gender' => 'L',
+                'marga_id' => $marga->id,
+            ]],
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect($ancestor->fresh()->is_public)->toBeFalse()
+        ->and($child->fresh()->is_public)->toBeFalse()
+        ->and($grandchild->fresh()->is_public)->toBeFalse();
+});
+
 test('the public tree respects the configured node limit', function () {
     config()->set('tarombo.public_max_nodes', 2);
     config()->set('tarombo.public_max_depth', 6);
