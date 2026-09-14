@@ -22,6 +22,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { AlternativeVersionDialog } from '@/components/people/alternative-version-dialog';
 import {
     Card,
     CardContent,
@@ -275,6 +276,8 @@ export function FamilyTreeHistoryCard({
     const [renameEntry, setRenameEntry] =
         useState<FamilyTreeHistoryEntry | null>(null);
     const [renameName, setRenameName] = useState('');
+    const [alternativeEntry, setAlternativeEntry] =
+        useState<FamilyTreeHistoryEntry | null>(null);
     const [recipientId, setRecipientId] = useState('');
     const [recipientSearch, setRecipientSearch] = useState('');
     const listTopRef = useRef<HTMLDivElement>(null);
@@ -750,18 +753,21 @@ export function FamilyTreeHistoryCard({
                                                             </Button>
                                                         )}
                                                         {entry.can_manage && (
-                                                            <Link
-                                                                href={familyTrees.duplicate(
-                                                                    entry.id,
-                                                                )}
-                                                                method="post"
-                                                                as="button"
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() =>
+                                                                    setAlternativeEntry(
+                                                                        entry,
+                                                                    )
+                                                                }
                                                                 className="inline-flex items-center gap-1.5 rounded-lg border border-tb-outline-variant px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
                                                             >
                                                                 <Copy className="size-3.5" />{' '}
                                                                 Versi Alternatif
                                                                 Keluarga
-                                                            </Link>
+                                                            </Button>
                                                         )}
                                                         {entry.can_manage && (
                                                             <Link
@@ -1171,6 +1177,18 @@ export function FamilyTreeHistoryCard({
                     )}
                 </DialogContent>
             </Dialog>
+            {alternativeEntry && (
+                <AlternativeVersionDialog
+                    open
+                    onOpenChange={(open) => {
+                        if (!open) {
+                            setAlternativeEntry(null);
+                        }
+                    }}
+                    submitUrl={familyTrees.duplicate(alternativeEntry.id).url}
+                    defaultName={`${alternativeEntry.name ?? alternativeEntry.root_name} - Versi alternatif`}
+                />
+            )}
         </div>
     );
 }

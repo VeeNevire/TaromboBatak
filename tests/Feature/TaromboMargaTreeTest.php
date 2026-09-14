@@ -4,6 +4,7 @@ use App\Models\Marga;
 use App\Models\MargaAccessRequest;
 use App\Models\Person;
 use App\Models\User;
+use App\Support\PersonShareCode;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('staff can open an upper or lower marga tree for its identity person', function () {
@@ -31,6 +32,10 @@ test('staff can open an upper or lower marga tree for its identity person', func
                 ->where('margaTree.margaName', $marga->name)
                 ->where('margaTree.identityPersonId', (string) $identity->id)
                 ->where('margaTree.direction', $direction)
+                ->where(
+                    'selectedTreePeople.0.shareCode',
+                    app(PersonShareCode::class)->for($direction === 'upper' ? $root : $identity),
+                )
                 ->where('people.0.id', (string) ($direction === 'upper' ? $root->id : $identity->id)));
     }
 });
@@ -178,4 +183,35 @@ test('approved users receive lower marga descendants beyond the person preview d
                 fn (array $person) => $person['id'] === (string) $parent->id
                     && $person['name'] === 'Generasi 7',
             )));
+});
+
+test('marga tree marks people claimed by an account and exposes that account for contact requests', function () {
+    $marga = Marga::factory()->create();
+    $viewer = User::factory()->withMarga($marga->id)->create();
+    $claimedPerson = Person::factory()->create([
+        'marga_id' => $marga->id,
+        'gender' => 'L',
+    ]);
+    $account = User::factory()->withMarga($marga->id)->create([
+        'current_person_id' => $claimedPerson->id,
+    ]);
+    $marga->update(['identity_person_id' => $claimedPerson->id]);
+    MargaAccessRequest::create([
+        'requester_id' => $viewer->id,
+        'marga_id' => $marga->id,
+        'status' => MargaAccessRequest::STATUS_APPROVED,
+    ]);
+
+    $this->actingAs($viewer)
+        ->get(route('tarombo.fullscreen', [
+            'view' => 'tree',
+            'marga_id' => $marga->id,
+            'marga_direction' => 'lower',
+        ]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('identity.currentUserId', $viewer->id)
+            ->where('people.0.claimedAccounts.0.id', $account->id)
+            ->where('people.0.claimedAccounts.0.name', $account->name)
+            ->where('people.0.claimedAccounts.0.isContact', true));
 });

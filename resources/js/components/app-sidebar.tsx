@@ -11,6 +11,7 @@ import {
     Newspaper,
     Shapes,
     ShieldCheck,
+    ScrollText,
     TreePine,
     Users,
 } from 'lucide-react';
@@ -36,12 +37,14 @@ import events from '@/routes/events';
 import familyTrees from '@/routes/family-trees';
 import groups from '@/routes/groups';
 import marga from '@/routes/marga';
+import messageLogs from '@/routes/message-logs';
 import newsFeed from '@/routes/news-feed';
 import people from '@/routes/people';
 import stories from '@/routes/stories';
 import subAdmins from '@/routes/sub-admins';
 import tarombo from '@/routes/tarombo';
 import taromboFrames from '@/routes/tarombo-frames';
+import treeActivityLogs from '@/routes/tree-activity-logs';
 import telegramMessages from '@/routes/telegram-messages';
 import type { NavGroup } from '@/types';
 
@@ -87,12 +90,22 @@ export function AppSidebar() {
                     href: tarombo.snapshots.index(),
                     icon: Images,
                 },
+                {
+                    title: 'Log Pohon Besar',
+                    href: treeActivityLogs.index(),
+                    icon: ScrollText,
+                },
                 ...(!isAdmin
                     ? [
                           {
                               title: 'Daftar Kontak',
                               href: contacts.index(),
                               icon: MessageCircle,
+                          },
+                          {
+                              title: 'Log Pesan',
+                              href: messageLogs.index(),
+                              icon: ScrollText,
                           },
                           {
                               title: 'Grup',

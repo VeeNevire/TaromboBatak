@@ -474,13 +474,17 @@ test('vertical tarombo lists account and approved marga sources separately', fun
     ]);
 
     $this->actingAs($owner)
-        ->get(route('tarombo.index', ['family_tree' => $tree->id]))
+        ->get(route('tarombo.index', [
+            'family_tree' => $tree->id,
+            'person' => $root->id,
+        ]))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->where('selectedFamilyTreeId', $tree->id)
             ->where('familyTreeOptions.0.id', $tree->id)
             ->where('familyTreeOptions.0.value', 'account:'.$tree->id)
             ->where('familyTreeOptions.0.group', 'account')
+            ->where('familyTreeOptions.0.rootPersonId', $root->id)
             ->where('familyTreeOptions.1.value', 'marga:'.$marga->id)
             ->where('familyTreeOptions.1.group', 'marga')
             ->has('selectedTreePeople', 2)

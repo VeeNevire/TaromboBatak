@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\GenerateTaromboFrameRequest;
 use App\Http\Requests\StoreTaromboSnapshotRequest;
+use App\Http\Requests\UpdateTaromboAiPromptRequest;
+use App\Models\TaromboAiPrompt;
 use App\Models\TaromboFrame;
 use App\Models\TaromboSnapshot;
 use App\Services\TaromboFrameComposer;
@@ -22,6 +24,8 @@ class TaromboSnapshotController extends Controller
     public function index(Request $request): Response
     {
         Gate::authorize('viewAny', TaromboSnapshot::class);
+
+        $canManageAiPrompt = $request->user()->isAdmin();
 
         $snapshots = TaromboSnapshot::query()
             ->whereBelongsTo($request->user())
@@ -59,7 +63,28 @@ class TaromboSnapshotController extends Controller
             'snapshotOptions' => $snapshotOptions,
             'activeFrames' => $activeFrames,
             'accountName' => $request->user()->name,
+            'canManageAiPrompt' => $canManageAiPrompt,
+            'aiPrompt' => $canManageAiPrompt
+                ? TaromboAiPrompt::query()
+                    ->where('key', TaromboAiPrompt::FRAME_COMPOSITION_KEY)
+                    ->value('prompt') ?? TaromboAiPrompt::DEFAULT_FRAME_COMPOSITION
+                : null,
         ]);
+    }
+
+    public function updatePrompt(UpdateTaromboAiPromptRequest $request): RedirectResponse
+    {
+        TaromboAiPrompt::query()->updateOrCreate(
+            ['key' => TaromboAiPrompt::FRAME_COMPOSITION_KEY],
+            ['prompt' => $request->validated('prompt')],
+        );
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => 'Prompt Gen AI berhasil disimpan.',
+        ]);
+
+        return back();
     }
 
     public function store(StoreTaromboSnapshotRequest $request): RedirectResponse

@@ -9,6 +9,7 @@ use App\Models\FeedPost;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Models\Story;
+use App\Models\User;
 use App\Services\MargaIdentityPersonService;
 use App\Services\TaromboStatisticsService;
 use App\Services\TaromboTreeService;
@@ -30,6 +31,13 @@ class MargaController extends Controller
     {
         $canManage = $request->user()?->isStaff() ?? false;
 
+        $contributorsByMarga = User::query()
+            ->whereIn('role', ['contributor_main', 'contributor_member'])
+            ->whereNotNull('marga_id')
+            ->orderBy('name')
+            ->get(['id', 'name', 'marga_id', 'role'])
+            ->groupBy('marga_id');
+
         $margas = Marga::query()
             ->when(! $canManage, fn ($query) => $query->where('is_public', true))
             ->with('identityPerson:id,name')
@@ -47,11 +55,18 @@ class MargaController extends Controller
                 'identity_person_name' => $marga->identityPerson?->name,
                 'people_count' => $marga->people_count,
                 'is_public' => $marga->is_public,
+                'contributors' => ($contributorsByMarga->get($marga->id) ?? collect())
+                    ->map(fn (User $contributor) => [
+                        'id' => $contributor->id,
+                        'name' => $contributor->name,
+                        'role' => $contributor->role,
+                    ])->values(),
             ]);
 
         return Inertia::render('marga/index', [
             'margas' => $margas,
             'canManage' => $canManage,
+            'canSendContributorMessage' => $request->user() !== null,
             'identityPersonOptions' => $canManage
                 ? app(MargaIdentityPersonService::class)->options()->all()
                 : [],

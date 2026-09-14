@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Event;
 use App\Models\FeedComment;
+use App\Models\FeedItemComment;
 use App\Models\FeedPost;
 use App\Models\FeedPostImage;
 use App\Models\Story;
@@ -104,8 +105,8 @@ class NewsFeedService
         };
 
         $all = $collect($this->statusRows($user, $cursor['status'] ?? null, $perPage))
-            ->concat($collect($this->storyRows($cursor['story'] ?? null, $perPage)))
-            ->concat($collect($this->announcementRows($cursor['announcement'] ?? null, $perPage)))
+            ->concat($collect($this->storyRows($user, $cursor['story'] ?? null, $perPage)))
+            ->concat($collect($this->announcementRows($user, $cursor['announcement'] ?? null, $perPage)))
             ->sortByDesc('created_at')
             ->values();
 
@@ -183,11 +184,22 @@ class NewsFeedService
     }
 
     /** @return Collection<int, array<string, mixed>> */
-    private function storyRows(?string $cursor, int $perPage): Collection
+    private function storyRows(?User $user, ?string $cursor, int $perPage): Collection
     {
         $query = Story::query()
             ->select(['id', 'created_by', 'marga_id', 'title', 'description', 'image', 'content_url', 'created_at'])
-            ->with(['creator:id,name', 'marga:id,name'])
+            ->with([
+                'creator:id,name',
+                'marga:id,name',
+                'feedComments' => fn ($query) => $query
+                    ->with('author:id,name')
+                    ->oldest()
+                    ->oldest('id'),
+            ])
+            ->withCount('feedLikes')
+            ->when($user !== null, fn ($query) => $query->withExists([
+                'feedLikes as liked_by_me' => fn ($likes) => $likes->where('user_id', $user->id),
+            ]))
             ->publiclyVisible();
 
         return $this->seek($query, $cursor, $perPage)
@@ -203,16 +215,28 @@ class NewsFeedService
                 'url' => $story->content_url ?: route('cerita.show', $story),
                 'meta' => $story->marga?->name,
                 'created_at' => $story->created_at?->toIso8601String(),
-                'comments' => [],
+                'likes_count' => $story->feed_likes_count,
+                'liked_by_me' => (bool) ($story->liked_by_me ?? false),
+                'comments' => $this->mapFeedItemComments($story->feedComments),
             ]);
     }
 
     /** @return Collection<int, array<string, mixed>> */
-    private function announcementRows(?string $cursor, int $perPage): Collection
+    private function announcementRows(?User $user, ?string $cursor, int $perPage): Collection
     {
         $query = Event::query()
             ->select(['id', 'created_by', 'title', 'description', 'location', 'date', 'created_at'])
-            ->with('creator:id,name')
+            ->with([
+                'creator:id,name',
+                'feedComments' => fn ($query) => $query
+                    ->with('author:id,name')
+                    ->oldest()
+                    ->oldest('id'),
+            ])
+            ->withCount('feedLikes')
+            ->when($user !== null, fn ($query) => $query->withExists([
+                'feedLikes as liked_by_me' => fn ($likes) => $likes->where('user_id', $user->id),
+            ]))
             ->publiclyVisible();
 
         return $this->seek($query, $cursor, $perPage)
@@ -231,7 +255,20 @@ class NewsFeedService
                     $event->location,
                 ])->filter()->join(' • '),
                 'created_at' => $event->created_at?->toIso8601String(),
-                'comments' => [],
+                'likes_count' => $event->feed_likes_count,
+                'liked_by_me' => (bool) ($event->liked_by_me ?? false),
+                'comments' => $this->mapFeedItemComments($event->feedComments),
             ]);
+    }
+
+    /** @return Collection<int, array{id: int, author: string, body: string, created_at: string|null}> */
+    private function mapFeedItemComments(Collection $comments): Collection
+    {
+        return $comments->map(fn (FeedItemComment $comment) => [
+            'id' => $comment->id,
+            'author' => $comment->author->name,
+            'body' => $comment->body,
+            'created_at' => $comment->created_at?->toIso8601String(),
+        ])->values();
     }
 }

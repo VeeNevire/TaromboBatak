@@ -7,6 +7,7 @@ use App\Models\FamilyTree;
 use App\Models\FamilyTreeNode;
 use App\Models\Person;
 use App\Services\FamilyTreeChainNumberingService;
+use App\Services\TreeActivityLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -102,6 +103,15 @@ class SharedFamilyTreePersonController extends Controller
 
             return $person;
         });
+
+        app(TreeActivityLogger::class)->record(
+            $person,
+            $request->user(),
+            'added',
+            "{$person->name} ditambahkan ke silsilah yang dibagikan.",
+            [],
+            $familyTree,
+        );
 
         Inertia::flash('toast', ['type' => 'success', 'message' => "{$person->name} berhasil ditambahkan tanpa mengubah anggota lama."]);
 

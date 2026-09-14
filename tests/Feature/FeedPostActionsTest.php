@@ -1,7 +1,11 @@
 <?php
 
+use App\Models\Event;
+use App\Models\FeedItemComment;
+use App\Models\FeedItemLike;
 use App\Models\FeedPost;
 use App\Models\Marga;
+use App\Models\Story;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -34,6 +38,37 @@ test('guests cannot like or comment', function () {
 
     expect($post->likes()->count())->toBe(0)
         ->and($post->comments()->count())->toBe(0);
+});
+
+test('published stories and announcements can be liked and commented on from the news feed', function () {
+    $user = User::factory()->create();
+    $story = Story::factory()->create([
+        'created_by' => $user->id,
+        'published' => true,
+        'status' => Story::STATUS_APPROVED,
+    ]);
+    $event = Event::factory()->create([
+        'created_by' => $user->id,
+        'published' => true,
+        'status' => Event::STATUS_APPROVED,
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('news-feed.items.likes.store', ['feedType' => 'story', 'feedId' => $story->id]))
+        ->assertRedirect();
+    $this->post(route('news-feed.items.comments.store', ['feedType' => 'story', 'feedId' => $story->id]), [
+        'body' => 'Cerita yang bagus.',
+    ])->assertRedirect();
+    $this->post(route('news-feed.items.likes.store', ['feedType' => 'announcement', 'feedId' => $event->id]))
+        ->assertRedirect();
+    $this->post(route('news-feed.items.comments.store', ['feedType' => 'announcement', 'feedId' => $event->id]), [
+        'body' => 'Saya akan hadir.',
+    ])->assertRedirect();
+
+    expect(FeedItemLike::query()->whereMorphedTo('feedable', $story)->count())->toBe(1)
+        ->and(FeedItemLike::query()->whereMorphedTo('feedable', $event)->count())->toBe(1)
+        ->and(FeedItemComment::query()->whereMorphedTo('feedable', $story)->value('body'))->toBe('Cerita yang bagus.')
+        ->and(FeedItemComment::query()->whereMorphedTo('feedable', $event)->value('body'))->toBe('Saya akan hadir.');
 });
 
 test('only the author may edit a status', function () {

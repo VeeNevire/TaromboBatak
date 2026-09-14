@@ -49,6 +49,7 @@ type FullscreenView = 'diagram' | 'tree';
 
 export type TaromboIdentity = {
     canSelectAnyPerson: boolean;
+    currentUserId: number;
     currentPersonId: string | null;
     currentPersonName: string | null;
     request: {
@@ -262,6 +263,9 @@ export function TaromboExplorer({
     const people = buildTaromboPeople(rows);
     const selectedFamilyTreePeople = buildTaromboPeople(
         selectedTreePeople ?? rows,
+    );
+    const selectedAccountTree = familyTreeOptions.find(
+        (tree) => tree.id === selectedFamilyTreeId && tree.group === 'account',
     );
     const margaIdentity = margaTree
         ? selectedFamilyTreePeople.find(
@@ -496,8 +500,15 @@ export function TaromboExplorer({
         : selectedFamilyTreePeople.filter(
               (person) => person.gender === 'L' || !person.gender,
           );
-    const ancestorPeople = ancestorFocusId
-        ? ancestorPath(verticalPeople, ancestorFocusId)
+    const selectedTreeRootId = selectedAccountTree?.rootPersonId
+        ? String(selectedAccountTree.rootPersonId)
+        : null;
+    const verticalFocusId = selectedTreeRootId &&
+        verticalPeople.some((person) => person.id === selectedTreeRootId)
+        ? selectedTreeRootId
+        : ancestorFocusId;
+    const ancestorPeople = verticalFocusId
+        ? ancestorPath(verticalPeople, verticalFocusId)
         : [];
     const treePeople =
         ancestorPeople.length > 0
@@ -521,6 +532,22 @@ export function TaromboExplorer({
     const ancestorFocusPerson =
         ancestorFocusId && ancestorPeople.length > 0
             ? verticalPeople.find((person) => person.id === ancestorFocusId)
+            : undefined;
+    const verticalTreeTitle = margaTree
+        ? `Pohon Silsilah ${margaTree.direction === 'upper' ? 'Atas' : 'Bawah'}`
+        : selectedAccountTree
+          ? `Pohon Silsilah ${selectedAccountTree.name}`
+          : 'Silsilah Keturunan';
+    const verticalTreeDescription = margaTree
+        ? `${margaTree.direction === 'upper' ? 'Si Raja Batak sampai' : 'Keturunan dari'} ${margaIdentity?.name ?? margaTree.margaName}`
+        : selectedAccountTree
+          ? `Lima generasi keturunan dari ${selectedAccountTree.rootName}`
+          : ancestorFocusPerson
+            ? `Jalur ${ANCESTOR_DEPTH} tingkat leluhur dari ${ancestorFocusPerson.name}`
+            : `Pohon vertikal dari ${treeCenterPerson?.name ?? 'Leluhur Utama'}`;
+    const verticalTreeCollapseDepth =
+        margaTree?.direction === 'lower' || selectedAccountTree
+            ? MARGA_LOWER_DEPTH
             : undefined;
     const treeHasChildren = treePeople.some(
         (person) => person.parentId === treeCenterId,
@@ -917,16 +944,10 @@ export function TaromboExplorer({
                     )}
                     <div className="min-w-0 px-20 text-center">
                         <h3 className="font-display text-lg font-bold text-tb-on-surface">
-                            {margaTree
-                                ? `Pohon Silsilah ${margaTree.direction === 'upper' ? 'Atas' : 'Bawah'}`
-                                : 'Silsilah Keturunan'}
+                            {verticalTreeTitle}
                         </h3>
                         <p className="mt-1 max-w-64 truncate text-xs text-tb-on-surface-variant">
-                            {margaTree
-                                ? `${margaTree.direction === 'upper' ? 'Si Raja Batak sampai' : 'Keturunan dari'} ${margaIdentity?.name ?? margaTree.margaName}`
-                                : ancestorFocusPerson
-                                  ? `Jalur ${ANCESTOR_DEPTH} tingkat leluhur dari ${ancestorFocusPerson.name}`
-                                  : `Pohon vertikal dari ${treeCenterPerson?.name ?? 'Leluhur Utama'}`}
+                            {verticalTreeDescription}
                         </p>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
@@ -954,13 +975,10 @@ export function TaromboExplorer({
                         markFemaleLineage={
                             margaTree ? false : showFemaleLineage
                         }
-                        collapseDepth={
-                            margaTree?.direction === 'lower'
-                                ? MARGA_LOWER_DEPTH
-                                : undefined
-                        }
+                        collapseDepth={verticalTreeCollapseDepth}
                         detachedPeople={margaDetachedRoots}
                         compact={fullscreen && fullscreenView === 'tree'}
+                        currentUserId={identity?.currentUserId}
                         nodeIdPrefix={
                             fullscreen
                                 ? 'tarombo-fullscreen-tree-node'
@@ -1262,16 +1280,10 @@ export function TaromboExplorer({
                                     <div className="relative overflow-hidden rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-4">
                                         <div className="mb-4 border-b border-tb-outline-variant pb-3 text-center">
                                             <h3 className="font-display text-lg font-bold text-tb-on-surface">
-                                                {margaTree
-                                                    ? `Pohon Silsilah ${margaTree.direction === 'upper' ? 'Atas' : 'Bawah'}`
-                                                    : 'Silsilah Keturunan'}
+                                                {verticalTreeTitle}
                                             </h3>
                                             <p className="mt-1 text-xs text-tb-on-surface-variant">
-                                                {margaTree
-                                                    ? `${margaTree.direction === 'upper' ? 'Si Raja Batak sampai' : 'Keturunan dari'} ${margaIdentity?.name ?? margaTree.margaName}`
-                                                    : ancestorFocusPerson
-                                                      ? `Jalur ${ANCESTOR_DEPTH} tingkat leluhur dari ${ancestorFocusPerson.name}`
-                                                      : `Pohon vertikal dari ${treeCenterPerson?.name ?? 'Leluhur Utama'}`}
+                                                {verticalTreeDescription}
                                             </p>
                                             <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
                                                 {familyTreeSelector}
@@ -1311,16 +1323,14 @@ export function TaromboExplorer({
                                                 markFemaleLineage={
                                                     showFemaleLineage
                                                 }
-                                                collapseDepth={
-                                                    margaTree?.direction ===
-                                                    'lower'
-                                                        ? MARGA_LOWER_DEPTH
-                                                        : undefined
-                                                }
+                                                collapseDepth={verticalTreeCollapseDepth}
                                                 detachedPeople={
                                                     margaDetachedRoots
                                                 }
                                                 nodeIdPrefix="tarombo-mobile-tree-node"
+                                                currentUserId={
+                                                    identity?.currentUserId
+                                                }
                                             />
                                         </div>
                                         {!treeHasChildren &&

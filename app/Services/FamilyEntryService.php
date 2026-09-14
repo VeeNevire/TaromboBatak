@@ -6,6 +6,7 @@ use App\Models\FamilyTree;
 use App\Models\FamilyTreeNode;
 use App\Models\Marga;
 use App\Models\Person;
+use App\Support\PersonShareCode;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -88,20 +89,34 @@ class FamilyEntryService
             $mothers = [];
 
             foreach ($this->motherEntries($data) as $index => $entry) {
+                $sharedMother = ! empty($entry['share_code'])
+                    ? app(PersonShareCode::class)->resolve((string) $entry['share_code'])
+                    : null;
+
+                if (! empty($entry['share_code']) && (
+                    $sharedMother === null
+                    || (int) ($entry['id'] ?? 0) !== $sharedMother->id
+                    || ! in_array($sharedMother->gender, ['P', null], true)
+                )) {
+                    throw ValidationException::withMessages([
+                        "mothers.{$index}.share_code" => 'Kode istri tidak valid. Tempel ulang kode dari kontributor.',
+                    ]);
+                }
+
                 $motherMargaId = $this->resolveMargaId(
                     $entry['marga_id'] ?? null,
                     $entry['new_marga'] ?? null,
                 );
-                $resolvedMother = $this->resolveParent(
+                $resolvedMother = $sharedMother ?? $this->resolveParent(
                     $entry['id'] ?? ($index === 0 ? ($data['mother_id'] ?? null) : null),
                     $entry,
                     $motherMargaId,
-                    $forcedMargaId,
+                    $sharedMother === null ? $forcedMargaId : null,
                     $createdBy,
                     'P',
                 );
 
-                if ($resolvedMother !== null && $this->normalizeName($entry['father_name'] ?? null) !== null) {
+                if ($sharedMother === null && $resolvedMother !== null && $this->normalizeName($entry['father_name'] ?? null) !== null) {
                     $motherFather = $this->resolveParent(
                         null,
                         ['name' => $entry['father_name']],
@@ -938,12 +953,12 @@ class FamilyEntryService
     }
 
     /**
-     * Permanently delete people removed from the family form.
+     * Detach removed siblings and delete removed own children.
      *
-     * The focused person is never deleted. A person with descendants is
-     * rejected so deleting the row cannot silently orphan another branch.
-     * For non-staff users every deleted person must have been created by the
-     * submitting user.
+     * A sibling remains as a standalone person so information about their
+     * mother is retained. Own children are removed permanently. A person with
+     * descendants is rejected in either case so another branch is not
+     * silently orphaned.
      *
      * @param  array<int, mixed>  $siblingIds
      * @param  array<int, mixed>  $ownChildIds
@@ -951,16 +966,23 @@ class FamilyEntryService
      */
     protected function deleteRemoved(array $siblingIds, array $ownChildIds, ?int $focusId, ?int $forcedMargaId, ?int $createdBy): array
     {
-        $ids = array_values(array_unique(array_filter(
-            array_merge($siblingIds, $ownChildIds),
+        $siblingIds = array_values(array_unique(array_filter(
+            $siblingIds,
             fn ($id) => is_numeric($id) && (int) $id > 0,
         )));
+        $ownChildIds = array_values(array_unique(array_filter(
+            $ownChildIds,
+            fn ($id) => is_numeric($id) && (int) $id > 0,
+        )));
+        $ids = array_values(array_unique([...$siblingIds, ...$ownChildIds]));
 
         if ($ids === []) {
             return [];
         }
 
         $ids = array_map('intval', $ids);
+        $siblingIds = array_map('intval', $siblingIds);
+        $ownChildIds = array_map('intval', $ownChildIds);
 
         if ($focusId !== null) {
             $ids = array_values(array_diff($ids, [$focusId]));
@@ -992,11 +1014,24 @@ class FamilyEntryService
             ]);
         }
 
-        foreach ($people as $person) {
+        $siblingIds = array_values(array_intersect($siblingIds, $ids));
+        $ownChildIds = array_values(array_intersect($ownChildIds, $ids));
+
+        foreach ($people->whereIn('id', $siblingIds) as $person) {
+            $person->update([
+                'father_id' => null,
+                'birth_order' => null,
+                'sibling_count' => null,
+                'pending_father' => false,
+                'chain' => null,
+            ]);
+        }
+
+        foreach ($people->whereIn('id', $ownChildIds) as $person) {
             $person->delete();
         }
 
-        return $people->pluck('id')->map(fn ($id) => (int) $id)->all();
+        return $ownChildIds;
     }
 
     /**

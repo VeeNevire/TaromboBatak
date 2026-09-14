@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeShare;
+use App\Models\ContactRequest;
 use App\Models\IdentityRequest;
 use App\Models\Marga;
 use App\Models\Person;
@@ -149,14 +150,18 @@ class TaromboController extends Controller
             $selectedMarga instanceof Marga => $service->rowsForMarga($selectedMarga, $direction),
             default => [],
         };
+        $selectedTreePeople = $this->withContactState($selectedTreePeople, $user);
         $rows = $selectedTreePeople;
         $visiblePersonIds = collect($rows)->pluck('id');
 
         $alternativeTrees = $accountFamilyTrees
             ->filter(fn (FamilyTree $tree) => $tree->based_on_id !== null
                 && $visiblePersonIds->contains((string) $tree->root_person_id))
-            ->map(function (FamilyTree $tree) use ($service): ?array {
-                $people = collect($service->rowsForFamilyTree($tree));
+            ->map(function (FamilyTree $tree) use ($service, $user): ?array {
+                $people = collect($this->withContactState(
+                    $service->rowsForFamilyTree($tree),
+                    $user,
+                ));
                 $rootId = (string) $tree->root_person_id;
 
                 if (! $people->contains('id', $rootId)) {
@@ -216,6 +221,7 @@ class TaromboController extends Controller
             $alternativeTrees,
             [
                 'canSelectAnyPerson' => $user->isAdmin(),
+                'currentUserId' => $user->id,
                 'currentPersonId' => $user->current_person_id !== null ? (string) $user->current_person_id : null,
                 'currentPersonName' => $user->currentPerson?->name,
                 'request' => $identityRequest ? [
@@ -234,6 +240,7 @@ class TaromboController extends Controller
                     'value' => 'account:'.$tree->id,
                     'name' => $tree->name ?? $tree->rootPerson?->name ?? 'Silsilah',
                     'rootName' => $tree->rootPerson?->name ?? 'Akar belum ditentukan',
+                    'rootPersonId' => $tree->root_person_id,
                     'group' => 'account',
                 ])
                 ->concat($approvedMargas
@@ -243,6 +250,7 @@ class TaromboController extends Controller
                         'value' => 'marga:'.$marga->id,
                         'name' => 'Keluarga '.($marga->identityPerson?->name ?? $marga->name),
                         'rootName' => $marga->identityPerson?->name ?? $marga->name,
+                        'rootPersonId' => $marga->identity_person_id,
                         'group' => 'marga',
                     ]))
                 ->values()
@@ -289,6 +297,66 @@ class TaromboController extends Controller
             ->with('identityPerson:id,name,father_id,marga_id')
             ->orderBy('name')
             ->get(['id', 'name', 'identity_person_id']);
+    }
+
+    /**
+     * Add the current user's contact-list state to each claimed account.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function withContactState(array $rows, User $viewer): array
+    {
+        $accountIds = collect($rows)
+            ->flatMap(fn (array $row) => $row['claimedAccounts'] ?? [])
+            ->pluck('id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id !== $viewer->id)
+            ->unique()
+            ->values();
+
+        if ($accountIds->isEmpty()) {
+            return $rows;
+        }
+
+        $approvedContactIds = ContactRequest::query()
+            ->where('status', ContactRequest::STATUS_APPROVED)
+            ->where(function (Builder $query) use ($viewer) {
+                $query->where('requester_id', $viewer->id)
+                    ->orWhere('recipient_id', $viewer->id);
+            })
+            ->get(['requester_id', 'recipient_id'])
+            ->map(fn (ContactRequest $request): int => $request->requester_id === $viewer->id
+                ? $request->recipient_id
+                : $request->requester_id);
+
+        $contactIds = User::query()
+            ->whereKey($accountIds)
+            ->where('role', '!=', 'admin')
+            ->where(function (Builder $query) use ($viewer, $approvedContactIds) {
+                $query->when(
+                    $viewer->marga_id !== null,
+                    fn (Builder $contacts) => $contacts->where('marga_id', $viewer->marga_id),
+                    fn (Builder $contacts) => $contacts->whereRaw('1 = 0'),
+                )->orWhereIn('id', $approvedContactIds);
+            })
+            ->pluck('id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->all();
+
+        return collect($rows)
+            ->map(function (array $row) use ($contactIds, $viewer): array {
+                $row['claimedAccounts'] = collect($row['claimedAccounts'] ?? [])
+                    ->map(fn (array $account): array => [
+                        ...$account,
+                        'isContact' => (int) $account['id'] === $viewer->id
+                            || in_array((int) $account['id'], $contactIds, true),
+                    ])
+                    ->all();
+
+                return $row;
+            })
+            ->all();
     }
 
     /**

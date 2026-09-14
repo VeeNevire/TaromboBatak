@@ -14,7 +14,6 @@ import {
 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { store as storeFeedComment } from '@/actions/App/Http/Controllers/FeedCommentController';
 import { AppAvatar } from '@/components/app-avatar';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
@@ -158,12 +157,20 @@ export function FeedCard({ item }: { item: FeedItem }) {
         };
 
         if (next) {
-            router.post(newsFeed.posts.likes.store(item.id).url, {}, options);
+            if (isStatus) {
+                router.post(newsFeed.posts.likes.store(item.id).url, {}, options);
+            } else {
+                router.post(newsFeed.items.likes.store([item.type, item.id]).url, {}, options);
+            }
 
             return;
         }
 
-        router.delete(newsFeed.posts.likes.destroy(item.id).url, options);
+        if (isStatus) {
+            router.delete(newsFeed.posts.likes.destroy(item.id).url, options);
+        } else {
+            router.delete(newsFeed.items.likes.destroy([item.type, item.id]).url, options);
+        }
     };
 
     const focusComments = () => {
@@ -346,64 +353,54 @@ export function FeedCard({ item }: { item: FeedItem }) {
             </CardContent>
 
             <div className="flex items-center gap-1 px-3 pb-2">
-                {isStatus &&
-                    (auth.user ? (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="gap-1.5"
-                            aria-label={liked ? 'Batal suka' : 'Suka'}
-                            aria-pressed={liked}
-                            onClick={toggleLike}
-                        >
-                            <Heart
-                                className={cn(
-                                    'size-5',
-                                    liked && 'fill-current text-rose-500',
-                                )}
-                            />
-                            {likes > 0 && (
-                                <span className="text-xs font-medium">
-                                    {likes}
-                                </span>
-                            )}
-                        </Button>
-                    ) : (
-                        <Button
-                            asChild
-                            variant="ghost"
-                            size="sm"
-                            className="gap-1.5"
-                        >
-                            <Link
-                                href={login()}
-                                aria-label="Masuk untuk menyukai"
-                            >
-                                <Heart className="size-5" />
-                                {likes > 0 && (
-                                    <span className="text-xs font-medium">
-                                        {likes}
-                                    </span>
-                                )}
-                            </Link>
-                        </Button>
-                    ))}
-                {isStatus && (
+                {auth.user ? (
                     <Button
                         variant="ghost"
                         size="sm"
                         className="gap-1.5"
-                        aria-label="Komentar"
-                        onClick={focusComments}
+                        aria-label={liked ? 'Batal suka' : 'Suka'}
+                        aria-pressed={liked}
+                        onClick={toggleLike}
                     >
-                        <MessageCircle className="size-5" />
-                        {item.comments.length > 0 && (
-                            <span className="text-xs font-medium">
-                                {item.comments.length}
-                            </span>
+                        <Heart
+                            className={cn(
+                                'size-5',
+                                liked && 'fill-current text-rose-500',
+                            )}
+                        />
+                        {likes > 0 && (
+                            <span className="text-xs font-medium">{likes}</span>
                         )}
                     </Button>
+                ) : (
+                    <Button
+                        asChild
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1.5"
+                    >
+                        <Link href={login()} aria-label="Masuk untuk menyukai">
+                            <Heart className="size-5" />
+                            {likes > 0 && (
+                                <span className="text-xs font-medium">{likes}</span>
+                            )}
+                        </Link>
+                    </Button>
                 )}
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5"
+                    aria-label="Komentar"
+                    onClick={focusComments}
+                >
+                    <MessageCircle className="size-5" />
+                    {item.comments.length > 0 && (
+                        <span className="text-xs font-medium">
+                            {item.comments.length}
+                        </span>
+                    )}
+                </Button>
                 <Button
                     variant="ghost"
                     size="icon"
@@ -415,13 +412,13 @@ export function FeedCard({ item }: { item: FeedItem }) {
                 </Button>
             </div>
 
-            {isStatus ? (
-                <StatusComments
-                    postId={item.id}
-                    comments={item.comments}
-                    inputRef={commentInputRef}
-                />
-            ) : (
+            <FeedComments
+                feedType={item.type}
+                feedId={item.id}
+                comments={item.comments}
+                inputRef={commentInputRef}
+            />
+            {!isStatus &&
                 item.url && (
                     <CardFooter className="border-t border-tb-outline-variant px-4 pt-3 pb-4">
                         <Button asChild variant="outline" size="sm">
@@ -435,8 +432,7 @@ export function FeedCard({ item }: { item: FeedItem }) {
                             </a>
                         </Button>
                     </CardFooter>
-                )
-            )}
+                )}
 
             <Dialog
                 open={confirmingDelete}
@@ -479,12 +475,14 @@ export function FeedCard({ item }: { item: FeedItem }) {
     );
 }
 
-function StatusComments({
-    postId,
+function FeedComments({
+    feedType,
+    feedId,
     comments,
     inputRef,
 }: {
-    postId: number;
+    feedType: FeedItem['type'];
+    feedId: number;
     comments: FeedComment[];
     inputRef: React.RefObject<HTMLInputElement | null>;
 }) {
@@ -492,6 +490,15 @@ function StatusComments({
     const [showAll, setShowAll] = useState(false);
     const hidden = Math.max(0, comments.length - VISIBLE_COMMENTS);
     const visible = showAll ? comments : comments.slice(-VISIBLE_COMMENTS);
+    const commentForm = feedType === 'status'
+        ? {
+            action: newsFeed.posts.comments.store(feedId).url,
+            method: 'post' as const,
+        }
+        : {
+            action: newsFeed.items.comments.store([feedType, feedId]).url,
+            method: 'post' as const,
+        };
 
     return (
         <CardFooter className="grid gap-3 border-t border-tb-outline-variant bg-tb-surface-container/20 px-4 pt-3 pb-4">
@@ -535,7 +542,7 @@ function StatusComments({
 
             {auth.user ? (
                 <Form
-                    {...storeFeedComment.form(postId)}
+                    {...commentForm}
                     options={{ preserveScroll: true }}
                     resetOnSuccess
                 >

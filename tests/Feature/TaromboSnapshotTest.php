@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Person;
+use App\Models\TaromboAiPrompt;
 use App\Models\TaromboSnapshot;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
@@ -63,9 +64,35 @@ test('the gallery only lists snapshots owned by the signed in account', function
         ->assertInertia(fn (Assert $page) => $page
             ->component('tarombo/snapshots')
             ->where('accountName', 'Pemilik Galeri')
+            ->where('canManageAiPrompt', false)
+            ->where('aiPrompt', null)
             ->has('snapshots.data', 1)
             ->where('snapshots.data.0.id', $ownSnapshot->id)
             ->where('snapshots.data.0.image_url', route('tarombo.snapshots.image', $ownSnapshot)));
+});
+
+test('only admins can view and update the shared tarombo AI prompt', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->putJson(route('tarombo.snapshots.prompt.update'), ['prompt' => 'Prompt terlarang'])
+        ->assertForbidden();
+
+    expect(TaromboAiPrompt::query()->exists())->toBeFalse();
+
+    $admin = User::factory()->create(['role' => 'admin']);
+
+    $this->actingAs($admin)
+        ->get(route('tarombo.snapshots.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('canManageAiPrompt', true)
+            ->where('aiPrompt', TaromboAiPrompt::DEFAULT_FRAME_COMPOSITION));
+
+    $this->actingAs($admin)
+        ->put(route('tarombo.snapshots.prompt.update'), ['prompt' => 'Gunakan prompt baru'])
+        ->assertRedirect();
+
+    expect(TaromboAiPrompt::query()->sole()->prompt)->toBe('Gunakan prompt baru');
 });
 
 test('only the owner can view a private snapshot image inline', function () {

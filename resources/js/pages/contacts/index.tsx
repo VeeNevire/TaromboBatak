@@ -170,6 +170,9 @@ export default function ContactsIndex({
     const [requestingContactId, setRequestingContactId] = useState<
         number | null
     >(null);
+    const [disconnectingContactId, setDisconnectingContactId] = useState<
+        number | null
+    >(null);
     const [selectedAttachments, setSelectedAttachments] = useState<
         ChatAttachment[]
     >([]);
@@ -1069,9 +1072,45 @@ export default function ContactsIndex({
                                                 {selectedContact.telegram_linked
                                                     ? 'connected'
                                                     : 'not-connected'}
+                                                {selectedContact.telegram_linked &&
+                                                    ' · Telegram'}
                                             </span>
                                         </div>
                                     </div>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => {
+                                            setDisconnectingContactId(
+                                                selectedContact.id,
+                                            );
+                                            router.delete(
+                                                contacts.destroy(
+                                                    selectedContact.id,
+                                                ).url,
+                                                {
+                                                    preserveScroll: true,
+                                                    onFinish: () =>
+                                                        setDisconnectingContactId(
+                                                            null,
+                                                        ),
+                                                },
+                                            );
+                                        }}
+                                        disabled={
+                                            disconnectingContactId !== null
+                                        }
+                                        className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/30"
+                                    >
+                                        {disconnectingContactId ===
+                                        selectedContact.id ? (
+                                            <Loader2 className="size-4 animate-spin" />
+                                        ) : (
+                                            <X className="size-4" />
+                                        )}
+                                        Putus
+                                    </Button>
                                     {statusIndicator}
                                 </header>
 
