@@ -36,7 +36,8 @@ function baseLayout(
         case name === 'tarombo/public':
         case name === 'tarombo/fullscreen':
         case name === 'tarombo/public-fullscreen':
-        case name === 'marga/public':
+            case name === 'traffic-monitor/public':
+            case name === 'marga/public':
         case name === 'budaya/index':
         case name === 'cerita/index':
         case name === 'cerita/show':

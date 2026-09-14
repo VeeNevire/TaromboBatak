@@ -266,6 +266,9 @@ Route::middleware(['auth', 'role.staff'])->group(function () {
 
 });
 
+Route::get('monitor-traffic', [TrafficMonitorController::class, 'publicReport'])
+    ->name('traffic-monitor.public');
+
 Route::middleware(['auth', 'role.admin'])->group(function () {
     Route::get('dashboard/monitor-traffic', [TrafficMonitorController::class, 'index'])
         ->name('traffic-monitor.index');
