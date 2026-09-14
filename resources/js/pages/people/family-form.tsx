@@ -167,6 +167,8 @@ export type FamilyData = {
     children: ChildRow[];
     ownChildren?: ChildRow[];
     is_public: boolean;
+    public_descendant_count?: number;
+    public_descendant_names?: string[];
 };
 
 type MargaOption = { id: number; name: string };
@@ -1300,6 +1302,7 @@ export default function FamilyForm({
         bio: person?.bio ?? '',
         related_stories: person?.related_stories ?? [],
         is_public: person?.is_public ?? false,
+        cascade_public_descendants: false,
         father: person?.father
             ? {
                   name: person.father.name ?? '',
@@ -1470,6 +1473,7 @@ export default function FamilyForm({
         index: number;
         row: ChildRow;
     } | null>(null);
+    const [privacyConfirmOpen, setPrivacyConfirmOpen] = useState(false);
     const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
     const [imageStatus, setImageStatus] = useState<
         'idle' | 'loading' | 'valid' | 'invalid'
@@ -2255,6 +2259,29 @@ export default function FamilyForm({
         }
     };
 
+    const handlePublicChange = (checked: boolean | 'indeterminate') => {
+        const willBePublic = checked === true;
+
+        if (
+            !willBePublic &&
+            person?.is_public &&
+            (person.public_descendant_count ?? 0) > 0
+        ) {
+            setPrivacyConfirmOpen(true);
+
+            return;
+        }
+
+        setData('is_public', willBePublic);
+        setData('cascade_public_descendants', false);
+    };
+
+    const confirmPrivateBranch = () => {
+        setData('is_public', false);
+        setData('cascade_public_descendants', true);
+        setPrivacyConfirmOpen(false);
+    };
+
     const fatherName = data.father?.name?.trim() ?? '';
     const selectedMargaLineage = data.marga_id
         ? margaLineage.filter(
@@ -2572,6 +2599,11 @@ export default function FamilyForm({
 
         if (!canPublish) {
             delete (submitData as { is_public?: boolean }).is_public;
+            delete (submitData as { cascade_public_descendants?: boolean })
+                .cascade_public_descendants;
+        } else if (submitData.is_public !== false) {
+            delete (submitData as { cascade_public_descendants?: boolean })
+                .cascade_public_descendants;
         }
 
         return {
@@ -3355,15 +3387,7 @@ export default function FamilyForm({
                                                     <Checkbox
                                                         id="is_public"
                                                         checked={data.is_public}
-                                                        onCheckedChange={(
-                                                            checked,
-                                                        ) =>
-                                                            setData(
-                                                                'is_public',
-                                                                checked ===
-                                                                    true,
-                                                            )
-                                                        }
+                                                        onCheckedChange={handlePublicChange}
                                                     />
                                                     <div className="grid gap-1">
                                                         <Label
@@ -4707,6 +4731,74 @@ export default function FamilyForm({
                     </fieldset>
                 </form>
             </div>
+
+            <Dialog
+                open={privacyConfirmOpen}
+                onOpenChange={(open) => !open && setPrivacyConfirmOpen(false)}
+            >
+                <DialogContent className="border-tb-outline-variant bg-tb-surface-bright sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-tb-on-surface">
+                            Jadikan seluruh cabang private?
+                        </DialogTitle>
+                        <DialogDescription className="space-y-3">
+                            <p>
+                                Membuat <strong>{person?.name}</strong> private
+                                juga menyembunyikan{' '}
+                                <strong>
+                                    {person?.public_descendant_count ?? 0}{' '}
+                                    keturunan public
+                                </strong>{' '}
+                                agar jalur Tarombo publik tidak terputus.
+                            </p>
+                            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-950 dark:bg-amber-950/40">
+                                <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">
+                                    Akan dijadikan private:
+                                </p>
+                                <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto text-sm text-amber-700/90 dark:text-amber-300/90">
+                                    {(person?.public_descendant_names ?? []).map(
+                                        (name, index) => (
+                                            <li
+                                                key={`${name}-${index}`}
+                                                className="flex items-center gap-2"
+                                            >
+                                                <Checkbox checked disabled />
+                                                <span>{name}</span>
+                                            </li>
+                                        ),
+                                    )}
+                                    {(person?.public_descendant_count ?? 0) >
+                                        (person?.public_descendant_names ?? [])
+                                            .length && (
+                                        <li className="text-xs italic">
+                                            …dan{' '}
+                                            {(person?.public_descendant_count ??
+                                                0) -
+                                                (person?.public_descendant_names ??
+                                                    []).length}{' '}
+                                            lainnya
+                                        </li>
+                                    )}
+                                </ul>
+                            </div>
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setPrivacyConfirmOpen(false)}
+                        >
+                            Batal
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={confirmPrivateBranch}
+                        >
+                            Jadikan seluruh cabang private
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <Dialog
                 open={reductionConfirm !== null}
