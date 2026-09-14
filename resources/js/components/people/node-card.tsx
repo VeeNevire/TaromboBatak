@@ -12,6 +12,7 @@ export type TreeNode = {
     displayNumber?: number;
     image?: string | null;
     pending?: boolean;
+    claimed?: boolean;
 };
 
 const PASTELS = ['#DCE7DE', '#EFE2C9', '#E6D6E3', '#D6E1EC', '#F0DAD0'];
@@ -39,6 +40,7 @@ export function NodeCard({
     onAvatarClick,
     onNameClick,
     dashed = false,
+    showAvatar = true,
 }: {
     node: TreeNode;
     highlighted?: boolean;
@@ -47,6 +49,7 @@ export function NodeCard({
     onAvatarClick?: () => void;
     onNameClick?: () => void;
     dashed?: boolean;
+    showAvatar?: boolean;
 }) {
     return (
         <div
@@ -57,48 +60,52 @@ export function NodeCard({
                     : 'max-w-[150px] min-w-[96px]',
             )}
         >
-            <div
-                role={onAvatarClick ? 'button' : undefined}
-                tabIndex={onAvatarClick ? 0 : undefined}
-                aria-label={
-                    onAvatarClick
-                        ? `Tampilkan jalur silsilah ${node.name}`
-                        : undefined
-                }
-                title={onAvatarClick ? 'Tampilkan jalur silsilah' : undefined}
-                onClick={onAvatarClick}
-                onKeyDown={(event) => {
-                    if (
-                        onAvatarClick &&
-                        (event.key === 'Enter' || event.key === ' ')
-                    ) {
-                        event.preventDefault();
-                        onAvatarClick();
+            {showAvatar && (
+                <div
+                    role={onAvatarClick ? 'button' : undefined}
+                    tabIndex={onAvatarClick ? 0 : undefined}
+                    aria-label={
+                        onAvatarClick
+                            ? `Tampilkan jalur silsilah ${node.name}`
+                            : undefined
                     }
-                }}
-                className={cn(
-                    'flex items-center justify-center overflow-hidden border transition-shadow',
-                    compact ? 'h-8 w-8' : 'h-12 w-12',
-                    dashed && 'border-dashed',
-                    highlighted ? 'rounded-xl' : 'rounded-full',
-                    onAvatarClick &&
-                        'cursor-pointer hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#B8934A] focus-visible:outline-none',
-                )}
-                style={{
-                    background: node.margaColor ?? pastelFor(node.id),
-                    borderColor: highlighted ? GOLD : '#E3DFD2',
-                    boxShadow: highlighted
-                        ? '0 3px 10px rgba(184,147,74,0.3)'
-                        : '0 2px 6px rgba(36,50,43,0.06)',
-                }}
-            >
-                <PersonImage
-                    src={node.image}
-                    name={node.name}
-                    className="h-full w-full object-cover"
-                    fallbackClassName="text-xs font-bold text-[#2F4538] opacity-80"
-                />
-            </div>
+                    title={
+                        onAvatarClick ? 'Tampilkan jalur silsilah' : undefined
+                    }
+                    onClick={onAvatarClick}
+                    onKeyDown={(event) => {
+                        if (
+                            onAvatarClick &&
+                            (event.key === 'Enter' || event.key === ' ')
+                        ) {
+                            event.preventDefault();
+                            onAvatarClick();
+                        }
+                    }}
+                    className={cn(
+                        'flex items-center justify-center overflow-hidden border transition-shadow',
+                        compact ? 'h-8 w-8' : 'h-12 w-12',
+                        dashed && 'border-dashed',
+                        highlighted ? 'rounded-xl' : 'rounded-full',
+                        onAvatarClick &&
+                            'cursor-pointer hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#B8934A] focus-visible:outline-none',
+                    )}
+                    style={{
+                        background: node.margaColor ?? pastelFor(node.id),
+                        borderColor: highlighted ? GOLD : '#E3DFD2',
+                        boxShadow: highlighted
+                            ? '0 3px 10px rgba(184,147,74,0.3)'
+                            : '0 2px 6px rgba(36,50,43,0.06)',
+                    }}
+                >
+                    <PersonImage
+                        src={node.image}
+                        name={node.name}
+                        className="h-full w-full object-cover"
+                        fallbackClassName="text-xs font-bold text-[#2F4538] opacity-80"
+                    />
+                </div>
+            )}
             <div
                 role={onNameClick ? 'button' : undefined}
                 tabIndex={onNameClick ? 0 : undefined}
@@ -117,16 +124,30 @@ export function NodeCard({
                     }
                 }}
                 className={cn(
-                    compact
-                        ? 'mt-0.5 rounded-md border bg-white px-1 py-0.5 text-center text-[8px] leading-tight font-semibold'
-                        : 'mt-2 rounded-md border bg-white px-2 py-1 text-center text-[11px] leading-snug font-semibold',
+                 compact
+    ? 'mt-0.5 rounded-md border px-1 py-0.5 text-center text-[8px] leading-tight font-semibold'
+    : cn(
+          showAvatar ? 'mt-2' : 'mt-0',
+          'rounded-md border px-2 py-1 text-center text-[11px] leading-snug font-semibold',
+      ),
+node.claimed
+    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+    : 'bg-white',
                     dashed && 'border-dashed',
                     onNameClick &&
                         'cursor-pointer hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#B8934A] focus-visible:outline-none',
                 )}
                 style={{
-                    borderColor: highlighted ? GOLD : '#E3DFD2',
-                    color: highlighted ? FOREST : INK,
+                    borderColor: highlighted
+                        ? GOLD
+                        : node.claimed
+                          ? '#6ee7b7'
+                          : '#E3DFD2',
+                    color: node.claimed
+                        ? '#166534'
+                        : highlighted
+                          ? FOREST
+                          : INK,
                 }}
             >
                 {node.pending ? (

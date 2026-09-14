@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\TaromboAiPrompt;
 use App\Models\TaromboFrame;
 use App\Models\TaromboSnapshot;
 use Illuminate\Http\Client\ConnectionException;
@@ -45,7 +46,9 @@ class TaromboFrameComposer
                 ->attach('image[]', $frameHandle, 'frame-tarombo.jpg')
                 ->post('/images/edits', [
                     'model' => config('services.openai.image_model', 'gpt-image-1.5'),
-                    'prompt' => 'Gabungkan dua gambar referensi menjadi satu JPG final. Gambar pertama adalah pohon silsilah Tarombo yang harus dipertahankan lengkap, tajam, dan terbaca. Gambar kedua adalah template frame yang harus dipertahankan utuh, termasuk ornamen, bingkai, warna, dan proporsinya. Analisis area konten pada template frame, tempatkan pohon Tarombo secara proporsional dan rapi di area yang tepat tanpa menutupi ornamen atau teks frame. Jangan menambah watermark, jangan mengubah isi pohon, dan jangan menambahkan teks baru.',
+                    'prompt' => TaromboAiPrompt::query()
+                        ->where('key', TaromboAiPrompt::FRAME_COMPOSITION_KEY)
+                        ->value('prompt') ?? TaromboAiPrompt::DEFAULT_FRAME_COMPOSITION,
                     'quality' => 'high',
                     'input_fidelity' => 'high',
                     'output_format' => 'jpeg',

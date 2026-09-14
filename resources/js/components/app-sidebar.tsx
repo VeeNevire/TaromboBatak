@@ -3,6 +3,7 @@ import {
     BookOpen,
     BellRing,
     CalendarDays,
+    History,
     Images,
     LayoutGrid,
     MessageCircle,
@@ -11,6 +12,7 @@ import {
     Newspaper,
     Shapes,
     ShieldCheck,
+    ScrollText,
     TreePine,
     Users,
 } from 'lucide-react';
@@ -33,16 +35,17 @@ import announcements from '@/routes/announcements';
 import contacts from '@/routes/contacts';
 import contributions from '@/routes/contributions';
 import events from '@/routes/events';
+import familyTreeActivities from '@/routes/family-tree-activities';
 import familyTrees from '@/routes/family-trees';
 import groups from '@/routes/groups';
 import marga from '@/routes/marga';
+import messageLogs from '@/routes/message-logs';
 import newsFeed from '@/routes/news-feed';
 import people from '@/routes/people';
 import stories from '@/routes/stories';
 import subAdmins from '@/routes/sub-admins';
 import tarombo from '@/routes/tarombo';
 import taromboFrames from '@/routes/tarombo-frames';
-import telegramMessages from '@/routes/telegram-messages';
 import type { NavGroup } from '@/types';
 
 export function AppSidebar() {
@@ -73,9 +76,9 @@ export function AppSidebar() {
                     icon: Newspaper,
                 },
                 {
-                    title: 'Pesan Telegram',
-                    href: telegramMessages.index(),
-                    icon: MessageCircle,
+                    title: 'Daftar Marga',
+                    href: marga.index(),
+                    icon: Shapes,
                 },
                 {
                     title: 'Pohon Tarombo',
@@ -87,12 +90,22 @@ export function AppSidebar() {
                     href: tarombo.snapshots.index(),
                     icon: Images,
                 },
+                {
+                    title: 'Log Pohon Besar',
+                    href: treeActivityLogs.index(),
+                    icon: ScrollText,
+                },
                 ...(!isAdmin
                     ? [
                           {
                               title: 'Daftar Kontak',
                               href: contacts.index(),
                               icon: MessageCircle,
+                          },
+                          {
+                              title: 'Log Pesan',
+                              href: messageLogs.index(),
+                              icon: ScrollText,
                           },
                           {
                               title: 'Grup',
@@ -119,9 +132,9 @@ export function AppSidebar() {
                               icon: Users,
                           },
                           {
-                              title: 'Daftar Marga',
-                              href: marga.index(),
-                              icon: Shapes,
+                              title: 'Log Aktivitas',
+                              href: familyTreeActivities.index(),
+                              icon: History,
                           },
                           {
                               title: 'Cerita Leluhur & Budaya',
@@ -146,9 +159,9 @@ export function AppSidebar() {
                               icon: Users,
                           },
                           {
-                              title: 'Daftar Marga',
-                              href: marga.index(),
-                              icon: Shapes,
+                              title: 'Log Aktivitas',
+                              href: familyTreeActivities.index(),
+                              icon: History,
                           },
                           {
                               title: 'Event & Kegiatan',

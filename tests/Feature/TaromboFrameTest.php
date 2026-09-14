@@ -1,10 +1,11 @@
 <?php
 
+use App\Models\TaromboAiPrompt;
 use App\Models\TaromboFrame;
 use App\Models\TaromboSnapshot;
 use App\Models\User;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 
@@ -61,6 +62,10 @@ test('an account can generate a private framed tarombo only from its own snapsho
         'path' => $sourcePath,
         'view' => 'tree',
     ]);
+    TaromboAiPrompt::query()->create([
+        'key' => TaromboAiPrompt::FRAME_COMPOSITION_KEY,
+        'prompt' => 'Pertahankan detail Tarombo dan frame.',
+    ]);
     $frame = TaromboFrame::factory()->create([
         'path' => $framePath,
         'canvas_width' => 1600,
@@ -71,10 +76,15 @@ test('an account can generate a private framed tarombo only from its own snapsho
         'area_height' => 800,
         'is_active' => true,
     ]);
+    $sentPrompt = false;
     Http::fake([
-        'api.openai.com/v1/images/edits' => Http::response([
-            'data' => [['b64_json' => base64_encode(Storage::disk('local')->get($sourcePath))]],
-        ]),
+        'api.openai.com/v1/images/edits' => function (Request $request) use (&$sentPrompt, $sourcePath) {
+            $sentPrompt = str_contains($request->body(), 'Pertahankan detail Tarombo dan frame.');
+
+            return Http::response([
+                'data' => [['b64_json' => base64_encode(Storage::disk('local')->get($sourcePath))]],
+            ]);
+        },
     ]);
 
     $this->actingAs($owner)
@@ -97,6 +107,7 @@ test('an account can generate a private framed tarombo only from its own snapsho
         return $request->url() === 'https://api.openai.com/v1/images/edits'
             && $request->method() === 'POST';
     });
+    expect($sentPrompt)->toBeTrue();
 
     $this->actingAs($otherUser)
         ->post(route('tarombo.snapshots.generate'), [

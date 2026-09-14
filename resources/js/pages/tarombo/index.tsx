@@ -30,6 +30,7 @@ export type TaromboFamilyTreeOption = {
     value: string;
     name: string;
     rootName: string;
+    rootPersonId?: number | null;
     group: 'account' | 'marga';
 };
 

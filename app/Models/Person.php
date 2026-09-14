@@ -74,6 +74,16 @@ class Person extends Model
     }
 
     /**
+     * Accounts that have verified this person as their identity.
+     *
+     * @return HasMany<User, $this>
+     */
+    public function claimingUsers(): HasMany
+    {
+        return $this->hasMany(User::class, 'current_person_id');
+    }
+
+    /**
      * @return BelongsToMany<FamilyTree, $this>
      */
     public function familyTrees(): BelongsToMany

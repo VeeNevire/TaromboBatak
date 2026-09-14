@@ -26,6 +26,7 @@ class UpdatePersonRequest extends FormRequest
     {
         $rules = [
             'name' => ['required', 'string', 'max:255'],
+            'family_tree_name' => ['nullable', 'string', 'max:120'],
             'alias' => ['nullable', 'string', 'max:255'],
             'gender' => ['nullable', 'string', 'max:1'],
             'marga_id' => ['nullable', 'exists:margas,id'],
@@ -72,6 +73,7 @@ class UpdatePersonRequest extends FormRequest
             'mother.death_year' => ['nullable', 'digits:4'],
             'mothers' => ['nullable', 'array'],
             'mothers.*.id' => ['nullable', 'exists:people,id'],
+            'mothers.*.share_code' => ['nullable', 'string', 'max:80'],
             'mothers.*.name' => ['nullable', 'string', 'max:255'],
             'mothers.*.alias' => ['nullable', 'string', 'max:255'],
             'mothers.*.marga_id' => ['nullable', 'exists:margas,id'],

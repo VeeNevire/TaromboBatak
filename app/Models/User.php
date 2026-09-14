@@ -49,6 +49,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, FeedComment> $feedComments
  * @property-read Collection<int, TaromboSnapshot> $taromboSnapshots
  * @property-read Collection<int, FamilyTreeShare> $receivedFamilyTreeShares
+ * @property-read Collection<int, FamilyTreeAppendRequest> $familyTreeAppendRequests
  * @property-read TelegramAccount|null $telegramAccount
  * @property-read Collection<int, OAuthAccount> $oauthAccounts
  * @property-read Collection<int, ChatGroup> $ownedChatGroups
@@ -100,8 +101,12 @@ class User extends Authenticatable
         return ! $this->isAdmin()
             && ! $contact->isAdmin()
             && $this->id !== $contact->id
+            && ! ContactDisconnect::query()
+                ->where(ContactDisconnect::attributesFor($this->id, $contact->id))
+                ->exists()
             && ($contact->hasActiveMtprotoSession()
                 || ($this->marga_id !== null && $this->marga_id === $contact->marga_id)
+                || Conversation::between($this, $contact)->exists()
                 || ContactRequest::query()
                     ->where('status', ContactRequest::STATUS_APPROVED)
                     ->where(function ($query) use ($contact) {
@@ -205,6 +210,12 @@ class User extends Authenticatable
     public function receivedFamilyTreeShares(): HasMany
     {
         return $this->hasMany(FamilyTreeShare::class, 'recipient_id');
+    }
+
+    /** @return HasMany<FamilyTreeAppendRequest, $this> */
+    public function familyTreeAppendRequests(): HasMany
+    {
+        return $this->hasMany(FamilyTreeAppendRequest::class, 'requester_id');
     }
 
     /** @return HasMany<ContributionRequest, $this> */

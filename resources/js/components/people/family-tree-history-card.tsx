@@ -22,6 +22,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { AlternativeVersionDialog } from '@/components/people/alternative-version-dialog';
 import {
     Card,
     CardContent,
@@ -39,6 +40,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import contributions from '@/routes/contributions';
+import familyTreeAppendRequests from '@/routes/family-tree-append-requests';
 import familyTreeShares from '@/routes/family-tree-shares';
 import familyTrees from '@/routes/family-trees';
 import margaAccessRequests from '@/routes/marga-access-requests';
@@ -70,6 +72,11 @@ export type FamilyTreeHistoryEntry = {
         recipient_name: string;
         recipient_email: string;
         status: 'pending' | 'accepted' | 'rejected';
+    }[];
+    append_requests: {
+        id: number;
+        requester_name: string;
+        member_name: string;
     }[];
     deletion_pending: boolean;
     updated_at: string;
@@ -151,7 +158,7 @@ export function ApprovedMargaTreeList({
                                         </p>
                                     </div>
                                 </div>
-                                <div className="grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-2">
+                                <div className="grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-3">
                                     <Link
                                         href={tarombo.fullscreen('tree', {
                                             query: {
@@ -181,6 +188,14 @@ export function ApprovedMargaTreeList({
                                     >
                                         <ArrowDown className="size-3.5" /> Pohon
                                         Bawah
+                                    </Link>
+                                    <Link
+                                        href={people.create()}
+                                        aria-label={`Tambah anggota pada silsilah marga ${entry.name}`}
+                                        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-tb-primary px-3 py-2 text-xs font-semibold text-tb-primary transition-colors hover:bg-tb-primary/10"
+                                    >
+                                        <UserPlus className="size-3.5" /> Tambah
+                                        Anggota
                                     </Link>
                                 </div>
                             </li>
@@ -275,6 +290,8 @@ export function FamilyTreeHistoryCard({
     const [renameEntry, setRenameEntry] =
         useState<FamilyTreeHistoryEntry | null>(null);
     const [renameName, setRenameName] = useState('');
+    const [alternativeEntry, setAlternativeEntry] =
+        useState<FamilyTreeHistoryEntry | null>(null);
     const [recipientId, setRecipientId] = useState('');
     const [recipientSearch, setRecipientSearch] = useState('');
     const listTopRef = useRef<HTMLDivElement>(null);
@@ -750,29 +767,26 @@ export function FamilyTreeHistoryCard({
                                                             </Button>
                                                         )}
                                                         {entry.can_manage && (
-                                                            <Link
-                                                                href={familyTrees.duplicate(
-                                                                    entry.id,
-                                                                )}
-                                                                method="post"
-                                                                as="button"
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() =>
+                                                                    setAlternativeEntry(
+                                                                        entry,
+                                                                    )
+                                                                }
                                                                 className="inline-flex items-center gap-1.5 rounded-lg border border-tb-outline-variant px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
                                                             >
                                                                 <Copy className="size-3.5" />{' '}
                                                                 Versi Alternatif
                                                                 Keluarga
-                                                            </Link>
+                                                            </Button>
                                                         )}
                                                         {entry.can_manage && (
                                                             <Link
-                                                                href={people.edit(
-                                                                    entry.root_person_id,
-                                                                    {
-                                                                        query: {
-                                                                            version_tree:
-                                                                                entry.id,
-                                                                        },
-                                                                    },
+                                                                href={familyTrees.edit(
+                                                                    entry.id,
                                                                 )}
                                                                 className="inline-flex items-center gap-1.5 rounded-lg border border-tb-outline-variant px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
                                                             >
@@ -860,6 +874,84 @@ export function FamilyTreeHistoryCard({
                                                         ) : null}
                                                     </div>
                                                 </div>
+                                                {entry.can_manage &&
+                                                    entry.append_requests
+                                                        .length > 0 && (
+                                                        <div className="basis-full rounded-lg border border-amber-300 bg-amber-50/70 p-3 dark:border-amber-800 dark:bg-amber-950/30">
+                                                            <p className="text-xs font-semibold text-amber-900 dark:text-amber-100">
+                                                                Permintaan tambah anggota
+                                                            </p>
+                                                            <div className="mt-2 grid gap-2">
+                                                                {entry.append_requests.map(
+                                                                    (
+                                                                        appendRequest,
+                                                                    ) => (
+                                                                        <div
+                                                                            key={
+                                                                                appendRequest.id
+                                                                            }
+                                                                            className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                                                                        >
+                                                                            <p className="text-xs text-amber-900 dark:text-amber-100">
+                                                                                <span className="font-semibold">
+                                                                                    {
+                                                                                        appendRequest.requester_name
+                                                                                    }
+                                                                                </span>{' '}
+                                                                                mengajukan{' '}
+                                                                                <span className="font-semibold">
+                                                                                    {
+                                                                                        appendRequest.member_name
+                                                                                    }
+                                                                                </span>
+                                                                            </p>
+                                                                            <div className="flex gap-2">
+                                                                                <Button
+                                                                                    type="button"
+                                                                                    size="sm"
+                                                                                    className="h-8 text-xs"
+                                                                                    onClick={() =>
+                                                                                        router.post(
+                                                                                            familyTreeAppendRequests.approve(
+                                                                                                appendRequest.id,
+                                                                                            )
+                                                                                                .url,
+                                                                                            {},
+                                                                                            {
+                                                                                                preserveScroll: true,
+                                                                                            },
+                                                                                        )
+                                                                                    }
+                                                                                >
+                                                                                    Setujui
+                                                                                </Button>
+                                                                                <Button
+                                                                                    type="button"
+                                                                                    size="sm"
+                                                                                    variant="outline"
+                                                                                    className="h-8 border-red-300 text-xs text-red-700 hover:bg-red-50 hover:text-red-800 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950"
+                                                                                    onClick={() =>
+                                                                                        router.post(
+                                                                                            familyTreeAppendRequests.reject(
+                                                                                                appendRequest.id,
+                                                                                            )
+                                                                                                .url,
+                                                                                            {},
+                                                                                            {
+                                                                                                preserveScroll: true,
+                                                                                            },
+                                                                                        )
+                                                                                    }
+                                                                                >
+                                                                                    Tolak
+                                                                                </Button>
+                                                                            </div>
+                                                                        </div>
+                                                                    ),
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                             </li>
                                         ))}
                                     </ol>
@@ -1171,6 +1263,18 @@ export function FamilyTreeHistoryCard({
                     )}
                 </DialogContent>
             </Dialog>
+            {alternativeEntry && (
+                <AlternativeVersionDialog
+                    open
+                    onOpenChange={(open) => {
+                        if (!open) {
+                            setAlternativeEntry(null);
+                        }
+                    }}
+                    submitUrl={familyTrees.duplicate(alternativeEntry.id).url}
+                    defaultName={`${alternativeEntry.name ?? alternativeEntry.root_name} - Versi alternatif`}
+                />
+            )}
         </div>
     );
 }

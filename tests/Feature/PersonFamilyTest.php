@@ -7,6 +7,7 @@ use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
 use App\Services\ChainNumberingService;
+use App\Support\PersonShareCode;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
@@ -25,6 +26,7 @@ test('a family store creates the father, mother, and all sibling rows as people'
 
     $response = $this->actingAs($this->admin)->post(route('people.store'), [
         'name' => 'Ompu Sitorus',
+        'family_tree_name' => 'Keluarga Ompu Sitorus',
         'gender' => 'L',
         'alias' => 'Tuan Sorba Dibanua',
         'marga_id' => $marga->id,
@@ -68,7 +70,39 @@ test('a family store creates the father, mother, and all sibling rows as people'
         ->and($children[1]->district_code)->toBe('32.01.02')
         ->and($children[1]->village_code)->toBe('32.01.02.2001')
         ->and($children[0]->spouse_marga)->toBe('Hutapea')
-        ->and($children[2]->name)->toBe('N/A');
+        ->and($children[2]->name)->toBe('N/A')
+        ->and(FamilyTree::query()->sole()->name)->toBe('Keluarga Ompu Sitorus');
+});
+
+test('a family entry update changes its family name', function () {
+    $marga = Marga::factory()->create(['name' => 'Sitorus']);
+    $person = Person::factory()->create([
+        'name' => 'Ompu Sitorus',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+    ]);
+    $familyTree = FamilyTree::create([
+        'user_id' => $this->admin->id,
+        'root_person_id' => $person->id,
+        'name' => 'Keluarga Lama',
+    ]);
+
+    $this->actingAs($this->admin)->put(route('people.update', $person), [
+        'name' => $person->name,
+        'family_tree_name' => 'Keluarga Ompu Sitorus',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'birth_order' => 1,
+        'sibling_count' => 1,
+        'children' => [[
+            'id' => $person->id,
+            'name' => $person->name,
+            'gender' => 'L',
+            'marga_id' => $marga->id,
+        ]],
+    ])->assertRedirect(route('people.show', $person));
+
+    expect($familyTree->fresh()->name)->toBe('Keluarga Ompu Sitorus');
 });
 
 test('related story links are stored and exposed on the person form', function () {
@@ -164,6 +198,47 @@ test('a family store supports multiple wives with their own marga', function () 
             ->has('person.mothers', 2)
             ->where('person.mothers.0.id', $firstWife->id)
             ->where('person.mothers.1.id', $secondWife->id));
+});
+
+test('a signed person code links an existing wife shared by another contributor', function () {
+    $familyMarga = Marga::factory()->create(['name' => 'Sitorus']);
+    $wifeMarga = Marga::factory()->create(['name' => 'Panjaitan']);
+    $contributor = User::factory()->asContributorMember()->withMarga($familyMarga->id)->create();
+    $wife = Person::factory()->create([
+        'name' => 'Boru Panjaitan',
+        'gender' => 'P',
+        'marga_id' => $wifeMarga->id,
+        'created_by' => $this->admin->id,
+    ]);
+    $code = app(PersonShareCode::class)->for($wife);
+
+    $this->actingAs($contributor)
+        ->postJson(route('people.resolve-share-code'), ['code' => $code])
+        ->assertOk()
+        ->assertJsonPath('id', $wife->id)
+        ->assertJsonPath('name', 'Boru Panjaitan');
+
+    $this->actingAs($contributor)->post(route('people.store'), [
+        'name' => 'Anak Sitorus',
+        'gender' => 'L',
+        'marga_id' => $familyMarga->id,
+        'birth_order' => 1,
+        'sibling_count' => 1,
+        'father' => ['name' => 'Ayah Sitorus'],
+        'mothers' => [[
+            'id' => $wife->id,
+            'name' => $wife->name,
+            'marga_id' => $wife->marga_id,
+            'share_code' => $code,
+        ]],
+        'children' => [['name' => 'Anak Sitorus', 'gender' => 'L']],
+    ])->assertRedirect(route('people.index'));
+
+    $father = Person::query()->where('name', 'Ayah Sitorus')->firstOrFail();
+
+    expect(Person::query()->where('name', 'Boru Panjaitan')->count())->toBe(1)
+        ->and($father->wives()->whereKey($wife->id)->exists())->toBeTrue()
+        ->and($wife->marga_id)->toBe($wifeMarga->id);
 });
 
 test('a family store assigns each own child to a wife and saves her father', function () {
@@ -1386,6 +1461,11 @@ test('an account can open its family tree without exposing unrelated trees', fun
 
 test('the create form suggests only male people as fathers', function () {
     Person::factory()->create(['name' => 'Calon Ayah', 'gender' => 'L']);
+    $fatherWithChild = Person::factory()->create([
+        'name' => 'Ayah Dengan Anak',
+        'gender' => 'L',
+    ]);
+    Person::factory()->create(['father_id' => $fatherWithChild->id]);
     Person::factory()->create(['name' => 'Perempuan', 'gender' => 'P']);
     Person::factory()->create(['name' => 'Belum Diketahui', 'gender' => null]);
 

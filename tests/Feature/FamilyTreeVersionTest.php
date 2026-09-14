@@ -363,13 +363,15 @@ test('a tree owner can duplicate a version from its history action', function ()
     FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $root->id]);
 
     $this->actingAs($user)
-        ->post(route('family-trees.duplicate', $tree))
+        ->post(route('family-trees.duplicate', $tree), [
+            'alternative_name' => 'Cabang Raja Lontung di Medan',
+        ])
         ->assertRedirect();
 
     $copy = FamilyTree::query()->where('based_on_id', $tree->id)->firstOrFail();
 
     expect($copy->user_id)->toBe($user->id)
-        ->and($copy->name)->toBe('Versi 1 - Versi alternatif')
+        ->and($copy->name)->toBe('Cabang Raja Lontung di Medan')
         ->and($copy->nodes()->value('person_id'))->toBe($root->id);
 });
 

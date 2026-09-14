@@ -108,8 +108,6 @@ export default function TelegramMessages({
         () =>
             router.reload({
                 only: ['dialogs', 'selectedDialog', 'messages'],
-                preserveScroll: true,
-                preserveState: true,
             }),
         [selectedDialog?.id],
     );
@@ -123,8 +121,6 @@ export default function TelegramMessages({
             () =>
                 router.reload({
                     only: ['dialogs', 'selectedDialog', 'messages'],
-                    preserveScroll: true,
-                    preserveState: true,
                 }),
             8000,
         );

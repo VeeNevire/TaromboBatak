@@ -1,13 +1,18 @@
-import { Link } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 import {
     BookOpen,
     CalendarDays,
+    Copy,
     ExternalLink,
     GitBranch,
     MapPin,
+    LoaderCircle,
     Pencil,
+    UserPlus,
     UserRound,
 } from 'lucide-react';
+import { useState } from 'react';
+import { toast } from 'sonner';
 import { PersonImage } from '@/components/people/person-image';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,6 +25,8 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import type { TaromboPerson } from '@/data/tarombo-tree';
+import contactRequests from '@/routes/contact-requests';
+import contacts from '@/routes/contacts';
 import peopleRoutes from '@/routes/people';
 
 function yearOnly(value?: string | null): string {
@@ -34,11 +41,16 @@ export function PersonSummaryDialog({
     person,
     people,
     onClose,
+    currentUserId,
 }: {
     person: TaromboPerson | null;
     people: TaromboPerson[];
     onClose: () => void;
+    currentUserId?: number;
 }) {
+    const [connectingAccountId, setConnectingAccountId] = useState<
+        number | null
+    >(null);
     const father = person?.parentId
         ? people.find((candidate) => candidate.id === person.parentId)
         : undefined;
@@ -48,6 +60,46 @@ export function PersonSummaryDialog({
               .filter((candidate) => candidate.parentId === person.id)
               .map((child) => child.name))
         : [];
+    const connectableAccounts = (person?.claimedAccounts ?? []).filter(
+        (account) =>
+            account.id !== currentUserId &&
+            account.role !== 'admin' &&
+            !account.isContact,
+    );
+
+    const connect = (accountId: number) => {
+        setConnectingAccountId(accountId);
+
+        router.post(
+            contactRequests.store().url,
+            { recipient_id: accountId },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    onClose();
+                    router.get(contacts.index().url);
+                },
+                onFinish: () => setConnectingAccountId(null),
+            },
+        );
+    };
+
+    const copyPersonCode = async () => {
+        if (!person?.shareCode) {
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(person.shareCode);
+            toast.success(
+                'Kode orang berhasil disalin. Kirimkan kode ini lewat pesan.',
+            );
+        } catch {
+            toast.error(
+                'Kode tidak dapat disalin. Periksa izin clipboard browser.',
+            );
+        }
+    };
 
     return (
         <Dialog
@@ -134,6 +186,102 @@ export function PersonSummaryDialog({
                                         </div>
                                     )}
                             </dl>
+                        </section>
+
+                        <section className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-800 dark:bg-emerald-950/20">
+                            <h3 className="flex items-center gap-2 font-semibold text-emerald-800 dark:text-emerald-300">
+                                <UserPlus className="size-4" /> Terhubung
+                            </h3>
+                            {(person.claimedAccounts?.length ?? 0) > 0 ? (
+                                <>
+                                    <p className="mt-1 text-sm text-tb-on-surface-variant">
+                                        Nama ini sudah diklaim oleh akun Tarombo
+                                        Batak.
+                                    </p>
+                                    <div className="mt-3 grid gap-2">
+                                        {person.claimedAccounts?.map(
+                                            (account) => {
+                                                const canConnect =
+                                                    connectableAccounts.some(
+                                                        (candidate) =>
+                                                            candidate.id ===
+                                                            account.id,
+                                                    );
+
+                                                return (
+                                                    <div
+                                                        key={account.id}
+                                                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200/80 bg-tb-surface-bright px-3 py-2 dark:border-emerald-900"
+                                                    >
+                                                        <div className="flex min-w-0 items-center gap-2">
+                                                            <span
+                                                                aria-hidden
+                                                                className={`size-2 shrink-0 rounded-full ${account.isContact ? 'bg-emerald-500' : 'bg-tb-outline'}`}
+                                                            />
+                                                            <span className="truncate text-sm font-medium text-tb-on-surface">
+                                                                {account.name}
+                                                            </span>
+                                                            <span
+                                                                className={`text-xs font-medium ${account.isContact ? 'text-emerald-700 dark:text-emerald-300' : 'text-tb-outline'}`}
+                                                            >
+                                                                {account.isContact
+                                                                    ? 'Connected'
+                                                                    : 'Not Connected'}
+                                                            </span>
+                                                        </div>
+                                                        {canConnect && (
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                onClick={() =>
+                                                                    connect(
+                                                                        account.id,
+                                                                    )
+                                                                }
+                                                                disabled={
+                                                                    connectingAccountId !==
+                                                                    null
+                                                                }
+                                                                className="bg-emerald-700 text-white hover:bg-emerald-800"
+                                                            >
+                                                                {connectingAccountId ===
+                                                                account.id ? (
+                                                                    <LoaderCircle className="size-4 animate-spin" />
+                                                                ) : (
+                                                                    <UserPlus className="size-4" />
+                                                                )}
+                                                                Connect
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                );
+                                            },
+                                        )}
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200/80 bg-tb-surface-bright px-3 py-2 dark:border-emerald-900">
+                                    <div className="flex items-center gap-2">
+                                        <span
+                                            aria-hidden
+                                            className="size-2 rounded-full bg-tb-outline"
+                                        />
+                                        <span className="text-sm font-medium text-tb-outline">
+                                            Not Connected
+                                        </span>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={() =>
+                                            router.get(contacts.index().url)
+                                        }
+                                        className="bg-emerald-700 text-white hover:bg-emerald-800"
+                                    >
+                                        <UserPlus className="size-4" /> Connect
+                                    </Button>
+                                </div>
+                            )}
                         </section>
 
                         {person.bio && (
@@ -256,6 +404,16 @@ export function PersonSummaryDialog({
                             </Button>
                         </DialogClose>
                         <div className="flex flex-wrap justify-end gap-2">
+                            {person.shareCode && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={copyPersonCode}
+                                >
+                                    <Copy className="size-4" />
+                                    Kopi Kode
+                                </Button>
+                            )}
                             <Button asChild variant="outline">
                                 <Link
                                     href={peopleRoutes.show({

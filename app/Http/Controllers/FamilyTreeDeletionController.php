@@ -9,6 +9,7 @@ use App\Models\FamilyTreeShare;
 use App\Models\User;
 use App\Notifications\FamilyTreeDeletionSubmitted;
 use App\Services\FamilyTreeDeletionService;
+use App\Services\FamilyTreeActivityLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
@@ -36,6 +37,12 @@ class FamilyTreeDeletionController extends Controller
             }
 
             if (! app(FamilyTreeDeletionService::class)->isConnectedToOtherAccount($tree)) {
+                app(FamilyTreeActivityLogger::class)->log(
+                    $tree,
+                    $user,
+                    'deleted',
+                    'Menghapus silsilah.',
+                );
                 $tree->delete();
 
                 return [
@@ -126,6 +133,12 @@ class FamilyTreeDeletionController extends Controller
                 'reviewed_at' => now(),
                 'rejection_reason' => null,
             ]);
+            app(FamilyTreeActivityLogger::class)->log(
+                $tree,
+                $request->user(),
+                'deleted',
+                'Menyetujui penghapusan silsilah.',
+            );
             $tree->delete();
             $this->markNotificationsRead($deletion);
 

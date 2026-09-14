@@ -5,7 +5,9 @@ namespace App\Services;
 use App\Models\FamilyTree;
 use App\Models\Marga;
 use App\Models\Person;
+use App\Models\User;
 use App\Support\IndonesiaRegions;
+use App\Support\PersonShareCode;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -25,7 +27,11 @@ class TaromboTreeService
             ->when($margaId !== null, fn (Builder $query) => $margaId instanceof Collection
                 ? $query->whereIn('marga_id', $margaId)
                 : $query->where('marga_id', $margaId))
-            ->with(['marga', 'creator:id,name'])
+            ->with([
+                'marga',
+                'creator:id,name',
+                'claimingUsers:id,name,role,current_person_id',
+            ])
             ->get()
             ->keyBy('id');
         $nodes = $nodes->filter(fn (array $node) => $people->has($node['person_id']))->values();
@@ -37,6 +43,7 @@ class TaromboTreeService
 
             return [
                 'id' => (string) $person->id,
+                'shareCode' => app(PersonShareCode::class)->for($person),
                 'name' => $person->name,
                 'alias' => $person->alias,
                 'marga' => $person->marga->name ?? 'Batak',
@@ -55,6 +62,7 @@ class TaromboTreeService
                 'image' => $person->image,
                 'bio' => $person->bio,
                 'createdBy' => $person->creator?->name,
+                'claimedAccounts' => $this->claimedAccountsFor($person),
                 'relatedStories' => $person->related_stories ?? [],
                 'location' => $this->locationFor($person),
                 'childrenNames' => $children->get($person->id, collect())
@@ -85,6 +93,7 @@ class TaromboTreeService
             ->with([
                 'marga',
                 'creator:id,name',
+                'claimingUsers:id,name,role,current_person_id',
                 'children' => fn ($query) => $query
                     ->when($familyTreeId !== null, fn ($query) => $query
                         ->whereHas('familyTrees', fn ($query) => $query->whereKey($familyTreeId))),
@@ -92,6 +101,7 @@ class TaromboTreeService
             ->get()
             ->map(fn (Person $person) => [
                 'id' => (string) $person->id,
+                'shareCode' => app(PersonShareCode::class)->for($person),
                 'name' => $person->name,
                 'alias' => $person->alias,
                 'marga' => $person->marga->name ?? 'Batak',
@@ -106,6 +116,7 @@ class TaromboTreeService
                 'image' => $person->image,
                 'bio' => $person->bio,
                 'createdBy' => $person->creator?->name,
+                'claimedAccounts' => $this->claimedAccountsFor($person),
                 'relatedStories' => $person->related_stories ?? [],
                 'location' => $this->locationFor($person),
                 'childrenNames' => $person->children
@@ -337,5 +348,19 @@ class TaromboTreeService
             'district' => $district['name'] ?? null,
             'village' => $village['name'] ?? null,
         ];
+    }
+
+    /** @return array<int, array{id: int, name: string, role: string}> */
+    private function claimedAccountsFor(Person $person): array
+    {
+        return $person->claimingUsers
+            ->sortBy('id')
+            ->map(fn (User $user): array => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'role' => $user->role,
+            ])
+            ->values()
+            ->all();
     }
 }

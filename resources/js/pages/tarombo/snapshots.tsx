@@ -4,6 +4,7 @@ import {
     Images,
     PanelsTopLeft,
     ShieldCheck,
+    SlidersHorizontal,
     Sparkles,
     Trash2,
 } from 'lucide-react';
@@ -49,11 +50,15 @@ export default function TaromboSnapshots({
     snapshotOptions,
     activeFrames,
     accountName,
+    canManageAiPrompt,
+    aiPrompt,
 }: {
     snapshots: SnapshotPage;
     snapshotOptions: Snapshot[];
     activeFrames: Frame[];
     accountName: string;
+    canManageAiPrompt: boolean;
+    aiPrompt: string | null;
 }) {
     const [selectedSnapshot, setSelectedSnapshot] = useState<Snapshot | null>(
         null,
@@ -62,6 +67,9 @@ export default function TaromboSnapshots({
     const [selectedFrame, setSelectedFrame] = useState<Frame | null>(null);
     const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
     const [framePickerOpen, setFramePickerOpen] = useState(false);
+    const [promptEditorOpen, setPromptEditorOpen] = useState(false);
+    const [promptDraft, setPromptDraft] = useState(aiPrompt ?? '');
+    const [savingPrompt, setSavingPrompt] = useState(false);
     const [generating, setGenerating] = useState(false);
     const dateFormatter = new Intl.DateTimeFormat('id-ID', {
         dateStyle: 'long',
@@ -107,6 +115,26 @@ export default function TaromboSnapshots({
         );
     };
 
+    const savePrompt = () => {
+        if (savingPrompt) {
+            return;
+        }
+
+        setSavingPrompt(true);
+        router.put(
+            tarombo.snapshots.prompt.update().url,
+            { prompt: promptDraft },
+            {
+                preserveScroll: true,
+                onSuccess: () => setPromptEditorOpen(false),
+                onError: (errors) => {
+                    window.alert(errors.prompt ?? 'Prompt gagal disimpan.');
+                },
+                onFinish: () => setSavingPrompt(false),
+            },
+        );
+    };
+
     return (
         <>
             <Head title="Tarombo Tersimpan" />
@@ -126,6 +154,19 @@ export default function TaromboSnapshots({
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
+                        {canManageAiPrompt && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => {
+                                    setPromptDraft(aiPrompt ?? '');
+                                    setPromptEditorOpen(true);
+                                }}
+                            >
+                                <SlidersHorizontal className="size-4" />
+                                Prompt Gen AI
+                            </Button>
+                        )}
                         <Button
                             type="button"
                             variant="outline"
@@ -422,6 +463,54 @@ export default function TaromboSnapshots({
                     </div>
                 </DialogContent>
             </Dialog>
+
+            {canManageAiPrompt && (
+                <Dialog
+                    open={promptEditorOpen}
+                    onOpenChange={setPromptEditorOpen}
+                >
+                    <DialogContent className="sm:max-w-2xl">
+                        <DialogHeader>
+                            <DialogTitle>Prompt Gen AI</DialogTitle>
+                            <DialogDescription>
+                                Prompt ini digunakan saat AI menggabungkan
+                                gambar Tarombo dengan template frame untuk
+                                semua pengguna.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <label
+                            htmlFor="tarombo-ai-prompt"
+                            className="text-sm font-medium text-tb-on-surface"
+                        >
+                            Instruksi untuk AI
+                        </label>
+                        <textarea
+                            id="tarombo-ai-prompt"
+                            value={promptDraft}
+                            onChange={(event) =>
+                                setPromptDraft(event.target.value)
+                            }
+                            maxLength={12000}
+                            rows={9}
+                            className="w-full resize-y rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 py-2 text-sm text-tb-on-surface shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-tb-primary"
+                        />
+                        <div className="flex items-center justify-between gap-3">
+                            <p className="text-xs text-tb-on-surface-variant">
+                                Maksimal 12.000 karakter. Prompt berlaku untuk
+                                generate berikutnya.
+                            </p>
+                            <Button
+                                type="button"
+                                disabled={savingPrompt || !promptDraft.trim()}
+                                onClick={savePrompt}
+                                className="bg-tb-primary hover:bg-tb-primary-light"
+                            >
+                                {savingPrompt ? 'Menyimpan...' : 'Simpan Prompt'}
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            )}
         </>
     );
 }
