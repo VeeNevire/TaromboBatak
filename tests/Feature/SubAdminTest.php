@@ -104,6 +104,35 @@ test('successful data changes by a sub-admin are recorded on their activity log'
         ->description->toBe('Melakukan perubahan data melalui family-trees.name.update.');
 });
 
+test('a sub-admin activity log identifies the edited person and their father', function () {
+    $subAdmin = User::factory()->asSubAdmin()->create();
+    $marga = Marga::factory()->create();
+    $father = Person::factory()->create(['name' => 'Ayah Log', 'marga_id' => $marga->id]);
+    $child = Person::factory()->create([
+        'name' => 'Anak Log',
+        'marga_id' => $marga->id,
+        'father_id' => $father->id,
+        'birth_order' => 1,
+    ]);
+
+    $this->actingAs($subAdmin)
+        ->put(route('people.update', $child), [
+            'name' => $child->name,
+            'marga_id' => $marga->id,
+            'birth_order' => 1,
+            'sibling_count' => 1,
+            'father_id' => $father->id,
+            'children' => [['id' => $child->id, 'name' => $child->name]],
+        ])
+        ->assertRedirect(route('people.show', $child));
+
+    expect(ActivityLog::query()
+        ->where('account_id', $subAdmin->id)
+        ->latest()
+        ->firstOrFail()
+        ->description)->toBe('Mengubah data Anak Log, anak dari Ayah Log.');
+});
+
 test('admins can update a sub-admin', function () {
     $admin = User::factory()->asAdmin()->create();
     $subAdmin = User::factory()->asSubAdmin()->create(['name' => 'Lama']);

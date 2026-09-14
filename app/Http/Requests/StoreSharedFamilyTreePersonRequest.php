@@ -6,6 +6,7 @@ use App\Models\FamilyTree;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreSharedFamilyTreePersonRequest extends FormRequest
 {
@@ -39,6 +40,37 @@ class StoreSharedFamilyTreePersonRequest extends FormRequest
             'spouse' => ['nullable', 'string', 'max:255'],
             'spouse_marga' => ['nullable', 'string', 'max:255'],
             'bio' => ['nullable', 'string', 'max:5000'],
+            'children' => ['nullable', 'array', 'max:20'],
+            'children.*.name' => ['required', 'string', 'max:255'],
+            'children.*.alias' => ['nullable', 'string', 'max:255'],
+            'children.*.gender' => ['nullable', Rule::in(['L', 'P'])],
+            'children.*.birth_year' => ['nullable', 'digits:4'],
+            'children.*.death_year' => ['nullable', 'digits:4'],
+            'children.*.spouse' => ['nullable', 'string', 'max:255'],
+            'children.*.spouse_marga' => ['nullable', 'string', 'max:255'],
+            'children.*.bio' => ['nullable', 'string', 'max:5000'],
+            'siblings' => ['nullable', 'array', 'max:20'],
+            'siblings.*.name' => ['required', 'string', 'max:255'],
+            'siblings.*.alias' => ['nullable', 'string', 'max:255'],
+            'siblings.*.gender' => ['nullable', Rule::in(['L', 'P'])],
+            'siblings.*.birth_year' => ['nullable', 'digits:4'],
+            'siblings.*.death_year' => ['nullable', 'digits:4'],
+            'siblings.*.spouse' => ['nullable', 'string', 'max:255'],
+            'siblings.*.spouse_marga' => ['nullable', 'string', 'max:255'],
+            'siblings.*.bio' => ['nullable', 'string', 'max:5000'],
         ];
+    }
+
+    /** @return array<int, \Closure(Validator): void> */
+    public function after(): array
+    {
+        return [function (Validator $validator): void {
+            if ($this->filled('children') && $this->input('gender') !== 'L') {
+                $validator->errors()->add(
+                    'children',
+                    'Daftar anak hanya dapat ditambahkan saat anggota utama berjenis kelamin laki-laki.',
+                );
+            }
+        }];
     }
 }

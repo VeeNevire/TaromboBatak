@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreSharedFamilyTreePersonRequest;
 use App\Models\FamilyTree;
+use App\Models\FamilyTreeAppendRequest;
 use App\Models\FamilyTreeNode;
-use App\Models\Person;
-use App\Services\FamilyTreeChainNumberingService;
+use App\Notifications\FamilyTreeAppendSubmitted;
+use App\Services\FamilyTreeActivityLogger;
+use App\Services\SharedFamilyTreeAppendService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,14 +28,17 @@ class SharedFamilyTreePersonController extends Controller
             ->orderBy('chain')
             ->orderBy('id')
             ->get();
+        $parentNodeIds = $nodes->pluck('father_node_id')->filter()->flip();
 
         return Inertia::render('people/shared-tree-person-form', [
             'familyTree' => [
                 'id' => $familyTree->id,
                 'name' => $familyTree->name ?? $familyTree->rootPerson()->value('name') ?? 'Silsilah',
+                'requires_approval' => ! $request->user()->can('manage', $familyTree),
             ],
             'fatherOptions' => $nodes
-                ->filter(fn (FamilyTreeNode $node) => $node->person->gender !== 'P')
+                ->filter(fn (FamilyTreeNode $node) => $node->person->gender !== 'P'
+                    && ! $parentNodeIds->has($node->id))
                 ->map(fn (FamilyTreeNode $node) => [
                     'id' => $node->id,
                     'name' => $node->person->name,
@@ -52,7 +57,7 @@ class SharedFamilyTreePersonController extends Controller
     public function store(
         StoreSharedFamilyTreePersonRequest $request,
         FamilyTree $familyTree,
-        FamilyTreeChainNumberingService $numbering,
+        SharedFamilyTreeAppendService $appendService,
     ): RedirectResponse {
         $validated = $request->validated();
         $fatherNode = $familyTree->nodes()->with('person')->find($validated['father_node_id']);
@@ -66,44 +71,40 @@ class SharedFamilyTreePersonController extends Controller
             ]);
         }
 
-        $person = DB::transaction(function () use ($validated, $request, $familyTree, $fatherNode, $motherNode, $numbering): Person {
+        if (! $request->user()->can('manage', $familyTree)) {
+            $appendRequest = DB::transaction(function () use ($validated, $request, $familyTree): FamilyTreeAppendRequest {
+                $tree = FamilyTree::query()->lockForUpdate()->findOrFail($familyTree->id);
+                $tree->ensureStructureIsEditable();
+
+                return FamilyTreeAppendRequest::create([
+                    'family_tree_id' => $tree->id,
+                    'requester_id' => $request->user()->id,
+                    'payload' => $validated,
+                ]);
+            });
+            $appendRequest->load(['requester', 'familyTree']);
+            $appendRequest->familyTree->user->notify(new FamilyTreeAppendSubmitted($appendRequest));
+
+            Inertia::flash('toast', [
+                'type' => 'success',
+                'message' => 'Pengajuan tambah anggota telah dikirim ke pemilik silsilah untuk disetujui.',
+            ]);
+
+            return to_route('family-trees.show', $familyTree);
+        }
+
+        $person = DB::transaction(function () use ($validated, $request, $familyTree, $appendService) {
             $familyTree = FamilyTree::query()->lockForUpdate()->findOrFail($familyTree->id);
             $familyTree->ensureStructureIsEditable();
-            $birthOrder = $validated['birth_order'] ?? ((int) $familyTree->nodes()
-                ->where('father_node_id', $fatherNode->id)
-                ->max('birth_order') + 1);
-
-            $person = Person::create([
-                'name' => $validated['name'],
-                'alias' => $validated['alias'] ?? null,
-                'gender' => $validated['gender'] ?? null,
-                'marga_id' => $fatherNode->person->marga_id,
-                'created_by' => $request->user()->id,
-                'father_id' => $fatherNode->person_id,
-                'mother_id' => $motherNode?->person_id,
-                'birth_order' => $birthOrder,
-                'birth_year' => $validated['birth_year'] ?? null,
-                'death_year' => $validated['death_year'] ?? null,
-                'spouse' => $validated['spouse'] ?? null,
-                'spouse_marga' => $validated['spouse_marga'] ?? null,
-                'bio' => $validated['bio'] ?? null,
-            ]);
-
-            $familyTree->people()->attach($person->id);
-            FamilyTreeNode::create([
-                'family_tree_id' => $familyTree->id,
-                'person_id' => $person->id,
-                'father_node_id' => $fatherNode->id,
-                'mother_node_id' => $motherNode?->id,
-                'birth_order' => $birthOrder,
-            ]);
-            $numbering->recompute($familyTree);
-            $familyTree->touch();
-
-            return $person;
+            return $appendService->append(
+                tree: $familyTree,
+                payload: $validated,
+                createdBy: $request->user()->id,
+            );
         });
 
         Inertia::flash('toast', ['type' => 'success', 'message' => "{$person->name} berhasil ditambahkan tanpa mengubah anggota lama."]);
+        app(FamilyTreeActivityLogger::class)->log($familyTree, $request->user(), 'added', "Menambahkan anggota {$person->name}.");
 
         return to_route('family-trees.show', $familyTree);
     }

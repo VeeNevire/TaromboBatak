@@ -11,6 +11,8 @@ use App\Http\Controllers\ContributionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\FamilyTreeDeletionController;
+use App\Http\Controllers\FamilyTreeAppendRequestController;
+use App\Http\Controllers\FamilyTreeActivityController;
 use App\Http\Controllers\FamilyTreeShareController;
 use App\Http\Controllers\FeedCommentController;
 use App\Http\Controllers\FeedPostController;
@@ -171,6 +173,8 @@ Route::middleware(['auth'])->group(function () {
 
     Route::post('family-trees/{familyTree}/contributions', [ContributionController::class, 'storeMargaTree'])
         ->name('contributions.marga-tree.store');
+    Route::get('family-tree-activities', [FamilyTreeActivityController::class, 'index'])
+        ->name('family-tree-activities.index');
 
     Route::get('dashboard/tarombo/full/{view}', [TaromboController::class, 'fullscreen'])
         ->where('view', 'diagram|tree')
@@ -211,6 +215,8 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('family-tree-shares/{familyTreeShare}', [FamilyTreeShareController::class, 'destroy'])->name('family-tree-shares.destroy');
     Route::get('family-trees/{familyTree}/people/create', [SharedFamilyTreePersonController::class, 'create'])->name('family-trees.people.create');
     Route::post('family-trees/{familyTree}/people', [SharedFamilyTreePersonController::class, 'store'])->name('family-trees.people.store');
+    Route::post('family-tree-append-requests/{appendRequest}/approve', [FamilyTreeAppendRequestController::class, 'approve'])->name('family-tree-append-requests.approve');
+    Route::post('family-tree-append-requests/{appendRequest}/reject', [FamilyTreeAppendRequestController::class, 'reject'])->name('family-tree-append-requests.reject');
 
     Route::resource('events', EventController::class)->except(['show']);
     Route::resource('stories', StoryController::class)->except(['show']);

@@ -30,6 +30,7 @@ use Illuminate\Validation\ValidationException;
  * @property-read Collection<int, FamilyTreeNode> $nodes
  * @property-read Collection<int, ContributionRequest> $contributionRequests
  * @property-read Collection<int, FamilyTreeDeletionRequest> $deletionRequests
+ * @property-read Collection<int, FamilyTreeAppendRequest> $appendRequests
  * @property-read Collection<int, FamilyTreeShare> $shares
  */
 #[Fillable(['user_id', 'root_person_id', 'name', 'description', 'source_name', 'source_url', 'based_on_id', 'is_primary'])]
@@ -101,6 +102,12 @@ class FamilyTree extends Model
     public function deletionRequests(): HasMany
     {
         return $this->hasMany(FamilyTreeDeletionRequest::class);
+    }
+
+    /** @return HasMany<FamilyTreeAppendRequest, $this> */
+    public function appendRequests(): HasMany
+    {
+        return $this->hasMany(FamilyTreeAppendRequest::class);
     }
 
     /** @return HasMany<FamilyTreeShare, $this> */

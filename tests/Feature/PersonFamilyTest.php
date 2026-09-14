@@ -25,6 +25,7 @@ test('a family store creates the father, mother, and all sibling rows as people'
 
     $response = $this->actingAs($this->admin)->post(route('people.store'), [
         'name' => 'Ompu Sitorus',
+        'family_tree_name' => 'Keluarga Ompu Sitorus',
         'gender' => 'L',
         'alias' => 'Tuan Sorba Dibanua',
         'marga_id' => $marga->id,
@@ -68,7 +69,39 @@ test('a family store creates the father, mother, and all sibling rows as people'
         ->and($children[1]->district_code)->toBe('32.01.02')
         ->and($children[1]->village_code)->toBe('32.01.02.2001')
         ->and($children[0]->spouse_marga)->toBe('Hutapea')
-        ->and($children[2]->name)->toBe('N/A');
+        ->and($children[2]->name)->toBe('N/A')
+        ->and(FamilyTree::query()->sole()->name)->toBe('Keluarga Ompu Sitorus');
+});
+
+test('a family entry update changes its family name', function () {
+    $marga = Marga::factory()->create(['name' => 'Sitorus']);
+    $person = Person::factory()->create([
+        'name' => 'Ompu Sitorus',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+    ]);
+    $familyTree = FamilyTree::create([
+        'user_id' => $this->admin->id,
+        'root_person_id' => $person->id,
+        'name' => 'Keluarga Lama',
+    ]);
+
+    $this->actingAs($this->admin)->put(route('people.update', $person), [
+        'name' => $person->name,
+        'family_tree_name' => 'Keluarga Ompu Sitorus',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'birth_order' => 1,
+        'sibling_count' => 1,
+        'children' => [[
+            'id' => $person->id,
+            'name' => $person->name,
+            'gender' => 'L',
+            'marga_id' => $marga->id,
+        ]],
+    ])->assertRedirect(route('people.show', $person));
+
+    expect($familyTree->fresh()->name)->toBe('Keluarga Ompu Sitorus');
 });
 
 test('related story links are stored and exposed on the person form', function () {
@@ -1386,6 +1419,11 @@ test('an account can open its family tree without exposing unrelated trees', fun
 
 test('the create form suggests only male people as fathers', function () {
     Person::factory()->create(['name' => 'Calon Ayah', 'gender' => 'L']);
+    $fatherWithChild = Person::factory()->create([
+        'name' => 'Ayah Dengan Anak',
+        'gender' => 'L',
+    ]);
+    Person::factory()->create(['father_id' => $fatherWithChild->id]);
     Person::factory()->create(['name' => 'Perempuan', 'gender' => 'P']);
     Person::factory()->create(['name' => 'Belum Diketahui', 'gender' => null]);
 

@@ -3,6 +3,7 @@ import {
     BookOpen,
     BellRing,
     CalendarDays,
+    History,
     Images,
     LayoutGrid,
     MessageCircle,
@@ -33,6 +34,7 @@ import announcements from '@/routes/announcements';
 import contacts from '@/routes/contacts';
 import contributions from '@/routes/contributions';
 import events from '@/routes/events';
+import familyTreeActivities from '@/routes/family-tree-activities';
 import familyTrees from '@/routes/family-trees';
 import groups from '@/routes/groups';
 import marga from '@/routes/marga';
@@ -42,7 +44,6 @@ import stories from '@/routes/stories';
 import subAdmins from '@/routes/sub-admins';
 import tarombo from '@/routes/tarombo';
 import taromboFrames from '@/routes/tarombo-frames';
-import telegramMessages from '@/routes/telegram-messages';
 import type { NavGroup } from '@/types';
 
 export function AppSidebar() {
@@ -73,9 +74,9 @@ export function AppSidebar() {
                     icon: Newspaper,
                 },
                 {
-                    title: 'Pesan Telegram',
-                    href: telegramMessages.index(),
-                    icon: MessageCircle,
+                    title: 'Daftar Marga',
+                    href: marga.index(),
+                    icon: Shapes,
                 },
                 {
                     title: 'Pohon Tarombo',
@@ -119,9 +120,9 @@ export function AppSidebar() {
                               icon: Users,
                           },
                           {
-                              title: 'Daftar Marga',
-                              href: marga.index(),
-                              icon: Shapes,
+                              title: 'Log Aktivitas',
+                              href: familyTreeActivities.index(),
+                              icon: History,
                           },
                           {
                               title: 'Cerita Leluhur & Budaya',
@@ -146,9 +147,9 @@ export function AppSidebar() {
                               icon: Users,
                           },
                           {
-                              title: 'Daftar Marga',
-                              href: marga.index(),
-                              icon: Shapes,
+                              title: 'Log Aktivitas',
+                              href: familyTreeActivities.index(),
+                              icon: History,
                           },
                           {
                               title: 'Event & Kegiatan',
