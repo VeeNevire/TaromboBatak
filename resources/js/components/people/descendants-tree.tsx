@@ -25,6 +25,7 @@ type Props = {
     compact?: boolean;
     detachedPeople?: TaromboPerson[];
     currentUserId?: number;
+    showNodeAvatar?: boolean;
 };
 
 type LineageLine = {
@@ -75,6 +76,7 @@ function TreeBranch({
     markFemaleLineage,
     collapseDepth,
     compact,
+    showNodeAvatar,
     alternativeTrees,
     nodeIdPrefix,
 }: {
@@ -98,6 +100,7 @@ function TreeBranch({
     markFemaleLineage: boolean;
     collapseDepth?: number;
     compact?: boolean;
+    showNodeAvatar?: boolean;
 }) {
     const [activeAlternativeId, setActiveAlternativeId] = useState<
         number | null
@@ -128,6 +131,7 @@ function TreeBranch({
                 showProfileOnName ? () => onOpenProfile(person) : undefined
             }
             dashed={markFemaleLineage && femaleLineage}
+            showAvatar={showNodeAvatar}
         />
     );
 
@@ -260,6 +264,7 @@ function TreeBranch({
                             markFemaleLineage={markFemaleLineage}
                             collapseDepth={collapseDepth}
                             compact={compact}
+                            showNodeAvatar={showNodeAvatar}
                         />
                     ))}
                 </ul>
@@ -317,6 +322,7 @@ function TreeBranch({
                             nodeIdPrefix={`${nodeIdPrefix}-alternative-${activeAlternative.id}`}
                             lineagePath={[]}
                             markFemaleLineage={markFemaleLineage}
+                            showNodeAvatar={showNodeAvatar}
                         />
                     </div>
                 </div>
@@ -343,6 +349,7 @@ export function DescendantsTree({
     compact = false,
     detachedPeople = [],
     currentUserId,
+    showNodeAvatar = true,
 }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [profilePerson, setProfilePerson] = useState<TaromboPerson | null>(
@@ -580,6 +587,7 @@ export function DescendantsTree({
                             markFemaleLineage={markFemaleLineage}
                             collapseDepth={collapseDepth}
                             compact={compact}
+                            showNodeAvatar={showNodeAvatar}
                         />
                     ))}
                 </ul>
@@ -626,6 +634,7 @@ export function DescendantsTree({
                                     markFemaleLineage={markFemaleLineage}
                                     collapseDepth={collapseDepth}
                                     compact={compact}
+                                    showNodeAvatar={showNodeAvatar}
                                 />
                             </ul>
                         ))}

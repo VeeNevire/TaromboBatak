@@ -1,11 +1,15 @@
 <?php
 
 use App\Models\FamilyTree;
+use App\Models\FamilyTreeActivity;
+use App\Models\FamilyTreeAppendRequest;
 use App\Models\FamilyTreeNode;
 use App\Models\FamilyTreeShare;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
+use App\Notifications\FamilyTreeAppendSubmitted;
+use Illuminate\Support\Facades\Notification;
 use Inertia\Testing\AssertableInertia as Assert;
 
 function sharingTree(User $owner, Marga $marga): array
@@ -89,7 +93,8 @@ test('a pending recipient must accept before opening the shared tree', function 
             ->where('familyTrees.0.can_append', true));
 });
 
-test('an accepted recipient can only append a new member to the shared tree', function () {
+test('an accepted recipient submits a new member for the owner to approve', function () {
+    Notification::fake();
     $marga = Marga::factory()->create();
     $owner = User::factory()->withMarga($marga->id)->create();
     $recipient = User::factory()->withMarga($marga->id)->create();
@@ -105,13 +110,73 @@ test('an accepted recipient can only append a new member to the shared tree', fu
         'birth_order' => 2, 'birth_year' => '2001', 'bio' => 'Ditambahkan kolaborator',
     ])->assertRedirect(route('family-trees.show', $tree));
 
+    expect(Person::query()->where('name', 'Anak Tambahan')->exists())->toBeFalse();
+
+    $appendRequest = FamilyTreeAppendRequest::query()->firstOrFail();
+    expect($appendRequest->requester_id)->toBe($recipient->id)
+        ->and($appendRequest->family_tree_id)->toBe($tree->id)
+        ->and($appendRequest->status)->toBe(FamilyTreeAppendRequest::STATUS_PENDING)
+        ->and($appendRequest->payload['name'])->toBe('Anak Tambahan');
+    Notification::assertSentTo($owner, FamilyTreeAppendSubmitted::class);
+
+    $this->actingAs($owner)
+        ->post(route('family-tree-append-requests.approve', $appendRequest))
+        ->assertRedirect();
+
     $child = Person::query()->where('name', 'Anak Tambahan')->firstOrFail();
     expect($child->created_by)->toBe($recipient->id)
         ->and($child->father_id)->toBe($root->id)
         ->and($child->marga_id)->toBe($marga->id)
         ->and($tree->nodes()->where('person_id', $child->id)->value('father_node_id'))->toBe($node->id)
         ->and($tree->people()->whereKey($child->id)->exists())->toBeTrue()
-        ->and($root->fresh()->bio)->toBe('Data lama tidak boleh berubah');
+        ->and($root->fresh()->bio)->toBe('Data lama tidak boleh berubah')
+        ->and($appendRequest->fresh()->status)->toBe(FamilyTreeAppendRequest::STATUS_APPROVED)
+        ->and($appendRequest->fresh()->reviewed_by)->toBe($owner->id);
+
+    expect(FamilyTreeActivity::query()
+        ->where('family_tree_id', $tree->id)
+        ->where('action', 'added')
+        ->exists())->toBeTrue();
+
+    $this->actingAs($owner)
+        ->get(route('family-tree-activities.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('family-tree-activities/index')
+            ->has('activities', 1));
+});
+
+test('the shared member form only offers leaf male nodes as fathers', function () {
+    $marga = Marga::factory()->create();
+    $owner = User::factory()->withMarga($marga->id)->create();
+    $recipient = User::factory()->withMarga($marga->id)->create();
+    ['tree' => $tree, 'node' => $rootNode] = sharingTree($owner, $marga);
+    $leaf = Person::factory()->create([
+        'name' => 'Calon Ayah Ujung',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'father_id' => $rootNode->person_id,
+    ]);
+    $leafNode = FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $leaf->id,
+        'father_node_id' => $rootNode->id,
+        'chain' => '1-1',
+    ]);
+    FamilyTreeShare::create([
+        'family_tree_id' => $tree->id,
+        'sender_id' => $owner->id,
+        'recipient_id' => $recipient->id,
+        'status' => FamilyTreeShare::STATUS_ACCEPTED,
+    ]);
+
+    $this->actingAs($recipient)
+        ->get(route('family-trees.people.create', $tree))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('fatherOptions', [
+                ['id' => $leafNode->id, 'name' => 'Calon Ayah Ujung', 'chain' => '1-1'],
+            ]));
 });
 
 test('a shared recipient cannot manage duplicate or reshare the tree', function () {
@@ -129,6 +194,8 @@ test('a shared recipient cannot manage duplicate or reshare the tree', function 
         ->get(route('family-trees.edit', $tree))->assertForbidden();
     $this->actingAs($recipient)->withHeader('Accept', 'application/json')
         ->post(route('family-trees.duplicate', $tree))->assertForbidden();
+    $this->actingAs($recipient)->withHeader('Accept', 'application/json')
+        ->post(route('people.family-version.duplicate', $tree->root_person_id))->assertUnprocessable();
     $this->actingAs($recipient)->withHeader('Accept', 'application/json')
         ->post(route('family-trees.shares.store', $tree), ['recipient_id' => $thirdUser->id])->assertForbidden();
     $this->actingAs($recipient)->withHeader('Accept', 'application/json')

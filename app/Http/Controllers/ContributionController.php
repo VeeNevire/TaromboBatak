@@ -22,6 +22,7 @@ use App\Notifications\StorySubmitted;
 use App\Services\ChainNumberingService;
 use App\Services\FamilyEntryService;
 use App\Services\TreeActivityLogger;
+use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
@@ -144,9 +145,9 @@ class ContributionController extends Controller
                 'matched_father_id' => $contribution->matched_father_id,
                 'matched_father_marga' => $contribution->matchedFather->marga?->name,
                 'reviewer' => $contribution->reviewer?->name,
-                'reviewed_at' => $contribution->reviewed_at?->format('d M Y H:i'),
+                'reviewed_at' => $this->formatWib($contribution->reviewed_at),
                 'reason' => $contribution->rejection_reason,
-                'created_at' => $contribution->created_at?->format('d M Y H:i'),
+                'created_at' => $this->formatWib($contribution->created_at),
                 'family_tree_id' => $contribution->family_tree_id,
                 'marga_tree' => $contribution->family_tree_id !== null
                     && empty($contribution->affected_person_ids),
@@ -169,10 +170,10 @@ class ContributionController extends Controller
                 'creator' => $event->creator?->name,
                 'marga' => $event->marga?->name,
                 'reviewer' => $event->reviewer?->name,
-                'reviewed_at' => $event->reviewed_at?->format('d M Y H:i'),
+                'reviewed_at' => $this->formatWib($event->reviewed_at),
                 'reason' => $event->rejection_reason,
                 'review_version' => $event->review_version,
-                'created_at' => $event->created_at?->format('d M Y H:i'),
+                'created_at' => $this->formatWib($event->created_at),
             ]);
 
         $storyRequests = Story::query()
@@ -194,10 +195,10 @@ class ContributionController extends Controller
                 'status' => $story->status,
                 'creator' => $story->creator?->name,
                 'reviewer' => $story->reviewer?->name,
-                'reviewed_at' => $story->reviewed_at?->format('d M Y H:i'),
+                'reviewed_at' => $this->formatWib($story->reviewed_at),
                 'reason' => $story->rejection_reason,
                 'review_version' => $story->review_version,
-                'created_at' => $story->created_at?->format('d M Y H:i'),
+                'created_at' => $this->formatWib($story->created_at),
             ]);
 
         $deletionRequests = FamilyTreeDeletionRequest::query()
@@ -214,9 +215,9 @@ class ContributionController extends Controller
                 'requester' => $deletion->requester->name,
                 'status' => $deletion->status,
                 'reviewer' => $deletion->reviewer?->name,
-                'reviewed_at' => $deletion->reviewed_at?->format('d M Y H:i'),
+                'reviewed_at' => $this->formatWib($deletion->reviewed_at),
                 'reason' => $deletion->rejection_reason,
-                'created_at' => $deletion->created_at?->format('d M Y H:i'),
+                'created_at' => $this->formatWib($deletion->created_at),
             ]);
 
         $identityRequests = IdentityRequest::query()
@@ -236,9 +237,9 @@ class ContributionController extends Controller
                 'person' => $identity->person->name,
                 'person_marga' => $identity->person->marga?->name,
                 'reviewer' => $identity->reviewer?->name,
-                'reviewed_at' => $identity->reviewed_at?->format('d M Y H:i'),
+                'reviewed_at' => $this->formatWib($identity->reviewed_at),
                 'reason' => $identity->rejection_reason,
-                'created_at' => $identity->created_at?->format('d M Y H:i'),
+                'created_at' => $this->formatWib($identity->created_at),
             ]);
 
         $margaAccessRequests = MargaAccessRequest::query()
@@ -253,9 +254,9 @@ class ContributionController extends Controller
                 'marga' => $accessRequest->marga->name,
                 'status' => $accessRequest->status,
                 'reviewer' => $accessRequest->reviewer?->name,
-                'reviewed_at' => $accessRequest->reviewed_at?->format('d M Y H:i'),
+                'reviewed_at' => $this->formatWib($accessRequest->reviewed_at),
                 'reason' => $accessRequest->rejection_reason,
-                'created_at' => $accessRequest->created_at?->format('d M Y H:i'),
+                'created_at' => $this->formatWib($accessRequest->created_at),
             ])
             ->values()
             ->all();
@@ -475,6 +476,13 @@ class ContributionController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Pengajuan akses marga ditolak.']);
 
         return to_route('contributions.index');
+    }
+
+    private function formatWib(?CarbonInterface $timestamp): ?string
+    {
+        return $timestamp
+            ? $timestamp->setTimezone('Asia/Jakarta')->translatedFormat('d M Y H:i').' WIB'
+            : null;
     }
 
     protected function authorizeReview(User $user, ContributionRequest $contribution): void

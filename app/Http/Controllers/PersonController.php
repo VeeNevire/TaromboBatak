@@ -8,6 +8,7 @@ use App\Http\Requests\UpdateFamilyTreeStructureRequest;
 use App\Http\Requests\UpdatePersonRequest;
 use App\Models\ContributionRequest;
 use App\Models\FamilyTree;
+use App\Models\FamilyTreeAppendRequest;
 use App\Models\FamilyTreeDeletionRequest;
 use App\Models\FamilyTreeNode;
 use App\Models\FamilyTreeShare;
@@ -18,6 +19,7 @@ use App\Models\User;
 use App\Notifications\FatherMatchSubmitted;
 use App\Services\ChainNumberingService;
 use App\Services\FamilyEntryService;
+use App\Services\FamilyTreeActivityLogger;
 use App\Services\FamilyTreeStructureService;
 use App\Services\FamilyTreeVersionService;
 use App\Services\TaromboTreeService;
@@ -376,6 +378,13 @@ class PersonController extends Controller
             });
         }
 
+        $result['familyTrees']->each(fn (FamilyTree $tree) => app(FamilyTreeActivityLogger::class)->log(
+            $tree,
+            $user,
+            'added',
+            'Menambahkan anggota keluarga ke silsilah.',
+        ));
+
         $message = isset($result) && $result['matchedFather'] !== null
             ? 'Keluarga disimpan. Pencocokan Ayah menunggu persetujuan kontributor.'
             : __('Keluarga berhasil ditambahkan.');
@@ -505,7 +514,16 @@ class PersonController extends Controller
         $familyTrees = FamilyTree::query()
             ->whereHas('nodes', fn ($query) => $query->where('person_id', $person->id))
             ->when(! $request->user()->isStaff(), fn ($query) => $query->where('user_id', $request->user()->id))
-            ->with(['user:id,name', 'rootPerson:id,name,marga_id', 'nodes.person:id,name', 'shares.recipient:id,name,email', 'contributionRequests:id,family_tree_id,status'])
+            ->with([
+                'user:id,name',
+                'rootPerson:id,name,marga_id',
+                'nodes.person:id,name',
+                'shares.recipient:id,name,email',
+                'contributionRequests:id,family_tree_id,status',
+                'appendRequests' => fn ($query) => $query
+                    ->where('status', FamilyTreeAppendRequest::STATUS_PENDING)
+                    ->with('requester:id,name'),
+            ])
             ->latest('updated_at')
             ->get();
 
@@ -643,6 +661,7 @@ class PersonController extends Controller
         $rootName = $familyTree->rootPerson()->value('name') ?? 'Silsilah';
         $name = $this->alternativeVersionName($request, ($familyTree->name ?? $rootName).' - Versi alternatif');
         $copy = app(FamilyTreeVersionService::class)->duplicate($familyTree, $request->user(), $name);
+        app(FamilyTreeActivityLogger::class)->log($copy, $request->user(), 'created', 'Membuat versi alternatif silsilah.');
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Versi alternatif berhasil dibuat.')]);
 
@@ -728,6 +747,7 @@ class PersonController extends Controller
         $this->authorizeFamilyTree($request, $familyTree);
 
         app(FamilyTreeStructureService::class)->update($familyTree, $request->validated('entries'));
+        app(FamilyTreeActivityLogger::class)->log($familyTree, $request->user(), 'updated', 'Memperbarui struktur silsilah.');
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Struktur versi silsilah berhasil diperbarui.')]);
 
@@ -742,6 +762,7 @@ class PersonController extends Controller
         $this->authorizeFamilyTree($request, $familyTree);
 
         $familyTree->update(['name' => trim($request->validated('name'))]);
+        app(FamilyTreeActivityLogger::class)->log($familyTree, $request->user(), 'updated', 'Mengubah nama silsilah.');
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Nama silsilah berhasil diperbarui.')]);
 
@@ -932,14 +953,19 @@ class PersonController extends Controller
         if ($versionTreeId > 0) {
             $familyTree = FamilyTree::query()->findOrFail($versionTreeId);
             $this->authorizeFamilyTree($request, $familyTree);
+
+            if (filled($validated['family_tree_name'] ?? null)) {
+                $familyTree->update([
+                    'name' => trim($validated['family_tree_name']),
+                ]);
+            }
+
             app(FamilyTreeStructureService::class)->updateFromFamilyForm($familyTree, $person, $validated);
-            app(TreeActivityLogger::class)->record(
-                $person->fresh(),
-                $user,
-                'edited',
-                "{$person->name} diperbarui pada versi silsilah.",
-                ['before' => $before],
+            app(FamilyTreeActivityLogger::class)->log(
                 $familyTree,
+                $user,
+                'updated',
+                'Memperbarui data dan struktur silsilah.',
             );
 
             Inertia::flash('toast', ['type' => 'success', 'message' => __('Versi silsilah berhasil diperbarui.')]);
@@ -971,6 +997,13 @@ class PersonController extends Controller
         } else {
             $result = app(FamilyEntryService::class)->save($validated, createdBy: $user->id);
         }
+
+        $result['familyTrees']->each(fn (FamilyTree $tree) => app(FamilyTreeActivityLogger::class)->log(
+            $tree,
+            $user,
+            'updated',
+            'Memperbarui data anggota pada silsilah.',
+        ));
 
         if (
             array_key_exists('image', $validated) &&
@@ -1564,6 +1597,7 @@ class PersonController extends Controller
             ->when($margaId instanceof \Illuminate\Support\Collection, fn ($query) => $query->whereIn('marga_id', $margaId))
             ->when(is_int($margaId), fn ($query) => $query->where('marga_id', $margaId))
             ->where('gender', 'L')
+            ->whereDoesntHave('children')
             ->when($person !== null, fn ($query) => $query->whereNotIn('id', $person->ineligibleFatherIds()))
             ->whereNotNull('name')
             ->where('name', '!=', 'N/A')
@@ -1619,7 +1653,16 @@ class PersonController extends Controller
                 'root_person_id',
                 $focus->id,
             ))
-            ->with(['user:id,name', 'rootPerson:id,name,marga_id', 'nodes.person:id,name', 'shares.recipient:id,name,email', 'contributionRequests:id,family_tree_id,status'])
+            ->with([
+                'user:id,name',
+                'rootPerson:id,name,marga_id',
+                'nodes.person:id,name',
+                'shares.recipient:id,name,email',
+                'contributionRequests:id,family_tree_id,status',
+                'appendRequests' => fn ($query) => $query
+                    ->where('status', FamilyTreeAppendRequest::STATUS_PENDING)
+                    ->with('requester:id,name'),
+            ])
             ->withExists(['deletionRequests as deletion_pending' => fn ($query) => $query
                 ->where('status', FamilyTreeDeletionRequest::STATUS_PENDING)])
             ->latest('updated_at')
@@ -1705,6 +1748,13 @@ class PersonController extends Controller
                 'recipient_email' => $share->recipient->email,
                 'status' => $share->status,
             ])->values()->all() : [],
+            'append_requests' => $canManage ? $tree->appendRequests->map(
+                fn (FamilyTreeAppendRequest $appendRequest) => [
+                    'id' => $appendRequest->id,
+                    'requester_name' => $appendRequest->requester->name,
+                    'member_name' => $appendRequest->payload['name'] ?? 'Anggota baru',
+                ],
+            )->values()->all() : [],
             'deletion_pending' => (bool) $tree->deletion_pending,
             'updated_at' => $tree->updated_at->toISOString(),
         ];

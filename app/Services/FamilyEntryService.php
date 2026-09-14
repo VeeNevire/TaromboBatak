@@ -205,6 +205,7 @@ class FamilyEntryService
                 $children,
                 $ownChildren,
                 $focus,
+                $data['family_tree_name'] ?? null,
             );
 
             return [
@@ -345,6 +346,7 @@ class FamilyEntryService
         Collection $children,
         Collection $ownChildren,
         ?Person $focus,
+        ?string $familyTreeName,
     ): Collection {
         if ($createdBy === null || $focus === null) {
             return new Collection;
@@ -359,6 +361,10 @@ class FamilyEntryService
             ->unique()
             ->values();
 
+        $name = filled($familyTreeName)
+            ? trim($familyTreeName)
+            : 'Keluarga '.$focus->name;
+
         $tree = FamilyTree::query()
             ->where('user_id', $createdBy)
             ->whereNull('based_on_id')
@@ -372,7 +378,7 @@ class FamilyEntryService
             ?? FamilyTree::create([
                 'user_id' => $createdBy,
                 'root_person_id' => $focus->id,
-                'name' => 'Keluarga '.$focus->name,
+                'name' => $name,
             ]);
 
         $memberIds = $children
@@ -395,8 +401,8 @@ class FamilyEntryService
             $current = $current->father()->first();
         }
 
-        if ($tree->name === null) {
-            $tree->update(['name' => 'Keluarga '.$focus->name]);
+        if ($tree->name === null || filled($familyTreeName)) {
+            $tree->update(['name' => $name]);
         }
 
         $tree->people()->syncWithoutDetaching(array_values(array_unique($memberIds)));

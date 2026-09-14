@@ -25,6 +25,8 @@ type NameComboboxProps = {
     allowNa?: boolean;
     className?: string;
     showSiblingPreview?: boolean;
+    siblingSuggestions?: Array<string | NameSuggestion>;
+    showChain?: boolean;
 };
 
 export function NameCombobox({
@@ -36,6 +38,8 @@ export function NameCombobox({
     allowNa = true,
     className,
     showSiblingPreview = false,
+    siblingSuggestions,
+    showChain = true,
 }: NameComboboxProps) {
     const [open, setOpen] = useState(false);
     const [highlighted, setHighlighted] = useState(-1);
@@ -74,7 +78,7 @@ export function NameCombobox({
             return [];
         }
 
-        return suggestions
+        return (siblingSuggestions ?? suggestions)
             .filter(
                 (suggestion): suggestion is NameSuggestion =>
                     typeof suggestion !== 'string' &&
@@ -83,7 +87,7 @@ export function NameCombobox({
             )
             .map((suggestion) => suggestion.name)
             .slice(0, 8);
-    }, [hoveredSuggestion, suggestions]);
+    }, [hoveredSuggestion, siblingSuggestions, suggestions]);
 
     useEffect(() => {
         return () => {
@@ -200,7 +204,7 @@ export function NameCombobox({
                                         {suggestion?.marga
                                             ? ` - Marga ${suggestion.marga}`
                                             : ''}
-                                        {suggestion?.chain
+                                        {showChain && suggestion?.chain
                                             ? ` · Chain ${suggestion.chain}`
                                             : ''}
                                     </span>

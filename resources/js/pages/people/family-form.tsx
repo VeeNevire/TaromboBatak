@@ -443,12 +443,23 @@ function FamilyTreePersonControls({
     return (
         <div className="flex shrink-0 flex-col items-end gap-1">
             <div className="flex items-center gap-1.5">
-                <FamilyTreeVersionAction
-                    entries={entries}
-                    personId={personId}
-                    iconOnly
-                    mode={manageableEntries.length > 0 ? 'duplicate' : 'open'}
-                />
+                {manageableEntries.length > 0 ? (
+                    <FamilyTreeVersionAction
+                        entries={manageableEntries}
+                        personId={personId}
+                        iconOnly
+                    />
+                ) : (
+                    <button
+                        type="button"
+                        disabled
+                        aria-label="Versi alternatif hanya tersedia untuk silsilah milik akun"
+                        title="Versi alternatif hanya tersedia untuk silsilah milik akun"
+                        className="inline-flex size-6 shrink-0 cursor-not-allowed items-center justify-center rounded-lg border border-tb-outline-variant text-tb-outline opacity-40"
+                    >
+                        <Copy className="size-3.5" />
+                    </button>
+                )}
                 {(manageableEntries.length > 0 || editable) && (
                     <Link
                         href={people.edit(personId)}
@@ -1263,6 +1274,13 @@ export default function FamilyForm({
         clearErrors,
     } = useForm({
         name: person?.name ?? '',
+        family_tree_name:
+            person === null
+                ? ''
+                : (selectedVersionName ??
+                  familyTrees.find((tree) => tree.is_primary)?.name ??
+                  familyTrees[0]?.name ??
+                  ''),
         gender: person?.gender ?? '',
         alias: person?.alias ?? '',
         marga_id: person?.marga_id ?? lockedMarga?.id ?? null,
@@ -2212,6 +2230,14 @@ export default function FamilyForm({
             return;
         }
 
+        const onError = (formErrors: Record<string, string>) => {
+            const message = Object.values(formErrors)[0];
+
+            if (message) {
+                toast.error(message);
+            }
+        };
+
         if (isEdit && person?.id) {
             const updateAction = people.update.form(person.id, {
                 query:
@@ -2222,9 +2248,10 @@ export default function FamilyForm({
 
             post(updateAction, {
                 forceFormData: true,
+                onError,
             });
         } else {
-            post(people.store.form().action, { forceFormData: true });
+            post(people.store.form().action, { forceFormData: true, onError });
         }
     };
 
@@ -2284,6 +2311,11 @@ export default function FamilyForm({
                         }
                         placeholder={`Nama ${label.toLowerCase()}`}
                         allowNa
+                        showSiblingPreview
+                        siblingSuggestions={
+                            key === 'father' ? nameSuggestions : undefined
+                        }
+                        showChain={key !== 'father'}
                         onSelect={
                             key === 'father'
                                 ? (suggestion) =>
@@ -2422,6 +2454,8 @@ export default function FamilyForm({
                             suggestions={fatherSuggestions}
                             placeholder="Nama ayah dari ibu"
                             allowNa
+                            showSiblingPreview
+                            siblingSuggestions={nameSuggestions}
                         />
                         <p className="text-xs text-tb-on-surface-variant">
                             Marga Ayah dari Ibu mengikuti marga Ibu:{' '}
@@ -2605,6 +2639,40 @@ export default function FamilyForm({
                                             </div>
                                         </CardHeader>
                                         <CardContent className="grid gap-5">
+                                            <div className="grid gap-1.5">
+                                                <Label
+                                                    htmlFor="family_tree_name"
+                                                    className="text-tb-on-surface"
+                                                >
+                                                    Nama Keluarga
+                                                </Label>
+                                                <Input
+                                                    id="family_tree_name"
+                                                    value={
+                                                        data.family_tree_name
+                                                    }
+                                                    onChange={(e) =>
+                                                        setData(
+                                                            'family_tree_name',
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    placeholder="Mis. Keluarga Jay SiLaban"
+                                                    maxLength={120}
+                                                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                                />
+                                                <p className="text-xs text-tb-on-surface-variant">
+                                                    Nama ini digunakan untuk
+                                                    membedakan silsilah keluarga
+                                                    Anda.
+                                                </p>
+                                                <InputError
+                                                    message={
+                                                        errors.family_tree_name
+                                                    }
+                                                />
+                                            </div>
+
                                             <div className="grid gap-1.5">
                                                 <Label
                                                     htmlFor="name"
@@ -3920,7 +3988,7 @@ export default function FamilyForm({
                                                             className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                                         />
                                                     </div>
-                                                    <div className="grid gap-1.5 lg:col-span-2">
+                                                    <div className="grid gap-1.5 lg:col-span-3">
                                                         <Label>
                                                             Jenis Kelamin
                                                         </Label>
@@ -3962,7 +4030,7 @@ export default function FamilyForm({
                                                             </SelectContent>
                                                         </Select>
                                                     </div>
-                                                    <div className="grid gap-1.5 lg:col-span-4">
+                                                    <div className="grid gap-1.5 lg:col-span-3">
                                                         <Label>Marga</Label>
                                                         <MargaField
                                                             value={

@@ -2,6 +2,8 @@ import { Link, router } from '@inertiajs/react';
 import { toJpeg } from 'html-to-image';
 import {
     ArrowLeft,
+    Check,
+    ChevronDown,
     ExternalLink,
     Images,
     LoaderCircle,
@@ -22,15 +24,6 @@ import type { DescendantsAlternativeTree } from '@/components/people/descendants
 import { PersonTreePickerDialog } from '@/components/tarombo/person-tree-picker-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-    Select,
-    SelectContent,
-    SelectGroup,
-    SelectItem,
-    SelectLabel,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { buildTaromboPeople } from '@/data/tarombo-tree';
 import type {
@@ -400,6 +393,11 @@ export function TaromboExplorer({
     const [expanded, setExpanded] = useState<'diagram' | 'tree' | null>(null);
     const [treeZoom, setTreeZoom] = useState(1);
     const [showFemaleLineage, setShowFemaleLineage] = useState(false);
+    const [showNodeCircles, setShowNodeCircles] = useState(true);
+    const [familyTreeSearch, setFamilyTreeSearch] = useState('');
+    const [familyTreeSelectorOpen, setFamilyTreeSelectorOpen] =
+        useState(false);
+    const familyTreeBlurTimer = useRef<number | null>(null);
     const [savingSnapshot, setSavingSnapshot] = useState(false);
     const [snapshotMode, setSnapshotMode] = useState(false);
     const snapshotRef = useRef<HTMLDivElement>(null);
@@ -456,6 +454,41 @@ export function TaromboExplorer({
             />
             Silsilah Perempuan Ditampilkan
         </label>
+    );
+
+    const nodeCircleToggle = (
+        <div
+            role="group"
+            aria-label="Tampilan pohon silsilah"
+            className="inline-flex overflow-hidden rounded-lg border border-tb-outline-variant bg-tb-surface-bright shadow-sm"
+        >
+            <button
+                type="button"
+                onClick={() => setShowNodeCircles(true)}
+                aria-pressed={showNodeCircles}
+                className={cn(
+                    'px-3 py-2 text-xs font-semibold transition-colors',
+                    showNodeCircles
+                        ? 'bg-tb-primary text-tb-on-primary'
+                        : 'text-tb-on-surface hover:bg-tb-surface-container',
+                )}
+            >
+                Dengan Bulatan
+            </button>
+            <button
+                type="button"
+                onClick={() => setShowNodeCircles(false)}
+                aria-pressed={!showNodeCircles}
+                className={cn(
+                    'border-l border-tb-outline-variant px-3 py-2 text-xs font-semibold transition-colors',
+                    !showNodeCircles
+                        ? 'bg-tb-primary text-tb-on-primary'
+                        : 'text-tb-on-surface hover:bg-tb-surface-container',
+                )}
+            >
+                Tanpa Bulatan
+            </button>
+        </div>
     );
 
     const descendantAlternativeTrees: DescendantsAlternativeTree[] =
@@ -529,6 +562,11 @@ export function TaromboExplorer({
         ? (margaTreePeople[0]?.id ?? '')
         : treeCenterId;
     const renderedHighlightId = margaTree ? margaIdentity?.id : selectedId;
+    const diagramPeople = margaTree ? renderedTreePeople : people;
+    const diagramCenterPersonId = margaTree
+        ? renderedTreeCenterId
+        : centerPersonId;
+    const diagramSelectedId = margaTree ? margaIdentity?.id : selectedId;
     const ancestorFocusPerson =
         ancestorFocusId && ancestorPeople.length > 0
             ? verticalPeople.find((person) => person.id === ancestorFocusId)
@@ -782,6 +820,37 @@ export function TaromboExplorer({
             : selectedFamilyTreeId !== null
               ? `account:${selectedFamilyTreeId}`
               : undefined;
+    const selectedFamilyTree = familyTreeOptions.find(
+        (tree) => tree.value === selectedOptionValue,
+    );
+    const normalizedFamilyTreeSearch = familyTreeSearch.trim().toLowerCase();
+    const visibleAccountFamilyTrees = accountFamilyTrees.filter((tree) =>
+        tree.name.toLowerCase().includes(normalizedFamilyTreeSearch),
+    );
+    const visibleMargaFamilyTrees = approvedMargaTrees.filter((tree) =>
+        tree.name.toLowerCase().includes(normalizedFamilyTreeSearch),
+    );
+
+    const selectFamilyTree = (selectedOption: TaromboFamilyTreeOption) => {
+        const query =
+            selectedOption.group === 'account'
+                ? {
+                      person: centerPersonId,
+                      family_tree: selectedOption.id,
+                  }
+                : {
+                      marga_id: selectedOption.id,
+                      marga_direction: 'lower' as const,
+                  };
+        const destination = fullscreen
+            ? tarombo.fullscreen({ view: fullscreenView }, { query })
+            : tarombo.index({ query });
+
+        setFamilyTreeSearch('');
+        setFamilyTreeSelectorOpen(false);
+        router.get(destination.url, {}, { preserveScroll: true });
+    };
+
     const familyTreeSelector = (
         <div
             className={cn(
@@ -792,63 +861,118 @@ export function TaromboExplorer({
             <span className="shrink-0 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
                 Silsilah:
             </span>
-            <Select
-                value={selectedOptionValue}
-                onValueChange={(value) => {
-                    const selectedOption = familyTreeOptions.find(
-                        (option) => option.value === value,
-                    );
-
-                    if (!selectedOption) {
-                        return;
+            <div className="relative w-72">
+                <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-emerald-700" />
+                <Input
+                    value={
+                        familyTreeSelectorOpen
+                            ? familyTreeSearch
+                            : (selectedFamilyTree?.name ?? '')
                     }
+                    onFocus={(event) => {
+                        if (familyTreeBlurTimer.current) {
+                            window.clearTimeout(familyTreeBlurTimer.current);
+                        }
 
-                    const query =
-                        selectedOption.group === 'account'
-                            ? {
-                                  person: centerPersonId,
-                                  family_tree: selectedOption.id,
-                              }
-                            : {
-                                  marga_id: selectedOption.id,
-                                  marga_direction: 'lower' as const,
-                              };
-                    const destination = fullscreen
-                        ? tarombo.fullscreen(
-                              { view: fullscreenView },
-                              { query },
-                          )
-                        : tarombo.index({ query });
+                        setFamilyTreeSelectorOpen(true);
+                        event.currentTarget.select();
+                    }}
+                    onChange={(event) => {
+                        setFamilyTreeSearch(event.target.value);
+                        setFamilyTreeSelectorOpen(true);
+                    }}
+                    onBlur={() => {
+                        familyTreeBlurTimer.current = window.setTimeout(() => {
+                            setFamilyTreeSelectorOpen(false);
+                            setFamilyTreeSearch('');
+                        }, 150);
+                    }}
+                    placeholder="Ketik nama silsilah..."
+                    aria-label="Cari silsilah"
+                    className="h-8 border-emerald-300 bg-tb-surface-bright pr-9 pl-8 text-xs focus:border-emerald-500 focus:ring-emerald-500/30"
+                />
+                <button
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                        if (familyTreeBlurTimer.current) {
+                            window.clearTimeout(familyTreeBlurTimer.current);
+                        }
 
-                    router.get(destination.url, {}, { preserveScroll: true });
-                }}
-            >
-                <SelectTrigger className="h-8 w-56 border-emerald-300 bg-tb-surface-bright text-xs focus:ring-emerald-500/30">
-                    <SelectValue placeholder="Pilih silsilah" />
-                </SelectTrigger>
-                <SelectContent>
-                    {accountFamilyTrees.length > 0 && (
-                        <SelectGroup>
-                            <SelectLabel>Silsilah Milik Akun</SelectLabel>
-                            {accountFamilyTrees.map((tree) => (
-                                <SelectItem key={tree.value} value={tree.value}>
-                                    {tree.name}
-                                </SelectItem>
-                            ))}
-                        </SelectGroup>
-                    )}
-                    {approvedMargaTrees.length > 0 && (
-                        <SelectGroup>
-                            <SelectLabel>Daftar Silsilah Marga</SelectLabel>
-                            {approvedMargaTrees.map((tree) => (
-                                <SelectItem key={tree.value} value={tree.value}>
-                                    {tree.name}
-                                </SelectItem>
-                            ))}
-                        </SelectGroup>
-                    )}
-                </SelectContent>
-            </Select>
+                        setFamilyTreeSearch('');
+                        setFamilyTreeSelectorOpen((open) => !open);
+                    }}
+                    aria-label="Buka pilihan silsilah"
+                    aria-expanded={familyTreeSelectorOpen}
+                    className="absolute top-1/2 right-1 flex size-6 -translate-y-1/2 items-center justify-center rounded text-emerald-700 transition-colors hover:bg-emerald-50"
+                >
+                    <ChevronDown className="size-4" />
+                </button>
+                {familyTreeSelectorOpen && (
+                    <div className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-md border border-tb-outline-variant bg-tb-surface-bright p-1 shadow-lg">
+                        {visibleAccountFamilyTrees.length > 0 && (
+                            <div>
+                                <p className="px-2 py-1 text-[10px] font-semibold tracking-wide text-tb-on-surface-variant uppercase">
+                                    Silsilah Milik Akun
+                                </p>
+                                {visibleAccountFamilyTrees.map((tree) => (
+                                    <button
+                                        key={tree.value}
+                                        type="button"
+                                        onMouseDown={(event) => {
+                                            event.preventDefault();
+                                            selectFamilyTree(tree);
+                                        }}
+                                        className={cn(
+                                            'flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs text-tb-on-surface transition-colors hover:bg-tb-surface-container',
+                                            tree.value === selectedOptionValue &&
+                                                'bg-emerald-50 text-emerald-800',
+                                        )}
+                                    >
+                                        {tree.name}
+                                        {tree.value === selectedOptionValue && (
+                                            <Check className="size-3.5 shrink-0" />
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                        {visibleMargaFamilyTrees.length > 0 && (
+                            <div>
+                                <p className="px-2 py-1 text-[10px] font-semibold tracking-wide text-tb-on-surface-variant uppercase">
+                                    Daftar Silsilah Marga
+                                </p>
+                                {visibleMargaFamilyTrees.map((tree) => (
+                                    <button
+                                        key={tree.value}
+                                        type="button"
+                                        onMouseDown={(event) => {
+                                            event.preventDefault();
+                                            selectFamilyTree(tree);
+                                        }}
+                                        className={cn(
+                                            'flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs text-tb-on-surface transition-colors hover:bg-tb-surface-container',
+                                            tree.value === selectedOptionValue &&
+                                                'bg-emerald-50 text-emerald-800',
+                                        )}
+                                    >
+                                        {tree.name}
+                                        {tree.value === selectedOptionValue && (
+                                            <Check className="size-3.5 shrink-0" />
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                        {visibleAccountFamilyTrees.length === 0 &&
+                            visibleMargaFamilyTrees.length === 0 && (
+                                <p className="px-2 py-3 text-center text-xs text-tb-on-surface-variant">
+                                    Silsilah tidak ditemukan.
+                                </p>
+                            )}
+                    </div>
+                )}
+            </div>
         </div>
     );
 
@@ -874,9 +998,9 @@ export function TaromboExplorer({
                     onPaneClick={() => setSelectedId(null)}
                     onBack={handleBack}
                     canGoBack={history.length > 0}
-                    selectedId={selectedId ?? undefined}
-                    centerPersonId={centerPersonId}
-                    people={people}
+                    selectedId={diagramSelectedId ?? undefined}
+                    centerPersonId={diagramCenterPersonId}
+                    people={diagramPeople}
                     margas={margas}
                     context="descendants"
                     allowPan={fullscreen}
@@ -953,6 +1077,7 @@ export function TaromboExplorer({
                     <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
                         {(!margaTree || !fullscreen) && familyTreeSelector}
                         {!margaTree && femaleLineageToggle}
+                        {!fullscreen && nodeCircleToggle}
                     </div>
                 </div>
                 <div style={{ zoom: treeZoom }}>
@@ -977,8 +1102,8 @@ export function TaromboExplorer({
                         }
                         collapseDepth={verticalTreeCollapseDepth}
                         detachedPeople={margaDetachedRoots}
-                        compact={fullscreen && fullscreenView === 'tree'}
-                        currentUserId={identity?.currentUserId}
+                        showNodeAvatar={showNodeCircles}
+                        compact={fullscreen}
                         nodeIdPrefix={
                             fullscreen
                                 ? 'tarombo-fullscreen-tree-node'
@@ -1041,7 +1166,8 @@ export function TaromboExplorer({
                     </div>
                 </div>
                 {fullscreen && (
-                    <div className="flex shrink-0 items-center gap-2">
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                        {nodeCircleToggle}
                         <Button asChild size="sm" variant="outline">
                             <Link href={tarombo.snapshots.index()}>
                                 <Images className="size-4" /> Galeri
@@ -1268,9 +1394,13 @@ export function TaromboExplorer({
                                             }
                                             onBack={handleBack}
                                             canGoBack={history.length > 0}
-                                            selectedId={selectedId ?? undefined}
-                                            centerPersonId={centerPersonId}
-                                            people={people}
+                                            selectedId={
+                                                diagramSelectedId ?? undefined
+                                            }
+                                            centerPersonId={
+                                                diagramCenterPersonId
+                                            }
+                                            people={diagramPeople}
                                             margas={margas}
                                             context="descendants"
                                         />
@@ -1289,6 +1419,7 @@ export function TaromboExplorer({
                                                 {familyTreeSelector}
                                                 {!margaTree &&
                                                     femaleLineageToggle}
+                                                {nodeCircleToggle}
                                             </div>
                                         </div>
                                         <div style={{ zoom: treeZoom }}>
@@ -1326,6 +1457,9 @@ export function TaromboExplorer({
                                                 collapseDepth={verticalTreeCollapseDepth}
                                                 detachedPeople={
                                                     margaDetachedRoots
+                                                }
+                                                showNodeAvatar={
+                                                    showNodeCircles
                                                 }
                                                 nodeIdPrefix="tarombo-mobile-tree-node"
                                                 currentUserId={

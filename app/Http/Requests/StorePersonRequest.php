@@ -18,6 +18,7 @@ class StorePersonRequest extends FormRequest
     {
         $rules = [
             'name' => ['required', 'string', 'max:255'],
+            'family_tree_name' => ['nullable', 'string', 'max:120'],
             'alias' => ['nullable', 'string', 'max:255'],
             'gender' => ['nullable', 'string', 'max:1'],
             'marga_id' => ['nullable', 'exists:margas,id'],
