@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreContactRequest;
+use App\Models\ContactDisconnect;
 use App\Models\ContactRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -15,6 +16,9 @@ class ContactRequestController extends Controller
     {
         $user = $request->user();
         $recipientId = $request->integer('recipient_id');
+        $reconnected = ContactDisconnect::query()
+            ->where(ContactDisconnect::attributesFor($user->id, $recipientId))
+            ->delete() > 0;
         $existing = ContactRequest::query()
             ->where(function ($query) use ($user, $recipientId) {
                 $query->where('requester_id', $user->id)->where('recipient_id', $recipientId)
@@ -22,7 +26,12 @@ class ContactRequestController extends Controller
             })->first();
 
         if ($existing?->status === ContactRequest::STATUS_APPROVED) {
-            return back()->with('toast', ['type' => 'info', 'message' => 'Akun tersebut sudah menjadi kontak Anda.']);
+            return back()->with('toast', [
+                'type' => 'info',
+                'message' => $reconnected
+                    ? 'Kontak berhasil tersambung kembali.'
+                    : 'Akun tersebut sudah menjadi kontak Anda.',
+            ]);
         }
 
         if ($existing?->status === ContactRequest::STATUS_PENDING) {

@@ -24,6 +24,7 @@ type Props = {
     collapseDepth?: number;
     compact?: boolean;
     detachedPeople?: TaromboPerson[];
+    currentUserId?: number;
     showNodeAvatar?: boolean;
 };
 
@@ -52,6 +53,7 @@ function toNode(person: TaromboPerson, displayNumber?: number): TreeNode {
         displayNumber,
         image: person.image,
         pending: person.pending,
+        claimed: (person.claimedAccounts?.length ?? 0) > 0,
     };
 }
 
@@ -346,6 +348,7 @@ export function DescendantsTree({
     collapseDepth,
     compact = false,
     detachedPeople = [],
+    currentUserId,
     showNodeAvatar = true,
 }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -643,6 +646,7 @@ export function DescendantsTree({
                     person={profilePerson}
                     people={people}
                     onClose={() => setProfilePerson(null)}
+                    currentUserId={currentUserId}
                 />
             )}
         </div>

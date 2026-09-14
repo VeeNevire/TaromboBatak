@@ -3,6 +3,7 @@
 use App\Events\MessageRead;
 use App\Events\MessageSent;
 use App\Models\Conversation;
+use App\Models\ContactDisconnect;
 use App\Models\Marga;
 use App\Models\Message;
 use App\Models\MessageAttachment;
@@ -68,6 +69,26 @@ test('users cannot open or message contacts outside their marga', function () {
 
     expect(Conversation::query()->count())->toBe(0)
         ->and(Message::query()->count())->toBe(0);
+});
+
+test('a user can disconnect a contact and loses access to their conversation', function () {
+    $marga = Marga::factory()->create();
+    $user = User::factory()->withMarga($marga->id)->create();
+    $contact = User::factory()->withMarga($marga->id)->create();
+
+    $this->actingAs($user)
+        ->delete(route('contacts.destroy', $contact))
+        ->assertRedirect(route('contacts.index'));
+
+    $disconnect = ContactDisconnect::query()->sole();
+    $this->assertModelExists($disconnect);
+
+    $this->actingAs($user)
+        ->get(route('contacts.index'))
+        ->assertInertia(fn (Assert $page) => $page->has('contacts', 0));
+    $this->actingAs($user)
+        ->get(route('contacts.show', $contact))
+        ->assertForbidden();
 });
 
 test('the incremental messages feed returns only newer messages as json', function () {

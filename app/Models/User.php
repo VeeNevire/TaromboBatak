@@ -101,8 +101,12 @@ class User extends Authenticatable
         return ! $this->isAdmin()
             && ! $contact->isAdmin()
             && $this->id !== $contact->id
+            && ! ContactDisconnect::query()
+                ->where(ContactDisconnect::attributesFor($this->id, $contact->id))
+                ->exists()
             && ($contact->hasActiveMtprotoSession()
                 || ($this->marga_id !== null && $this->marga_id === $contact->marga_id)
+                || Conversation::between($this, $contact)->exists()
                 || ContactRequest::query()
                     ->where('status', ContactRequest::STATUS_APPROVED)
                     ->where(function ($query) use ($contact) {

@@ -15,15 +15,18 @@ use App\Http\Controllers\FamilyTreeAppendRequestController;
 use App\Http\Controllers\FamilyTreeActivityController;
 use App\Http\Controllers\FamilyTreeShareController;
 use App\Http\Controllers\FeedCommentController;
+use App\Http\Controllers\FeedItemEngagementController;
 use App\Http\Controllers\FeedPostController;
 use App\Http\Controllers\FeedPostLikeController;
 use App\Http\Controllers\GroupMessageController;
 use App\Http\Controllers\IdentityRequestController;
 use App\Http\Controllers\IndonesiaRegionController;
 use App\Http\Controllers\KomunitasController;
+use App\Http\Controllers\MargaContributorMessageController;
 use App\Http\Controllers\MargaController;
 use App\Http\Controllers\MessageAttachmentController;
 use App\Http\Controllers\MessageController;
+use App\Http\Controllers\MessageLogController;
 use App\Http\Controllers\NewsFeedController;
 use App\Http\Controllers\PersonController;
 use App\Http\Controllers\SharedFamilyTreePersonController;
@@ -37,6 +40,7 @@ use App\Http\Controllers\TelegramAnnouncementController;
 use App\Http\Controllers\TelegramGroupLinkController;
 use App\Http\Controllers\TelegramMessagesController;
 use App\Http\Controllers\TentangController;
+use App\Http\Controllers\TreeActivityLogController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [NewsFeedController::class, 'index'])->name('home');
@@ -103,6 +107,20 @@ Route::get('regions/villages/{districtCode}', [IndonesiaRegionController::class,
     ->name('regions.villages');
 
 Route::middleware(['auth'])->group(function () {
+    Route::get('dashboard/log-pesan', [MessageLogController::class, 'index'])
+        ->name('message-logs.index');
+    Route::post('dashboard/marga/{marga}/contributors/{contributor}/messages', [MargaContributorMessageController::class, 'store'])
+        ->middleware('throttle:20,1')
+        ->name('marga.contributors.messages.store');
+    Route::get('dashboard/log-pohon-besar', [TreeActivityLogController::class, 'index'])
+        ->name('tree-activity-logs.index');
+    Route::post('dashboard/log-pohon-besar/perubahan/{treeChangeRequest}/setujui', [TreeActivityLogController::class, 'approve'])
+        ->middleware('throttle:20,1')
+        ->name('tree-activity-logs.approve');
+    Route::post('dashboard/log-pohon-besar/perubahan/{treeChangeRequest}/tolak', [TreeActivityLogController::class, 'reject'])
+        ->middleware('throttle:20,1')
+        ->name('tree-activity-logs.reject');
+
     Route::get('telegram/messages', [TelegramMessagesController::class, 'index'])->name('telegram-messages.index');
     Route::post('telegram/messages/sync', [TelegramMessagesController::class, 'sync'])
         ->middleware('throttle:5,1')
@@ -131,9 +149,19 @@ Route::middleware(['auth'])->group(function () {
     Route::post('dashboard/news-feed/statuses/{feedPost}/comments', [FeedCommentController::class, 'store'])
         ->middleware('throttle:60,1')
         ->name('news-feed.posts.comments.store');
+    Route::post('dashboard/news-feed/items/{feedType}/{feedId}/likes', [FeedItemEngagementController::class, 'like'])
+        ->middleware('throttle:60,1')
+        ->name('news-feed.items.likes.store');
+    Route::delete('dashboard/news-feed/items/{feedType}/{feedId}/likes', [FeedItemEngagementController::class, 'unlike'])
+        ->middleware('throttle:60,1')
+        ->name('news-feed.items.likes.destroy');
+    Route::post('dashboard/news-feed/items/{feedType}/{feedId}/comments', [FeedItemEngagementController::class, 'comment'])
+        ->middleware('throttle:60,1')
+        ->name('news-feed.items.comments.store');
 
     Route::get('contacts', [ContactController::class, 'index'])->name('contacts.index');
     Route::get('contacts/{contact}', [ContactController::class, 'show'])->name('contacts.show');
+    Route::delete('contacts/{contact}', [ContactController::class, 'destroy'])->name('contacts.destroy');
     Route::get('contacts/{contact}/messages', [ContactController::class, 'messages'])
         ->name('contacts.messages.index');
     Route::post('contacts/{contact}/messages', [MessageController::class, 'store'])
@@ -181,6 +209,8 @@ Route::middleware(['auth'])->group(function () {
         ->name('tarombo.fullscreen');
     Route::get('dashboard/tarombo/snapshots', [TaromboSnapshotController::class, 'index'])
         ->name('tarombo.snapshots.index');
+    Route::put('dashboard/tarombo/snapshots/ai-prompt', [TaromboSnapshotController::class, 'updatePrompt'])
+        ->name('tarombo.snapshots.prompt.update');
     Route::post('dashboard/tarombo/snapshots', [TaromboSnapshotController::class, 'store'])
         ->middleware('throttle:10,1')
         ->name('tarombo.snapshots.store');
@@ -195,6 +225,8 @@ Route::middleware(['auth'])->group(function () {
         ->name('tarombo-frames.image');
 
     Route::get('people/create', [PersonController::class, 'create'])->name('people.create');
+
+    Route::post('people/resolve-share-code', [PersonController::class, 'resolveShareCode'])->name('people.resolve-share-code');
 
     Route::post('people', [PersonController::class, 'store'])->name('people.store');
 

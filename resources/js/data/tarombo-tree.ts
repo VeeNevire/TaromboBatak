@@ -3,6 +3,7 @@ import taromboRows from '@/data/tarombo-tree.json';
 
 export type TaromboPersonRow = {
     id: string;
+    shareCode?: string;
     name: string;
     alias?: string;
     marga: string;
@@ -20,10 +21,19 @@ export type TaromboPersonRow = {
     chain?: string | null;
     pending?: boolean;
     childrenNames?: string[];
+    claimedAccounts?: ClaimedAccount[];
+};
+
+export type ClaimedAccount = {
+    id: number;
+    name: string;
+    role: string;
+    isContact: boolean;
 };
 
 export type TaromboPerson = {
     id: string;
+    shareCode?: string;
     name: string;
     alias?: string;
     marga: string;
@@ -42,6 +52,7 @@ export type TaromboPerson = {
     chain?: string | null;
     pending?: boolean;
     childrenNames?: string[];
+    claimedAccounts?: ClaimedAccount[];
 };
 
 export type RelatedStory = {

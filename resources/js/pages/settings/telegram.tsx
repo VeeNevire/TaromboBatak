@@ -203,12 +203,13 @@ export default function TelegramSettings({
                                 </div>
                                 <Form
                                     {...telegramMtproto.destroy.form()}
+                                    onBefore={() =>
+                                        window.confirm(
+                                            'Putuskan Telegram dan hapus semua session serta pesan lokal?',
+                                        )
+                                    }
                                     options={{
                                         preserveScroll: true,
-                                        onBefore: () =>
-                                            window.confirm(
-                                                'Putuskan Telegram dan hapus semua session serta pesan lokal?',
-                                            ),
                                     }}
                                 >
                                     {({ processing }) => (

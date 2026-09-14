@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Events\MessageRead;
+use App\Models\ContactDisconnect;
 use App\Models\ContactRequest;
 use App\Models\Conversation;
 use App\Models\Message;
@@ -10,6 +11,7 @@ use App\Models\TelegramAccount;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -140,6 +142,7 @@ class ContactController extends Controller
         }
 
         $conversations = $this->conversationsFor($user);
+        $disconnectedContactIds = ContactDisconnect::otherUserIdsFor($user);
         $contacts = User::query()
             ->with('marga', 'currentPerson', 'telegramAccount')
             ->where(function ($query) use ($user) {
@@ -161,6 +164,7 @@ class ContactController extends Controller
                         ->where('connection_status', TelegramAccount::STATUS_CONNECTED));
             })
             ->where('id', '!=', $user->id)
+            ->whereNotIn('id', $disconnectedContactIds)
             ->where('role', '!=', 'admin')
             ->orderBy('name')
             ->get()
@@ -208,6 +212,22 @@ class ContactController extends Controller
                 ? $this->contactPayload($selectedContact, $conversation)
                 : null,
             'messages' => $messages,
+        ]);
+    }
+
+    public function destroy(Request $request, User $contact): RedirectResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        abort_unless($user->canChatWith($contact), 403);
+
+        ContactDisconnect::query()->firstOrCreate(
+            ContactDisconnect::attributesFor($user->id, $contact->id),
+        );
+
+        return to_route('contacts.index')->with('toast', [
+            'type' => 'success',
+            'message' => 'Kontak berhasil diputus.',
         ]);
     }
 

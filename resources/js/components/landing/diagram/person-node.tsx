@@ -205,8 +205,12 @@ export function PersonNode({ data }: NodeProps) {
             </div>
             <p
                 className={cn(
-                    'mt-1 line-clamp-1 text-center text-[10px] leading-snug font-semibold transition-colors',
-                    selected ? 'text-tb-primary' : 'text-tb-on-surface',
+                    'mt-1 line-clamp-1 rounded px-1 text-center text-[10px] leading-snug font-semibold transition-colors',
+                    (person.claimedAccounts?.length ?? 0) > 0
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                        : selected
+                          ? 'text-tb-primary'
+                          : 'text-tb-on-surface',
                 )}
             >
                 {getShortName(person.name)}

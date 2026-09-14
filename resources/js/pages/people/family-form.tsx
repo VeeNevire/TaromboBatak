@@ -19,6 +19,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import InputError from '@/components/input-error';
+import { AlternativeVersionDialog } from '@/components/people/alternative-version-dialog';
 import { FamilyTreeHistoryCard } from '@/components/people/family-tree-history-card';
 import type {
     ApprovedMargaTreeEntry,
@@ -105,6 +106,7 @@ type ParentEntry = {
     father_name?: string;
     father_marga_id?: number | null;
     father_marga?: string | null;
+    share_code?: string;
 };
 
 export type LineageChild = {
@@ -241,16 +243,43 @@ function FamilyTreeVersionAction({
     iconOnly?: boolean;
     mode?: 'duplicate' | 'open';
 }) {
+    const [alternativeSource, setAlternativeSource] = useState<{
+        submitUrl: string;
+        defaultName: string;
+    } | null>(null);
+
+    const openAlternativeDialog = (submitUrl: string, defaultName: string) => {
+        setAlternativeSource({ submitUrl, defaultName });
+    };
+
+    const alternativeDialog = alternativeSource && (
+        <AlternativeVersionDialog
+            open
+            onOpenChange={(open) => {
+                if (!open) {
+                    setAlternativeSource(null);
+                }
+            }}
+            submitUrl={alternativeSource.submitUrl}
+            defaultName={alternativeSource.defaultName}
+        />
+    );
+
     if (entries.length === 0) {
         if (personId == null) {
             return null;
         }
 
         return (
-            <Link
-                href={people.familyVersion.duplicate(personId)}
-                method="post"
-                as="button"
+            <>
+                <button
+                    type="button"
+                    onClick={() =>
+                        openAlternativeDialog(
+                            people.familyVersion.duplicate(personId).url,
+                            'Versi alternatif keluarga',
+                        )
+                    }
                 aria-label={
                     iconOnly
                         ? 'Salin keluarga menjadi versi alternatif'
@@ -267,10 +296,12 @@ function FamilyTreeVersionAction({
                         ? 'size-6 text-tb-outline opacity-70 hover:bg-tb-primary/10 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none'
                         : 'gap-1.5 px-3 py-2 text-xs font-semibold',
                 )}
-            >
-                <Copy className="size-3.5" />
-                {!iconOnly && ' Salin Versi'}
-            </Link>
+                >
+                    <Copy className="size-3.5" />
+                    {!iconOnly && ' Salin Versi'}
+                </button>
+                {alternativeDialog}
+            </>
         );
     }
 
@@ -292,10 +323,10 @@ function FamilyTreeVersionAction({
 
     if (entries.length === 1) {
         return (
-            <Link
-                href={actionHref(entries[0])}
-                method={isOpenMode ? 'get' : 'post'}
-                as={isOpenMode ? 'a' : 'button'}
+            <>
+                {isOpenMode ? (
+                    <Link
+                        href={actionHref(entries[0])}
                 aria-label={iconOnly ? actionLabel : undefined}
                 title={iconOnly ? actionLabel : undefined}
                 className={cn(
@@ -304,15 +335,40 @@ function FamilyTreeVersionAction({
                         ? 'size-6 text-tb-outline opacity-70 hover:bg-tb-primary/10 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none'
                         : 'gap-1.5 px-3 py-2 text-xs font-semibold',
                 )}
-            >
-                <Icon className="size-3.5" />
-                {!iconOnly && ` ${actionLabel}`}
-            </Link>
+                    >
+                        <Icon className="size-3.5" />
+                        {!iconOnly && ` ${actionLabel}`}
+                    </Link>
+                ) : (
+                    <button
+                        type="button"
+                        onClick={() =>
+                            openAlternativeDialog(
+                                familyTreeRoutes.duplicate(entries[0].id).url,
+                                `${entries[0].name ?? entries[0].root_name} - Versi alternatif`,
+                            )
+                        }
+                        aria-label={iconOnly ? actionLabel : undefined}
+                        title={iconOnly ? actionLabel : undefined}
+                        className={cn(
+                            'inline-flex shrink-0 items-center justify-center rounded-lg border border-tb-outline-variant text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary',
+                            iconOnly
+                                ? 'size-6 text-tb-outline opacity-70 hover:bg-tb-primary/10 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none'
+                                : 'gap-1.5 px-3 py-2 text-xs font-semibold',
+                        )}
+                    >
+                        <Icon className="size-3.5" />
+                        {!iconOnly && ` ${actionLabel}`}
+                    </button>
+                )}
+                {alternativeDialog}
+            </>
         );
     }
 
     return (
-        <DropdownMenu>
+        <>
+            <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <button
                     type="button"
@@ -338,19 +394,36 @@ function FamilyTreeVersionAction({
             <DropdownMenuContent align="end" className="min-w-64">
                 {orderedEntries.map((entry) => (
                     <DropdownMenuItem key={entry.id} asChild>
-                        <Link
-                            href={actionHref(entry)}
-                            method={isOpenMode ? 'get' : 'post'}
-                            as={isOpenMode ? 'a' : 'button'}
-                            className="w-full text-left"
-                        >
-                            {entry.name ?? entry.root_name} (V
-                            {versionNumberById.get(entry.id)})
-                        </Link>
+                        {isOpenMode ? (
+                            <Link
+                                href={actionHref(entry)}
+                                className="w-full text-left"
+                            >
+                                {entry.name ?? entry.root_name} (V
+                                {versionNumberById.get(entry.id)})
+                            </Link>
+                        ) : (
+                            <button
+                                type="button"
+                                className="w-full text-left"
+                                onClick={() =>
+                                    openAlternativeDialog(
+                                        familyTreeRoutes.duplicate(entry.id)
+                                            .url,
+                                        `${entry.name ?? entry.root_name} - Versi alternatif`,
+                                    )
+                                }
+                            >
+                                {entry.name ?? entry.root_name} (V
+                                {versionNumberById.get(entry.id)})
+                            </button>
+                        )}
                     </DropdownMenuItem>
                 ))}
             </DropdownMenuContent>
-        </DropdownMenu>
+            </DropdownMenu>
+            {alternativeDialog}
+        </>
     );
 }
 
@@ -947,6 +1020,7 @@ function toMotherRows(person: FamilyData | null): ParentEntry[] {
                 father_name: entry.father_name ?? '',
                 father_marga_id: entry.father_marga_id ?? null,
                 father_marga: entry.father_marga ?? null,
+                share_code: entry.share_code ?? '',
             }))
             .filter(
                 (entry, index, all) =>
@@ -979,6 +1053,7 @@ function toMotherRows(person: FamilyData | null): ParentEntry[] {
                 father_name: person.mother.father_name ?? '',
                 father_marga_id: person.mother.father_marga_id ?? null,
                 father_marga: person.mother.father_marga ?? null,
+                share_code: person.mother.share_code ?? '',
             },
         ];
     }
@@ -1177,6 +1252,9 @@ export default function FamilyForm({
     const [villagesLoading, setVillagesLoading] = useState(
         Boolean(person?.district_code),
     );
+    const [resolvingMotherIndex, setResolvingMotherIndex] = useState<
+        number | null
+    >(null);
     const initialMotherIndex = (motherId: number | null | undefined) => {
         const index = initialMothers.findIndex(
             (mother) => mother.id === motherId,
@@ -2024,13 +2102,93 @@ export default function FamilyForm({
 
     const setParentEntry = (
         key: ParentKey,
-        field: 'name' | 'alias' | 'birth_year' | 'death_year' | 'father_name',
+        field:
+            | 'name'
+            | 'alias'
+            | 'birth_year'
+            | 'death_year'
+            | 'father_name'
+            | 'share_code',
         value: string,
     ) => {
         updateParent(key, {
             [field]: value,
             ...(key === 'father' && field === 'name' ? { id: null } : {}),
+            ...(typeof key === 'number' && field === 'name'
+                ? { id: null, share_code: '' }
+                : {}),
         });
+    };
+
+    const resolveMotherCode = async (index: number) => {
+        const code = data.mothers[index]?.share_code?.trim();
+
+        if (!code) {
+            toast.error('Tempel kode dari kontributor terlebih dahulu.');
+
+            return;
+        }
+
+        setResolvingMotherIndex(index);
+
+        try {
+            const xsrfToken = document.cookie
+                .split('; ')
+                .find((cookie) => cookie.startsWith('XSRF-TOKEN='))
+                ?.slice('XSRF-TOKEN='.length);
+            const response = await fetch(people.resolveShareCode().url, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    ...(xsrfToken
+                        ? { 'X-XSRF-TOKEN': decodeURIComponent(xsrfToken) }
+                        : {}),
+                },
+                body: JSON.stringify({ code }),
+            });
+            const result = (await response.json()) as {
+                id?: number;
+                name?: string;
+                alias?: string | null;
+                marga_id?: number | null;
+                birth_year?: string | null;
+                death_year?: string | null;
+                code?: string;
+                message?: string;
+                errors?: Record<string, string[]>;
+            };
+
+            if (!response.ok || !result.id || !result.name || !result.code) {
+                throw new Error(
+                    result.errors?.code?.[0] ??
+                        result.message ??
+                        'Kode tidak valid atau data orang tidak ditemukan.',
+                );
+            }
+
+            updateParent(index, {
+                id: result.id,
+                name: result.name,
+                alias: result.alias ?? '',
+                marga_id: result.marga_id ?? null,
+                birth_year: result.birth_year ?? '',
+                death_year: result.death_year ?? '',
+                share_code: result.code,
+                new_marga: '',
+            });
+            toast.success(`${result.name} berhasil ditautkan sebagai istri.`);
+        } catch (error) {
+            toast.error(
+                error instanceof Error
+                    ? error.message
+                    : 'Kode tidak dapat diperiksa.',
+            );
+        } finally {
+            setResolvingMotherIndex(null);
+        }
     };
 
     const setParentMarga = (key: ParentKey, margaId: number | null) => {
@@ -2238,6 +2396,49 @@ export default function FamilyForm({
                         <InputError
                             message={errors[`${errorPrefix}.marga_id`]}
                         />
+                    </div>
+                )}
+                {key !== 'father' && (
+                    <div className="grid gap-2 rounded-lg border border-dashed border-tb-outline-variant bg-tb-surface-container/30 p-3">
+                        <Label
+                            htmlFor={`${errorPrefix}-share-code`}
+                            className="text-tb-on-surface"
+                        >
+                            Kode orang dari kontributor
+                        </Label>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                            <Input
+                                id={`${errorPrefix}-share-code`}
+                                value={entry.share_code ?? ''}
+                                onChange={(event) =>
+                                    setParentEntry(
+                                        key,
+                                        'share_code',
+                                        event.target.value,
+                                    )
+                                }
+                                placeholder="Tempel kode yang diterima"
+                                className="border-tb-outline-variant bg-tb-surface-bright"
+                            />
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => resolveMotherCode(key)}
+                                disabled={resolvingMotherIndex !== null}
+                                className="shrink-0"
+                            >
+                                <Link2 className="size-4" />
+                                {resolvingMotherIndex === key
+                                    ? 'Memeriksa…'
+                                    : 'Sambungkan Kode'}
+                            </Button>
+                        </div>
+                        {entry.id && entry.share_code && (
+                            <p className="text-xs font-medium text-emerald-700">
+                                Data {entry.name} akan ditautkan, tanpa membuat
+                                data orang baru.
+                            </p>
+                        )}
                     </div>
                 )}
                 {key !== 'father' && (

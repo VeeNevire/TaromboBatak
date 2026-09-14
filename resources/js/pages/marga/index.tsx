@@ -5,6 +5,7 @@ import {
     ArrowUp,
     ChevronsUpDown,
     ImagePlus,
+    MessageCircle,
     Pencil,
     Plus,
     Search,
@@ -46,11 +47,17 @@ type MargaItem = {
     identity_person_id: number | null;
     identity_person_name: string | null;
     is_public: boolean;
+    contributors: {
+        id: number;
+        name: string;
+        role: 'contributor_main' | 'contributor_member';
+    }[];
 };
 
 type Props = {
     margas: MargaItem[];
     canManage: boolean;
+    canSendContributorMessage: boolean;
     identityPersonOptions: IdentityPersonOption[];
 };
 
@@ -210,10 +217,12 @@ function ImageInput({
 export default function MargaIndex({
     margas,
     canManage,
+    canSendContributorMessage,
     identityPersonOptions,
 }: Props) {
     const [dialog, setDialog] = useState<null | 'create' | MargaItem>(null);
     const [detailMarga, setDetailMarga] = useState<MargaItem | null>(null);
+    const [messageMargaId, setMessageMargaId] = useState<number | null>(null);
     const [toDelete, setToDelete] = useState<MargaItem | null>(null);
     const [identityPickerOpen, setIdentityPickerOpen] = useState(false);
     const [search, setSearch] = useState('');
@@ -321,7 +330,12 @@ export default function MargaIndex({
                 <MargaDetailDialog
                     key={detailMarga.id}
                     marga={detailMarga}
-                    onClose={() => setDetailMarga(null)}
+                    canSendMessage={canSendContributorMessage}
+                    openMessageOnMount={messageMargaId === detailMarga.id}
+                    onClose={() => {
+                        setDetailMarga(null);
+                        setMessageMargaId(null);
+                    }}
                 />
             )}
 
@@ -543,6 +557,22 @@ export default function MargaIndex({
                                                 </span>
                                             )}
                                         </div>
+                                        {canSendContributorMessage &&
+                                            m.contributors.length > 0 && (
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="mt-1 w-fit"
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        setDetailMarga(m);
+                                                        setMessageMargaId(m.id);
+                                                    }}
+                                                >
+                                                    <MessageCircle className="size-3.5" /> Kirim Pesan
+                                                </Button>
+                                            )}
                                     </CardContent>
                                 </Card>
                             </motion.div>

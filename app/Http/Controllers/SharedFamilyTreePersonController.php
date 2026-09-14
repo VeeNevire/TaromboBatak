@@ -103,6 +103,15 @@ class SharedFamilyTreePersonController extends Controller
             );
         });
 
+        app(TreeActivityLogger::class)->record(
+            $person,
+            $request->user(),
+            'added',
+            "{$person->name} ditambahkan ke silsilah yang dibagikan.",
+            [],
+            $familyTree,
+        );
+
         Inertia::flash('toast', ['type' => 'success', 'message' => "{$person->name} berhasil ditambahkan tanpa mengubah anggota lama."]);
         app(FamilyTreeActivityLogger::class)->log($familyTree, $request->user(), 'added', "Menambahkan anggota {$person->name}.");
 

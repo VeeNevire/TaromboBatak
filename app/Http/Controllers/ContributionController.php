@@ -21,6 +21,7 @@ use App\Notifications\MargaAccessRequested;
 use App\Notifications\StorySubmitted;
 use App\Services\ChainNumberingService;
 use App\Services\FamilyEntryService;
+use App\Services\TreeActivityLogger;
 use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -400,6 +401,19 @@ class ContributionController extends Controller
             }
 
             app(ChainNumberingService::class)->recomputeFromAncestor($contribution->matchedFather);
+            $loggedPersonIds = $affectedIds !== []
+                ? $affectedIds
+                : ($contribution->familyTree?->nodes()->pluck('person_id')->all() ?? []);
+            Person::query()->whereIn('id', $loggedPersonIds)->get()->each(
+                fn (Person $person) => app(TreeActivityLogger::class)->record(
+                    $person,
+                    $request->user(),
+                    'added',
+                    "{$person->name} tersambung ke Pohon Besar setelah persetujuan kontributor.",
+                    ['contribution_request_id' => $contribution->id],
+                    $contribution->familyTree,
+                ),
+            );
             $this->markRequestNotificationsRead($contribution);
         });
 
