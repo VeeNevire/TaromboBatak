@@ -21,8 +21,8 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Button } from '@/components/ui/button';
 import { AlternativeVersionDialog } from '@/components/people/alternative-version-dialog';
+import { Button } from '@/components/ui/button';
 import {
     Card,
     CardContent,
@@ -88,6 +88,7 @@ export type ApprovedMargaTreeEntry = {
     identity_person_id: number;
     identity_person_name: string | null;
     people_count: number;
+    family_tree_id: number | null;
 };
 
 export function ApprovedMargaTreeList({
@@ -189,14 +190,18 @@ export function ApprovedMargaTreeList({
                                         <ArrowDown className="size-3.5" /> Pohon
                                         Bawah
                                     </Link>
-                                    <Link
-                                        href={people.create()}
-                                        aria-label={`Tambah anggota pada silsilah marga ${entry.name}`}
-                                        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-tb-primary px-3 py-2 text-xs font-semibold text-tb-primary transition-colors hover:bg-tb-primary/10"
-                                    >
-                                        <UserPlus className="size-3.5" /> Tambah
-                                        Anggota
-                                    </Link>
+                                    {entry.family_tree_id !== null && (
+                                        <Link
+                                            href={familyTrees.people.create(
+                                                entry.family_tree_id,
+                                            )}
+                                            aria-label={`Tambah anggota pada silsilah marga ${entry.name}`}
+                                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-tb-primary px-3 py-2 text-xs font-semibold text-tb-primary transition-colors hover:bg-tb-primary/10"
+                                        >
+                                            <UserPlus className="size-3.5" />{' '}
+                                            Tambah Anggota
+                                        </Link>
+                                    )}
                                 </div>
                             </li>
                         ))}
@@ -659,9 +664,26 @@ export function FamilyTreeHistoryCard({
                                             >
                                                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                                                     <Link
-                                                        href={familyTrees.show(
-                                                            entry.id,
-                                                        )}
+                                                        href={
+                                                            entry.can_manage
+                                                                ? people.edit(
+                                                                      entry.root_person_id,
+                                                                      {
+                                                                          query: {
+                                                                              version_tree:
+                                                                                  entry.id,
+                                                                          },
+                                                                      },
+                                                                  )
+                                                                : familyTrees.show(
+                                                                      entry.id,
+                                                                  )
+                                                        }
+                                                        aria-label={
+                                                            entry.can_manage
+                                                                ? `Ubah anggota ${entry.name ?? `Silsilah ${entry.root_name}`}`
+                                                                : `Buka ${entry.name ?? `Silsilah ${entry.root_name}`}`
+                                                        }
                                                         className="group flex min-w-0 items-start gap-3"
                                                     >
                                                         <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-tb-surface-bright text-sm font-bold text-tb-on-surface-variant ring-1 ring-tb-outline-variant">
@@ -785,8 +807,14 @@ export function FamilyTreeHistoryCard({
                                                         )}
                                                         {entry.can_manage && (
                                                             <Link
-                                                                href={familyTrees.edit(
-                                                                    entry.id,
+                                                                href={people.edit(
+                                                                    entry.root_person_id,
+                                                                    {
+                                                                        query: {
+                                                                            version_tree:
+                                                                                entry.id,
+                                                                        },
+                                                                    },
                                                                 )}
                                                                 className="inline-flex items-center gap-1.5 rounded-lg border border-tb-outline-variant px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary"
                                                             >

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Event;
 use App\Models\Marga;
 use App\Models\Story;
+use App\Services\TaromboTreeService;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -15,6 +16,9 @@ class DashboardController extends Controller
      */
     public function index(): Response
     {
+        $tarombo = app(TaromboTreeService::class);
+        $publicTree = $tarombo->publicRows();
+
         $stories = Story::query()
             ->publiclyVisible()
             ->latest()
@@ -59,6 +63,8 @@ class DashboardController extends Controller
             'stories' => $stories,
             'events' => $events,
             'margas' => $margas,
+            'taromboPeople' => $publicTree['rows'],
+            'taromboMargas' => $tarombo->margas(publicOnly: true),
         ]);
     }
 }

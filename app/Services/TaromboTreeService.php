@@ -288,24 +288,16 @@ class TaromboTreeService
             );
         }
 
-        $identityRows = collect(
-            $direction === 'upper'
-                ? $this->rowsForPersonWithAncestors($identity)
-                : $this->rowsForPerson(
+        $identityRows = $direction === 'upper'
+            ? collect($this->rowsForPersonWithAncestors($identity))
+            : collect($this->rowsForPersonWithAncestors($identity))
+                ->merge($this->rowsForPerson(
                     $identity,
                     maxDepth: (int) config('tarombo.public_max_depth'),
                     maxNodes: (int) config('tarombo.public_max_nodes'),
-                ),
-        );
+                ));
 
         return $identityRows
-            ->when($direction === 'lower', fn (Collection $rows) => $rows->merge(
-                $this->rows(
-                    Person::query()
-                        ->where('marga_id', $marga->id)
-                        ->orderBy('id'),
-                ),
-            ))
             ->unique('id')
             ->values()
             ->all();

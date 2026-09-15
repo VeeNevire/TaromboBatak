@@ -6,12 +6,16 @@ import { ProfileCard } from '@/components/landing/profile-card';
 import { TaromboDiagram } from '@/components/landing/tarombo-diagram';
 import { stats } from '@/data/landing';
 import {
+    buildTaromboPeople,
     findPerson,
     findPersonChildren,
-    MOCK_TAROMBO,
     oldestOfMarga,
 } from '@/data/tarombo-tree';
-import type { TaromboPerson } from '@/data/tarombo-tree';
+import type {
+    MargaInfo,
+    TaromboPerson,
+    TaromboPersonRow,
+} from '@/data/tarombo-tree';
 import tarombo from '@/routes/tarombo';
 
 const DEFAULT_PERSON_ID = 'tuan-sorimangaraja';
@@ -30,14 +34,24 @@ const item = {
     },
 };
 
-export function Hero() {
+export function Hero({
+    people: rows,
+    margas,
+}: {
+    people: TaromboPersonRow[];
+    margas: MargaInfo[];
+}) {
+    const people = useMemo(() => buildTaromboPeople(rows), [rows]);
+    const rootPerson = people.find((person) => !person.parentId) ?? people[0];
+    const defaultCenterPersonId =
+        findPerson(people, DEFAULT_PERSON_ID)?.id ?? rootPerson?.id ?? '';
     const [selected, setSelected] = useState<TaromboPerson | null>(null);
     const [centerPersonId, setCenterPersonId] =
-        useState<string>(DEFAULT_PERSON_ID);
+        useState<string>(defaultCenterPersonId);
     const [history, setHistory] = useState<string[]>([]);
     const children = useMemo(
-        () => (selected ? findPersonChildren(MOCK_TAROMBO, selected.id) : []),
-        [selected],
+        () => (selected ? findPersonChildren(people, selected.id) : []),
+        [people, selected],
     );
 
     const handlePersonSelect = (person: TaromboPerson) => {
@@ -57,7 +71,7 @@ export function Hero() {
     };
 
     const handleMargaSelect = (margaName: string) => {
-        const person = oldestOfMarga(MOCK_TAROMBO, margaName);
+        const person = oldestOfMarga(people, margaName);
 
         if (!person || person.id === centerPersonId) {
             return;
@@ -76,11 +90,11 @@ export function Hero() {
         const prev = history[history.length - 1];
         setHistory((prevHistory) => prevHistory.slice(0, -1));
 
-        if (prev === DEFAULT_PERSON_ID) {
+        if (prev === defaultCenterPersonId) {
             setSelected(null);
-            setCenterPersonId(DEFAULT_PERSON_ID);
+            setCenterPersonId(defaultCenterPersonId);
         } else {
-            setSelected(findPerson(MOCK_TAROMBO, prev) ?? null);
+            setSelected(findPerson(people, prev) ?? null);
             setCenterPersonId(prev);
         }
     };
@@ -171,7 +185,9 @@ export function Hero() {
                     selectedId={selected?.id}
                     centerPersonId={centerPersonId}
                     context="descendants"
-                    maxDepth={2}
+                    maxDepth={11}
+                    people={people}
+                    margas={margas}
                     bubbleTrigger="hover"
                     enableSearch
                     onSearchSelect={handleSearchSelect}

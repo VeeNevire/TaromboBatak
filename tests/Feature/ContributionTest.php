@@ -262,6 +262,7 @@ test('approved marga access exposes a staff tree without contribution approval a
         'user_id' => $admin->id,
         'root_person_id' => $root->id,
         'name' => 'Tarombo Borbor Admin',
+        'is_primary' => true,
     ]);
     FamilyTreeNode::create([
         'family_tree_id' => $tree->id,
@@ -278,7 +279,15 @@ test('approved marga access exposes a staff tree without contribution approval a
         ->get(route('people.create'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('approvedMargaTrees.0.id', $marga->id));
+            ->where('approvedMargaTrees.0.id', $marga->id)
+            ->where('approvedMargaTrees.0.family_tree_id', $tree->id));
+
+    $this->actingAs($viewer)
+        ->get(route('family-trees.people.create', $tree))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('people/shared-tree-person-form')
+            ->where('familyTree.id', $tree->id));
 
     $this->actingAs($viewer)
         ->get(route('family-trees.show', $tree))

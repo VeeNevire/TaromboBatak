@@ -8,6 +8,7 @@ import { NewsletterSection } from '@/components/landing/newsletter-section';
 import { SiteFooter } from '@/components/landing/site-footer';
 import { StoriesSection } from '@/components/landing/stories-section';
 import { TestimonialsSection } from '@/components/landing/testimonials-section';
+import type { MargaInfo, TaromboPersonRow } from '@/data/tarombo-tree';
 
 type StoryItem = {
     id: number;
@@ -35,15 +36,23 @@ export type HomeProps = {
     stories: StoryItem[];
     events: EventItem[];
     margas: MargaItem[];
+    taromboPeople: TaromboPersonRow[];
+    taromboMargas: MargaInfo[];
 };
 
-export default function Home({ stories, events, margas }: HomeProps) {
+export default function Home({
+    stories,
+    events,
+    margas,
+    taromboPeople,
+    taromboMargas,
+}: HomeProps) {
     return (
         <MotionConfig reducedMotion="user">
             <div className="bg-tb-surface font-body text-tb-on-surface antialiased">
                 <Head title="Tarombo Batak" />
                 <main>
-                    <Hero />
+                    <Hero people={taromboPeople} margas={taromboMargas} />
                     <FeaturesSection />
                     <MargaDirectory margas={margas} />
                     <section

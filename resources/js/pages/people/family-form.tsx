@@ -2343,6 +2343,7 @@ export default function FamilyForm({
                             key === 'father' ? nameSuggestions : undefined
                         }
                         showChain={key !== 'father'}
+                        maxResults={key === 'father' ? null : undefined}
                         onSelect={
                             key === 'father'
                                 ? (suggestion) =>
@@ -3967,29 +3968,46 @@ export default function FamilyForm({
                                                     </div>
                                                     <div className="grid gap-1.5 lg:col-span-3">
                                                         <Label>Nama</Label>
-                                                        <NameCombobox
-                                                            value={child.name}
-                                                            onChange={(value) =>
-                                                                setOwnChild(
-                                                                    index,
-                                                                    'name',
+                                                        {canPublish ? (
+                                                            <NameCombobox
+                                                                value={child.name}
+                                                                onChange={(
                                                                     value,
-                                                                )
-                                                            }
-                                                            onSelect={(
-                                                                suggestion,
-                                                            ) =>
-                                                                selectOwnChild(
-                                                                    index,
+                                                                ) =>
+                                                                    setOwnChild(
+                                                                        index,
+                                                                        'name',
+                                                                        value,
+                                                                    )
+                                                                }
+                                                                onSelect={(
                                                                     suggestion,
-                                                                )
-                                                            }
-                                                            suggestions={
-                                                                nameSuggestions
-                                                            }
-                                                            placeholder="Nama anak"
-                                                            showSiblingPreview
-                                                        />
+                                                                ) =>
+                                                                    selectOwnChild(
+                                                                        index,
+                                                                        suggestion,
+                                                                    )
+                                                                }
+                                                                suggestions={
+                                                                    nameSuggestions
+                                                                }
+                                                                placeholder="Nama anak"
+                                                                showSiblingPreview
+                                                            />
+                                                        ) : (
+                                                            <Input
+                                                                value={child.name}
+                                                                onChange={(e) =>
+                                                                    setOwnChild(
+                                                                        index,
+                                                                        'name',
+                                                                        e.target
+                                                                            .value,
+                                                                    )
+                                                                }
+                                                                placeholder="Nama anak"
+                                                            />
+                                                        )}
                                                     </div>
                                                     <div className="grid gap-1.5 lg:col-span-3">
                                                         <Label>
@@ -4514,7 +4532,7 @@ export default function FamilyForm({
                                                                 {data.name ||
                                                                     '—'}
                                                             </div>
-                                                        ) : (
+                                                        ) : canPublish ? (
                                                             <NameCombobox
                                                                 value={
                                                                     child.name
@@ -4547,6 +4565,23 @@ export default function FamilyForm({
                                                                         : 'Nama saudara'
                                                                 }
                                                                 allowNa
+                                                            />
+                                                        ) : (
+                                                            <Input
+                                                                value={child.name}
+                                                                onChange={(e) =>
+                                                                    setChild(
+                                                                        index,
+                                                                        'name',
+                                                                        e.target
+                                                                            .value,
+                                                                    )
+                                                                }
+                                                                placeholder={
+                                                                    isGapRow(child)
+                                                                        ? 'N/A'
+                                                                        : 'Nama saudara'
+                                                                }
                                                             />
                                                         )}
                                                     </div>

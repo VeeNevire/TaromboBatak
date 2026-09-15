@@ -1477,6 +1477,28 @@ test('the create form suggests only male people as fathers', function () {
                 ->pluck('name')->all() === ['Calon Ayah']));
 });
 
+test('father suggestions include every eligible person without a result limit', function () {
+    $marga = Marga::factory()->create();
+
+    foreach (range(1, 301) as $number) {
+        Person::factory()->create([
+            'name' => "Kandidat Ayah {$number}",
+            'gender' => 'L',
+            'marga_id' => $marga->id,
+        ]);
+    }
+
+    $this->actingAs($this->admin)
+        ->get(route('people.create'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('fatherSuggestions', fn ($suggestions) => collect($suggestions)
+                ->count() === 301
+                && collect($suggestions)
+                    ->pluck('name')
+                    ->contains('Kandidat Ayah 301')));
+});
+
 test('name suggestions keep duplicate names distinguishable by their father', function () {
     $firstFather = Person::factory()->create(['name' => 'Bapak Pertama', 'gender' => 'L']);
     $secondFather = Person::factory()->create(['name' => 'Bapak Kedua', 'gender' => 'L']);

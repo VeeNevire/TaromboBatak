@@ -1598,6 +1598,7 @@ class PersonController extends Controller
     protected function fatherSuggestions(?Person $person = null, int|\Illuminate\Support\Collection|null $margaId = null): array
     {
         return Person::query()
+            ->select(['id', 'name', 'gender', 'marga_id', 'father_id'])
             ->with(['father:id,name', 'marga:id,name'])
             ->when($margaId instanceof \Illuminate\Support\Collection, fn ($query) => $query->whereIn('marga_id', $margaId))
             ->when(is_int($margaId), fn ($query) => $query->where('marga_id', $margaId))
@@ -1608,7 +1609,6 @@ class PersonController extends Controller
             ->where('name', '!=', 'N/A')
             ->orderBy('name')
             ->orderBy('father_id')
-            ->limit(300)
             ->get()
             ->map(fn (Person $father) => [
                 'id' => $father->id,
@@ -1694,19 +1694,32 @@ class PersonController extends Controller
             return [];
         }
 
-        return Marga::query()
+        $margas = Marga::query()
             ->whereNotNull('identity_person_id')
             ->when($margaIds !== null, fn ($query) => $query->whereKey($margaIds))
             ->with('identityPerson:id,name')
             ->withCount('people')
             ->orderBy('name')
-            ->get(['id', 'name', 'identity_person_id'])
+            ->get(['id', 'name', 'identity_person_id']);
+
+        $treesByRootPersonId = FamilyTree::query()
+            ->whereIn('root_person_id', $margas->pluck('identity_person_id'))
+            ->orderByDesc('is_primary')
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->get(['id', 'root_person_id'])
+            ->unique('root_person_id')
+            ->keyBy('root_person_id');
+
+        return $margas
             ->map(fn (Marga $marga): array => [
                 'id' => $marga->id,
                 'name' => $marga->name,
                 'identity_person_id' => $marga->identity_person_id,
                 'identity_person_name' => $marga->identityPerson?->name,
                 'people_count' => $marga->people_count,
+                'family_tree_id' => $treesByRootPersonId
+                    ->get($marga->identity_person_id)?->id,
             ])
             ->values()
             ->all();
