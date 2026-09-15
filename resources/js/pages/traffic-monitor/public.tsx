@@ -3,7 +3,7 @@ import { BarChart3, ExternalLink } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import home from '@/routes/home';
+import { home } from '@/routes';
 
 type TrafficMonitorPublicProps = {
     reportUrl: string | null;
