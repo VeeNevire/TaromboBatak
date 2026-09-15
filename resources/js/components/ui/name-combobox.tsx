@@ -27,6 +27,7 @@ type NameComboboxProps = {
     showSiblingPreview?: boolean;
     siblingSuggestions?: Array<string | NameSuggestion>;
     showChain?: boolean;
+    maxResults?: number | null;
 };
 
 export function NameCombobox({
@@ -40,6 +41,7 @@ export function NameCombobox({
     showSiblingPreview = false,
     siblingSuggestions,
     showChain = true,
+    maxResults = 12,
 }: NameComboboxProps) {
     const [open, setOpen] = useState(false);
     const [highlighted, setHighlighted] = useState(-1);
@@ -67,8 +69,8 @@ export function NameCombobox({
             return `${name} ${context}`.trim().toLowerCase().includes(query);
         });
 
-        return matches.slice(0, 12);
-    }, [suggestions, query]);
+        return maxResults === null ? matches : matches.slice(0, maxResults);
+    }, [maxResults, suggestions, query]);
 
     const rows: Array<string | NameSuggestion> = allowNa
         ? [...filtered, '__NA__']

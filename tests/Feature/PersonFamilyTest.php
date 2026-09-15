@@ -210,13 +210,21 @@ test('a signed person code links an existing wife shared by another contributor'
         'marga_id' => $wifeMarga->id,
         'created_by' => $this->admin->id,
     ]);
+    $wifeFather = Person::factory()->create([
+        'name' => 'Ompu Panjaitan',
+        'gender' => 'L',
+        'marga_id' => $wifeMarga->id,
+    ]);
+    $wife->update(['father_id' => $wifeFather->id]);
     $code = app(PersonShareCode::class)->for($wife);
 
     $this->actingAs($contributor)
         ->postJson(route('people.resolve-share-code'), ['code' => $code])
         ->assertOk()
         ->assertJsonPath('id', $wife->id)
-        ->assertJsonPath('name', 'Boru Panjaitan');
+        ->assertJsonPath('name', 'Boru Panjaitan')
+        ->assertJsonPath('father_id', $wifeFather->id)
+        ->assertJsonPath('father_name', $wifeFather->name);
 
     $this->actingAs($contributor)->post(route('people.store'), [
         'name' => 'Anak Sitorus',
@@ -1475,6 +1483,28 @@ test('the create form suggests only male people as fathers', function () {
         ->assertInertia(fn (Assert $page) => $page
             ->where('fatherSuggestions', fn ($suggestions) => collect($suggestions)
                 ->pluck('name')->all() === ['Calon Ayah']));
+});
+
+test('father suggestions include every eligible person without a result limit', function () {
+    $marga = Marga::factory()->create();
+
+    foreach (range(1, 301) as $number) {
+        Person::factory()->create([
+            'name' => "Kandidat Ayah {$number}",
+            'gender' => 'L',
+            'marga_id' => $marga->id,
+        ]);
+    }
+
+    $this->actingAs($this->admin)
+        ->get(route('people.create'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('fatherSuggestions', fn ($suggestions) => collect($suggestions)
+                ->count() === 301
+                && collect($suggestions)
+                    ->pluck('name')
+                    ->contains('Kandidat Ayah 301')));
 });
 
 test('name suggestions keep duplicate names distinguishable by their father', function () {

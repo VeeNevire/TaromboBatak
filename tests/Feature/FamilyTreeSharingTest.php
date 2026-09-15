@@ -179,6 +179,71 @@ test('the shared member form only offers leaf male nodes as fathers', function (
             ]));
 });
 
+test('the shared member form limits mothers to the selected father wives', function () {
+    $marga = Marga::factory()->create();
+    $owner = User::factory()->withMarga($marga->id)->create();
+    $recipient = User::factory()->withMarga($marga->id)->create();
+    ['tree' => $tree, 'root' => $father, 'node' => $fatherNode] = sharingTree($owner, $marga);
+    $wife = Person::factory()->create(['name' => 'Istri Raja Sharing', 'gender' => 'P']);
+    $unrelatedWoman = Person::factory()->create(['name' => 'Bukan Istri', 'gender' => 'P']);
+
+    $father->wives()->attach($wife->id, ['position' => 1]);
+
+    $wifeNode = FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $wife->id,
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $unrelatedWoman->id,
+    ]);
+    $tree->people()->attach([$wife->id, $unrelatedWoman->id]);
+    FamilyTreeShare::create([
+        'family_tree_id' => $tree->id,
+        'sender_id' => $owner->id,
+        'recipient_id' => $recipient->id,
+        'status' => FamilyTreeShare::STATUS_ACCEPTED,
+    ]);
+
+    $this->actingAs($recipient)
+        ->get(route('family-trees.people.create', $tree))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where("motherOptionsByFather.{$fatherNode->id}", [[
+                'id' => $wifeNode->id,
+                'name' => 'Istri Raja Sharing',
+                'chain' => null,
+            ]]));
+});
+
+test('a shared member cannot select a mother unrelated to the selected father', function () {
+    $marga = Marga::factory()->create();
+    $owner = User::factory()->withMarga($marga->id)->create();
+    $recipient = User::factory()->withMarga($marga->id)->create();
+    ['tree' => $tree, 'node' => $fatherNode] = sharingTree($owner, $marga);
+    $unrelatedWoman = Person::factory()->create(['gender' => 'P']);
+    $unrelatedNode = FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $unrelatedWoman->id,
+    ]);
+    $tree->people()->attach($unrelatedWoman->id);
+    FamilyTreeShare::create([
+        'family_tree_id' => $tree->id,
+        'sender_id' => $owner->id,
+        'recipient_id' => $recipient->id,
+        'status' => FamilyTreeShare::STATUS_ACCEPTED,
+    ]);
+
+    $this->actingAs($recipient)
+        ->post(route('family-trees.people.store', $tree), [
+            'name' => 'Anak Baru',
+            'gender' => 'L',
+            'father_node_id' => $fatherNode->id,
+            'mother_node_id' => $unrelatedNode->id,
+        ])
+        ->assertSessionHasErrors('mother_node_id');
+});
+
 test('a shared recipient cannot manage duplicate or reshare the tree', function () {
     $marga = Marga::factory()->create();
     $owner = User::factory()->withMarga($marga->id)->create();

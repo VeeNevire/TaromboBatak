@@ -15,6 +15,19 @@ test('guests can open the news feed in read-only mode', function () {
             ->component('news-feed/index'));
 });
 
+test('opening the news feed marks it as read for an authenticated user', function () {
+    $user = User::factory()->create([
+        'news_feed_read_at' => now()->subHour(),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('news-feed.index'))
+        ->assertOk();
+
+    expect($user->fresh()->news_feed_read_at?->greaterThan(now()->subMinute()))
+        ->toBeTrue();
+});
+
 test('the home route opens the public news feed', function () {
     $this->get(route('home'))
         ->assertOk()

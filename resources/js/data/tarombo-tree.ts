@@ -13,6 +13,7 @@ export type TaromboPersonRow = {
     birthOrder?: number | null;
     gender?: string | null;
     spouse?: string | null;
+    spouses?: TaromboSpouse[];
     image?: string | null;
     bio?: string;
     createdBy?: string | null;
@@ -31,6 +32,13 @@ export type ClaimedAccount = {
     isContact: boolean;
 };
 
+export type TaromboSpouse = {
+    id: string;
+    name: string;
+    fatherName?: string | null;
+    fatherMarga?: string | null;
+};
+
 export type TaromboPerson = {
     id: string;
     shareCode?: string;
@@ -44,6 +52,7 @@ export type TaromboPerson = {
     birthOrder?: number | null;
     gender?: string | null;
     spouse?: string | null;
+    spouses?: TaromboSpouse[];
     image?: string | null;
     bio?: string;
     createdBy?: string | null;

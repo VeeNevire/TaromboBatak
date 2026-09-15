@@ -42,11 +42,13 @@ export function PersonSummaryDialog({
     people,
     onClose,
     currentUserId,
+    versionTreeId,
 }: {
     person: TaromboPerson | null;
     people: TaromboPerson[];
     onClose: () => void;
     currentUserId?: number;
+    versionTreeId?: number | null;
 }) {
     const [connectingAccountId, setConnectingAccountId] = useState<
         number | null
@@ -317,6 +319,23 @@ export function PersonSummaryDialog({
                                         {person.spouse || 'Belum dicatat'}
                                     </dd>
                                 </div>
+                                {(person.spouses ?? []).map((spouse) => (
+                                    <div
+                                        key={spouse.id}
+                                        className="grid gap-1 rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 py-2"
+                                    >
+                                        <dt className="text-tb-on-surface-variant">
+                                            Ayah dari Ibu {spouse.name}
+                                        </dt>
+                                        <dd className="font-medium text-tb-on-surface">
+                                            {spouse.fatherName ??
+                                                'Belum dicatat'}
+                                            {spouse.fatherMarga
+                                                ? ` (${spouse.fatherMarga})`
+                                                : ''}
+                                        </dd>
+                                    </div>
+                                ))}
                                 <div className="grid gap-1">
                                     <dt className="text-tb-on-surface-variant">
                                         Anak
@@ -418,6 +437,10 @@ export function PersonSummaryDialog({
                                 <Link
                                     href={peopleRoutes.show({
                                         person: Number(person.id),
+                                    }, {
+                                        query: versionTreeId
+                                            ? { version_tree: versionTreeId }
+                                            : {},
                                     })}
                                 >
                                     Lihat Detail
@@ -427,6 +450,10 @@ export function PersonSummaryDialog({
                                 <Link
                                     href={peopleRoutes.edit({
                                         person: Number(person.id),
+                                    }, {
+                                        query: versionTreeId
+                                            ? { version_tree: versionTreeId }
+                                            : {},
                                     })}
                                 >
                                     <Pencil className="size-4" />

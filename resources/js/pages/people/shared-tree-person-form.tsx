@@ -31,7 +31,7 @@ type MemberRow = {
 type Props = {
     familyTree: { id: number; name: string; requires_approval: boolean };
     fatherOptions: NodeOption[];
-    motherOptions: NodeOption[];
+    motherOptionsByFather: Record<string, NodeOption[]>;
 };
 
 const MAX_EXTRA_ROWS = 20;
@@ -75,7 +75,7 @@ const emptyMemberRow = (): MemberRow => ({
 export default function SharedTreePersonForm({
     familyTree,
     fatherOptions,
-    motherOptions,
+    motherOptionsByFather,
 }: Props) {
     const { data, setData, post, transform, processing, errors } = useForm({
         name: '',
@@ -94,6 +94,8 @@ export default function SharedTreePersonForm({
     });
 
     const canHaveChildren = data.gender === 'L';
+    const motherOptions =
+        motherOptionsByFather[data.father_node_id] ?? [];
 
     const addRow = (kind: 'children' | 'siblings') => {
         setData(kind, [...data[kind], emptyMemberRow()]);
@@ -548,6 +550,52 @@ export default function SharedTreePersonForm({
                                     </div>
                                 </CardContent>
                             </Card>
+
+                            {canHaveChildren && (
+                                <Card className="border-tb-outline-variant bg-tb-surface-bright">
+                                    <CardHeader>
+                                        <CardTitle className="flex items-center gap-2 font-display text-lg text-tb-on-surface">
+                                            <Users className="size-4 text-tb-primary" />{' '}
+                                            Daftar Anak
+                                        </CardTitle>
+                                        <CardDescription>
+                                            Anak dari anggota yang sedang
+                                            ditambahkan (opsional). Marga anak
+                                            akan mengikuti marga ayah secara
+                                            otomatis.
+                                        </CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="grid gap-4">
+                                        {data.children.map((row, index) =>
+                                            renderMemberRow(
+                                                'children',
+                                                row,
+                                                index,
+                                            ),
+                                        )}
+                                        {errors.children && (
+                                            <InputError
+                                                message={errors.children}
+                                            />
+                                        )}
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={
+                                                data.children.length >=
+                                                MAX_EXTRA_ROWS
+                                            }
+                                            onClick={() => addRow('children')}
+                                            className="w-fit"
+                                        >
+                                            <Plus className="size-4" />{' '}
+                                            Tambah Anak
+                                        </Button>
+                                    </CardContent>
+                                </Card>
+                            )}
+
                             <Card className="border-tb-outline-variant bg-tb-surface-bright">
                                 <CardHeader>
                                     <CardTitle className="font-display text-lg text-tb-on-surface">
@@ -573,12 +621,13 @@ export default function SharedTreePersonForm({
                                             id="father_node_id"
                                             required
                                             value={data.father_node_id}
-                                            onChange={(e) =>
+                                            onChange={(e) => {
                                                 setData(
                                                     'father_node_id',
                                                     e.target.value,
-                                                )
-                                            }
+                                                );
+                                                setData('mother_node_id', '');
+                                            }}
                                             className="h-10 w-full rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 text-sm text-tb-on-surface focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20 focus:outline-none"
                                         >
                                             <option value="">
@@ -683,51 +732,6 @@ export default function SharedTreePersonForm({
                                     </div>
                                 </CardContent>
                             </Card>
-
-                            {canHaveChildren && (
-                                <Card className="border-tb-outline-variant bg-tb-surface-bright">
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2 font-display text-lg text-tb-on-surface">
-                                            <Users className="size-4 text-tb-primary" />{' '}
-                                            Data Anak
-                                        </CardTitle>
-                                        <CardDescription>
-                                            Anak dari anggota yang sedang
-                                            ditambahkan (opsional). Marga anak
-                                            akan mengikuti marga ayah secara
-                                            otomatis.
-                                        </CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="grid gap-4">
-                                        {data.children.map((row, index) =>
-                                            renderMemberRow(
-                                                'children',
-                                                row,
-                                                index,
-                                            ),
-                                        )}
-                                        {errors.children && (
-                                            <InputError
-                                                message={errors.children}
-                                            />
-                                        )}
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            disabled={
-                                                data.children.length >=
-                                                MAX_EXTRA_ROWS
-                                            }
-                                            onClick={() => addRow('children')}
-                                            className="w-fit"
-                                        >
-                                            <Plus className="size-4" />{' '}
-                                            Tambah Anak
-                                        </Button>
-                                    </CardContent>
-                                </Card>
-                            )}
 
                             <Card className="border-tb-outline-variant bg-tb-surface-bright">
                                 <CardHeader>

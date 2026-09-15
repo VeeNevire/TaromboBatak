@@ -106,6 +106,9 @@ test('members can open and send messages while outsiders are rejected', function
             ->component('groups/show')
             ->where('group.name', 'Grup Keluarga'));
 
+    expect($group->memberships()->where('user_id', $member->id)->value('last_read_at'))
+        ->not->toBeNull();
+
     $this->actingAs($member)
         ->post(route('groups.messages.store', $group), ['body' => '  Horas semua  '])
         ->assertRedirect(route('groups.show', $group));

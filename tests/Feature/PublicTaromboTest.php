@@ -44,6 +44,29 @@ test('the public tarombo excludes private people and sensitive person fields', f
             ->where('stats.totalPeople', 2));
 });
 
+test('the dashboard Tarombo preview uses the same public branch data as the full page', function () {
+    $marga = Marga::factory()->create();
+    $ancestor = Person::factory()->public()->create(['marga_id' => $marga->id]);
+    $child = Person::factory()->public()->create([
+        'marga_id' => $marga->id,
+        'father_id' => $ancestor->id,
+        'birth_order' => 1,
+    ]);
+    Person::factory()->public()->create([
+        'marga_id' => $marga->id,
+        'father_id' => $child->id,
+        'birth_order' => 1,
+    ]);
+
+    $this->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('dashboard')
+            ->has('taromboPeople', 3)
+            ->where('taromboPeople.1.parentId', (string) $ancestor->id)
+            ->where('taromboPeople.2.parentId', (string) $child->id));
+});
+
 test('a regular user cannot publish family data directly', function () {
     $marga = Marga::factory()->create();
     $user = User::factory()->withMarga($marga->id)->create();

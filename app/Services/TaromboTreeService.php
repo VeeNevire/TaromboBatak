@@ -29,6 +29,7 @@ class TaromboTreeService
                 : $query->where('marga_id', $margaId))
             ->with([
                 'marga',
+                'wives.father.marga',
                 'creator:id,name',
                 'claimingUsers:id,name,role,current_person_id',
             ])
@@ -59,6 +60,7 @@ class TaromboTreeService
                 'pending' => $node['pending_father'],
                 'gender' => $person->gender,
                 'spouse' => $person->spouse,
+                'spouses' => $this->spousesFor($person),
                 'image' => $person->image,
                 'bio' => $person->bio,
                 'createdBy' => $person->creator?->name,
@@ -92,6 +94,7 @@ class TaromboTreeService
         return $query
             ->with([
                 'marga',
+                'wives.father.marga',
                 'creator:id,name',
                 'claimingUsers:id,name,role,current_person_id',
                 'children' => fn ($query) => $query
@@ -113,6 +116,7 @@ class TaromboTreeService
                 'pending' => (bool) $person->pending_father,
                 'gender' => $person->gender,
                 'spouse' => $person->spouse,
+                'spouses' => $this->spousesFor($person),
                 'image' => $person->image,
                 'bio' => $person->bio,
                 'createdBy' => $person->creator?->name,
@@ -128,6 +132,21 @@ class TaromboTreeService
                     ->all(),
             ])
             ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, array{id: string, name: string, fatherName: string|null, fatherMarga: string|null}>
+     */
+    protected function spousesFor(Person $person): array
+    {
+        return $person->wives
+            ->map(fn (Person $wife): array => [
+                'id' => (string) $wife->id,
+                'name' => $wife->name,
+                'fatherName' => $wife->father?->name,
+                'fatherMarga' => $wife->father?->marga?->name,
+            ])
             ->all();
     }
 
@@ -288,24 +307,16 @@ class TaromboTreeService
             );
         }
 
-        $identityRows = collect(
-            $direction === 'upper'
-                ? $this->rowsForPersonWithAncestors($identity)
-                : $this->rowsForPerson(
+        $identityRows = $direction === 'upper'
+            ? collect($this->rowsForPersonWithAncestors($identity))
+            : collect($this->rowsForPersonWithAncestors($identity))
+                ->merge($this->rowsForPerson(
                     $identity,
                     maxDepth: (int) config('tarombo.public_max_depth'),
                     maxNodes: (int) config('tarombo.public_max_nodes'),
-                ),
-        );
+                ));
 
         return $identityRows
-            ->when($direction === 'lower', fn (Collection $rows) => $rows->merge(
-                $this->rows(
-                    Person::query()
-                        ->where('marga_id', $marga->id)
-                        ->orderBy('id'),
-                ),
-            ))
             ->unique('id')
             ->values()
             ->all();
