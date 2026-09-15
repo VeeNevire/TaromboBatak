@@ -16,6 +16,45 @@ use Illuminate\Support\Collection;
 class NewsFeedService
 {
     /**
+     * Count visible feed items created after the user's most recent visit.
+     * A null timestamp establishes the initial baseline without surfacing the
+     * existing feed as new activity.
+     */
+    public function unreadCount(User $user): int
+    {
+        $lastReadAt = $user->news_feed_read_at;
+
+        if ($lastReadAt === null) {
+            return 0;
+        }
+
+        $notCreatedByUser = fn (Builder $query) => $query
+            ->whereNull('created_by')
+            ->orWhere('created_by', '!=', $user->id);
+
+        return FeedPost::query()
+            ->visibleTo($user)
+            ->where('user_id', '!=', $user->id)
+            ->where('created_at', '>', $lastReadAt)
+            ->count()
+            + Story::query()
+                ->publiclyVisible()
+                ->where($notCreatedByUser)
+                ->where('created_at', '>', $lastReadAt)
+                ->count()
+            + Event::query()
+                ->publiclyVisible()
+                ->where($notCreatedByUser)
+                ->where('created_at', '>', $lastReadAt)
+                ->count();
+    }
+
+    public function markRead(User $user): void
+    {
+        $user->forceFill(['news_feed_read_at' => now()])->save();
+    }
+
+    /**
      * Load one status with everything the feed card needs, for the single
      * status page.
      *

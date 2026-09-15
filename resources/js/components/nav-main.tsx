@@ -101,7 +101,7 @@ export function NavMain({ groups = [] }: { groups?: NavGroup[] }) {
                                                 <span className="min-w-0 truncate group-data-[collapsible=icon]:hidden">
                                                     {item.title}
                                                 </span>
-                                                {!!item.badge && !isActive && (
+                                                {!!item.badge && (
                                                     <span className="ml-auto min-w-5 rounded-full bg-red-600 px-1.5 py-0.5 text-center text-[10px] leading-none font-bold text-white group-data-[collapsible=icon]:hidden">
                                                         {item.badge > 99
                                                             ? '99+'

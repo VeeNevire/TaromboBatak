@@ -59,6 +59,7 @@ class UpdatePersonRequest extends FormRequest
             'cascade_public_descendants' => $this->user()?->isStaff() ? ['sometimes', 'boolean'] : ['prohibited'],
             'version_tree' => ['nullable', 'integer', 'exists:family_trees,id'],
             'father' => ['nullable', 'array'],
+            'father.id' => ['nullable', 'exists:people,id'],
             'father.name' => ['nullable', 'string', 'max:255'],
             'father.alias' => ['nullable', 'string', 'max:255'],
             'father.marga_id' => ['nullable', 'exists:margas,id'],

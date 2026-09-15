@@ -27,6 +27,8 @@ class PersonShareCode
             return null;
         }
 
-        return Person::query()->with('marga:id,name')->find((int) $id);
+        return Person::query()
+            ->with(['marga:id,name', 'father.marga:id,name'])
+            ->find((int) $id);
     }
 }

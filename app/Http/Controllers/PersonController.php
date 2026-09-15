@@ -203,6 +203,10 @@ class PersonController extends Controller
             'marga' => $person->marga?->name,
             'birth_year' => $person->birth_year,
             'death_year' => $person->death_year,
+            'father_id' => $person->father?->id,
+            'father_name' => $person->father?->name,
+            'father_marga_id' => $person->father?->marga_id,
+            'father_marga' => $person->father?->marga?->name,
             'code' => $shareCodes->for($person),
         ]);
     }
@@ -1654,9 +1658,9 @@ class PersonController extends Controller
                     ->whereBelongsTo($user, 'recipient')
                     ->where('status', FamilyTreeShare::STATUS_ACCEPTED))))
             ->whereNotNull('root_person_id')
-            ->when($focus !== null, fn ($query) => $query->where(
-                'root_person_id',
-                $focus->id,
+            ->when($focus !== null, fn ($query) => $query->whereHas(
+                'nodes',
+                fn ($nodes) => $nodes->where('person_id', $focus->id),
             ))
             ->with([
                 'user:id,name',

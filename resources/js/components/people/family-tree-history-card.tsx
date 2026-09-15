@@ -21,8 +21,8 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Button } from '@/components/ui/button';
 import { AlternativeVersionDialog } from '@/components/people/alternative-version-dialog';
+import { Button } from '@/components/ui/button';
 import {
     Card,
     CardContent,
@@ -299,6 +299,11 @@ export function FamilyTreeHistoryCard({
         day: 'numeric',
         month: 'long',
         year: 'numeric',
+    });
+    const timeFormatter = new Intl.DateTimeFormat('id-ID', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
     });
 
     const showSearch =
@@ -711,6 +716,12 @@ export function FamilyTreeHistoryCard({
                                                                 <span>
                                                                     Diperbarui{' '}
                                                                     {dateFormatter.format(
+                                                                        new Date(
+                                                                            entry.updated_at,
+                                                                        ),
+                                                                    )}{' '}
+                                                                    pukul{' '}
+                                                                    {timeFormatter.format(
                                                                         new Date(
                                                                             entry.updated_at,
                                                                         ),

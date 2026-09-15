@@ -162,6 +162,64 @@ test('the existing family form updates an alternative version without changing g
         ->and($secondChild->fresh()->chain)->toBe('1-2');
 });
 
+test('editing a member from a tree modal retains and updates that tree parent', function () {
+    $admin = User::factory()->asAdmin()->create();
+    $globalFather = Person::factory()->create(['name' => 'Ayah Global']);
+    $treeFather = Person::factory()->create(['name' => 'Ayah Pada Silsilah']);
+    $replacementFather = Person::factory()->create(['name' => 'Ayah Pengganti']);
+    $child = Person::factory()->create([
+        'name' => 'Anak Pada Silsilah',
+        'gender' => 'L',
+        'father_id' => $globalFather->id,
+    ]);
+    $tree = FamilyTree::create([
+        'user_id' => $admin->id,
+        'root_person_id' => $treeFather->id,
+        'name' => 'Silsilah Modal',
+    ]);
+    $treeFatherNode = FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $treeFather->id,
+    ]);
+    $replacementFatherNode = FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $replacementFather->id,
+    ]);
+    $childNode = FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $child->id,
+        'father_node_id' => $treeFatherNode->id,
+        'birth_order' => 1,
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('people.edit', ['person' => $child, 'version_tree' => $tree->id]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('people/form')
+            ->where('person.father.id', $treeFather->id)
+            ->where('person.father.name', $treeFather->name));
+
+    $this->actingAs($admin)
+        ->put(route('people.update', ['person' => $child, 'version_tree' => $tree->id]), [
+            'name' => $child->name,
+            'gender' => $child->gender,
+            'birth_order' => 1,
+            'sibling_count' => 1,
+            'father' => [
+                'id' => $replacementFather->id,
+                'name' => $replacementFather->name,
+            ],
+            'mothers' => [],
+            'children' => [],
+            'ownChildren' => [],
+        ])
+        ->assertRedirect(route('people.show', ['person' => $child, 'version_tree' => $tree->id]));
+
+    expect($childNode->fresh()->father_node_id)->toBe($replacementFatherNode->id)
+        ->and($child->fresh()->father_id)->toBe($globalFather->id);
+});
+
 test('an unavailable version context never falls back to the main family form', function () {
     $user = User::factory()->asAdmin()->create();
     $person = Person::factory()->create();

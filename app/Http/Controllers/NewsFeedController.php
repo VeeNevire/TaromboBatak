@@ -25,17 +25,22 @@ class NewsFeedController extends Controller
         /** @var array<string, string|null>|null $cursor */
         $cursor = $request->has('cursor') ? $request->array('cursor') : null;
 
-        $page = $this->newsFeed->page($request->user(), $cursor, self::PER_PAGE);
+        $user = $request->user();
+        $page = $this->newsFeed->page($user, $cursor, self::PER_PAGE);
 
         if ($request->wantsJson()) {
             return response()->json($page);
+        }
+
+        if ($user !== null) {
+            $this->newsFeed->markRead($user);
         }
 
         return Inertia::render('news-feed/index', [
             'items' => $page['items'],
             'cursor' => $page['cursor'],
             'hasMore' => $page['has_more'],
-            'margas' => $request->user() ? Marga::query()->orderBy('name')->get(['id', 'name']) : [],
+            'margas' => $user ? Marga::query()->orderBy('name')->get(['id', 'name']) : [],
         ]);
     }
 }

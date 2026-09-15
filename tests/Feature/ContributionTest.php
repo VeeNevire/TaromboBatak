@@ -44,6 +44,38 @@ test('matching an existing father creates a pending contribution and notifies co
         ->and($member->notifications()->count())->toBe(1);
 });
 
+test('matching a father in the users own family tree connects immediately', function () {
+    $marga = Marga::factory()->create();
+    $user = User::factory()->withMarga($marga->id)->create();
+    $father = Person::factory()->create([
+        'name' => 'Ayah Silsilah Saya',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+    ]);
+    FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $father->id,
+        'name' => 'Silsilah Saya',
+    ]);
+
+    $this->actingAs($user)->post(route('people.store'), [
+        'name' => 'Anak Terhubung',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'birth_order' => 1,
+        'sibling_count' => 1,
+        'father' => ['name' => $father->name],
+        'children' => [['name' => 'Anak Terhubung', 'gender' => 'L']],
+    ])->assertRedirect(route('people.index'))
+        ->assertSessionHasNoErrors();
+
+    $child = Person::query()->where('name', 'Anak Terhubung')->firstOrFail();
+
+    expect($child->father_id)->toBe($father->id)
+        ->and($child->pending_father)->toBeFalse()
+        ->and(ContributionRequest::query()->doesntExist())->toBeTrue();
+});
+
 test('a contributor for the same marga can approve a pending father match', function () {
     $marga = Marga::factory()->create();
     $user = User::factory()->withMarga($marga->id)->create();

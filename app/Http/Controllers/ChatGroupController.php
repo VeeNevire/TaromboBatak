@@ -85,6 +85,9 @@ class ChatGroupController extends Controller
     public function show(Request $request, ChatGroup $chatGroup): Response
     {
         abort_unless($request->user()?->can('view', $chatGroup), 403);
+        $chatGroup->memberships()
+            ->where('user_id', $request->user()->id)
+            ->update(['last_read_at' => now()]);
         $chatGroup->load(['owner', 'memberships.user']);
 
         return Inertia::render('groups/show', [

@@ -860,8 +860,74 @@ export default function ContactsIndex({
         <>
             <Head title="Daftar Kontak" />
 
-            <main className="h-[calc(100svh-4rem)] min-h-[36rem] p-3 md:p-6">
-                <div className="mx-auto grid h-full max-w-7xl overflow-hidden rounded-xl border border-tb-outline-variant bg-tb-surface-bright shadow-sm md:grid-cols-[21rem_minmax(0,1fr)]">
+            <main className="flex h-[calc(100svh-4rem)] min-h-[36rem] flex-col gap-3 p-3 md:p-6">
+                {incomingContactRequests.length > 0 && (
+                    <section
+                        aria-labelledby="incoming-contact-requests-heading"
+                        className="mx-auto flex w-full max-w-7xl flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-sm dark:border-amber-800 dark:bg-amber-950/30 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                        <div className="flex items-start gap-3">
+                            <div className="grid size-9 shrink-0 place-items-center rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                                <AlertCircle className="size-5" aria-hidden="true" />
+                            </div>
+                            <div>
+                                <h2
+                                    id="incoming-contact-requests-heading"
+                                    className="text-sm font-semibold text-tb-on-surface"
+                                >
+                                    {incomingContactRequests.length} permintaan kontak masuk
+                                </h2>
+                                <p className="mt-0.5 text-xs text-tb-on-surface-variant">
+                                    Setujui agar Anda dapat mulai berkirim pesan.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {incomingContactRequests.map((request) => (
+                                <div
+                                    key={request.id}
+                                    className="flex items-center gap-2 rounded-lg border border-amber-200 bg-tb-surface-bright px-3 py-2 dark:border-amber-900"
+                                >
+                                    <p className="max-w-36 truncate text-sm font-medium text-tb-on-surface">
+                                        {request.name}
+                                        <span className="ml-1 font-normal text-tb-on-surface-variant">
+                                            · {request.marga ?? 'Marga belum dicatat'}
+                                        </span>
+                                    </p>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={() =>
+                                            router.patch(
+                                                contactRequests.update(request.id).url,
+                                                { status: 'approved' },
+                                                { preserveScroll: true },
+                                            )
+                                        }
+                                    >
+                                        Terima
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() =>
+                                            router.patch(
+                                                contactRequests.update(request.id).url,
+                                                { status: 'rejected' },
+                                                { preserveScroll: true },
+                                            )
+                                        }
+                                    >
+                                        Tolak
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
+
+                <div className="mx-auto grid min-h-0 w-full max-w-7xl flex-1 overflow-hidden rounded-xl border border-tb-outline-variant bg-tb-surface-bright shadow-sm md:grid-cols-[21rem_minmax(0,1fr)]">
                     <section
                         aria-label="Daftar kontak"
                         className={`${selectedContact ? 'hidden md:flex' : 'flex'} min-h-0 flex-col border-tb-outline-variant md:border-r`}
@@ -1415,71 +1481,6 @@ export default function ContactsIndex({
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4">
-                        {incomingContactRequests.length > 0 && (
-                            <div className="grid gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
-                                <p className="text-sm font-semibold text-tb-on-surface">
-                                    Permintaan masuk
-                                </p>
-                                {incomingContactRequests.map((request) => (
-                                    <div
-                                        key={request.id}
-                                        className="flex items-center justify-between gap-3 rounded-md bg-tb-surface-bright px-3 py-2"
-                                    >
-                                        <p className="min-w-0 truncate text-sm text-tb-on-surface">
-                                            {request.name}
-                                            <span className="ml-2 text-xs text-tb-on-surface-variant">
-                                                {request.marga ??
-                                                    'Marga belum dicatat'}
-                                            </span>
-                                            <span
-                                                className={`ml-2 text-[10px] font-medium ${request.telegram_linked ? 'text-emerald-600' : 'text-tb-outline'}`}
-                                            >
-                                                {request.telegram_linked
-                                                    ? 'connected'
-                                                    : 'not-connected'}
-                                            </span>
-                                        </p>
-                                        <div className="flex shrink-0 gap-1">
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                onClick={() =>
-                                                    router.patch(
-                                                        contactRequests.update(
-                                                            request.id,
-                                                        ).url,
-                                                        { status: 'approved' },
-                                                        {
-                                                            preserveScroll: true,
-                                                        },
-                                                    )
-                                                }
-                                            >
-                                                Terima
-                                            </Button>
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() =>
-                                                    router.patch(
-                                                        contactRequests.update(
-                                                            request.id,
-                                                        ).url,
-                                                        { status: 'rejected' },
-                                                        {
-                                                            preserveScroll: true,
-                                                        },
-                                                    )
-                                                }
-                                            >
-                                                Tolak
-                                            </Button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
                         <div className="relative">
                             <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-tb-outline" />
                             <Input

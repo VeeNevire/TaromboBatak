@@ -210,13 +210,21 @@ test('a signed person code links an existing wife shared by another contributor'
         'marga_id' => $wifeMarga->id,
         'created_by' => $this->admin->id,
     ]);
+    $wifeFather = Person::factory()->create([
+        'name' => 'Ompu Panjaitan',
+        'gender' => 'L',
+        'marga_id' => $wifeMarga->id,
+    ]);
+    $wife->update(['father_id' => $wifeFather->id]);
     $code = app(PersonShareCode::class)->for($wife);
 
     $this->actingAs($contributor)
         ->postJson(route('people.resolve-share-code'), ['code' => $code])
         ->assertOk()
         ->assertJsonPath('id', $wife->id)
-        ->assertJsonPath('name', 'Boru Panjaitan');
+        ->assertJsonPath('name', 'Boru Panjaitan')
+        ->assertJsonPath('father_id', $wifeFather->id)
+        ->assertJsonPath('father_name', $wifeFather->name);
 
     $this->actingAs($contributor)->post(route('people.store'), [
         'name' => 'Anak Sitorus',

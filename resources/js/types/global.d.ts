@@ -16,6 +16,9 @@ declare module '@inertiajs/core' {
             unreadContributionCount: number;
             unreadEventCount: number;
             unreadStoryCount: number;
+            unreadContactCount: number;
+            unreadGroupMessageCount: number;
+            unreadNewsFeedCount: number;
             [key: string]: unknown;
         };
     }
