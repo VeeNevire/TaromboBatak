@@ -65,6 +65,26 @@ class StoreSharedFamilyTreePersonRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator): void {
+            $familyTree = $this->route('familyTree');
+
+            if ($familyTree instanceof FamilyTree
+                && $this->filled('father_node_id')
+                && $this->filled('mother_node_id')) {
+                $fatherNode = $familyTree->nodes()
+                    ->with('person.wives:id')
+                    ->find($this->integer('father_node_id'));
+                $motherNode = $familyTree->nodes()
+                    ->find($this->integer('mother_node_id'));
+
+                if ($fatherNode !== null && $motherNode !== null
+                    && ! $fatherNode->person->wives->contains('id', $motherNode->person_id)) {
+                    $validator->errors()->add(
+                        'mother_node_id',
+                        'Ibu harus merupakan pasangan dari ayah yang dipilih.',
+                    );
+                }
+            }
+
             if ($this->filled('children') && $this->input('gender') !== 'L') {
                 $validator->errors()->add(
                     'children',

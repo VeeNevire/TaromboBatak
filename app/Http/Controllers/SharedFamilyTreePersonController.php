@@ -6,6 +6,7 @@ use App\Http\Requests\StoreSharedFamilyTreePersonRequest;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeAppendRequest;
 use App\Models\FamilyTreeNode;
+use App\Models\Person;
 use App\Notifications\FamilyTreeAppendSubmitted;
 use App\Services\FamilyTreeActivityLogger;
 use App\Services\SharedFamilyTreeAppendService;
@@ -24,11 +25,14 @@ class SharedFamilyTreePersonController extends Controller
         Gate::authorize('append', $familyTree);
 
         $nodes = $familyTree->nodes()
-            ->with('person:id,name,gender,marga_id')
+            ->with(['person:id,name,gender,marga_id', 'person.wives:id,name'])
             ->orderBy('chain')
             ->orderBy('id')
             ->get();
         $parentNodeIds = $nodes->pluck('father_node_id')->filter()->flip();
+        $motherNodesByPersonId = $nodes
+            ->filter(fn (FamilyTreeNode $node) => $node->person->gender === 'P')
+            ->keyBy('person_id');
 
         return Inertia::render('people/shared-tree-person-form', [
             'familyTree' => [
@@ -44,13 +48,18 @@ class SharedFamilyTreePersonController extends Controller
                     'name' => $node->person->name,
                     'chain' => $node->chain,
                 ])->values()->all(),
-            'motherOptions' => $nodes
-                ->filter(fn (FamilyTreeNode $node) => $node->person->gender === 'P')
-                ->map(fn (FamilyTreeNode $node) => [
-                    'id' => $node->id,
-                    'name' => $node->person->name,
-                    'chain' => $node->chain,
-                ])->values()->all(),
+            'motherOptionsByFather' => $nodes
+                ->filter(fn (FamilyTreeNode $node) => $node->person->gender !== 'P')
+                ->mapWithKeys(fn (FamilyTreeNode $fatherNode) => [
+                    (string) $fatherNode->id => $fatherNode->person->wives
+                        ->map(fn (Person $wife) => $motherNodesByPersonId->get($wife->id))
+                        ->filter()
+                        ->map(fn (FamilyTreeNode $motherNode) => [
+                            'id' => $motherNode->id,
+                            'name' => $motherNode->person->name,
+                            'chain' => $motherNode->chain,
+                        ])->values()->all(),
+                ])->all(),
         ]);
     }
 

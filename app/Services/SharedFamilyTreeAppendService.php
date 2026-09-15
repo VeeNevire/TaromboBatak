@@ -32,6 +32,13 @@ class SharedFamilyTreeAppendService
             ]);
         }
 
+        if ($motherNode !== null
+            && ! $fatherNode->person->wives()->whereKey($motherNode->person_id)->exists()) {
+            throw ValidationException::withMessages([
+                'mother_node_id' => 'Ibu harus merupakan pasangan dari ayah yang dipilih.',
+            ]);
+        }
+
         $member = $this->appendPerson(
             tree: $tree,
             payload: $payload,
