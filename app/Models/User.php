@@ -29,6 +29,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $regency_code
  * @property string|null $district_code
  * @property string|null $village_code
+ * @property Carbon|null $news_feed_read_at
  * @property string|null $two_factor_secret
  * @property string|null $two_factor_recovery_codes
  * @property Carbon|null $two_factor_confirmed_at
@@ -292,6 +293,7 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'news_feed_read_at' => 'datetime',
             'password' => 'hashed',
         ];
     }

@@ -56,8 +56,12 @@ class FamilyEntryService
             $focusPerson = isset($data['id']) ? Person::query()->find((int) $data['id']) : null;
             $ineligibleFatherIds = $focusPerson?->ineligibleFatherIds() ?? [];
 
-            $matchedFather = $deferExistingFatherMatch && $fatherGiven
+            $existingFather = $deferExistingFatherMatch && $fatherGiven
                 ? $this->findExistingFatherMatch($data, $fatherMargaId, $ineligibleFatherIds)
+                : null;
+            $matchedFather = $existingFather !== null
+                && ! $this->ownsFamilyTreeContaining($createdBy, $existingFather)
+                ? $existingFather
                 : null;
             // A blank father means "pending" for a new/detached family, but
             // an existing root ancestor must not become pending merely
@@ -340,6 +344,26 @@ class FamilyEntryService
         }
 
         return $matches->first();
+    }
+
+    /**
+     * A user may immediately extend a lineage already recorded in their own
+     * tree. Matching a father from another tree still requires contributor
+     * approval, so an unrelated lineage cannot be attached by name alone.
+     */
+    protected function ownsFamilyTreeContaining(?int $userId, Person $person): bool
+    {
+        if ($userId === null) {
+            return false;
+        }
+
+        return FamilyTree::query()
+            ->where('user_id', $userId)
+            ->where(fn ($query) => $query
+                ->where('root_person_id', $person->id)
+                ->orWhereHas('people', fn ($people) => $people->whereKey($person))
+                ->orWhereHas('nodes', fn ($nodes) => $nodes->where('person_id', $person->id)))
+            ->exists();
     }
 
     /**

@@ -1243,6 +1243,8 @@ export default function FamilyForm({
     readOnly = false,
 }: Props) {
     const isEdit = person !== null;
+    const role = usePage().props.auth.user?.role;
+    const canChooseExistingChild = role === 'admin' || role === 'subadmin';
     const initialImageMode: 'url' | 'upload' =
         person?.image && !/^https?:\/\//i.test(person.image) ? 'upload' : 'url';
     const initialMothers = toMotherRows(person);
@@ -1305,6 +1307,7 @@ export default function FamilyForm({
         cascade_public_descendants: false,
         father: person?.father
             ? {
+                  id: person.father.id ?? null,
                   name: person.father.name ?? '',
                   alias: person.father.alias ?? '',
                   birth_year: person.father.birth_year ?? '',
@@ -2160,6 +2163,10 @@ export default function FamilyForm({
                 marga_id?: number | null;
                 birth_year?: string | null;
                 death_year?: string | null;
+                father_id?: number | null;
+                father_name?: string | null;
+                father_marga_id?: number | null;
+                father_marga?: string | null;
                 code?: string;
                 message?: string;
                 errors?: Record<string, string[]>;
@@ -2180,6 +2187,9 @@ export default function FamilyForm({
                 marga_id: result.marga_id ?? null,
                 birth_year: result.birth_year ?? '',
                 death_year: result.death_year ?? '',
+                father_name: result.father_name ?? '',
+                father_marga_id: result.father_marga_id ?? null,
+                father_marga: result.father_marga ?? null,
                 share_code: result.code,
                 new_marga: '',
             });
@@ -2283,6 +2293,31 @@ export default function FamilyForm({
     };
 
     const fatherName = data.father?.name?.trim() ?? '';
+    const selectedMargaId = data.marga_id;
+    const selectedMargaHasApprovedTree = approvedMargaTrees.some(
+        (tree) =>
+            tree.id === selectedMargaId &&
+            tree.people_count > 0,
+    );
+    const selectedMargaHasAccountTree = familyTrees.some((tree) =>
+        tree.member_person_ids.some((personId) =>
+            nameSuggestions.some(
+                (person) =>
+                    person.id === personId &&
+                    person.marga_id === selectedMargaId,
+            ),
+        ),
+    );
+    const canChooseExistingFather =
+        selectedMargaId !== null &&
+        (selectedMargaHasApprovedTree || selectedMargaHasAccountTree);
+    const canChooseExistingParent =
+        canChooseExistingChild && canChooseExistingFather;
+    const selectableFatherSuggestions = canChooseExistingFather
+        ? fatherSuggestions.filter(
+              (father) => father.marga_id === selectedMargaId,
+          )
+        : [];
     const selectedMargaLineage = data.marga_id
         ? margaLineage.filter(
               (entry) => Number(entry.marga_id) === Number(data.marga_id),
@@ -2292,7 +2327,9 @@ export default function FamilyForm({
         entry,
         ...(entry.children ?? []),
     ]);
-    const fatherCandidates = [...lineageEntries, ...fatherSuggestions];
+    const fatherCandidates = canChooseExistingFather
+        ? [...lineageEntries, ...selectableFatherSuggestions]
+        : [];
     const fatherMatch = fatherName
         ? fatherCandidates.find(
               (entry) =>
@@ -2332,12 +2369,14 @@ export default function FamilyForm({
                         value={entry.name}
                         onChange={(value) => setParentEntry(key, 'name', value)}
                         suggestions={
-                            key === 'father'
-                                ? fatherSuggestions
-                                : nameSuggestions
+                            key === 'father' && canChooseExistingParent
+                                ? selectableFatherSuggestions
+                                : canChooseExistingParent
+                                  ? nameSuggestions
+                                  : []
                         }
                         placeholder={`Nama ${label.toLowerCase()}`}
-                        allowNa
+                        allowNa={canChooseExistingParent}
                         showSiblingPreview
                         siblingSuggestions={
                             key === 'father' ? nameSuggestions : undefined
@@ -2479,9 +2518,13 @@ export default function FamilyForm({
                             onChange={(value) =>
                                 setParentEntry(key, 'father_name', value)
                             }
-                            suggestions={fatherSuggestions}
+                            suggestions={
+                                canChooseExistingParent
+                                    ? fatherSuggestions
+                                    : []
+                            }
                             placeholder="Nama ayah dari ibu"
-                            allowNa
+                            allowNa={canChooseExistingParent}
                             showSiblingPreview
                             siblingSuggestions={nameSuggestions}
                         />
@@ -3589,10 +3632,14 @@ export default function FamilyForm({
                                                                         )
                                                                     }
                                                                     suggestions={
-                                                                        nameSuggestions
+                                                                        canChooseExistingChild
+                                                                            ? nameSuggestions
+                                                                            : []
                                                                     }
                                                                     placeholder="Nama"
-                                                                    allowNa
+                                                                    allowNa={
+                                                                        canChooseExistingChild
+                                                                    }
                                                                 />
                                                             )}
                                                         </div>
@@ -3968,7 +4015,7 @@ export default function FamilyForm({
                                                     </div>
                                                     <div className="grid gap-1.5 lg:col-span-3">
                                                         <Label>Nama</Label>
-                                                        {canPublish ? (
+                                                        {canChooseExistingChild ? (
                                                             <NameCombobox
                                                                 value={child.name}
                                                                 onChange={(
@@ -3992,6 +4039,7 @@ export default function FamilyForm({
                                                                     nameSuggestions
                                                                 }
                                                                 placeholder="Nama anak"
+                                                                allowNa
                                                                 showSiblingPreview
                                                             />
                                                         ) : (
@@ -4268,65 +4316,65 @@ export default function FamilyForm({
                         </Card>
 
                         <Card className="border-tb-outline-variant bg-tb-surface-bright">
-                            <CardHeader>
-                                <CardTitle className="font-display text-lg text-tb-on-surface">
-                                    Orang Tua
-                                </CardTitle>
-                                <CardDescription>
-                                    Ayah dan istri-istrinya dari anak-anak yang
-                                    dicatat di bawah. Setiap anak dapat
-                                    ditautkan ke Ibu yang sesuai.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="grid gap-5 lg:grid-cols-2">
-                                {renderParentBlock(
-                                    'father',
-                                    'Ayah',
-                                    '1950',
-                                    '2020',
-                                )}
-                                <div className="grid content-start gap-5">
-                                    {data.mothers.map((wife, index) => (
-                                        <div
-                                            key={
-                                                wife.id ??
-                                                `istri-block-${index}`
-                                            }
-                                            className="relative"
+                                <CardHeader>
+                                    <CardTitle className="font-display text-lg text-tb-on-surface">
+                                        Orang Tua
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Ayah dan istri-istrinya dari anak-anak yang
+                                        dicatat di bawah. Setiap anak dapat
+                                        ditautkan ke Ibu yang sesuai.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="grid gap-5 lg:grid-cols-2">
+                                    {renderParentBlock(
+                                        'father',
+                                        'Ayah',
+                                        '1950',
+                                        '2020',
+                                    )}
+                                    <div className="grid content-start gap-5">
+                                        {data.mothers.map((wife, index) => (
+                                            <div
+                                                key={
+                                                    wife.id ??
+                                                    `istri-block-${index}`
+                                                }
+                                                className="relative"
+                                            >
+                                                {data.mothers.length > 1 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            removeMother(index)
+                                                        }
+                                                        aria-label={`Hapus Istri ${index + 1}`}
+                                                        title={`Hapus Istri ${index + 1}`}
+                                                        className="absolute top-2 right-2 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full text-tb-on-surface-variant transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                                                    >
+                                                        <X className="size-3.5" />
+                                                    </button>
+                                                )}
+                                                {renderParentBlock(
+                                                    index,
+                                                    `Istri ${index + 1}`,
+                                                    '1955',
+                                                    '2025',
+                                                    true,
+                                                    false,
+                                                )}
+                                            </div>
+                                        ))}
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={addMother}
+                                            className="w-full border-dashed border-tb-outline-variant text-tb-primary hover:bg-tb-primary/5"
                                         >
-                                            {data.mothers.length > 1 && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                        removeMother(index)
-                                                    }
-                                                    aria-label={`Hapus Istri ${index + 1}`}
-                                                    title={`Hapus Istri ${index + 1}`}
-                                                    className="absolute top-2 right-2 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full text-tb-on-surface-variant transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
-                                                >
-                                                    <X className="size-3.5" />
-                                                </button>
-                                            )}
-                                            {renderParentBlock(
-                                                index,
-                                                `Istri ${index + 1}`,
-                                                '1955',
-                                                '2025',
-                                                true,
-                                                false,
-                                            )}
-                                        </div>
-                                    ))}
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={addMother}
-                                        className="w-full border-dashed border-tb-outline-variant text-tb-primary hover:bg-tb-primary/5"
-                                    >
-                                        <Plus className="size-4" /> Tambah Istri
-                                    </Button>
-                                </div>
-                            </CardContent>
+                                            <Plus className="size-4" /> Tambah Istri
+                                        </Button>
+                                    </div>
+                                </CardContent>
                         </Card>
 
                         <Card className="border-tb-outline-variant bg-tb-surface-bright">
@@ -4532,7 +4580,7 @@ export default function FamilyForm({
                                                                 {data.name ||
                                                                     '—'}
                                                             </div>
-                                                        ) : canPublish ? (
+                                                        ) : canChooseExistingChild ? (
                                                             <NameCombobox
                                                                 value={
                                                                     child.name

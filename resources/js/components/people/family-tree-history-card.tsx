@@ -305,6 +305,11 @@ export function FamilyTreeHistoryCard({
         month: 'long',
         year: 'numeric',
     });
+    const timeFormatter = new Intl.DateTimeFormat('id-ID', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    });
 
     const showSearch =
         accountTreesOnly || entries.length > ACCOUNT_FAMILY_TREE_ITEMS_PER_PAGE;
@@ -733,6 +738,12 @@ export function FamilyTreeHistoryCard({
                                                                 <span>
                                                                     Diperbarui{' '}
                                                                     {dateFormatter.format(
+                                                                        new Date(
+                                                                            entry.updated_at,
+                                                                        ),
+                                                                    )}{' '}
+                                                                    pukul{' '}
+                                                                    {timeFormatter.format(
                                                                         new Date(
                                                                             entry.updated_at,
                                                                         ),

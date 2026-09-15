@@ -1,6 +1,7 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
     BookOpen,
+    BarChart3,
     BellRing,
     CalendarDays,
     History,
@@ -46,6 +47,7 @@ import stories from '@/routes/stories';
 import subAdmins from '@/routes/sub-admins';
 import tarombo from '@/routes/tarombo';
 import taromboFrames from '@/routes/tarombo-frames';
+import trafficMonitor from '@/routes/traffic-monitor';
 import treeActivityLogs from '@/routes/tree-activity-logs';
 import type { NavGroup } from '@/types';
 
@@ -55,6 +57,9 @@ export function AppSidebar() {
         unreadContributionCount,
         unreadEventCount,
         unreadStoryCount,
+        unreadContactCount,
+        unreadGroupMessageCount,
+        unreadNewsFeedCount,
     } = usePage().props;
     const isAdmin = auth.user?.role === 'admin';
     const isStaff = isAdmin || auth.user?.role === 'subadmin';
@@ -75,6 +80,7 @@ export function AppSidebar() {
                     title: 'News Feed',
                     href: newsFeed.index(),
                     icon: Newspaper,
+                    badge: unreadNewsFeedCount,
                 },
                 {
                     title: 'Daftar Marga',
@@ -102,16 +108,19 @@ export function AppSidebar() {
                               title: 'Daftar Kontak',
                               href: contacts.index(),
                               icon: MessageCircle,
+                              badge: unreadContactCount,
                           },
                           {
                               title: 'Log Pesan',
                               href: messageLogs.index(),
                               icon: ScrollText,
+                              badge: unreadContactCount,
                           },
                           {
                               title: 'Grup',
                               href: groups.index(),
                               icon: MessagesSquare,
+                              badge: unreadGroupMessageCount,
                           },
                           {
                               title: 'Pengumuman',
@@ -141,11 +150,13 @@ export function AppSidebar() {
                               title: 'Cerita Leluhur & Budaya',
                               href: stories.index(),
                               icon: BookOpen,
+                              badge: unreadStoryCount,
                           },
                           {
                               title: 'Event & Kegiatan',
                               href: events.index(),
                               icon: CalendarDays,
+                              badge: unreadEventCount,
                           },
                       ],
                   } satisfies NavGroup,
@@ -168,11 +179,13 @@ export function AppSidebar() {
                               title: 'Event & Kegiatan',
                               href: events.index(),
                               icon: CalendarDays,
+                              badge: unreadEventCount,
                           },
                           {
                               title: 'Cerita Leluhur & Budaya',
                               href: stories.index(),
                               icon: BookOpen,
+                              badge: unreadStoryCount,
                           },
                       ],
                   } satisfies NavGroup,
@@ -186,6 +199,11 @@ export function AppSidebar() {
                               title: 'Data Pengguna',
                               href: accounts.index(),
                               icon: Users,
+                          },
+                          {
+                              title: 'Monitor Traffic',
+                              href: trafficMonitor.index(),
+                              icon: BarChart3,
                           },
                           {
                               title: 'Daftar Silsilah Milik Akun',
@@ -221,10 +239,7 @@ export function AppSidebar() {
                               title: 'Pengajuan Kontribusi',
                               href: contributions.index(),
                               icon: BellRing,
-                              badge:
-                                  unreadContributionCount +
-                                  unreadEventCount +
-                                  unreadStoryCount,
+                              badge: unreadContributionCount,
                           },
                       ],
                   } satisfies NavGroup,

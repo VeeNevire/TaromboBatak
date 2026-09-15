@@ -47,6 +47,38 @@ test('tarombo defaults to the signed in accounts primary family tree', function 
             ->has('selectedTreePeople', 1));
 });
 
+test('tarombo modal payload includes the father of a linked wife', function () {
+    $owner = User::factory()->asAdmin()->create();
+    $root = Person::factory()->create(['name' => 'Ompu Sitorus', 'gender' => 'L']);
+    $wifeFather = Person::factory()->create(['name' => 'Ompu Panjaitan', 'gender' => 'L']);
+    $wife = Person::factory()->create([
+        'name' => 'Boru Panjaitan',
+        'gender' => 'P',
+        'father_id' => $wifeFather->id,
+    ]);
+    $root->wives()->attach($wife, ['position' => 1]);
+    $tree = FamilyTree::create([
+        'user_id' => $owner->id,
+        'root_person_id' => $root->id,
+        'name' => 'Silsilah Ompu Sitorus',
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $root->id,
+        'chain' => '1',
+    ]);
+
+    $this->actingAs($owner)
+        ->get(route('tarombo.fullscreen', [
+            'view' => 'tree',
+            'family_tree' => $tree->id,
+        ]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('selectedTreePeople.0.spouses.0.name', $wife->name)
+            ->where('selectedTreePeople.0.spouses.0.fatherName', $wifeFather->name));
+});
+
 test('tarombo defaults to the most recently updated account family tree when no primary exists', function () {
     $owner = User::factory()->asAdmin()->create();
     $olderRoot = Person::factory()->create();

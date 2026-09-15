@@ -1150,6 +1150,7 @@ export function TaromboExplorer({
                         collapseDepth={verticalTreeCollapseDepth}
                         detachedPeople={margaDetachedRoots}
                         showNodeAvatar={showNodeCircles}
+                        versionTreeId={selectedFamilyTreeId}
                         compact={fullscreen}
                         nodeIdPrefix={
                             fullscreen
@@ -1515,6 +1516,7 @@ export function TaromboExplorer({
                                                 currentUserId={
                                                     identity?.currentUserId
                                                 }
+                                                versionTreeId={selectedFamilyTreeId}
                                             />
                                         </div>
                                         {!treeHasChildren &&

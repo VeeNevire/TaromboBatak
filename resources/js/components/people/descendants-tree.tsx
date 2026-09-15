@@ -25,6 +25,7 @@ type Props = {
     compact?: boolean;
     detachedPeople?: TaromboPerson[];
     currentUserId?: number;
+    versionTreeId?: number | null;
     showNodeAvatar?: boolean;
 };
 
@@ -349,6 +350,7 @@ export function DescendantsTree({
     compact = false,
     detachedPeople = [],
     currentUserId,
+    versionTreeId,
     showNodeAvatar = true,
 }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -647,6 +649,7 @@ export function DescendantsTree({
                     people={people}
                     onClose={() => setProfilePerson(null)}
                     currentUserId={currentUserId}
+                    versionTreeId={versionTreeId}
                 />
             )}
         </div>

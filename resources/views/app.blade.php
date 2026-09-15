@@ -37,6 +37,18 @@
 
         @fonts
 
+        @if (filled(config('services.google.analytics_measurement_id')))
+            <script async src="https://www.googletagmanager.com/gtag/js?id={{ config('services.google.analytics_measurement_id') }}"></script>
+            <script>
+                window.dataLayer = window.dataLayer || [];
+                window.gtag = function () { dataLayer.push(arguments); };
+                window.gtag('js', new Date());
+                window.gtag('config', '{{ config('services.google.analytics_measurement_id') }}', {
+                    send_page_view: false,
+                });
+            </script>
+        @endif
+
         @viteReactRefresh
         @vite(['resources/css/app.css', 'resources/js/app.tsx', "resources/js/pages/{$page['component']}.tsx"])
         <x-inertia::head>
