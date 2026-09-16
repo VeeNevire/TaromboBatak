@@ -457,7 +457,13 @@ class PersonController extends Controller
         $user = $request->user();
         $isStaff = $user->isStaff();
 
-        Gate::authorize('update', $person);
+        if ($request->filled('version_tree')) {
+            $tree = FamilyTree::query()->findOrFail($request->integer('version_tree'));
+            $this->authorizeFamilyTree($request, $tree);
+            abort_unless($tree->nodes()->where('person_id', $person->id)->exists(), 404);
+        } else {
+            Gate::authorize('update', $person);
+        }
         $versionTrees = $this->familyTrees($user, $person);
         $selectedVersionName = data_get(
             collect($versionTrees)->firstWhere('id', $request->integer('version_tree')),
@@ -980,7 +986,7 @@ class PersonController extends Controller
                 ]);
             }
 
-            app(FamilyTreeStructureService::class)->updateFromFamilyForm($familyTree, $person, $validated);
+            app(FamilyTreeStructureService::class)->updateFromFamilyForm($familyTree, $person, $validated, $user->id);
             app(FamilyTreeActivityLogger::class)->log(
                 $familyTree,
                 $user,

@@ -146,7 +146,7 @@ test('an accepted recipient submits a new member for the owner to approve', func
             ->has('activities', 1));
 });
 
-test('the shared member form offers fathers who already have children', function () {
+test('the shared member form only offers fathers without children in this tree', function () {
     $marga = Marga::factory()->create();
     $owner = User::factory()->withMarga($marga->id)->create();
     $recipient = User::factory()->withMarga($marga->id)->create();
@@ -163,6 +163,8 @@ test('the shared member form offers fathers who already have children', function
         'father_node_id' => $rootNode->id,
         'chain' => '1-1',
     ]);
+    // A child recorded elsewhere must not hide a leaf in the selected tree.
+    Person::factory()->create(['father_id' => $leaf->id]);
     FamilyTreeShare::create([
         'family_tree_id' => $tree->id,
         'sender_id' => $owner->id,
@@ -175,7 +177,18 @@ test('the shared member form offers fathers who already have children', function
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->where('fatherOptions', [
-                ['id' => $rootNode->id, 'name' => 'Raja Sharing', 'chain' => '1'],
+                ['id' => $leafNode->id, 'name' => 'Calon Ayah Ujung', 'chain' => '1-1'],
+            ]));
+
+    $this->actingAs($recipient)
+        ->get(route('family-trees.people.create', [
+            'familyTree' => $tree,
+            'father_person_id' => $rootNode->person_id,
+        ]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('initialFatherNodeId', null)
+            ->where('fatherOptions', [
                 ['id' => $leafNode->id, 'name' => 'Calon Ayah Ujung', 'chain' => '1-1'],
             ]));
 });
@@ -192,7 +205,7 @@ test('adding a child from a known father preselects his node and joins the exist
         'birth_order' => 1,
     ]);
     $tree->people()->attach($firstChild->id);
-    FamilyTreeNode::create([
+    $firstChildNode = FamilyTreeNode::create([
         'family_tree_id' => $tree->id,
         'person_id' => $firstChild->id,
         'father_node_id' => $fatherNode->id,
@@ -202,21 +215,21 @@ test('adding a child from a known father preselects his node and joins the exist
 
     $this->actingAs($owner)->get(route('family-trees.people.create', [
         'familyTree' => $tree,
-        'father_person_id' => $father->id,
+        'father_person_id' => $firstChild->id,
     ]))->assertSuccessful()->assertInertia(fn (Assert $page) => $page
-        ->where('initialFatherNodeId', $fatherNode->id)
-        ->where('fatherOptions', fn ($options) => collect($options)->contains('id', $fatherNode->id)));
+        ->where('initialFatherNodeId', $firstChildNode->id)
+        ->where('fatherOptions', fn ($options) => collect($options)->contains('id', $firstChildNode->id)));
 
     $this->actingAs($owner)->post(route('family-trees.people.store', $tree), [
         'name' => 'Anak Kedua',
         'gender' => 'L',
-        'father_node_id' => $fatherNode->id,
+        'father_node_id' => $firstChildNode->id,
     ])->assertRedirect(route('family-trees.show', $tree));
 
     $secondChild = Person::query()->where('name', 'Anak Kedua')->firstOrFail();
-    expect($secondChild->father_id)->toBe($father->id)
-        ->and($secondChild->birth_order)->toBe(2)
-        ->and($tree->nodes()->where('person_id', $secondChild->id)->value('father_node_id'))->toBe($fatherNode->id)
+    expect($secondChild->father_id)->toBe($firstChild->id)
+        ->and($secondChild->birth_order)->toBe(1)
+        ->and($tree->nodes()->where('person_id', $secondChild->id)->value('father_node_id'))->toBe($firstChildNode->id)
         ->and(FamilyTree::query()->count())->toBe(1);
 });
 

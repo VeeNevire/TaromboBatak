@@ -90,12 +90,22 @@ class FamilyTreeStructureService
 
     /**
      * Translate the existing family form's person-based rows into nodes of one
-     * version. Person relationships and global chains are deliberately not
-     * touched.
+     * version, appending new members locally. Existing person relationships
+     * and global chains are deliberately not touched.
      *
      * @param  array<string, mixed>  $data
      */
-    public function updateFromFamilyForm(FamilyTree $tree, Person $focus, array $data): void
+    public function updateFromFamilyForm(FamilyTree $tree, Person $focus, array $data, ?int $createdBy = null): void
+    {
+        DB::transaction(function () use ($tree, $focus, $data, $createdBy): void {
+            $tree = FamilyTree::query()->lockForUpdate()->findOrFail($tree->id);
+            $tree->ensureStructureIsEditable();
+            $this->applyFamilyForm($tree, $focus, $data, $createdBy ?? $tree->user_id);
+        });
+    }
+
+    /** @param array<string, mixed> $data */
+    private function applyFamilyForm(FamilyTree $tree, Person $focus, array $data, int $createdBy): void
     {
         if (($data['name'] ?? $focus->name) !== $focus->name) {
             throw ValidationException::withMessages(['name' => 'Biodata tidak diubah pada versi alternatif.']);
@@ -137,24 +147,39 @@ class FamilyTreeStructureService
                     continue;
                 }
 
+                $parentNode = $group === 'ownChildren' ? $focusNode : $fatherNode;
+
                 if (! filled($row['id'] ?? null)) {
-                    if (filled($row['name'] ?? null)) {
+                    if (! filled($row['name'] ?? null)) {
+                        continue;
+                    }
+
+                    if ($parentNode === null) {
                         throw ValidationException::withMessages([
-                            $group.'.'.$index.'.id' => 'Tambahkan anggota baru pada silsilah utama terlebih dahulu, lalu buat versi alternatifnya.',
+                            $group.'.'.$index.'.name' => 'Pilih ayah pada silsilah ini sebelum menambahkan anak.',
                         ]);
                     }
 
-                    continue;
+                    $person = app(SharedFamilyTreeAppendService::class)->append($tree, [
+                        'name' => trim($row['name']),
+                        'alias' => $row['alias'] ?? null,
+                        'gender' => $row['gender'] ?? null,
+                        'spouse' => $row['spouse'] ?? null,
+                        'spouse_marga' => $row['spouse_marga'] ?? null,
+                        'father_node_id' => $parentNode->id,
+                        'birth_order' => $index + 1,
+                    ], $createdBy);
+                    $node = $tree->nodes()->where('person_id', $person->id)->firstOrFail();
+                    $nodes->put($person->id, $node);
+                } else {
+                    $node = $nodeForPerson($row['id']);
                 }
-
-                $node = $nodeForPerson($row['id']);
                 if ($node === null) {
                     throw ValidationException::withMessages([
                         $group.'.'.$index.'.id' => 'Anggota harus berasal dari versi silsilah yang sama.',
                     ]);
                 }
 
-                $parentNode = $group === 'ownChildren' ? $focusNode : $fatherNode;
                 $entries[$node->id] = [
                     'id' => $node->id,
                     'father_node_id' => $parentNode?->id,

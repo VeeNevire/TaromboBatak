@@ -30,6 +30,9 @@ class SharedFamilyTreePersonController extends Controller
             ->orderBy('chain')
             ->orderBy('id')
             ->get();
+        $parentNodeIds = $nodes->pluck('father_node_id')->filter()->flip();
+        $eligibleFathers = $nodes->filter(fn (FamilyTreeNode $node) => $node->person->gender !== 'P'
+            && ! $parentNodeIds->has($node->id));
         $fatherPersonId = $request->integer('father_person_id');
         $initialFatherNode = $fatherPersonId > 0
             ? $nodes->first(fn (FamilyTreeNode $node) => $node->person_id === $fatherPersonId
@@ -40,6 +43,9 @@ class SharedFamilyTreePersonController extends Controller
             throw ValidationException::withMessages([
                 'father_person_id' => 'Ayah tidak ditemukan dalam silsilah ini.',
             ]);
+        }
+        if ($initialFatherNode !== null && $parentNodeIds->has($initialFatherNode->id)) {
+            $initialFatherNode = null;
         }
         $motherNodesByPersonId = $nodes
             ->filter(fn (FamilyTreeNode $node) => $node->person->gender === 'P')
@@ -52,15 +58,13 @@ class SharedFamilyTreePersonController extends Controller
                 'requires_approval' => ! $request->user()->can('manage', $familyTree),
             ],
             'initialFatherNodeId' => $initialFatherNode?->id,
-            'fatherOptions' => $nodes
-                ->filter(fn (FamilyTreeNode $node) => $node->person->gender !== 'P')
+            'fatherOptions' => $eligibleFathers
                 ->map(fn (FamilyTreeNode $node) => [
                     'id' => $node->id,
                     'name' => $node->person->name,
                     'chain' => $node->chain,
                 ])->values()->all(),
-            'motherOptionsByFather' => $nodes
-                ->filter(fn (FamilyTreeNode $node) => $node->person->gender !== 'P')
+            'motherOptionsByFather' => $eligibleFathers
                 ->mapWithKeys(fn (FamilyTreeNode $fatherNode) => [
                     (string) $fatherNode->id => $fatherNode->person->wives
                         ->map(fn (Person $wife) => $motherNodesByPersonId->get($wife->id))
