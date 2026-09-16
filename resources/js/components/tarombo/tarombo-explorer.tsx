@@ -548,6 +548,43 @@ export function TaromboExplorer({
             ? descendantSubtree(verticalPeople, ancestorPeople[0].id)
             : verticalPeople;
     const lineagePath = ancestorPeople.map((person) => person.id);
+    const margaLowerLineagePath = useMemo(() => {
+        if (
+            !margaTree ||
+            margaTree.direction !== 'lower' ||
+            !margaIdentity
+        ) {
+            return [] as string[];
+        }
+
+        const byId = new Map(
+            selectedFamilyTreePeople.map((person) => [person.id, person]),
+        );
+        const focus = ancestorFocusId
+            ? byId.get(ancestorFocusId) ?? margaIdentity
+            : margaIdentity;
+        const path: string[] = [];
+        const visited = new Set<string>();
+        let current: TaromboPerson | undefined = focus;
+
+        while (current && !visited.has(current.id)) {
+            path.unshift(current.id);
+            visited.add(current.id);
+            current = current.parentId
+                ? byId.get(current.parentId)
+                : undefined;
+        }
+
+        return path.includes(margaIdentity.id)
+            ? path
+            : margaLineagePath.map((person) => person.id);
+    }, [
+        ancestorFocusId,
+        margaIdentity,
+        margaLineagePath,
+        margaTree,
+        selectedFamilyTreePeople,
+    ]);
     const treeCenterPerson =
         verticalPeople.find(
             (person) => person.id === (ancestorPeople[0]?.id ?? centerPersonId),
@@ -1095,7 +1132,9 @@ export function TaromboExplorer({
                         lineagePath={
                             margaTree?.direction === 'upper'
                                 ? margaLineagePath.map((person) => person.id)
-                                : lineagePath
+                                : margaTree?.direction === 'lower'
+                                  ? margaLowerLineagePath
+                                  : lineagePath
                         }
                         markFemaleLineage={
                             margaTree ? false : showFemaleLineage
@@ -1450,7 +1489,10 @@ export function TaromboExplorer({
                                                               (person) =>
                                                                   person.id,
                                                           )
-                                                        : lineagePath
+                                                        : margaTree?.direction ===
+                                                            'lower'
+                                                          ? margaLowerLineagePath
+                                                          : lineagePath
                                                 }
                                                 markFemaleLineage={
                                                     showFemaleLineage
