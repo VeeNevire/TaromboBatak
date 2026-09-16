@@ -32,6 +32,7 @@ type Props = {
     familyTree: { id: number; name: string; requires_approval: boolean };
     fatherOptions: NodeOption[];
     motherOptionsByFather: Record<string, NodeOption[]>;
+    initialFatherNodeId: number | null;
 };
 
 const MAX_EXTRA_ROWS = 20;
@@ -76,6 +77,7 @@ export default function SharedTreePersonForm({
     familyTree,
     fatherOptions,
     motherOptionsByFather,
+    initialFatherNodeId,
 }: Props) {
     const { data, setData, post, transform, processing, errors } = useForm({
         name: '',
@@ -85,7 +87,7 @@ export default function SharedTreePersonForm({
         birth_year: '',
         death_year: '',
         bio: '',
-        father_node_id: '',
+        father_node_id: initialFatherNodeId?.toString() ?? '',
         mother_node_id: '',
         spouse: '',
         spouse_marga: '',
