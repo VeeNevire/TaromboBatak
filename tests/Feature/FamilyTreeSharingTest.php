@@ -163,8 +163,14 @@ test('the shared member form only offers fathers without children in this tree',
         'father_node_id' => $rootNode->id,
         'chain' => '1-1',
     ]);
-    // A child recorded elsewhere must not hide a leaf in the selected tree.
-    Person::factory()->create(['father_id' => $leaf->id]);
+    // A visually empty branch may still have children recorded elsewhere.
+    $fatherElsewhere = Person::factory()->create(['gender' => 'L', 'marga_id' => $marga->id]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $fatherElsewhere->id,
+        'father_node_id' => $rootNode->id,
+    ]);
+    Person::factory()->create(['father_id' => $fatherElsewhere->id]);
     FamilyTreeShare::create([
         'family_tree_id' => $tree->id,
         'sender_id' => $owner->id,
@@ -191,6 +197,13 @@ test('the shared member form only offers fathers without children in this tree',
             ->where('fatherOptions', [
                 ['id' => $leafNode->id, 'name' => 'Calon Ayah Ujung', 'chain' => '1-1'],
             ]));
+
+    $this->get(route('family-trees.people.create', [
+        'familyTree' => $tree,
+        'father_person_id' => $fatherElsewhere->id,
+    ]))->assertSuccessful()->assertInertia(fn (Assert $page) => $page
+        ->where('initialFatherNodeId', null)
+        ->has('fatherOptions', 1));
 });
 
 test('adding a child from a known father preselects his node and joins the existing tree', function () {

@@ -9,6 +9,7 @@ use App\Models\FamilyTreeNode;
 use App\Models\Person;
 use App\Notifications\FamilyTreeAppendSubmitted;
 use App\Services\FamilyTreeActivityLogger;
+use App\Services\FamilyTreeInheritanceService;
 use App\Services\SharedFamilyTreeAppendService;
 use App\Services\TreeActivityLogger;
 use Illuminate\Http\RedirectResponse;
@@ -26,13 +27,18 @@ class SharedFamilyTreePersonController extends Controller
         Gate::authorize('append', $familyTree);
 
         $nodes = $familyTree->nodes()
-            ->with(['person:id,name,gender,marga_id', 'person.wives:id,name'])
+            ->with([
+                'person' => fn ($query) => $query->select('id', 'name', 'gender', 'marga_id')->withExists('children'),
+                'person.wives:id,name',
+            ])
             ->orderBy('chain')
             ->orderBy('id')
             ->get();
-        $parentNodeIds = $nodes->pluck('father_node_id')->filter()->flip();
+        $parentPersonIds = app(FamilyTreeInheritanceService::class)->nodesFor($familyTree)
+            ->pluck('father_person_id')->filter()->flip();
         $eligibleFathers = $nodes->filter(fn (FamilyTreeNode $node) => $node->person->gender !== 'P'
-            && ! $parentNodeIds->has($node->id));
+            && ! $node->person->children_exists
+            && ! $parentPersonIds->has($node->person_id));
         $fatherPersonId = $request->integer('father_person_id');
         $initialFatherNode = $fatherPersonId > 0
             ? $nodes->first(fn (FamilyTreeNode $node) => $node->person_id === $fatherPersonId
@@ -44,7 +50,7 @@ class SharedFamilyTreePersonController extends Controller
                 'father_person_id' => 'Ayah tidak ditemukan dalam silsilah ini.',
             ]);
         }
-        if ($initialFatherNode !== null && $parentNodeIds->has($initialFatherNode->id)) {
+        if ($initialFatherNode !== null && ! $eligibleFathers->contains('id', $initialFatherNode->id)) {
             $initialFatherNode = null;
         }
         $motherNodesByPersonId = $nodes
