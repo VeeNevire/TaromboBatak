@@ -49,6 +49,7 @@ class StorePersonRequest extends FormRequest
             'spouse_marga' => ['nullable', 'string', 'max:255'],
             'is_public' => $this->user()?->isStaff() ? ['nullable', 'boolean'] : ['prohibited'],
             'father' => ['nullable', 'array'],
+            'father.id' => ['nullable', 'exists:people,id'],
             'father.name' => ['nullable', 'string', 'max:255'],
             'father.alias' => ['nullable', 'string', 'max:255'],
             'father.marga_id' => ['nullable', 'exists:margas,id'],

@@ -1607,7 +1607,6 @@ class PersonController extends Controller
             ->when($margaId instanceof \Illuminate\Support\Collection, fn ($query) => $query->whereIn('marga_id', $margaId))
             ->when(is_int($margaId), fn ($query) => $query->where('marga_id', $margaId))
             ->where('gender', 'L')
-            ->whereDoesntHave('children')
             ->when($person !== null, fn ($query) => $query->whereNotIn('id', $person->ineligibleFatherIds()))
             ->whereNotNull('name')
             ->where('name', '!=', 'N/A')
