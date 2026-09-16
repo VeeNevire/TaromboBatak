@@ -95,9 +95,12 @@ export default function PersonShow({
                     {!readOnly && person.gender !== 'P' && appendTree && (
                         <Button asChild className="w-fit">
                             <Link
-                                href={familyTreeRoutes.people.create(appendTree.id, {
-                                    query: { father_person_id: person.id },
-                                })}
+                                href={familyTreeRoutes.people.create(
+                                    appendTree.id,
+                                    {
+                                        query: { father_person_id: person.id },
+                                    },
+                                )}
                             >
                                 <UserPlus className="size-4" /> Tambah Anak dari{' '}
                                 {person.name}
@@ -117,6 +120,9 @@ export default function PersonShow({
                 </div>
 
                 <FamilyForm
+                    key={`person-${person.id}-version-${
+                        selectedVersionId ?? 'base'
+                    }`}
                     person={person}
                     regions={regions}
                     margas={margas}

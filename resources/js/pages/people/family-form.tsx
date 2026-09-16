@@ -102,6 +102,7 @@ type ParentEntry = {
     birth_year: string;
     death_year: string;
     marga_id?: number | null;
+    marga?: string | null;
     new_marga?: string;
     father_name?: string;
     father_marga_id?: number | null;

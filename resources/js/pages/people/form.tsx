@@ -6,6 +6,13 @@ import type {
     FamilyTreeHistoryEntry,
 } from '@/components/people/family-tree-history-card';
 import { Button } from '@/components/ui/button';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
 import type { NameSuggestion } from '@/components/ui/name-combobox';
 import FamilyForm from '@/pages/people/family-form';
 import type {
@@ -108,7 +115,50 @@ export default function PersonForm({
                     />
                 </div>
 
+                {person && (
+                    <Card className="border-tb-outline-variant bg-tb-surface-bright">
+                        <CardHeader>
+                            <CardTitle className="font-display text-lg text-tb-on-surface">
+                                Orang Tua Tercatat
+                            </CardTitle>
+                            <CardDescription>
+                                Hubungan orang tua yang saat ini tersimpan untuk{' '}
+                                {person.name}.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="grid gap-3 sm:grid-cols-2">
+                            <div className="rounded-lg border border-tb-outline-variant bg-tb-surface-container/35 p-4">
+                                <p className="text-xs font-medium tracking-wide text-tb-on-surface-variant uppercase">
+                                    Ayah
+                                </p>
+                                <p className="mt-1 font-semibold text-tb-on-surface">
+                                    {person.father?.name ?? 'Belum dicatat'}
+                                </p>
+                                {person.father?.marga && (
+                                    <p className="mt-1 text-sm text-tb-on-surface-variant">
+                                        Marga {person.father.marga}
+                                    </p>
+                                )}
+                            </div>
+                            <div className="rounded-lg border border-tb-outline-variant bg-tb-surface-container/35 p-4">
+                                <p className="text-xs font-medium tracking-wide text-tb-on-surface-variant uppercase">
+                                    Ibu
+                                </p>
+                                <p className="mt-1 font-semibold text-tb-on-surface">
+                                    {person.mother?.name ?? 'Belum dicatat'}
+                                </p>
+                                {person.mother?.marga && (
+                                    <p className="mt-1 text-sm text-tb-on-surface-variant">
+                                        Marga {person.mother.marga}
+                                    </p>
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
                 <FamilyForm
+                    key={`person-${person?.id ?? 'new'}-version-${selectedVersionId ?? 'base'}`}
                     person={person}
                     regions={regions}
                     margas={margas}

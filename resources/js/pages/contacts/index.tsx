@@ -771,10 +771,8 @@ export default function ContactsIndex({
             { recipient_id: recipientId },
             {
                 preserveScroll: true,
-                onSuccess: () => {
-                    setAddContactOpen(false);
-                    setContactSearch('');
-                },
+                preserveState: true,
+                onSuccess: () => setAddContactOpen(true),
                 onFinish: () => setRequestingContactId(null),
             },
         );
@@ -1468,7 +1466,16 @@ export default function ContactsIndex({
                 </div>
             </main>
 
-            <Dialog open={addContactOpen} onOpenChange={setAddContactOpen}>
+            <Dialog
+                open={addContactOpen}
+                onOpenChange={(open) => {
+                    if (!open && requestingContactId !== null) {
+                        return;
+                    }
+
+                    setAddContactOpen(open);
+                }}
+            >
                 <DialogContent className="border-tb-outline-variant bg-tb-surface-bright sm:max-w-lg">
                     <DialogHeader>
                         <DialogTitle className="font-display text-tb-on-surface">

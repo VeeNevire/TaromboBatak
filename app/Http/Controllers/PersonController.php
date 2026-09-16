@@ -54,6 +54,11 @@ class PersonController extends Controller
             ->with([
                 'marga',
                 'father' => fn ($query) => $query->when($isGuest, fn ($father) => $father->public()),
+                'familyTrees' => fn ($query) => $query
+                    ->when($isGuest, fn ($trees) => $trees->whereRaw('1 = 0'))
+                    ->when(! $isGuest && ! $isStaff, fn ($trees) => $trees->where('family_trees.user_id', $user->id))
+                    ->orderByDesc('is_primary')
+                    ->orderBy('family_trees.id'),
             ])
             ->withCount('children')
             ->when($isGuest, fn ($query) => $query->public())
@@ -97,6 +102,7 @@ class PersonController extends Controller
             'pending' => (bool) $person->pending_father,
             'created_at' => $person->created_at?->format('d M Y'),
             'editable' => $user?->can('update', $person) ?? false,
+            'version_tree_id' => $person->familyTrees->first()?->id,
         ];
 
         if ($isGuest) {
@@ -465,8 +471,18 @@ class PersonController extends Controller
         $selectedVersionId = $selectedVersionName !== null ? $request->integer('version_tree') : null;
 
         $personMargaScope = $isStaff ? null : ($user->isContributor() ? $person->marga_id : $user->marga_id);
-        $familyPayload = $selectedVersionId !== null
-                ? $this->familyPayloadForVersion($person, $selectedVersionId, $personMargaScope)
+        $structureTreeId = $selectedVersionId ?? FamilyTree::query()
+            ->whereNull('based_on_id')
+            ->when(! $user->isAdmin(), fn ($query) => $query->where(fn ($access) => $access
+                ->whereBelongsTo($user)
+                ->orWhereHas('shares', fn ($shares) => $shares
+                    ->whereBelongsTo($user, 'recipient')
+                    ->where('status', FamilyTreeShare::STATUS_ACCEPTED))))
+            ->whereHas('nodes', fn ($nodes) => $nodes->where('person_id', $person->id))
+            ->oldest('id')
+            ->value('id');
+        $familyPayload = $structureTreeId !== null
+                ? $this->familyPayloadForVersion($person, $structureTreeId, $personMargaScope)
                 : $this->familyPayload($person, $personMargaScope);
 
         return Inertia::render('people/form', [
