@@ -95,7 +95,6 @@ export default function SharedTreePersonForm({
         siblings: [] as MemberRow[],
     });
 
-    const canHaveChildren = data.gender === 'L';
     const motherOptions =
         motherOptionsByFather[data.father_node_id] ?? [];
 
@@ -553,8 +552,7 @@ export default function SharedTreePersonForm({
                                 </CardContent>
                             </Card>
 
-                            {canHaveChildren && (
-                                <Card className="border-tb-outline-variant bg-tb-surface-bright">
+                            <Card className="border-tb-outline-variant bg-tb-surface-bright">
                                     <CardHeader>
                                         <CardTitle className="flex items-center gap-2 font-display text-lg text-tb-on-surface">
                                             <Users className="size-4 text-tb-primary" />{' '}
@@ -595,8 +593,7 @@ export default function SharedTreePersonForm({
                                             Tambah Anak
                                         </Button>
                                     </CardContent>
-                                </Card>
-                            )}
+                            </Card>
 
                             <Card className="border-tb-outline-variant bg-tb-surface-bright">
                                 <CardHeader>
