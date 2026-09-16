@@ -220,6 +220,51 @@ test('editing a member from a tree modal retains and updates that tree parent', 
         ->and($child->fresh()->father_id)->toBe($globalFather->id);
 });
 
+test('an owner can open their family version when its root is a locked ancestor', function () {
+    $marga = Marga::factory()->create();
+    $user = User::factory()->withMarga($marga->id)->create();
+    $root = Person::factory()->create(['marga_id' => $marga->id, 'created_by' => $user->id]);
+    $tree = FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $root->id,
+        'name' => 'Keluarga Milik Saya',
+    ]);
+    FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $root->id]);
+    ContributionRequest::factory()->approved()->create([
+        'requester_id' => $user->id,
+        'matched_father_id' => $root->id,
+        'subject_person_id' => $root->id,
+        'family_tree_id' => $tree->id,
+    ]);
+
+    $this->actingAs($user)
+        ->getJson(route('people.edit', $root))
+        ->assertForbidden();
+
+    $this->get(route('people.edit', ['person' => $root, 'version_tree' => $tree->id]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('people/form')
+            ->where('selectedVersionId', $tree->id)
+            ->where('selectedVersionName', $tree->name));
+});
+
+test('editing a family version requires ownership even when the person is editable', function () {
+    $marga = Marga::factory()->create();
+    $user = User::factory()->withMarga($marga->id)->create();
+    $person = Person::factory()->create(['marga_id' => $marga->id, 'created_by' => $user->id]);
+    $tree = FamilyTree::create([
+        'user_id' => User::factory()->create()->id,
+        'root_person_id' => $person->id,
+        'name' => 'Keluarga Pengguna Lain',
+    ]);
+    FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $person->id]);
+
+    $this->actingAs($user)->get(route('people.edit', $person))->assertOk();
+    $this->get(route('people.edit', ['person' => $person, 'version_tree' => $tree->id]))
+        ->assertForbidden();
+});
+
 test('an unavailable version context never falls back to the main family form', function () {
     $user = User::factory()->asAdmin()->create();
     $person = Person::factory()->create();
@@ -524,4 +569,65 @@ test('opening a selected version shows its jejak keluarga entries without creati
 
     expect(FamilyTree::query()->count())->toBe(1)
         ->and(FamilyTree::query()->whereNotNull('based_on_id')->count())->toBe(0);
+});
+
+test('a family form can append a new child only to the selected alternative', function (string $group) {
+    $marga = Marga::factory()->create();
+    $user = User::factory()->withMarga($marga->id)->create();
+    $father = Person::factory()->create(['marga_id' => $marga->id, 'created_by' => $user->id]);
+    $first = Person::factory()->create(['marga_id' => $marga->id, 'father_id' => $father->id, 'created_by' => $user->id]);
+    $second = Person::factory()->create(['marga_id' => $marga->id, 'father_id' => $father->id, 'created_by' => $user->id]);
+    $source = FamilyTree::create(['user_id' => $user->id, 'root_person_id' => $father->id, 'name' => 'Utama']);
+    $fatherNode = FamilyTreeNode::create(['family_tree_id' => $source->id, 'person_id' => $father->id, 'chain' => '1']);
+    foreach ([$first, $second] as $index => $child) {
+        FamilyTreeNode::create(['family_tree_id' => $source->id, 'person_id' => $child->id, 'father_node_id' => $fatherNode->id, 'birth_order' => $index + 1]);
+    }
+    $alternative = app(FamilyTreeVersionService::class)->duplicate($source, $user, 'Alternatif');
+    $focus = $group === 'ownChildren' ? $father : $first;
+    $payload = [
+        'name' => $focus->name,
+        'father' => $group === 'ownChildren' ? [] : ['id' => $father->id, 'name' => $father->name],
+        'birth_order' => 1,
+        $group => [
+            ['id' => $first->id, 'name' => $first->name],
+            ['id' => $second->id, 'name' => $second->name],
+            ['name' => 'Anak Ketiga Saya Damanik', 'gender' => 'L'],
+        ],
+    ];
+    $this->actingAs($user)
+        ->put(route('people.update', ['person' => $focus, 'version_tree' => $alternative->id]), $payload)
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('people.show', ['person' => $focus, 'version_tree' => $alternative->id]));
+
+    $child = Person::query()->where('name', 'Anak Ketiga Saya Damanik')->sole();
+    $node = $alternative->nodes()->where('person_id', $child->id)->sole();
+    expect($node->father_node_id)->toBe($alternative->nodes()->where('person_id', $father->id)->value('id'))
+        ->and($node->birth_order)->toBe(3)
+        ->and($node->chain)->toBe('1-3')
+        ->and($child->created_by)->toBe($user->id)
+        ->and($child->marga_id)->toBe($marga->id)
+        ->and($alternative->people()->whereKey($child->id)->exists())->toBeTrue()
+        ->and($source->nodes()->count())->toBe(3)
+        ->and($source->people()->whereKey($child->id)->exists())->toBeFalse();
+
+    $this->get(route('people.edit', ['person' => $focus, 'version_tree' => $alternative->id]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('person.'.$group.'.2.name', $child->name));
+})->with(['children', 'ownChildren']);
+
+test('a failed version update rolls back newly appended children', function () {
+    $user = User::factory()->asAdmin()->create();
+    $root = Person::factory()->create();
+    $outsider = Person::factory()->create();
+    $tree = FamilyTree::create(['user_id' => $user->id, 'root_person_id' => $root->id]);
+    FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $root->id]);
+    $this->actingAs($user)->put(route('people.update', ['person' => $root, 'version_tree' => $tree->id]), [
+        'name' => $root->name,
+        'ownChildren' => [['name' => 'Must Roll Back'], ['id' => $outsider->id, 'name' => $outsider->name]],
+    ])->assertSessionHasErrors('ownChildren.1.id');
+
+    expect(Person::query()->where('name', 'Must Roll Back')->exists())->toBeFalse()
+        ->and($tree->nodes()->count())->toBe(1)
+        ->and($tree->people()->count())->toBe(0);
 });

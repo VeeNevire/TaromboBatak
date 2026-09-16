@@ -103,7 +103,7 @@ class TreeActivityLogController extends Controller
                 abort_unless(is_array($data), 422, 'Data perubahan tidak lengkap.');
 
                 if ($change->familyTree !== null && isset($payload['version_tree'])) {
-                    app(FamilyTreeStructureService::class)->updateFromFamilyForm($change->familyTree, $person, $data);
+                    app(FamilyTreeStructureService::class)->updateFromFamilyForm($change->familyTree, $person, $data, $change->requester_id);
                 } else {
                     app(FamilyEntryService::class)->save(
                         $data,
