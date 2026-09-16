@@ -893,6 +893,17 @@ class FamilyEntryService
         array $mothers = [],
     ): Collection {
         $children = new Collection;
+        // A separate family entry contains only its new sibling rows. Append
+        // them after the father's recorded children instead of starting again
+        // at birth order 1; full edits with existing row IDs keep their order.
+        $newFamilyEntry = $fatherId !== null
+            && ! collect($rows)->contains(fn ($row) => ! empty($row['id']));
+        $existingChildCount = $newFamilyEntry
+            ? Person::query()->where('father_id', $fatherId)->count()
+            : 0;
+        $birthOrderOffset = $newFamilyEntry
+            ? (int) Person::query()->where('father_id', $fatherId)->max('birth_order')
+            : 0;
 
         foreach ($rows as $index => $row) {
             $child = isset($row['id'])
@@ -987,8 +998,10 @@ class FamilyEntryService
                 'marga_id' => $childMargaId,
                 'father_id' => $fatherId,
                 'mother_id' => $childMotherId,
-                'birth_order' => $index + 1,
-                'sibling_count' => $siblingCount,
+                'birth_order' => $birthOrderOffset + $index + 1,
+                'sibling_count' => $newFamilyEntry
+                    ? $existingChildCount + count($rows)
+                    : $siblingCount,
                 'pending_father' => $pending,
                 ...$focusedFields,
             ], fn ($value) => $value !== null);
@@ -1014,6 +1027,12 @@ class FamilyEntryService
             }
 
             $children->push($child);
+        }
+
+        if ($newFamilyEntry && $rows !== []) {
+            Person::query()
+                ->where('father_id', $fatherId)
+                ->update(['sibling_count' => $existingChildCount + count($rows)]);
         }
 
         return $children;

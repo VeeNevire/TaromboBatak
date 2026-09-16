@@ -2310,9 +2310,10 @@ export default function FamilyForm({
     );
     const canChooseExistingFather =
         selectedMargaId !== null &&
-        (selectedMargaHasApprovedTree || selectedMargaHasAccountTree);
-    const canChooseExistingParent =
-        canChooseExistingChild && canChooseExistingFather;
+        (canChooseExistingChild ||
+            selectedMargaHasApprovedTree ||
+            selectedMargaHasAccountTree);
+    const canChooseExistingParent = canChooseExistingFather;
     const selectableFatherSuggestions = canChooseExistingFather
         ? fatherSuggestions.filter(
               (father) => father.marga_id === selectedMargaId,
@@ -2330,13 +2331,24 @@ export default function FamilyForm({
     const fatherCandidates = canChooseExistingFather
         ? [...lineageEntries, ...selectableFatherSuggestions]
         : [];
-    const fatherMatch = fatherName
-        ? fatherCandidates.find(
+    const selectedFather = data.father?.id
+        ? fatherCandidates.find((entry) => entry.id === data.father?.id)
+        : undefined;
+    const fatherNameMatches = fatherName
+        ? fatherCandidates.filter(
               (entry) =>
                   normalizeNameForMatch(entry.name ?? '') ===
                   normalizeNameForMatch(fatherName),
           )
-        : undefined;
+        : [];
+    const fatherMatch = selectedFather;
+    const selectedFatherNeedsApproval =
+        selectedFather !== undefined &&
+        role !== 'admin' &&
+        role !== 'subadmin' &&
+        !familyTrees.some((tree) =>
+            tree.member_person_ids.includes(selectedFather.id),
+        );
     const predictedFatherChain = fatherMatch?.chain ?? null;
     const predictedFocusChain =
         predictedFatherChain && data.name.trim()
@@ -2415,17 +2427,33 @@ export default function FamilyForm({
                     </div>
                     {key === 'father' && (
                         <div className="text-xs">
-                            {fatherMatch ? (
+                            {fatherMatch && selectedFatherNeedsApproval ? (
+                                <p className="font-medium text-amber-700">
+                                    Ayah {fatherMatch.name} dipilih. Sambungan
+                                    ke silsilahnya menunggu persetujuan
+                                    kontributor.
+                                </p>
+                            ) : fatherMatch ? (
                                 <p className="font-medium text-emerald-700">
-                                    Akan tersambung ke {fatherMatch.name}
+                                    Ayah {fatherMatch.name} dipilih — anak akan
+                                    tersambung ke data ini
                                     {fatherMatch.marga
                                         ? ` (${fatherMatch.marga})`
                                         : ''}{' '}
-                                    — chain {predictedFatherChain}
+                                    {predictedFatherChain
+                                        ? `— chain ${predictedFatherChain}`
+                                        : ''}
                                     {predictedFocusChain
                                         ? ` → ${predictedFocusChain}`
                                         : ''}
                                     .
+                                </p>
+                            ) : fatherNameMatches.length > 0 ? (
+                                <p className="font-medium text-amber-700">
+                                    Nama ini sudah ada di daftar. Pilih Ayah
+                                    yang tepat agar sambungan ke data yang
+                                    dimaksud pasti. Jika hanya diketik, sistem
+                                    akan mencoba mencocokkan nama dan marga.
                                 </p>
                             ) : fatherName && !isNaPlaceholder(fatherName) ? (
                                 <p className="font-medium text-amber-700">

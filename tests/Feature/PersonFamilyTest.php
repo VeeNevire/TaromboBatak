@@ -1441,6 +1441,50 @@ test('updating a member refreshes its family tree without creating another item'
         ->and($tree->fresh()->updated_at->toISOString())->toBe('2026-08-19T11:30:00.000000Z');
 });
 
+test('a father who already has children remains selectable and adding another child reuses the family tree', function () {
+    $marga = Marga::factory()->create();
+    $father = Person::factory()->create(['name' => 'Ayah Terdaftar', 'gender' => 'L', 'marga_id' => $marga->id]);
+    $firstChild = Person::factory()->create([
+        'name' => 'Anak Pertama',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'father_id' => $father->id,
+        'birth_order' => 1,
+    ]);
+    $tree = FamilyTree::create([
+        'user_id' => $this->admin->id,
+        'root_person_id' => $father->id,
+        'name' => 'Keluarga Ayah Terdaftar',
+    ]);
+    $tree->people()->syncWithoutDetaching([$father->id, $firstChild->id]);
+
+    $this->actingAs($this->admin)->get(route('people.create'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('fatherSuggestions', fn ($suggestions) => collect($suggestions)
+                ->contains('id', $father->id)));
+
+    $this->actingAs($this->admin)->post(route('people.store'), [
+        'name' => 'Anak Kedua',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'birth_order' => 2,
+        'sibling_count' => 2,
+        'father' => ['id' => $father->id, 'name' => $father->name],
+        'children' => [['name' => 'Anak Kedua', 'gender' => 'L']],
+    ])->assertRedirect(route('people.index'));
+
+    $secondChild = Person::query()->where('name', 'Anak Kedua')->firstOrFail();
+
+    expect($secondChild->father_id)->toBe($father->id)
+        ->and($secondChild->birth_order)->toBe(2)
+        ->and($secondChild->chain)->toBe($father->fresh()->chain.'-2')
+        ->and($firstChild->fresh()->sibling_count)->toBe(2)
+        ->and(Person::query()->where('name', $father->name)->count())->toBe(1)
+        ->and(FamilyTree::query()->where('user_id', $this->admin->id)->count())->toBe(1)
+        ->and($tree->fresh()->people()->whereKey($secondChild->id)->exists())->toBeTrue();
+});
+
 test('an account can open its family tree without exposing unrelated trees', function () {
     $marga = Marga::factory()->create(['name' => 'Sitorus']);
     $user = User::factory()->withMarga($marga->id)->create();
@@ -1467,7 +1511,7 @@ test('an account can open its family tree without exposing unrelated trees', fun
             ->where('person.name', 'Anak'));
 });
 
-test('the create form suggests only male people as fathers', function () {
+test('the create form suggests male people as fathers even when they have children', function () {
     Person::factory()->create(['name' => 'Calon Ayah', 'gender' => 'L']);
     $fatherWithChild = Person::factory()->create([
         'name' => 'Ayah Dengan Anak',
@@ -1482,7 +1526,7 @@ test('the create form suggests only male people as fathers', function () {
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->where('fatherSuggestions', fn ($suggestions) => collect($suggestions)
-                ->pluck('name')->all() === ['Calon Ayah']));
+                ->pluck('name')->all() === ['Ayah Dengan Anak', 'Calon Ayah']));
 });
 
 test('father suggestions include every eligible person without a result limit', function () {
