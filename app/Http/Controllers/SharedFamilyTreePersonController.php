@@ -10,6 +10,7 @@ use App\Models\Person;
 use App\Notifications\FamilyTreeAppendSubmitted;
 use App\Services\FamilyTreeActivityLogger;
 use App\Services\SharedFamilyTreeAppendService;
+use App\Services\TreeActivityLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -29,7 +30,17 @@ class SharedFamilyTreePersonController extends Controller
             ->orderBy('chain')
             ->orderBy('id')
             ->get();
-        $parentNodeIds = $nodes->pluck('father_node_id')->filter()->flip();
+        $fatherPersonId = $request->integer('father_person_id');
+        $initialFatherNode = $fatherPersonId > 0
+            ? $nodes->first(fn (FamilyTreeNode $node) => $node->person_id === $fatherPersonId
+                && $node->person->gender !== 'P')
+            : null;
+
+        if ($fatherPersonId > 0 && $initialFatherNode === null) {
+            throw ValidationException::withMessages([
+                'father_person_id' => 'Ayah tidak ditemukan dalam silsilah ini.',
+            ]);
+        }
         $motherNodesByPersonId = $nodes
             ->filter(fn (FamilyTreeNode $node) => $node->person->gender === 'P')
             ->keyBy('person_id');
@@ -40,9 +51,9 @@ class SharedFamilyTreePersonController extends Controller
                 'name' => $familyTree->name ?? $familyTree->rootPerson()->value('name') ?? 'Silsilah',
                 'requires_approval' => ! $request->user()->can('manage', $familyTree),
             ],
+            'initialFatherNodeId' => $initialFatherNode?->id,
             'fatherOptions' => $nodes
-                ->filter(fn (FamilyTreeNode $node) => $node->person->gender !== 'P'
-                    && ! $parentNodeIds->has($node->id))
+                ->filter(fn (FamilyTreeNode $node) => $node->person->gender !== 'P')
                 ->map(fn (FamilyTreeNode $node) => [
                     'id' => $node->id,
                     'name' => $node->person->name,
@@ -105,6 +116,7 @@ class SharedFamilyTreePersonController extends Controller
         $person = DB::transaction(function () use ($validated, $request, $familyTree, $appendService) {
             $familyTree = FamilyTree::query()->lockForUpdate()->findOrFail($familyTree->id);
             $familyTree->ensureStructureIsEditable();
+
             return $appendService->append(
                 tree: $familyTree,
                 payload: $validated,

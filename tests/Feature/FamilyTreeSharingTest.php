@@ -146,7 +146,7 @@ test('an accepted recipient submits a new member for the owner to approve', func
             ->has('activities', 1));
 });
 
-test('the shared member form only offers leaf male nodes as fathers', function () {
+test('the shared member form offers fathers who already have children', function () {
     $marga = Marga::factory()->create();
     $owner = User::factory()->withMarga($marga->id)->create();
     $recipient = User::factory()->withMarga($marga->id)->create();
@@ -175,8 +175,49 @@ test('the shared member form only offers leaf male nodes as fathers', function (
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->where('fatherOptions', [
+                ['id' => $rootNode->id, 'name' => 'Raja Sharing', 'chain' => '1'],
                 ['id' => $leafNode->id, 'name' => 'Calon Ayah Ujung', 'chain' => '1-1'],
             ]));
+});
+
+test('adding a child from a known father preselects his node and joins the existing tree', function () {
+    $marga = Marga::factory()->create();
+    $owner = User::factory()->withMarga($marga->id)->create();
+    ['tree' => $tree, 'root' => $father, 'node' => $fatherNode] = sharingTree($owner, $marga);
+    $firstChild = Person::factory()->create([
+        'name' => 'Anak Pertama',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'father_id' => $father->id,
+        'birth_order' => 1,
+    ]);
+    $tree->people()->attach($firstChild->id);
+    FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $firstChild->id,
+        'father_node_id' => $fatherNode->id,
+        'birth_order' => 1,
+        'chain' => '1-1',
+    ]);
+
+    $this->actingAs($owner)->get(route('family-trees.people.create', [
+        'familyTree' => $tree,
+        'father_person_id' => $father->id,
+    ]))->assertSuccessful()->assertInertia(fn (Assert $page) => $page
+        ->where('initialFatherNodeId', $fatherNode->id)
+        ->where('fatherOptions', fn ($options) => collect($options)->contains('id', $fatherNode->id)));
+
+    $this->actingAs($owner)->post(route('family-trees.people.store', $tree), [
+        'name' => 'Anak Kedua',
+        'gender' => 'L',
+        'father_node_id' => $fatherNode->id,
+    ])->assertRedirect(route('family-trees.show', $tree));
+
+    $secondChild = Person::query()->where('name', 'Anak Kedua')->firstOrFail();
+    expect($secondChild->father_id)->toBe($father->id)
+        ->and($secondChild->birth_order)->toBe(2)
+        ->and($tree->nodes()->where('person_id', $secondChild->id)->value('father_node_id'))->toBe($fatherNode->id)
+        ->and(FamilyTree::query()->count())->toBe(1);
 });
 
 test('the shared member form limits mothers to the selected father wives', function () {

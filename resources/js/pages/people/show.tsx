@@ -1,5 +1,5 @@
 import { Head, Link } from '@inertiajs/react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, UserPlus } from 'lucide-react';
 import { FamilyTreeHistoryCard } from '@/components/people/family-tree-history-card';
 import type {
     ApprovedMargaTreeEntry,
@@ -14,6 +14,7 @@ import type {
     ShareableAccount,
 } from '@/pages/people/family-form';
 import { dashboard } from '@/routes';
+import familyTreeRoutes from '@/routes/family-trees';
 import people from '@/routes/people';
 
 type Props = {
@@ -61,6 +62,9 @@ export default function PersonShow({
 }: Props) {
     const activeMargaName =
         margas.find((marga) => marga.id === person.marga_id)?.name ?? null;
+    const appendTree =
+        versionTrees.find((tree) => tree.can_append && tree.is_primary) ??
+        versionTrees.find((tree) => tree.can_append);
 
     return (
         <>
@@ -88,6 +92,18 @@ export default function PersonShow({
                             Perubahan disimpan sekaligus.
                         </p>
                     </div>
+                    {!readOnly && person.gender !== 'P' && appendTree && (
+                        <Button asChild className="w-fit">
+                            <Link
+                                href={familyTreeRoutes.people.create(appendTree.id, {
+                                    query: { father_person_id: person.id },
+                                })}
+                            >
+                                <UserPlus className="size-4" /> Tambah Anak dari{' '}
+                                {person.name}
+                            </Link>
+                        </Button>
+                    )}
 
                     <FamilyTreeHistoryCard
                         entries={familyTrees}
