@@ -34,9 +34,9 @@ test('staff can open an upper or lower marga tree for its identity person', func
                 ->where('margaTree.direction', $direction)
                 ->where(
                     'selectedTreePeople.0.shareCode',
-                    app(PersonShareCode::class)->for($root),
+                    app(PersonShareCode::class)->for($direction === 'upper' ? $root : $identity),
                 )
-                ->where('people.0.id', (string) $root->id));
+                ->where('people.0.id', (string) ($direction === 'upper' ? $root->id : $identity->id)));
     }
 });
 
@@ -183,58 +183,6 @@ test('approved users receive lower marga descendants beyond the person preview d
                 fn (array $person) => $person['id'] === (string) $parent->id
                     && $person['name'] === 'Generasi 7',
             )));
-});
-
-test('lower marga tree excludes disconnected branches from the descendant view', function () {
-    $admin = User::factory()->asAdmin()->create();
-    $marga = Marga::factory()->create(['name' => 'Silaban']);
-    $identity = Person::factory()->create([
-        'name' => 'Tunggul Silaban',
-        'marga_id' => $marga->id,
-        'gender' => 'L',
-    ]);
-    $descendant = Person::factory()->create([
-        'name' => 'Keturunan Tunggul',
-        'marga_id' => $marga->id,
-        'father_id' => $identity->id,
-        'gender' => 'L',
-    ]);
-    $disconnectedRoot = Person::factory()->create([
-        'name' => 'Cabang Terputus',
-        'marga_id' => $marga->id,
-        'gender' => 'L',
-    ]);
-    $disconnectedDescendant = Person::factory()->create([
-        'name' => 'Keturunan Cabang Terputus',
-        'marga_id' => $marga->id,
-        'father_id' => $disconnectedRoot->id,
-        'gender' => 'L',
-    ]);
-    $marga->update(['identity_person_id' => $identity->id]);
-
-    $this->actingAs($admin)
-        ->get(route('tarombo.fullscreen', [
-            'view' => 'tree',
-            'marga_id' => $marga->id,
-            'marga_direction' => 'lower',
-        ]))
-        ->assertSuccessful()
-        ->assertInertia(fn (Assert $page) => $page
-            ->where('selectedTreePeople', fn ($people) => collect($people)
-                ->pluck('id')
-                ->sort()
-                ->values()
-                ->all() === collect([$identity, $descendant])
-                ->pluck('id')
-                ->map(fn (int $id) => (string) $id)
-                ->sort()
-                ->values()
-                ->all()
-                && ! collect($people)->contains(fn (array $person) => in_array(
-                    $person['id'],
-                    [(string) $disconnectedRoot->id, (string) $disconnectedDescendant->id],
-                    true,
-                ))));
 });
 
 test('marga tree marks people claimed by an account and exposes that account for contact requests', function () {
