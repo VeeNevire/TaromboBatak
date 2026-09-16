@@ -436,6 +436,90 @@ test('the show route exposes the whole family sheet', function () {
                 ->etc()));
 });
 
+test('the edit form exposes the recorded father and mother', function () {
+    $marga = Marga::factory()->create();
+    $father = Person::factory()->create(['name' => 'Ayah Tercatat', 'gender' => 'L', 'marga_id' => $marga->id]);
+    $mother = Person::factory()->create(['name' => 'Ibu Tercatat', 'gender' => 'P']);
+    $child = Person::factory()->create([
+        'name' => 'Anak Tercatat',
+        'marga_id' => $marga->id,
+        'father_id' => $father->id,
+        'mother_id' => $mother->id,
+    ]);
+
+    $this->actingAs($this->admin)
+        ->get(route('people.edit', $child))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('people/form')
+            ->where('person.father.id', $father->id)
+            ->where('person.father.name', 'Ayah Tercatat')
+            ->where('person.mother.id', $mother->id)
+            ->where('person.mother.name', 'Ibu Tercatat'));
+});
+
+test('the base edit url reads parent structure from the owned base tree', function () {
+    $marga = Marga::factory()->create();
+    $user = User::factory()->withMarga($marga->id)->create();
+    $father = Person::factory()->create([
+        'name' => 'Ayah dari Pohon',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'created_by' => $user->id,
+    ]);
+    $child = Person::factory()->create([
+        'name' => 'Anak dari Pohon',
+        'marga_id' => $marga->id,
+        'created_by' => $user->id,
+        'father_id' => null,
+    ]);
+    $tree = FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $child->id,
+        'name' => 'Keluarga dari Pohon',
+    ]);
+    $fatherNode = $tree->nodes()->create(['person_id' => $father->id, 'chain' => '1']);
+    $tree->nodes()->create([
+        'person_id' => $child->id,
+        'father_node_id' => $fatherNode->id,
+        'birth_order' => 1,
+        'chain' => '1-1',
+    ]);
+    $tree->people()->sync([$father->id, $child->id]);
+
+    $this->actingAs($user)
+        ->get(route('people.edit', $child))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('selectedVersionId', null)
+            ->where('person.father.id', $father->id)
+            ->where('person.father.name', 'Ayah dari Pohon'));
+});
+
+test('the member list exposes its family tree version for edit links', function () {
+    $marga = Marga::factory()->create();
+    $user = User::factory()->withMarga($marga->id)->create();
+    $father = Person::factory()->create(['marga_id' => $marga->id, 'created_by' => $user->id]);
+    $child = Person::factory()->create([
+        'marga_id' => $marga->id,
+        'created_by' => $user->id,
+        'father_id' => $father->id,
+    ]);
+    $tree = FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $father->id,
+        'name' => 'Keluarga Uji',
+    ]);
+    $tree->people()->sync([$father->id, $child->id]);
+
+    $this->actingAs($user)->get(route('people.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('people.data', fn ($people) => collect($people)
+                ->contains(fn ($person) => $person['id'] === $child->id
+                    && $person['version_tree_id'] === $tree->id)));
+});
+
 test('updating a family persists changes and new siblings', function () {
     $marga = Marga::factory()->create();
     $father = Person::factory()->create(['marga_id' => $marga->id]);

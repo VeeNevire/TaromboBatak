@@ -48,6 +48,7 @@ type PersonItem = {
     pending: boolean;
     created_at: string | null;
     editable: boolean;
+    version_tree_id: number | null;
 };
 
 type Paginated = {
@@ -331,6 +332,14 @@ export default function PeopleIndex({
                                                                     <Link
                                                                         href={people.edit(
                                                                             person.id,
+                                                                            person.version_tree_id
+                                                                                ? {
+                                                                                      query: {
+                                                                                          version_tree:
+                                                                                              person.version_tree_id,
+                                                                                      },
+                                                                                  }
+                                                                                : undefined,
                                                                         )}
                                                                     >
                                                                         <Pencil className="size-4" />
@@ -395,6 +404,14 @@ export default function PeopleIndex({
                                                                     <Link
                                                                         href={people.edit(
                                                                             person.id,
+                                                                            person.version_tree_id
+                                                                                ? {
+                                                                                      query: {
+                                                                                          version_tree:
+                                                                                              person.version_tree_id,
+                                                                                      },
+                                                                                  }
+                                                                                : undefined,
                                                                         )}
                                                                     >
                                                                         <Pencil className="size-4" />
