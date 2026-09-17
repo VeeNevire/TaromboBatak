@@ -13,6 +13,7 @@ import {
     Loader2,
     MessageCircle,
     Megaphone,
+    Pencil,
     Plus,
     RefreshCw,
     Search,
@@ -30,6 +31,7 @@ import {
     useState,
 } from 'react';
 import type { CSSProperties } from 'react';
+import { toast } from 'sonner';
 import { AppAvatar } from '@/components/app-avatar';
 import {
     categoryForFile,
@@ -52,6 +54,7 @@ import { dashboard, login } from '@/routes';
 import announcements from '@/routes/announcements';
 import contactRequests from '@/routes/contact-requests';
 import contacts from '@/routes/contacts';
+import peopleRoutes from '@/routes/people';
 
 type Contact = {
     id: number;
@@ -121,6 +124,9 @@ type Props = {
         marga: string | null;
         color: string | null;
         person_name: string | null;
+        person_id: number | null;
+        share_code: string | null;
+        can_edit_person: boolean;
         person_alias: string | null;
         person_image: string | null;
         birth_year: string | null;
@@ -859,6 +865,25 @@ export default function ContactsIndex({
                 onFinish: () => setReviewingIncomingRequest(false),
             },
         );
+    };
+
+    const copyPersonCode = async () => {
+        if (!selectedIncomingRequest?.share_code) {
+            toast.error('Kode orang belum tersedia untuk pemohon ini.');
+
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(selectedIncomingRequest.share_code);
+            toast.success('Kode orang berhasil disalin. Kirimkan kode ini lewat pesan.');
+        } catch {
+            toast.error('Kode tidak dapat disalin. Periksa izin clipboard browser.');
+        }
+    };
+
+    const showPersonDetailUnavailable = () => {
+        toast.error('Detail Tarombo belum tersedia untuk pemohon ini.');
     };
 
     const statusIndicator = (
@@ -1688,6 +1713,57 @@ export default function ContactsIndex({
                                         {selectedIncomingRequest.contributor ?? 'Belum dicatat'}
                                     </p>
                                 </section>
+
+                                <div className="flex flex-wrap justify-end gap-2">
+                                    {selectedIncomingRequest.person_id ? (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={copyPersonCode}
+                                        >
+                                            <Copy className="size-4" /> Kopi Kode
+                                        </Button>
+                                    ) : (
+                                        <Button type="button" variant="outline" onClick={copyPersonCode}>
+                                            <Copy className="size-4" /> Kopi Kode
+                                        </Button>
+                                    )}
+                                    {selectedIncomingRequest.person_id ? (
+                                        <Button asChild type="button" variant="outline">
+                                            <Link
+                                                href={peopleRoutes.show({
+                                                    person: selectedIncomingRequest.person_id,
+                                                })}
+                                            >
+                                                Lihat Detail
+                                            </Link>
+                                        </Button>
+                                    ) : (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={showPersonDetailUnavailable}
+                                        >
+                                            Lihat Detail
+                                        </Button>
+                                    )}
+                                    {selectedIncomingRequest.person_id &&
+                                    selectedIncomingRequest.can_edit_person ? (
+                                        <Button asChild type="button">
+                                            <Link
+                                                href={peopleRoutes.edit({
+                                                    person: selectedIncomingRequest.person_id,
+                                                })}
+                                            >
+                                                <Pencil className="size-4" /> Edit
+                                            </Link>
+                                        </Button>
+                                    ) : (
+                                        <Button type="button" disabled>
+                                            <Pencil className="size-4" /> Edit
+                                        </Button>
+                                    )}
+                                </div>
                             </div>
 
                             <DialogFooter className="grid gap-2 sm:grid-cols-2">

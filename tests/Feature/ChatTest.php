@@ -140,7 +140,7 @@ test('a disconnected contact remains hidden until their reconnection request is 
 
 test('incoming contact requests include the requester profile for the contact modal', function () {
     $marga = Marga::factory()->create(['name' => 'Sitorus', 'color' => '#2255aa']);
-    $recipient = User::factory()->withMarga($marga->id)->create();
+    $recipient = User::factory()->create();
     $father = Person::factory()->create(['name' => 'Tunggul Sitorus']);
     $contributor = User::factory()->create(['name' => 'Rehan2']);
     $person = Person::factory()->create([
@@ -175,6 +175,8 @@ test('incoming contact requests include the requester profile for the contact mo
             ->where('incomingContactRequests.0.user_id', $requester->id)
             ->where('incomingContactRequests.0.name', 'Akun Borsak')
             ->where('incomingContactRequests.0.person_name', 'Borsak Sitorus')
+            ->where('incomingContactRequests.0.person_id', $person->id)
+            ->where('incomingContactRequests.0.can_edit_person', true)
             ->where('incomingContactRequests.0.person_alias', 'Borsak')
             ->where('incomingContactRequests.0.person_image', 'https://example.com/borsak.jpg')
             ->where('incomingContactRequests.0.birth_year', '1985')
@@ -188,6 +190,10 @@ test('incoming contact requests include the requester profile for the contact mo
             ->where('incomingContactRequests.0.marga', 'Sitorus')
             ->where('incomingContactRequests.0.color', '#2255aa')
             ->where('incomingContactRequests.0.role_label', 'Pengurus Marga'));
+
+    $this->actingAs($recipient)
+        ->get(route('people.show', $person))
+        ->assertSuccessful();
 });
 
 test('the incremental messages feed returns only newer messages as json', function () {

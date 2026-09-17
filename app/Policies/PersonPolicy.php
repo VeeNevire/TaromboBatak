@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Models\ContactRequest;
 use App\Models\ContributionRequest;
 use App\Models\FamilyTreeShare;
 use App\Models\Person;
@@ -22,7 +23,8 @@ class PersonPolicy
         return $user->isStaff()
             || ($person->marga_id !== null
                 && ($user->accessibleMargaIds()->contains($person->marga_id)
-                    || $user->approvedMargaAccessIds()->contains($person->marga_id)));
+                    || $user->approvedMargaAccessIds()->contains($person->marga_id)))
+            || $this->hasContactRequestForClaimedPerson($user, $person);
     }
 
     public function update(User $user, Person $person): bool
@@ -85,5 +87,28 @@ class PersonPolicy
         }
 
         return isset($this->lockedAncestorIds[$person->id]);
+    }
+
+    /** Allow viewing only the claimed identity associated with a contact request. */
+    protected function hasContactRequestForClaimedPerson(User $user, Person $person): bool
+    {
+        return ContactRequest::query()
+            ->whereIn('status', [ContactRequest::STATUS_PENDING, ContactRequest::STATUS_APPROVED])
+            ->where(function ($requests) use ($user, $person) {
+                $requests
+                    ->where(function ($incoming) use ($user, $person) {
+                        $incoming
+                            ->where('recipient_id', $user->id)
+                            ->whereHas('requester', fn ($requester) => $requester
+                                ->where('current_person_id', $person->id));
+                    })
+                    ->orWhere(function ($outgoing) use ($user, $person) {
+                        $outgoing
+                            ->where('requester_id', $user->id)
+                            ->whereHas('recipient', fn ($recipient) => $recipient
+                                ->where('current_person_id', $person->id));
+                    });
+            })
+            ->exists();
     }
 }

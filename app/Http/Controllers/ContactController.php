@@ -9,6 +9,7 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\TelegramAccount;
 use App\Models\User;
+use App\Support\PersonShareCode;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
@@ -19,6 +20,8 @@ use Inertia\Response;
 
 class ContactController extends Controller
 {
+    public function __construct(private readonly PersonShareCode $personShareCodes) {}
+
     public function index(Request $request): Response
     {
         return $this->render($request);
@@ -206,9 +209,11 @@ class ContactController extends Controller
                 ])
                 ->latest()
                 ->get()
-                ->map(function (ContactRequest $request): array {
+                ->map(function (ContactRequest $request) use ($user): array {
                     $person = $request->requester->currentPerson;
+                    $hasCurrentPerson = $person !== null;
                     $hasClaimedPerson = $person !== null && ! $person->isNa();
+                    $canEditPerson = $hasCurrentPerson && $user->can('update', $person);
 
                     return [
                         'id' => $request->id,
@@ -217,6 +222,9 @@ class ContactController extends Controller
                         'marga' => $request->requester->marga?->name,
                         'color' => $request->requester->marga?->color,
                         'person_name' => $hasClaimedPerson ? $person->name : null,
+                        'person_id' => $hasCurrentPerson ? $person->id : null,
+                        'share_code' => $hasCurrentPerson ? $this->personShareCodes->for($person) : null,
+                        'can_edit_person' => $canEditPerson,
                         'person_alias' => $hasClaimedPerson ? $person->alias : null,
                         'person_image' => $hasClaimedPerson ? $person->image : null,
                         'birth_year' => $hasClaimedPerson ? $person->birth_year : null,
