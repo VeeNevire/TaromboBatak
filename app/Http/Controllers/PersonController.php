@@ -996,13 +996,21 @@ class PersonController extends Controller
             $familyTree = FamilyTree::query()->findOrFail($versionTreeId);
             $this->authorizeFamilyTree($request, $familyTree);
 
-            if (filled($validated['family_tree_name'] ?? null)) {
-                $familyTree->update([
-                    'name' => trim($validated['family_tree_name']),
-                ]);
-            }
+            DB::transaction(function () use ($familyTree, $person, $validated, $user): void {
+                if (filled($validated['family_tree_name'] ?? null)) {
+                    $familyTree->update([
+                        'name' => trim($validated['family_tree_name']),
+                    ]);
+                }
 
-            app(FamilyTreeStructureService::class)->updateFromFamilyForm($familyTree, $person, $validated, $user->id);
+                // Biography and story links describe the person, not their
+                // placement in one version of a family tree.
+                $person->update(collect($validated)
+                    ->only(['bio', 'related_stories'])
+                    ->all());
+
+                app(FamilyTreeStructureService::class)->updateFromFamilyForm($familyTree, $person, $validated, $user->id);
+            });
             app(FamilyTreeActivityLogger::class)->log(
                 $familyTree,
                 $user,
@@ -1970,9 +1978,15 @@ class PersonController extends Controller
     private function personLogDetails(Person $person): array
     {
         return $person->only([
+            'id',
             'name',
             'alias',
             'gender',
+            'marga_id',
+            'province_code',
+            'regency_code',
+            'district_code',
+            'village_code',
             'father_id',
             'mother_id',
             'birth_order',
@@ -1980,7 +1994,10 @@ class PersonController extends Controller
             'death_year',
             'spouse',
             'spouse_marga',
+            'image',
             'bio',
+            'related_stories',
+            'is_public',
         ]);
     }
 
@@ -2017,7 +2034,9 @@ class PersonController extends Controller
                     $action === 'added'
                         ? "{$person->name} ditambahkan ke pohon."
                         : "{$person->name} diperbarui.",
-                    $action === 'edited' ? ['before' => $before] : [],
+                    $action === 'edited' && (int) ($before['id'] ?? 0) === $person->id
+                        ? ['before' => $before]
+                        : [],
                 );
             });
     }

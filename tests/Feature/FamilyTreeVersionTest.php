@@ -140,6 +140,11 @@ test('the existing family form updates an alternative version without changing g
         ->put(route('people.update', ['person' => $root, 'version_tree' => $alternative->id]), [
             'name' => $root->name,
             'gender' => 'L',
+            'bio' => 'Riwayat Si Raja Batak yang diperbarui.',
+            'related_stories' => [[
+                'title' => 'Sejarah Si Raja Batak',
+                'url' => 'https://example.com/sejarah-si-raja-batak',
+            ]],
             'birth_order' => 1,
             'sibling_count' => 1,
             'father' => [],
@@ -159,7 +164,22 @@ test('the existing family form updates an alternative version without changing g
         ->and($alternative->nodes()->where('person_id', $secondChild->id)->firstOrFail()->structure_overrides)
         ->toMatchArray(['birth_order' => 1])
         ->and($firstChild->fresh()->chain)->toBe('1-1')
-        ->and($secondChild->fresh()->chain)->toBe('1-2');
+        ->and($secondChild->fresh()->chain)->toBe('1-2')
+        ->and($root->fresh()->bio)->toBe('Riwayat Si Raja Batak yang diperbarui.')
+        ->and($root->fresh()->related_stories)->toBe([
+            [
+                'title' => 'Sejarah Si Raja Batak',
+                'url' => 'https://example.com/sejarah-si-raja-batak',
+            ],
+        ]);
+
+    $this->actingAs($user)
+        ->get(route('people.edit', ['person' => $root, 'version_tree' => $alternative->id]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('person.bio', 'Riwayat Si Raja Batak yang diperbarui.')
+            ->where('person.related_stories.0.title', 'Sejarah Si Raja Batak')
+            ->where('person.related_stories.0.url', 'https://example.com/sejarah-si-raja-batak'));
 });
 
 test('editing a member from a tree modal retains and updates that tree parent', function () {

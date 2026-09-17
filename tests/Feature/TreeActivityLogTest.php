@@ -53,7 +53,12 @@ test('a contributor can view big tree logs and pending changes', function () {
         ->asContributorMember()
         ->withMarga($marga->id)
         ->create();
-    $person = Person::factory()->create(['marga_id' => $marga->id]);
+    $person = Person::factory()->create([
+        'name' => 'Nama Baru',
+        'marga_id' => $marga->id,
+        'birth_year' => '2000',
+        'bio' => 'Biografi baru',
+    ]);
     $requester = User::factory()->create();
     TreeActivityLog::query()->create([
         'person_id' => $person->id,
@@ -62,6 +67,13 @@ test('a contributor can view big tree logs and pending changes', function () {
         'action' => 'added',
         'protection_scope' => TreeChangeRequest::SCOPE_CONTRIBUTOR,
         'summary' => 'Nama ditambahkan.',
+        'details' => [
+            'before' => [
+                'name' => 'Nama Lama',
+                'birth_year' => '1990',
+                'bio' => 'Biografi lama',
+            ],
+        ],
     ]);
     TreeChangeRequest::query()->create([
         'person_id' => $person->id,
@@ -77,6 +89,9 @@ test('a contributor can view big tree logs and pending changes', function () {
         ->assertInertia(fn (Assert $page) => $page
             ->component('tree-activity-logs/index')
             ->has('logs.data', 1)
+            ->where('logs.data.0.changed_fields', ['Nama', 'Tahun lahir', 'Biografi'])
+            ->has('logs.data.0.date')
+            ->has('logs.data.0.time')
             ->has('changeRequests', 1)
             ->where('changeRequests.0.person', $person->name));
 });

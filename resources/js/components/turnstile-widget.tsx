@@ -15,8 +15,13 @@ declare global {
 let scriptPromise: Promise<void> | null = null;
 
 function loadTurnstile(): Promise<void> {
-    if (window.turnstile) return Promise.resolve();
-    if (scriptPromise) return scriptPromise;
+    if (window.turnstile) {
+return Promise.resolve();
+}
+
+    if (scriptPromise) {
+return scriptPromise;
+}
 
     scriptPromise = new Promise((resolve, reject) => {
         const script = document.createElement('script');
@@ -36,7 +41,10 @@ export default function TurnstileWidget({ siteKey }: { siteKey: string | null })
     const widgetIdRef = useRef<string | null>(null);
 
     useEffect(() => {
-        if (!siteKey || !containerRef.current) return;
+        if (!siteKey || !containerRef.current) {
+return;
+}
+
         let cancelled = false;
 
         void loadTurnstile().then(() => {
@@ -50,6 +58,7 @@ export default function TurnstileWidget({ siteKey }: { siteKey: string | null })
 
         return () => {
             cancelled = true;
+
             if (widgetIdRef.current && window.turnstile) {
                 window.turnstile.remove(widgetIdRef.current);
                 widgetIdRef.current = null;

@@ -10,6 +10,7 @@ import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import { trackGoogleAnalyticsPageView } from '@/lib/google-analytics';
+
 if (!import.meta.env.SSR) {
     configureEcho({
         broadcaster: 'reverb',

@@ -8,7 +8,6 @@ use App\Models\ContactRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
-use Inertia\Inertia;
 
 class ContactRequestController extends Controller
 {
@@ -16,21 +15,19 @@ class ContactRequestController extends Controller
     {
         $user = $request->user();
         $recipientId = $request->integer('recipient_id');
-        $reconnected = ContactDisconnect::query()
+        $isDisconnected = ContactDisconnect::query()
             ->where(ContactDisconnect::attributesFor($user->id, $recipientId))
-            ->delete() > 0;
+            ->exists();
         $existing = ContactRequest::query()
             ->where(function ($query) use ($user, $recipientId) {
                 $query->where('requester_id', $user->id)->where('recipient_id', $recipientId)
                     ->orWhere(fn ($query) => $query->where('requester_id', $recipientId)->where('recipient_id', $user->id));
             })->first();
 
-        if ($existing?->status === ContactRequest::STATUS_APPROVED) {
+        if ($existing?->status === ContactRequest::STATUS_APPROVED && ! $isDisconnected) {
             return back()->with('toast', [
                 'type' => 'info',
-                'message' => $reconnected
-                    ? 'Kontak berhasil tersambung kembali.'
-                    : 'Akun tersebut sudah menjadi kontak Anda.',
+                'message' => 'Akun tersebut sudah menjadi kontak Anda.',
             ]);
         }
 
@@ -54,6 +51,15 @@ class ContactRequestController extends Controller
         abort_unless(in_array($status, [ContactRequest::STATUS_APPROVED, ContactRequest::STATUS_REJECTED], true), 422);
 
         $contactRequest->update(['status' => $status, 'reviewed_at' => now()]);
+
+        if ($status === ContactRequest::STATUS_APPROVED) {
+            ContactDisconnect::query()
+                ->where(ContactDisconnect::attributesFor(
+                    $contactRequest->requester_id,
+                    $contactRequest->recipient_id,
+                ))
+                ->delete();
+        }
 
         return back()->with('toast', ['type' => 'success', 'message' => $status === ContactRequest::STATUS_APPROVED ? 'Permintaan kontak disetujui.' : 'Permintaan kontak ditolak.']);
     }
