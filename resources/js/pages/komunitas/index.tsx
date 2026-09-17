@@ -248,12 +248,14 @@ export default function KomunitasIndex() {
                                     baru.
                                 </p>
                                 <div className="mt-8 flex flex-wrap justify-center gap-4">
-                                    <a
-                                        href="mailto:info@tarombobatak.com"
+                                   <a
+                                        href="https://wa.me/62889501863652?text=Halo%2C%20saya%20ingin%20menghubungi%20Tim%20Tarombo%20Connection."
+                                        target="_blank"
+                                        rel="noopener noreferrer"
                                         className="flex items-center gap-2 rounded-full bg-tb-primary px-6 py-3 font-medium text-white transition-colors hover:bg-tb-primary-light"
                                     >
-                                        <Mail className="h-4 w-4" /> Hubungi
-                                        Kami
+                                        <Mail className="h-4 w-4" />
+                                        Hubungi Kami
                                     </a>
                                     <Link
                                         href={home()}

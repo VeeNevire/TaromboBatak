@@ -7,6 +7,7 @@ import familyTreeActivities from '@/routes/family-tree-activities';
 type Activity = {
     id: number;
     tree_name: string;
+    father_name: string | null;
     action: string;
     description: string;
     actor: string;
@@ -47,7 +48,8 @@ export default function FamilyTreeActivitiesIndex({
                                                     {activity.description}
                                                 </p>
                                                 <p className="mt-1 text-xs text-tb-on-surface-variant">
-                                                    {activity.tree_name} · oleh {activity.actor}
+                                                    Nama Keluarga: {activity.tree_name} · Nama Ayah:{' '}
+                                                    {activity.father_name ?? '-'} · oleh {activity.actor}
                                                 </p>
                                             </div>
                                             <time className="text-xs text-tb-on-surface-variant">
