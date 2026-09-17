@@ -71,6 +71,7 @@ class StoreSharedFamilyTreePersonRequest extends FormRequest
             if ($familyTree instanceof FamilyTree && $this->filled('father_node_id')) {
                 $fatherNode = $familyTree->nodes()
                     ->with('person:id,gender')
+                    ->withCount('children')
                     ->find($this->integer('father_node_id'));
 
                 if ($fatherNode === null) {
@@ -82,6 +83,11 @@ class StoreSharedFamilyTreePersonRequest extends FormRequest
                     $validator->errors()->add(
                         'father_node_id',
                         'Ayah yang dipilih harus berjenis kelamin laki-laki.',
+                    );
+                } elseif ($fatherNode->children_count > 0) {
+                    $validator->errors()->add(
+                        'father_node_id',
+                        'Pilih ayah yang belum memiliki cabang keturunan di bawahnya.',
                     );
                 }
             }

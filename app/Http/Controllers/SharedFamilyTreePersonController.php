@@ -30,11 +30,13 @@ class SharedFamilyTreePersonController extends Controller
                 'person' => fn ($query) => $query->select('id', 'name', 'gender', 'marga_id'),
                 'person.wives:id,name',
             ])
+            ->withCount('children')
             ->orderBy('chain')
             ->orderBy('id')
             ->get();
         $fatherNodes = $nodes->filter(
-            fn (FamilyTreeNode $node) => $node->person->gender === 'L',
+            fn (FamilyTreeNode $node) => $node->person->gender === 'L'
+                && $node->children_count === 0,
         );
         $fatherPersonId = $request->integer('father_person_id');
         $initialFatherNode = $fatherPersonId > 0
