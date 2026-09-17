@@ -49,10 +49,16 @@ type Page = {
 
 type ActivityLog = {
     id: number;
-    action: 'created' | 'updated' | 'deleted';
+    action: string;
     description: string;
     actor: string;
     created_at: string | null;
+    context: {
+        person_name: string | null;
+        father_name: string | null;
+        family_tree_name: string | null;
+        is_legacy: boolean;
+    } | null;
 };
 
 const roleLabels: Record<string, string> = {
@@ -501,6 +507,33 @@ export default function AccountsIndex({
                                         <span className="text-xs text-tb-on-surface-variant">
                                             Oleh {log.actor}
                                         </span>
+                                        {log.context && (
+                                            <div className="mt-1 grid gap-0.5 border-l-2 border-tb-primary/35 pl-2 text-xs text-tb-on-surface-variant">
+                                                {log.context.is_legacy ? (
+                                                    <span>
+                                                        Anggota dan ayah belum tercatat pada log lama.
+                                                    </span>
+                                                ) : (
+                                                    <>
+                                                        <span>
+                                                            Anggota:{' '}
+                                                            {log.context.person_name ?? '-'}
+                                                        </span>
+                                                        <span>
+                                                            Ayah:{' '}
+                                                            {log.context.father_name ??
+                                                                'Belum dicatat'}
+                                                        </span>
+                                                    </>
+                                                )}
+                                                {log.context.family_tree_name && (
+                                                    <span>
+                                                        Nama Keluarga:{' '}
+                                                        {log.context.family_tree_name}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>

@@ -141,6 +141,14 @@ class FamilyTreeStructureService
                 : null,
         ];
 
+        if ($fatherNode !== null) {
+            app(FamilyEntryService::class)->syncWives(
+                $fatherNode->person()->firstOrFail(),
+                $data,
+                $createdBy,
+            );
+        }
+
         foreach (['children', 'ownChildren'] as $group) {
             foreach (($data[$group] ?? []) as $index => $row) {
                 if (! is_array($row)) {

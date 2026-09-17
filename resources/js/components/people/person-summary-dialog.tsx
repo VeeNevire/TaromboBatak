@@ -315,8 +315,29 @@ export function PersonSummaryDialog({
                                     <dt className="text-tb-on-surface-variant">
                                         Pasangan
                                     </dt>
-                                    <dd className="text-right font-medium text-tb-on-surface">
-                                        {person.spouse || 'Belum dicatat'}
+                                    <dd className="flex flex-col items-end gap-1 text-right font-medium">
+                                        {(person.spouses ?? []).length > 0 ? (
+                                            person.spouses?.map((spouse) => (
+                                                <Link
+                                                    key={spouse.id}
+                                                    href={peopleRoutes.silsilah(
+                                                        { person: Number(spouse.id) },
+                                                        {
+                                                            query: {
+                                                                context: 'close',
+                                                            },
+                                                        },
+                                                    )}
+                                                    className="text-tb-primary underline decoration-tb-primary/40 underline-offset-2 transition-colors hover:text-tb-primary-light"
+                                                >
+                                                    {spouse.name}
+                                                </Link>
+                                            ))
+                                        ) : (
+                                            <span className="text-tb-on-surface">
+                                                {person.spouse || 'Belum dicatat'}
+                                            </span>
+                                        )}
                                     </dd>
                                 </div>
                                 {(person.spouses ?? []).map((spouse) => (

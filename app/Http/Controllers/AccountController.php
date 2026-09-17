@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreAccountRequest;
 use App\Http\Requests\UpdateAccountRequest;
 use App\Models\ActivityLog;
+use App\Models\FamilyTree;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
@@ -70,6 +71,8 @@ class AccountController extends Controller
 
     public function activityLog(User $account): JsonResponse
     {
+        $legacyFamilyTreeName = $this->primaryFamilyTreeName($account);
+
         return response()->json([
             'account' => [
                 'id' => $account->id,
@@ -82,15 +85,46 @@ class AccountController extends Controller
                 ->latest()
                 ->limit(100)
                 ->get()
-                ->map(fn (ActivityLog $log) => [
-                    'id' => $log->id,
-                    'action' => $log->action,
-                    'description' => $log->description,
-                    'actor' => $log->actor?->name ?? 'Sistem',
-                    'created_at' => $log->created_at?->format('d M Y H:i'),
-                ])
+                ->map(fn (ActivityLog $log) => $this->activityLogPayload($log, $legacyFamilyTreeName))
                 ->values(),
         ]);
+    }
+
+    /** @return array<string, mixed> */
+    private function activityLogPayload(ActivityLog $log, ?string $legacyFamilyTreeName): array
+    {
+        $metadata = $log->metadata ?? [];
+        $isPersonActivity = in_array($log->action, ['people.update', 'people.destroy'], true)
+            || in_array(data_get($metadata, 'route'), ['people.update', 'people.destroy'], true);
+        $personName = data_get($metadata, 'person.name');
+        $isLegacy = $isPersonActivity && ! is_string($personName);
+
+        return [
+            'id' => $log->id,
+            'action' => $log->action,
+            'description' => $log->description,
+            'actor' => $log->actor?->name ?? 'Sistem',
+            'created_at' => $log->created_at?->format('d M Y H:i'),
+            'context' => $isPersonActivity ? [
+                'person_name' => $personName,
+                'father_name' => data_get($metadata, 'father.name'),
+                'family_tree_name' => data_get($metadata, 'family_tree.name')
+                    ?? ($isLegacy ? $legacyFamilyTreeName : null),
+                'is_legacy' => $isLegacy,
+            ] : null,
+        ];
+    }
+
+    private function primaryFamilyTreeName(User $account): ?string
+    {
+        $familyTree = FamilyTree::query()
+            ->where('user_id', $account->id)
+            ->with('rootPerson:id,name')
+            ->orderByDesc('is_primary')
+            ->latest('updated_at')
+            ->first();
+
+        return $familyTree?->name ?? $familyTree?->rootPerson?->name;
     }
 
     public function create(): Response

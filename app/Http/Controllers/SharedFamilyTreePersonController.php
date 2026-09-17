@@ -9,7 +9,6 @@ use App\Models\FamilyTreeNode;
 use App\Models\Person;
 use App\Notifications\FamilyTreeAppendSubmitted;
 use App\Services\FamilyTreeActivityLogger;
-use App\Services\FamilyTreeInheritanceService;
 use App\Services\SharedFamilyTreeAppendService;
 use App\Services\TreeActivityLogger;
 use Illuminate\Http\RedirectResponse;
@@ -28,17 +27,15 @@ class SharedFamilyTreePersonController extends Controller
 
         $nodes = $familyTree->nodes()
             ->with([
-                'person' => fn ($query) => $query->select('id', 'name', 'gender', 'marga_id')->withExists('children'),
+                'person' => fn ($query) => $query->select('id', 'name', 'gender', 'marga_id'),
                 'person.wives:id,name',
             ])
             ->orderBy('chain')
             ->orderBy('id')
             ->get();
-        $parentPersonIds = app(FamilyTreeInheritanceService::class)->nodesFor($familyTree)
-            ->pluck('father_person_id')->filter()->flip();
-        $eligibleFathers = $nodes->filter(fn (FamilyTreeNode $node) => $node->person->gender !== 'P'
-            && ! $node->person->children_exists
-            && ! $parentPersonIds->has($node->person_id));
+        $fatherNodes = $nodes->filter(
+            fn (FamilyTreeNode $node) => $node->person->gender === 'L',
+        );
         $fatherPersonId = $request->integer('father_person_id');
         $initialFatherNode = $fatherPersonId > 0
             ? $nodes->first(fn (FamilyTreeNode $node) => $node->person_id === $fatherPersonId
@@ -50,7 +47,7 @@ class SharedFamilyTreePersonController extends Controller
                 'father_person_id' => 'Ayah tidak ditemukan dalam silsilah ini.',
             ]);
         }
-        if ($initialFatherNode !== null && ! $eligibleFathers->contains('id', $initialFatherNode->id)) {
+        if ($initialFatherNode !== null && ! $fatherNodes->contains('id', $initialFatherNode->id)) {
             $initialFatherNode = null;
         }
         $motherNodesByPersonId = $nodes
@@ -64,13 +61,13 @@ class SharedFamilyTreePersonController extends Controller
                 'requires_approval' => ! $request->user()->can('manage', $familyTree),
             ],
             'initialFatherNodeId' => $initialFatherNode?->id,
-            'fatherOptions' => $eligibleFathers
+            'fatherOptions' => $fatherNodes
                 ->map(fn (FamilyTreeNode $node) => [
                     'id' => $node->id,
                     'name' => $node->person->name,
                     'chain' => $node->chain,
                 ])->values()->all(),
-            'motherOptionsByFather' => $eligibleFathers
+            'motherOptionsByFather' => $fatherNodes
                 ->mapWithKeys(fn (FamilyTreeNode $fatherNode) => [
                     (string) $fatherNode->id => $fatherNode->person->wives
                         ->map(fn (Person $wife) => $motherNodesByPersonId->get($wife->id))

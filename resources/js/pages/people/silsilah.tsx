@@ -158,6 +158,7 @@ export default function PersonSilsilah(props: Props) {
                         key={centerPersonId}
                         people={tree}
                         centerId={centerPersonId}
+                        rootId={props.centerPersonId}
                         onSelect={handleSelect}
                         showProfileOnName
                         lineagePath={lineagePath}

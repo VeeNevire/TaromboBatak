@@ -772,7 +772,10 @@ export default function ContactsIndex({
             {
                 preserveScroll: true,
                 preserveState: true,
-                onSuccess: () => setAddContactOpen(true),
+                onSuccess: () => {
+                    setAddContactOpen(false);
+                    setContactSearch('');
+                },
                 onFinish: () => setRequestingContactId(null),
             },
         );

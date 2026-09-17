@@ -631,3 +631,38 @@ test('a failed version update rolls back newly appended children', function () {
         ->and($tree->nodes()->count())->toBe(1)
         ->and($tree->people()->count())->toBe(0);
 });
+
+test('a version form saves wives and their fathers for the selected father', function () {
+    $user = User::factory()->asAdmin()->create();
+    $father = Person::factory()->create(['name' => 'Ayah Darma', 'gender' => 'L']);
+    $focus = Person::factory()->create([
+        'name' => 'Darma',
+        'gender' => 'L',
+        'father_id' => $father->id,
+    ]);
+    $tree = FamilyTree::create(['user_id' => $user->id, 'root_person_id' => $father->id]);
+    $fatherNode = FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $father->id]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $focus->id,
+        'father_node_id' => $fatherNode->id,
+    ]);
+
+    $this->actingAs($user)->put(route('people.update', [
+        'person' => $focus,
+        'version_tree' => $tree->id,
+    ]), [
+        'name' => $focus->name,
+        'gender' => 'L',
+        'father' => ['id' => $father->id, 'name' => $father->name],
+        'mothers' => [[
+            'name' => 'Istri Darma',
+            'marga_id' => Marga::factory()->create()->id,
+            'father_name' => 'Ayah Istri Darma',
+        ]],
+    ])->assertRedirect();
+
+    $wife = Person::query()->where('name', 'Istri Darma')->firstOrFail();
+    expect($father->wives()->whereKey($wife->id)->exists())->toBeTrue()
+        ->and($wife->father?->name)->toBe('Ayah Istri Darma');
+});
