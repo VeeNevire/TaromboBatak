@@ -183,7 +183,7 @@ node.claimed
                 ) : null}
                 {showSpouseNames && (node.spouses?.length ?? 0) > 0 && (
                     <span className="mt-0.5 block border-t border-current/15 pt-0.5 text-[9px] leading-tight font-medium text-tb-primary">
-                        Pasangan: {node.spouses?.join(', ')}
+                        {node.spouses?.join(', ')}
                     </span>
                 )}
             </div>
