@@ -1395,7 +1395,7 @@ test('the family history card displays the topmost father node as its root', fun
             ->where('familyTrees.0.root_name', 'Ayah Jaya Silaban'));
 });
 
-test('the person family form lists only versions rooted at the focused person', function () {
+test('the person family form keeps every accessible family tree visible while editing one version', function () {
     $admin = User::factory()->asAdmin()->create();
     $user = User::factory()->create();
     $focus = Person::factory()->create(['name' => 'Fokus Admin']);
@@ -1428,21 +1428,26 @@ test('the person family form lists only versions rooted at the focused person', 
             ->has('familyTrees', 3));
 
     $this->actingAs($admin)
-        ->get(route('people.edit', $focus))
+        ->get(route('people.edit', [
+            'person' => $focus,
+            'version_tree' => $adminTree->id,
+        ]))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->has('familyTrees', 2)
-            ->has('versionTrees', 2)
+            ->has('familyTrees', 3)
+            ->where('familyTrees', fn ($trees) => collect($trees)
+                ->contains('id', $otherTree->id))
+            ->has('versionTrees', 3)
             ->where('versionTrees', fn ($trees) => collect($trees)
-                ->every(fn (array $tree) => $tree['root_person_id'] === $focus->id
-                    && $tree['root_name'] === 'Fokus Admin')));
+                ->every(fn (array $tree) => collect($tree['member_person_ids'])
+                    ->contains($focus->id))));
 
     $this->actingAs($admin)
         ->get(route('people.show', $focus))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->has('familyTrees', 2)
-            ->has('versionTrees', 2));
+            ->has('familyTrees', 3)
+            ->has('versionTrees', 3));
 });
 
 test('family tree entries expose every member for alternative version actions', function () {
@@ -1593,6 +1598,52 @@ test('an account can open its family tree without exposing unrelated trees', fun
             ->component('people/silsilah')
             ->has('people', 2)
             ->where('person.name', 'Anak'));
+});
+
+test('a family tree starts at the highest ancestor of its configured root without using detached nodes', function () {
+    $ancestor = Person::factory()->create(['name' => 'Leluhur Tertinggi']);
+    $configuredRoot = Person::factory()->create([
+        'name' => 'Akar Tersimpan',
+        'father_id' => $ancestor->id,
+    ]);
+    $descendant = Person::factory()->create([
+        'name' => 'Keturunan',
+        'father_id' => $configuredRoot->id,
+    ]);
+    $detached = Person::factory()->create(['name' => 'Node Terpisah']);
+    $tree = FamilyTree::create([
+        'user_id' => $this->admin->id,
+        'root_person_id' => $configuredRoot->id,
+        'name' => 'Silsilah Lengkap',
+    ]);
+    $ancestorNode = FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $ancestor->id,
+    ]);
+    $rootNode = FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $configuredRoot->id,
+        'father_node_id' => $ancestorNode->id,
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $descendant->id,
+        'father_node_id' => $rootNode->id,
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $detached->id,
+    ]);
+
+    $this->actingAs($this->admin)
+        ->get(route('family-trees.show', $tree))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('people/silsilah')
+            ->has('people', 4)
+            ->where('centerPersonId', (string) $ancestor->id)
+            ->where('person.id', (string) $ancestor->id)
+            ->where('familyTree.rootPersonId', $configuredRoot->id));
 });
 
 test('the create form suggests male people as fathers even when they have children', function () {

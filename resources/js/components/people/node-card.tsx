@@ -13,6 +13,7 @@ export type TreeNode = {
     image?: string | null;
     pending?: boolean;
     claimed?: boolean;
+    spouses?: string[];
 };
 
 const PASTELS = ['#DCE7DE', '#EFE2C9', '#E6D6E3', '#D6E1EC', '#F0DAD0'];
@@ -41,6 +42,7 @@ export function NodeCard({
     onNameClick,
     dashed = false,
     showAvatar = true,
+    showSpouseNames = false,
 }: {
     node: TreeNode;
     highlighted?: boolean;
@@ -50,6 +52,7 @@ export function NodeCard({
     onNameClick?: () => void;
     dashed?: boolean;
     showAvatar?: boolean;
+    showSpouseNames?: boolean;
 }) {
     return (
         <div
@@ -179,6 +182,11 @@ node.claimed
                     </span>
                 ) : null}
             </div>
+            {showSpouseNames && (node.spouses?.length ?? 0) > 0 && (
+                <p className="mt-1 max-w-full text-center text-[9px] leading-tight font-medium text-tb-primary">
+                    Pasangan: {node.spouses?.join(', ')}
+                </p>
+            )}
         </div>
     );
 }

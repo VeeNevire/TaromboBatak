@@ -79,6 +79,42 @@ test('tarombo modal payload includes the father of a linked wife', function () {
             ->where('selectedTreePeople.0.spouses.0.fatherName', $wifeFather->name));
 });
 
+test('a linked wife opens a close family tree with her father, siblings, and children', function () {
+    $owner = User::factory()->asAdmin()->create();
+    $wifeFather = Person::factory()->create(['name' => 'Ayah Istri', 'gender' => 'L']);
+    $wife = Person::factory()->create([
+        'name' => 'Istri Terhubung',
+        'gender' => 'P',
+        'father_id' => $wifeFather->id,
+    ]);
+    Person::factory()->create([
+        'name' => 'Saudara Istri',
+        'gender' => 'L',
+        'father_id' => $wifeFather->id,
+    ]);
+    $husband = Person::factory()->create(['name' => 'Suami Istri', 'gender' => 'L']);
+    Person::factory()->create([
+        'name' => 'Anak Istri',
+        'gender' => 'L',
+        'father_id' => $husband->id,
+        'mother_id' => $wife->id,
+    ]);
+
+    $this->actingAs($owner)
+        ->get(route('people.silsilah', [
+            'person' => $wife,
+            'context' => 'close',
+        ]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('people/silsilah')
+            ->where('centerPersonId', (string) $wife->id)
+            ->has('people', 4)
+            ->where('people', fn ($people) => collect($people)
+                ->contains(fn (array $person) => $person['name'] === 'Anak Istri'
+                    && $person['parentId'] === (string) $wife->id)));
+});
+
 test('tarombo defaults to the most recently updated account family tree when no primary exists', function () {
     $owner = User::factory()->asAdmin()->create();
     $olderRoot = Person::factory()->create();

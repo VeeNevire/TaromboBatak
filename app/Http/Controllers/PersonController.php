@@ -465,6 +465,7 @@ class PersonController extends Controller
             Gate::authorize('update', $person);
         }
         $versionTrees = $this->familyTrees($user, $person);
+        $familyTrees = $this->familyTrees($user);
         $selectedVersionName = data_get(
             collect($versionTrees)->firstWhere('id', $request->integer('version_tree')),
             'name',
@@ -505,7 +506,7 @@ class PersonController extends Controller
             ),
             'lockedMarga' => $isStaff || $user->isContributor() ? null : $this->lockedMarga($user),
             'margaLineage' => $this->createMargaLineage($user, $isStaff),
-            'familyTrees' => $versionTrees,
+            'familyTrees' => $familyTrees,
             'approvedMargaTrees' => $this->approvedMargaTrees($user),
             'margaAccessMargaId' => $user->isStaff() || $user->isContributor() ? null : $user->marga_id,
             'margaAccessStatus' => $this->margaAccessStatus($user, $user->marga_id),
@@ -536,6 +537,20 @@ class PersonController extends Controller
     public function silsilah(Request $request, Person $person): Response|RedirectResponse
     {
         Gate::authorize('view', $person);
+
+        if ($request->string('context')->toString() === 'close') {
+            return Inertia::render('people/silsilah', [
+                'people' => app(TaromboTreeService::class)->rowsForCloseFamily($person),
+                'centerPersonId' => (string) $person->id,
+                'person' => [
+                    'id' => (string) $person->id,
+                    'name' => $person->name,
+                    'alias' => $person->alias,
+                    'marga' => $person->marga->name ?? 'Batak',
+                    'birthOrder' => $person->birth_order,
+                ],
+            ]);
+        }
 
         $familyTrees = FamilyTree::query()
             ->whereHas('nodes', fn ($query) => $query->where('person_id', $person->id))
@@ -611,7 +626,8 @@ class PersonController extends Controller
             $familyTree,
             $visibleMargaIds,
         );
-        $rootRow = collect($rows)->firstWhere('id', (string) $familyTree->root_person_id)
+        $displayRootId = $service->highestAncestorId($rows, $familyTree->root_person_id);
+        $rootRow = collect($rows)->firstWhere('id', $displayRootId)
             ?? collect($rows)->firstWhere('parentId', null)
             ?? collect($rows)->first();
         abort_if($rootRow === null, 404);
@@ -980,13 +996,21 @@ class PersonController extends Controller
             $familyTree = FamilyTree::query()->findOrFail($versionTreeId);
             $this->authorizeFamilyTree($request, $familyTree);
 
-            if (filled($validated['family_tree_name'] ?? null)) {
-                $familyTree->update([
-                    'name' => trim($validated['family_tree_name']),
-                ]);
-            }
+            DB::transaction(function () use ($familyTree, $person, $validated, $user): void {
+                if (filled($validated['family_tree_name'] ?? null)) {
+                    $familyTree->update([
+                        'name' => trim($validated['family_tree_name']),
+                    ]);
+                }
 
-            app(FamilyTreeStructureService::class)->updateFromFamilyForm($familyTree, $person, $validated, $user->id);
+                // Biography and story links describe the person, not their
+                // placement in one version of a family tree.
+                $person->update(collect($validated)
+                    ->only(['bio', 'related_stories'])
+                    ->all());
+
+                app(FamilyTreeStructureService::class)->updateFromFamilyForm($familyTree, $person, $validated, $user->id);
+            });
             app(FamilyTreeActivityLogger::class)->log(
                 $familyTree,
                 $user,
@@ -1954,9 +1978,15 @@ class PersonController extends Controller
     private function personLogDetails(Person $person): array
     {
         return $person->only([
+            'id',
             'name',
             'alias',
             'gender',
+            'marga_id',
+            'province_code',
+            'regency_code',
+            'district_code',
+            'village_code',
             'father_id',
             'mother_id',
             'birth_order',
@@ -1964,7 +1994,10 @@ class PersonController extends Controller
             'death_year',
             'spouse',
             'spouse_marga',
+            'image',
             'bio',
+            'related_stories',
+            'is_public',
         ]);
     }
 
@@ -2001,7 +2034,9 @@ class PersonController extends Controller
                     $action === 'added'
                         ? "{$person->name} ditambahkan ke pohon."
                         : "{$person->name} diperbarui.",
-                    $action === 'edited' ? ['before' => $before] : [],
+                    $action === 'edited' && (int) ($before['id'] ?? 0) === $person->id
+                        ? ['before' => $before]
+                        : [],
                 );
             });
     }

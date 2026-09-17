@@ -19,6 +19,78 @@ class FamilyEntryService
     }
 
     /**
+     * Resolve wife rows from the family form and persist their links to a
+     * father. Version-only edits use this without changing global child links.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<int, Person|null>
+     */
+    public function syncWives(Person $father, array $data, ?int $createdBy = null): array
+    {
+        $mothers = [];
+
+        foreach ($this->motherEntries($data) as $index => $entry) {
+            $sharedMother = ! empty($entry['share_code'])
+                ? app(PersonShareCode::class)->resolve((string) $entry['share_code'])
+                : null;
+
+            if (! empty($entry['share_code']) && (
+                $sharedMother === null
+                || (int) ($entry['id'] ?? 0) !== $sharedMother->id
+                || ! in_array($sharedMother->gender, ['P', null], true)
+            )) {
+                throw ValidationException::withMessages([
+                    "mothers.{$index}.share_code" => 'Kode istri tidak valid. Tempel ulang kode dari kontributor.',
+                ]);
+            }
+
+            $motherMargaId = $this->resolveMargaId(
+                $entry['marga_id'] ?? null,
+                $entry['new_marga'] ?? null,
+            );
+            $mother = $sharedMother ?? $this->resolveParent(
+                $entry['id'] ?? ($index === 0 ? ($data['mother_id'] ?? null) : null),
+                $entry,
+                $motherMargaId,
+                null,
+                $createdBy,
+                'P',
+            );
+
+            if ($sharedMother === null && $mother !== null && $this->normalizeName($entry['father_name'] ?? null) !== null) {
+                $motherFather = $this->resolveParent(
+                    null,
+                    ['name' => $entry['father_name']],
+                    $motherMargaId,
+                    null,
+                    $createdBy,
+                    'L',
+                    $mother->ineligibleFatherIds(),
+                );
+
+                if ($motherFather !== null && $mother->father_id !== $motherFather->id) {
+                    $mother->update([
+                        'father_id' => $motherFather->id,
+                        'pending_father' => false,
+                    ]);
+                }
+            }
+
+            $mothers[] = $mother;
+        }
+
+        $wifeLinks = [];
+        foreach ($mothers as $mother) {
+            if ($mother !== null && ! isset($wifeLinks[$mother->id])) {
+                $wifeLinks[$mother->id] = ['position' => count($wifeLinks) + 1];
+            }
+        }
+        $father->wives()->sync($wifeLinks);
+
+        return $mothers;
+    }
+
+    /**
      * Persist a whole family entry (father, mother, and all sibling rows)
      * inside a single transaction, then recompute the chain numbers for the
      * affected patrilineal lineage.

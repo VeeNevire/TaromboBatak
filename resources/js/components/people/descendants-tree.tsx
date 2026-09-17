@@ -10,6 +10,7 @@ import people from '@/routes/people';
 type Props = {
     people: TaromboPerson[];
     centerId: string;
+    rootId?: string;
     onSelect?: (id: string) => void;
     highlightId?: string | null;
     editNodes?: boolean;
@@ -27,6 +28,7 @@ type Props = {
     currentUserId?: number;
     versionTreeId?: number | null;
     showNodeAvatar?: boolean;
+    showSpouseNames?: boolean;
 };
 
 type LineageLine = {
@@ -55,6 +57,7 @@ function toNode(person: TaromboPerson, displayNumber?: number): TreeNode {
         image: person.image,
         pending: person.pending,
         claimed: (person.claimedAccounts?.length ?? 0) > 0,
+        spouses: person.spouses?.map((spouse) => spouse.name),
     };
 }
 
@@ -78,6 +81,7 @@ function TreeBranch({
     collapseDepth,
     compact,
     showNodeAvatar,
+    showSpouseNames,
     alternativeTrees,
     nodeIdPrefix,
 }: {
@@ -102,6 +106,7 @@ function TreeBranch({
     collapseDepth?: number;
     compact?: boolean;
     showNodeAvatar?: boolean;
+    showSpouseNames?: boolean;
 }) {
     const [activeAlternativeId, setActiveAlternativeId] = useState<
         number | null
@@ -133,6 +138,7 @@ function TreeBranch({
             }
             dashed={markFemaleLineage && femaleLineage}
             showAvatar={showNodeAvatar}
+            showSpouseNames={showSpouseNames}
         />
     );
 
@@ -266,6 +272,7 @@ function TreeBranch({
                             collapseDepth={collapseDepth}
                             compact={compact}
                             showNodeAvatar={showNodeAvatar}
+                            showSpouseNames={showSpouseNames}
                         />
                     ))}
                 </ul>
@@ -324,6 +331,7 @@ function TreeBranch({
                             lineagePath={[]}
                             markFemaleLineage={markFemaleLineage}
                             showNodeAvatar={showNodeAvatar}
+                            showSpouseNames={showSpouseNames}
                         />
                     </div>
                 </div>
@@ -335,6 +343,7 @@ function TreeBranch({
 export function DescendantsTree({
     people,
     centerId,
+    rootId,
     onSelect,
     highlightId,
     editNodes = false,
@@ -352,6 +361,7 @@ export function DescendantsTree({
     currentUserId,
     versionTreeId,
     showNodeAvatar = true,
+    showSpouseNames = false,
 }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [profilePerson, setProfilePerson] = useState<TaromboPerson | null>(
@@ -379,10 +389,12 @@ export function DescendantsTree({
     }, [people]);
 
     const center = people.find((person) => person.id === centerId) ?? people[0];
+    const root =
+        people.find((person) => person.id === rootId) ?? center;
     const numberById = useMemo(() => {
         const numbers = new Map<string, number>();
 
-        if (!center) {
+        if (!root) {
             return numbers;
         }
 
@@ -401,10 +413,10 @@ export function DescendantsTree({
             }
         };
 
-        walk(center.id, 1);
+        walk(root.id, 1);
 
         return numbers;
-    }, [center, childrenOf]);
+    }, [childrenOf, root]);
 
     const [collapsed, setCollapsed] = useState<Set<string>>(() => {
         const initial = new Set<string>();
@@ -431,8 +443,8 @@ export function DescendantsTree({
             }
         };
 
-        if (center) {
-            walk(center.id, 1);
+        if (root) {
+            walk(root.id, 1);
         }
 
         return initial;
@@ -534,8 +546,8 @@ export function DescendantsTree({
     }
 
     const visibleRoots = hideRoot
-        ? (childrenOf.get(center.id) ?? [])
-        : [center];
+        ? (childrenOf.get(root.id) ?? [])
+        : [root];
     const detachedRoots = detachedPeople.filter(
         (person) => person.id !== center.id,
     );
@@ -590,6 +602,7 @@ export function DescendantsTree({
                             collapseDepth={collapseDepth}
                             compact={compact}
                             showNodeAvatar={showNodeAvatar}
+                            showSpouseNames={showSpouseNames}
                         />
                     ))}
                 </ul>
@@ -637,6 +650,7 @@ export function DescendantsTree({
                                     collapseDepth={collapseDepth}
                                     compact={compact}
                                     showNodeAvatar={showNodeAvatar}
+                                    showSpouseNames={showSpouseNames}
                                 />
                             </ul>
                         ))}

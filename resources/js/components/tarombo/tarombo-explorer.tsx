@@ -393,6 +393,7 @@ export function TaromboExplorer({
     const [expanded, setExpanded] = useState<'diagram' | 'tree' | null>(null);
     const [treeZoom, setTreeZoom] = useState(1);
     const [showFemaleLineage, setShowFemaleLineage] = useState(false);
+    const [showSpouseNames, setShowSpouseNames] = useState(false);
     const [showNodeCircles, setShowNodeCircles] = useState(true);
     const [familyTreeSearch, setFamilyTreeSearch] = useState('');
     const [familyTreeSelectorOpen, setFamilyTreeSelectorOpen] =
@@ -453,6 +454,23 @@ export function TaromboExplorer({
                 className="size-4 rounded border-emerald-600 text-emerald-600 accent-emerald-600 focus:ring-2 focus:ring-emerald-500/30"
             />
             Silsilah Perempuan Ditampilkan
+        </label>
+    );
+
+    const spouseNamesToggle = (
+        <label
+            className={cn(
+                'flex cursor-pointer items-center justify-end gap-2 text-xs font-semibold text-emerald-700 select-none dark:text-emerald-300',
+                snapshotMode && 'invisible',
+            )}
+        >
+            <input
+                type="checkbox"
+                checked={showSpouseNames}
+                onChange={(event) => setShowSpouseNames(event.target.checked)}
+                className="size-4 rounded border-emerald-600 text-emerald-600 accent-emerald-600 focus:ring-2 focus:ring-emerald-500/30"
+            />
+            Nama Pasangan Ditampilkan
         </label>
     );
 
@@ -1114,6 +1132,7 @@ export function TaromboExplorer({
                     <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
                         {(!margaTree || !fullscreen) && familyTreeSelector}
                         {!margaTree && femaleLineageToggle}
+                        {spouseNamesToggle}
                         {!fullscreen && nodeCircleToggle}
                     </div>
                 </div>
@@ -1142,6 +1161,7 @@ export function TaromboExplorer({
                         collapseDepth={verticalTreeCollapseDepth}
                         detachedPeople={margaDetachedRoots}
                         showNodeAvatar={showNodeCircles}
+                        showSpouseNames={showSpouseNames}
                         versionTreeId={selectedFamilyTreeId}
                         compact={fullscreen}
                         nodeIdPrefix={
@@ -1459,6 +1479,7 @@ export function TaromboExplorer({
                                                 {familyTreeSelector}
                                                 {!margaTree &&
                                                     femaleLineageToggle}
+                                                {spouseNamesToggle}
                                                 {nodeCircleToggle}
                                             </div>
                                         </div>
@@ -1503,6 +1524,9 @@ export function TaromboExplorer({
                                                 }
                                                 showNodeAvatar={
                                                     showNodeCircles
+                                                }
+                                                showSpouseNames={
+                                                    showSpouseNames
                                                 }
                                                 nodeIdPrefix="tarombo-mobile-tree-node"
                                                 currentUserId={

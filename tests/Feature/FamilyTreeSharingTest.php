@@ -143,10 +143,12 @@ test('an accepted recipient submits a new member for the owner to approve', func
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->component('family-tree-activities/index')
-            ->has('activities', 1));
+            ->has('activities', 1)
+            ->where('activities.0.tree_name', $tree->name)
+            ->where('activities.0.father_name', $root->name));
 });
 
-test('the shared member form only offers fathers without children in this tree', function () {
+test('the shared member form offers every male father in the active tree', function () {
     $marga = Marga::factory()->create();
     $owner = User::factory()->withMarga($marga->id)->create();
     $recipient = User::factory()->withMarga($marga->id)->create();
@@ -165,12 +167,17 @@ test('the shared member form only offers fathers without children in this tree',
     ]);
     // A visually empty branch may still have children recorded elsewhere.
     $fatherElsewhere = Person::factory()->create(['gender' => 'L', 'marga_id' => $marga->id]);
-    FamilyTreeNode::create([
+    $fatherElsewhereNode = FamilyTreeNode::create([
         'family_tree_id' => $tree->id,
         'person_id' => $fatherElsewhere->id,
         'father_node_id' => $rootNode->id,
     ]);
     Person::factory()->create(['father_id' => $fatherElsewhere->id]);
+    $woman = Person::factory()->create(['gender' => 'P', 'marga_id' => $marga->id]);
+    $womanNode = FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $woman->id,
+    ]);
     FamilyTreeShare::create([
         'family_tree_id' => $tree->id,
         'sender_id' => $owner->id,
@@ -183,6 +190,8 @@ test('the shared member form only offers fathers without children in this tree',
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->where('fatherOptions', [
+                ['id' => $fatherElsewhereNode->id, 'name' => $fatherElsewhere->name, 'chain' => null],
+                ['id' => $rootNode->id, 'name' => 'Raja Sharing', 'chain' => '1'],
                 ['id' => $leafNode->id, 'name' => 'Calon Ayah Ujung', 'chain' => '1-1'],
             ]));
 
@@ -193,17 +202,31 @@ test('the shared member form only offers fathers without children in this tree',
         ]))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('initialFatherNodeId', null)
-            ->where('fatherOptions', [
-                ['id' => $leafNode->id, 'name' => 'Calon Ayah Ujung', 'chain' => '1-1'],
-            ]));
+            ->where('initialFatherNodeId', $rootNode->id)
+            ->has('fatherOptions', 3));
 
     $this->get(route('family-trees.people.create', [
         'familyTree' => $tree,
         'father_person_id' => $fatherElsewhere->id,
     ]))->assertSuccessful()->assertInertia(fn (Assert $page) => $page
-        ->where('initialFatherNodeId', null)
-        ->has('fatherOptions', 1));
+        ->where('initialFatherNodeId', $fatherElsewhereNode->id)
+        ->has('fatherOptions', 3));
+
+    $this->actingAs($owner)->post(route('family-trees.people.store', $tree), [
+        'name' => 'Anak Cabang Baru',
+        'gender' => 'L',
+        'father_node_id' => $fatherElsewhereNode->id,
+    ])->assertRedirect(route('family-trees.show', $tree));
+
+    $newChild = Person::query()->where('name', 'Anak Cabang Baru')->firstOrFail();
+    expect($newChild->father_id)->toBe($fatherElsewhere->id)
+        ->and($tree->nodes()->where('person_id', $newChild->id)->value('father_node_id'))
+        ->toBe($fatherElsewhereNode->id);
+
+    $this->actingAs($owner)->post(route('family-trees.people.store', $tree), [
+        'name' => 'Tidak Boleh Berayah Perempuan',
+        'father_node_id' => $womanNode->id,
+    ])->assertSessionHasErrors('father_node_id');
 });
 
 test('adding a child from a known father preselects his node and joins the existing tree', function () {

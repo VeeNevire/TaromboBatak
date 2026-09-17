@@ -2,6 +2,7 @@
 
 use App\Models\ActivityLog;
 use App\Models\FamilyTree;
+use App\Models\FamilyTreeNode;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
@@ -105,6 +106,7 @@ test('successful data changes by a sub-admin are recorded on their activity log'
 });
 
 test('a sub-admin activity log identifies the edited person and their father', function () {
+    $admin = User::factory()->asAdmin()->create();
     $subAdmin = User::factory()->asSubAdmin()->create();
     $marga = Marga::factory()->create();
     $father = Person::factory()->create(['name' => 'Ayah Log', 'marga_id' => $marga->id]);
@@ -113,6 +115,18 @@ test('a sub-admin activity log identifies the edited person and their father', f
         'marga_id' => $marga->id,
         'father_id' => $father->id,
         'birth_order' => 1,
+    ]);
+    $tree = FamilyTree::create([
+        'user_id' => $subAdmin->id,
+        'root_person_id' => $father->id,
+        'name' => 'Keluarga Log',
+        'is_primary' => true,
+    ]);
+    $fatherNode = FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $father->id]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $child->id,
+        'father_node_id' => $fatherNode->id,
     ]);
 
     $this->actingAs($subAdmin)
@@ -126,11 +140,67 @@ test('a sub-admin activity log identifies the edited person and their father', f
         ])
         ->assertRedirect(route('people.show', $child));
 
-    expect(ActivityLog::query()
+    $log = ActivityLog::query()
         ->where('account_id', $subAdmin->id)
         ->latest()
-        ->firstOrFail()
-        ->description)->toBe('Mengubah data Anak Log, anak dari Ayah Log.');
+        ->firstOrFail();
+
+    expect($log->description)->toBe('Mengubah data Anak Log, anak dari Ayah Log.')
+        ->and($log->metadata)->toMatchArray([
+            'person' => ['id' => $child->id, 'name' => 'Anak Log'],
+            'father' => ['id' => $father->id, 'name' => 'Ayah Log'],
+            'family_tree' => ['id' => $tree->id, 'name' => 'Keluarga Log'],
+        ]);
+
+    $this->actingAs($admin)
+        ->get(route('accounts.activity-log', $subAdmin))
+        ->assertOk()
+        ->assertJsonPath('logs.0.context.person_name', 'Anak Log')
+        ->assertJsonPath('logs.0.context.father_name', 'Ayah Log')
+        ->assertJsonPath('logs.0.context.family_tree_name', 'Keluarga Log')
+        ->assertJsonPath('logs.0.context.is_legacy', false);
+});
+
+test('a sub-admin activity log snapshots the family tree selected by version_tree', function () {
+    $subAdmin = User::factory()->asSubAdmin()->create();
+    $root = Person::factory()->create(['name' => 'Akar Versi', 'gender' => 'L']);
+    $child = Person::factory()->create([
+        'name' => 'Anak Versi',
+        'gender' => 'L',
+        'father_id' => $root->id,
+        'birth_order' => 1,
+    ]);
+    $tree = FamilyTree::create([
+        'user_id' => $subAdmin->id,
+        'root_person_id' => $root->id,
+        'name' => 'Versi Yang Dipilih',
+    ]);
+    $rootNode = FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $root->id]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $child->id,
+        'father_node_id' => $rootNode->id,
+        'birth_order' => 1,
+    ]);
+
+    $this->actingAs($subAdmin)
+        ->put(route('people.update', ['person' => $root, 'version_tree' => $tree->id]), [
+            'name' => $root->name,
+            'gender' => $root->gender,
+            'birth_order' => 1,
+            'sibling_count' => 1,
+            'father' => [],
+            'mothers' => [],
+            'children' => [],
+            'ownChildren' => [['id' => $child->id, 'name' => $child->name, 'gender' => $child->gender]],
+        ])
+        ->assertRedirect(route('people.show', ['person' => $root, 'version_tree' => $tree->id]));
+
+    expect(ActivityLog::query()->where('account_id', $subAdmin->id)->latest()->firstOrFail()->metadata)
+        ->toMatchArray([
+            'person' => ['id' => $root->id, 'name' => 'Akar Versi'],
+            'family_tree' => ['id' => $tree->id, 'name' => 'Versi Yang Dipilih'],
+        ]);
 });
 
 test('admins can update a sub-admin', function () {

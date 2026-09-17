@@ -140,6 +140,11 @@ test('the existing family form updates an alternative version without changing g
         ->put(route('people.update', ['person' => $root, 'version_tree' => $alternative->id]), [
             'name' => $root->name,
             'gender' => 'L',
+            'bio' => 'Riwayat Si Raja Batak yang diperbarui.',
+            'related_stories' => [[
+                'title' => 'Sejarah Si Raja Batak',
+                'url' => 'https://example.com/sejarah-si-raja-batak',
+            ]],
             'birth_order' => 1,
             'sibling_count' => 1,
             'father' => [],
@@ -159,7 +164,22 @@ test('the existing family form updates an alternative version without changing g
         ->and($alternative->nodes()->where('person_id', $secondChild->id)->firstOrFail()->structure_overrides)
         ->toMatchArray(['birth_order' => 1])
         ->and($firstChild->fresh()->chain)->toBe('1-1')
-        ->and($secondChild->fresh()->chain)->toBe('1-2');
+        ->and($secondChild->fresh()->chain)->toBe('1-2')
+        ->and($root->fresh()->bio)->toBe('Riwayat Si Raja Batak yang diperbarui.')
+        ->and($root->fresh()->related_stories)->toBe([
+            [
+                'title' => 'Sejarah Si Raja Batak',
+                'url' => 'https://example.com/sejarah-si-raja-batak',
+            ],
+        ]);
+
+    $this->actingAs($user)
+        ->get(route('people.edit', ['person' => $root, 'version_tree' => $alternative->id]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('person.bio', 'Riwayat Si Raja Batak yang diperbarui.')
+            ->where('person.related_stories.0.title', 'Sejarah Si Raja Batak')
+            ->where('person.related_stories.0.url', 'https://example.com/sejarah-si-raja-batak'));
 });
 
 test('editing a member from a tree modal retains and updates that tree parent', function () {
@@ -630,4 +650,39 @@ test('a failed version update rolls back newly appended children', function () {
     expect(Person::query()->where('name', 'Must Roll Back')->exists())->toBeFalse()
         ->and($tree->nodes()->count())->toBe(1)
         ->and($tree->people()->count())->toBe(0);
+});
+
+test('a version form saves wives and their fathers for the selected father', function () {
+    $user = User::factory()->asAdmin()->create();
+    $father = Person::factory()->create(['name' => 'Ayah Darma', 'gender' => 'L']);
+    $focus = Person::factory()->create([
+        'name' => 'Darma',
+        'gender' => 'L',
+        'father_id' => $father->id,
+    ]);
+    $tree = FamilyTree::create(['user_id' => $user->id, 'root_person_id' => $father->id]);
+    $fatherNode = FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $father->id]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $focus->id,
+        'father_node_id' => $fatherNode->id,
+    ]);
+
+    $this->actingAs($user)->put(route('people.update', [
+        'person' => $focus,
+        'version_tree' => $tree->id,
+    ]), [
+        'name' => $focus->name,
+        'gender' => 'L',
+        'father' => ['id' => $father->id, 'name' => $father->name],
+        'mothers' => [[
+            'name' => 'Istri Darma',
+            'marga_id' => Marga::factory()->create()->id,
+            'father_name' => 'Ayah Istri Darma',
+        ]],
+    ])->assertRedirect();
+
+    $wife = Person::query()->where('name', 'Istri Darma')->firstOrFail();
+    expect($father->wives()->whereKey($wife->id)->exists())->toBeTrue()
+        ->and($wife->father?->name)->toBe('Ayah Istri Darma');
 });

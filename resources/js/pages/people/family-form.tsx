@@ -2162,6 +2162,7 @@ export default function FamilyForm({
                 name?: string;
                 alias?: string | null;
                 marga_id?: number | null;
+                marga?: string | null;
                 birth_year?: string | null;
                 death_year?: string | null;
                 father_id?: number | null;
@@ -2186,6 +2187,7 @@ export default function FamilyForm({
                 name: result.name,
                 alias: result.alias ?? '',
                 marga_id: result.marga_id ?? null,
+                marga: result.marga ?? null,
                 birth_year: result.birth_year ?? '',
                 death_year: result.death_year ?? '',
                 father_name: result.father_name ?? '',
@@ -2496,6 +2498,20 @@ export default function FamilyForm({
                 )}
                 {key !== 'father' && (
                     <div className="grid gap-2 rounded-lg border border-dashed border-tb-outline-variant bg-tb-surface-container/30 p-3">
+                        {entry.id && isNameFilled(entry.name) && (
+                            <div className="flex items-start gap-2 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
+                                <Link2 className="mt-0.5 size-4 shrink-0" />
+                                <div className="min-w-0">
+                                    <p className="text-xs font-semibold">
+                                        Tersambung ke data kontributor
+                                    </p>
+                                    <p className="truncate text-sm font-medium">
+                                        {entry.name}
+                                        {entry.marga && ` · Marga ${entry.marga}`}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
                         <Label
                             htmlFor={`${errorPrefix}-share-code`}
                             className="text-tb-on-surface"
@@ -2526,15 +2542,15 @@ export default function FamilyForm({
                                 <Link2 className="size-4" />
                                 {resolvingMotherIndex === key
                                     ? 'Memeriksa…'
-                                    : 'Sambungkan Kode'}
+                                    : entry.id
+                                      ? 'Ganti Kode'
+                                      : 'Sambungkan Kode'}
                             </Button>
                         </div>
-                        {entry.id && entry.share_code && (
-                            <p className="text-xs font-medium text-emerald-700">
-                                Data {entry.name} akan ditautkan, tanpa membuat
-                                data orang baru.
-                            </p>
-                        )}
+                        <p className="text-xs text-tb-on-surface-variant">
+                            Kode yang disambungkan akan memakai data orang yang
+                            sudah ada saat jejak keluarga disimpan.
+                        </p>
                     </div>
                 )}
                 {key !== 'father' && (

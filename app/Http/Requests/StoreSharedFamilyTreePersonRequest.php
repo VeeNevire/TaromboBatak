@@ -67,10 +67,29 @@ class StoreSharedFamilyTreePersonRequest extends FormRequest
         return [function (Validator $validator): void {
             $familyTree = $this->route('familyTree');
 
+            $fatherNode = null;
+            if ($familyTree instanceof FamilyTree && $this->filled('father_node_id')) {
+                $fatherNode = $familyTree->nodes()
+                    ->with('person:id,gender')
+                    ->find($this->integer('father_node_id'));
+
+                if ($fatherNode === null) {
+                    $validator->errors()->add(
+                        'father_node_id',
+                        'Ayah harus berasal dari silsilah yang dibagikan ini.',
+                    );
+                } elseif ($fatherNode->person->gender !== 'L') {
+                    $validator->errors()->add(
+                        'father_node_id',
+                        'Ayah yang dipilih harus berjenis kelamin laki-laki.',
+                    );
+                }
+            }
+
             if ($familyTree instanceof FamilyTree
                 && $this->filled('father_node_id')
                 && $this->filled('mother_node_id')) {
-                $fatherNode = $familyTree->nodes()
+                $fatherNode ??= $familyTree->nodes()
                     ->with('person.wives:id')
                     ->find($this->integer('father_node_id'));
                 $motherNode = $familyTree->nodes()

@@ -14,6 +14,39 @@ use Illuminate\Support\Collection;
 class TaromboTreeService
 {
     /**
+     * Find the highest available ancestor for a focus person in a tree payload.
+     *
+     * The traversal only follows parent IDs that are present in the same tree,
+     * so detached nodes and malformed cycles cannot become the visual root.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     */
+    public function highestAncestorId(array $rows, int $focusPersonId): ?string
+    {
+        $rowsById = collect($rows)->keyBy('id');
+        $currentId = (string) $focusPersonId;
+
+        if (! $rowsById->has($currentId)) {
+            return null;
+        }
+
+        $visited = [];
+
+        while (! isset($visited[$currentId])) {
+            $visited[$currentId] = true;
+            $parentId = $rowsById->get($currentId)['parentId'] ?? null;
+
+            if (! is_string($parentId) || ! $rowsById->has($parentId) || isset($visited[$parentId])) {
+                break;
+            }
+
+            $currentId = $parentId;
+        }
+
+        return $currentId;
+    }
+
+    /**
      * Build a diagram payload from relationships belonging to one tree version.
      * Person records provide identity data; nodes provide contextual genealogy.
      *
@@ -256,6 +289,44 @@ class TaromboTreeService
         }
 
         return $this->rows(Person::query()->whereIn('id', $ids)->orderBy('id'));
+    }
+
+    /**
+     * Build one close family view: the person, their father and siblings, and
+     * their direct children. Maternal children are placed below their mother
+     * so a wife's family view remains meaningful in a patrilineal tree.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function rowsForCloseFamily(Person $person): array
+    {
+        $ids = collect([$person->id]);
+
+        if ($person->father_id !== null) {
+            $ids->push($person->father_id);
+            $ids = $ids->merge(
+                Person::query()->where('father_id', $person->father_id)->pluck('id'),
+            );
+        }
+
+        $maternalChildIds = Person::query()
+            ->where('mother_id', $person->id)
+            ->pluck('id');
+        $ids = $ids
+            ->merge(Person::query()->where('father_id', $person->id)->pluck('id'))
+            ->merge($maternalChildIds)
+            ->unique()
+            ->values();
+
+        return collect($this->rows(Person::query()->whereIn('id', $ids)->orderBy('id')))
+            ->map(function (array $row) use ($maternalChildIds, $person): array {
+                if ($maternalChildIds->contains((int) $row['id'])) {
+                    $row['parentId'] = (string) $person->id;
+                }
+
+                return $row;
+            })
+            ->all();
     }
 
     /**

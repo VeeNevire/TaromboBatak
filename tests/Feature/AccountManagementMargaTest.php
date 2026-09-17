@@ -1,9 +1,10 @@
 <?php
 
+use App\Models\ActivityLog;
+use App\Models\FamilyTree;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
-use App\Models\ActivityLog;
 use Inertia\Testing\AssertableInertia as Assert;
 
 function margaWithLowerTree(string $name): Marga
@@ -96,6 +97,54 @@ test('account changes are recorded and visible to admins', function () {
         ->assertJsonPath('logs.0.actor', $admin->name);
 
     expect(ActivityLog::query()->where('account_id', $account->id)->count())->toBe(1);
+});
+
+test('legacy people activity logs show the account primary family tree without inventing member context', function () {
+    $admin = User::factory()->asAdmin()->create();
+    $account = User::factory()->asSubAdmin()->create();
+    $root = Person::factory()->create(['name' => 'Akar Log Lama']);
+    FamilyTree::create([
+        'user_id' => $account->id,
+        'root_person_id' => $root->id,
+        'name' => 'Keluarga Utama Lama',
+        'is_primary' => true,
+    ]);
+    ActivityLog::create([
+        'account_id' => $account->id,
+        'actor_id' => $account->id,
+        'account_name' => $account->name,
+        'account_email' => $account->email,
+        'action' => 'people.update',
+        'description' => 'Melakukan perubahan data melalui people.update.',
+        'metadata' => ['method' => 'PUT', 'route' => 'people.update'],
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('accounts.activity-log', $account))
+        ->assertOk()
+        ->assertJsonPath('logs.0.context.is_legacy', true)
+        ->assertJsonPath('logs.0.context.person_name', null)
+        ->assertJsonPath('logs.0.context.father_name', null)
+        ->assertJsonPath('logs.0.context.family_tree_name', 'Keluarga Utama Lama');
+});
+
+test('non-person activity logs do not receive people context', function () {
+    $admin = User::factory()->asAdmin()->create();
+    $account = User::factory()->asSubAdmin()->create();
+    ActivityLog::create([
+        'account_id' => $account->id,
+        'actor_id' => $account->id,
+        'account_name' => $account->name,
+        'account_email' => $account->email,
+        'action' => 'stories.store',
+        'description' => 'Membuat cerita.',
+        'metadata' => ['method' => 'POST', 'route' => 'stories.store'],
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('accounts.activity-log', $account))
+        ->assertOk()
+        ->assertJsonPath('logs.0.context', null);
 });
 
 test('account form provides cascading district and village options', function () {
