@@ -181,12 +181,12 @@ node.claimed
                         Belum tersambung
                     </span>
                 ) : null}
+                {showSpouseNames && (node.spouses?.length ?? 0) > 0 && (
+                    <span className="mt-0.5 block border-t border-current/15 pt-0.5 text-[9px] leading-tight font-medium text-tb-primary">
+                        Pasangan: {node.spouses?.join(', ')}
+                    </span>
+                )}
             </div>
-            {showSpouseNames && (node.spouses?.length ?? 0) > 0 && (
-                <p className="mt-1 max-w-full text-center text-[9px] leading-tight font-medium text-tb-primary">
-                    Pasangan: {node.spouses?.join(', ')}
-                </p>
-            )}
         </div>
     );
 }
