@@ -9,14 +9,17 @@ import {
     Clock,
     Copy,
     FilePlus2,
+    GitBranch,
     Loader2,
     MessageCircle,
     Megaphone,
+    Pencil,
     Plus,
     RefreshCw,
     Search,
     Send,
     ShieldCheck,
+    UserPlus,
     Users,
     X,
 } from 'lucide-react';
@@ -28,6 +31,7 @@ import {
     useState,
 } from 'react';
 import type { CSSProperties } from 'react';
+import { toast } from 'sonner';
 import { AppAvatar } from '@/components/app-avatar';
 import {
     categoryForFile,
@@ -50,6 +54,7 @@ import { dashboard, login } from '@/routes';
 import announcements from '@/routes/announcements';
 import contactRequests from '@/routes/contact-requests';
 import contacts from '@/routes/contacts';
+import peopleRoutes from '@/routes/people';
 
 type Contact = {
     id: number;
@@ -114,8 +119,24 @@ type Props = {
     }[];
     incomingContactRequests: {
         id: number;
+        user_id: number;
         name: string;
         marga: string | null;
+        color: string | null;
+        person_name: string | null;
+        person_id: number | null;
+        share_code: string | null;
+        can_edit_person: boolean;
+        person_alias: string | null;
+        person_image: string | null;
+        birth_year: string | null;
+        bio: string | null;
+        father_name: string | null;
+        spouse: string | null;
+        children: string[];
+        related_stories: { title?: string; url?: string }[];
+        contributor: string | null;
+        role_label: string;
         telegram_linked: boolean;
     }[];
     outgoingContactRequests: number[];
@@ -165,6 +186,12 @@ export default function ContactsIndex({
     const [search, setSearch] = useState('');
     const [addContactOpen, setAddContactOpen] = useState(false);
     const [telegramInviteOpen, setTelegramInviteOpen] = useState(false);
+    const [selectedIncomingRequest, setSelectedIncomingRequest] = useState<
+        Props['incomingContactRequests'][number] | null
+    >(null);
+    const [reviewingIncomingRequest, setReviewingIncomingRequest] = useState<
+        boolean
+    >(false);
     const [telegramInviteCopied, setTelegramInviteCopied] = useState(false);
     const [contactSearch, setContactSearch] = useState('');
     const [requestingContactId, setRequestingContactId] = useState<
@@ -822,6 +849,42 @@ export default function ContactsIndex({
         window.setTimeout(() => setTelegramInviteCopied(false), 2000);
     };
 
+    const reviewIncomingRequest = (status: 'approved' | 'rejected') => {
+        if (!selectedIncomingRequest) {
+            return;
+        }
+
+        setReviewingIncomingRequest(true);
+        router.patch(
+            contactRequests.update(selectedIncomingRequest.id).url,
+            { status },
+            {
+                preserveScroll: true,
+                onSuccess: () => setSelectedIncomingRequest(null),
+                onFinish: () => setReviewingIncomingRequest(false),
+            },
+        );
+    };
+
+    const copyPersonCode = async () => {
+        if (!selectedIncomingRequest?.share_code) {
+            toast.error('Kode orang belum tersedia untuk pemohon ini.');
+
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(selectedIncomingRequest.share_code);
+            toast.success('Kode orang berhasil disalin. Kirimkan kode ini lewat pesan.');
+        } catch {
+            toast.error('Kode tidak dapat disalin. Periksa izin clipboard browser.');
+        }
+    };
+
+    const showPersonDetailUnavailable = () => {
+        toast.error('Detail Tarombo belum tersedia untuk pemohon ini.');
+    };
+
     const statusIndicator = (
         <div
             className="flex items-center gap-2 text-xs text-tb-on-surface-variant"
@@ -885,22 +948,31 @@ export default function ContactsIndex({
                                     key={request.id}
                                     className="flex items-center gap-2 rounded-lg border border-amber-200 bg-tb-surface-bright px-3 py-2 dark:border-amber-900"
                                 >
-                                    <p className="max-w-36 truncate text-sm font-medium text-tb-on-surface">
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedIncomingRequest(request)}
+                                        className="max-w-36 truncate text-left text-sm font-medium text-tb-on-surface hover:text-tb-primary"
+                                    >
                                         {request.name}
                                         <span className="ml-1 font-normal text-tb-on-surface-variant">
                                             · {request.marga ?? 'Marga belum dicatat'}
                                         </span>
-                                    </p>
+                                    </button>
+                                    <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="outline"
+                                        onClick={() => setSelectedIncomingRequest(request)}
+                                        aria-label={`Lihat informasi ${request.name}`}
+                                        title="Lihat informasi pemohon"
+                                        className="size-8"
+                                    >
+                                        <Plus className="size-4" />
+                                    </Button>
                                     <Button
                                         type="button"
                                         size="sm"
-                                        onClick={() =>
-                                            router.patch(
-                                                contactRequests.update(request.id).url,
-                                                { status: 'approved' },
-                                                { preserveScroll: true },
-                                            )
-                                        }
+                                        onClick={() => setSelectedIncomingRequest(request)}
                                     >
                                         Terima
                                     </Button>
@@ -1466,6 +1538,256 @@ export default function ContactsIndex({
             </main>
 
             <Dialog
+                open={selectedIncomingRequest !== null}
+                onOpenChange={(open) => {
+                    if (!open && !reviewingIncomingRequest) {
+                        setSelectedIncomingRequest(null);
+                    }
+                }}
+            >
+                <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto border-tb-outline-variant bg-tb-surface-bright sm:max-w-2xl">
+                    {selectedIncomingRequest && (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle className="font-display text-tb-on-surface">
+                                    Permintaan kontak masuk
+                                </DialogTitle>
+                                <DialogDescription>
+                                    Periksa informasi pemohon sebelum menyetujui
+                                    permintaan kontak.
+                                </DialogDescription>
+                            </DialogHeader>
+
+                            <div className="grid gap-4">
+                                <div className="flex items-center gap-3 rounded-xl border border-tb-outline-variant bg-tb-surface-container/50 p-4">
+                                    <AppAvatar
+                                        name={selectedIncomingRequest.name}
+                                        image={selectedIncomingRequest.person_image}
+                                        color={selectedIncomingRequest.color}
+                                        className="size-12"
+                                    />
+                                    <div className="min-w-0">
+                                        <p className="truncate font-semibold text-tb-on-surface">
+                                            {selectedIncomingRequest.name}
+                                        </p>
+                                        <p className="text-sm text-tb-on-surface-variant">
+                                            {selectedIncomingRequest.role_label}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <section className="rounded-xl border border-tb-outline-variant p-4">
+                                    <h3 className="font-semibold text-tb-on-surface">
+                                        Informasi Pribadi
+                                    </h3>
+                                    <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                                        <div>
+                                            <dt className="text-tb-on-surface-variant">Identitas Tarombo</dt>
+                                            <dd className="mt-1 font-medium text-tb-on-surface">
+                                                {selectedIncomingRequest.person_name ?? 'Belum diklaim'}
+                                                {selectedIncomingRequest.person_alias
+                                                    ? ` (${selectedIncomingRequest.person_alias})`
+                                                    : ''}
+                                            </dd>
+                                        </div>
+                                        <div>
+                                            <dt className="text-tb-on-surface-variant">Tahun lahir</dt>
+                                            <dd className="mt-1 font-medium text-tb-on-surface">
+                                                {selectedIncomingRequest.birth_year ?? 'Belum dicatat'}
+                                            </dd>
+                                        </div>
+                                        <div>
+                                            <dt className="text-tb-on-surface-variant">Marga</dt>
+                                            <dd className="mt-1 font-medium text-tb-on-surface">
+                                                {selectedIncomingRequest.marga ?? 'Belum dicatat'}
+                                            </dd>
+                                        </div>
+                                        <div>
+                                            <dt className="text-tb-on-surface-variant">Telegram</dt>
+                                            <dd className="mt-1 font-medium text-tb-on-surface">
+                                                {selectedIncomingRequest.telegram_linked
+                                                    ? 'Terhubung'
+                                                    : 'Belum terhubung'}
+                                            </dd>
+                                        </div>
+                                    </dl>
+                                </section>
+
+                                <section className="rounded-xl border border-tb-outline-variant bg-tb-surface-container/50 p-4">
+                                    <div className="flex flex-wrap items-center justify-between gap-3">
+                                        <div>
+                                            <h3 className="font-semibold text-tb-on-surface">Terhubung</h3>
+                                            <p className="mt-1 text-sm text-tb-on-surface-variant">
+                                                Not Connected — permintaan masih menunggu persetujuan Anda.
+                                            </p>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            disabled={reviewingIncomingRequest}
+                                            onClick={() => reviewIncomingRequest('approved')}
+                                        >
+                                            <UserPlus className="size-4" /> Connect
+                                        </Button>
+                                    </div>
+                                </section>
+
+                                <section className="rounded-xl border border-tb-outline-variant p-4">
+                                    <h3 className="flex items-center gap-2 font-semibold text-tb-on-surface">
+                                        <GitBranch className="size-4 text-tb-primary" /> Hubungan Keluarga
+                                    </h3>
+                                    <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
+                                        <div>
+                                            <dt className="text-tb-on-surface-variant">Ayah</dt>
+                                            <dd className="mt-1 font-medium text-tb-on-surface">
+                                                {selectedIncomingRequest.father_name ?? 'Belum dicatat'}
+                                            </dd>
+                                        </div>
+                                        <div>
+                                            <dt className="text-tb-on-surface-variant">Pasangan</dt>
+                                            <dd className="mt-1 font-medium text-tb-on-surface">
+                                                {selectedIncomingRequest.spouse ?? 'Belum dicatat'}
+                                            </dd>
+                                        </div>
+                                        <div>
+                                            <dt className="text-tb-on-surface-variant">Anak</dt>
+                                            <dd className="mt-1 font-medium text-tb-on-surface">
+                                                {selectedIncomingRequest.children.length > 0
+                                                    ? selectedIncomingRequest.children.join(', ')
+                                                    : 'Belum dicatat'}
+                                            </dd>
+                                        </div>
+                                    </dl>
+                                </section>
+
+                                {selectedIncomingRequest.bio && (
+                                    <section className="rounded-xl border border-tb-outline-variant bg-tb-surface-container/50 p-4">
+                                        <h3 className="font-semibold text-tb-on-surface">Biografi</h3>
+                                        <p className="mt-2 text-sm leading-relaxed whitespace-pre-line text-tb-on-surface-variant">
+                                            {selectedIncomingRequest.bio}
+                                        </p>
+                                    </section>
+                                )}
+
+                                <section className="rounded-xl border border-tb-outline-variant p-4">
+                                    <h3 className="font-semibold text-tb-on-surface">
+                                        Sejarah/Cerita Terkait
+                                    </h3>
+                                    {selectedIncomingRequest.related_stories.length > 0 ? (
+                                        <ul className="mt-3 grid gap-2 text-sm">
+                                            {selectedIncomingRequest.related_stories.map((story, index) => (
+                                                <li key={`${story.url ?? story.title ?? 'cerita'}-${index}`}>
+                                                    {story.url ? (
+                                                        <a
+                                                            href={story.url}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="font-medium text-tb-primary underline underline-offset-4"
+                                                        >
+                                                            {story.title || story.url}
+                                                        </a>
+                                                    ) : (
+                                                        <span className="font-medium text-tb-on-surface">
+                                                            {story.title ?? 'Cerita terkait'}
+                                                        </span>
+                                                    )}
+                                                    {story.url && (
+                                                        <p className="mt-0.5 text-xs text-tb-on-surface-variant">
+                                                            Sumber: Link ke website lain
+                                                        </p>
+                                                    )}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <p className="mt-2 text-sm text-tb-on-surface-variant">
+                                            Belum ada link sejarah atau cerita.
+                                        </p>
+                                    )}
+                                </section>
+
+                                <section className="rounded-xl border border-tb-outline-variant bg-tb-surface-container/50 p-4 text-sm">
+                                    <span className="text-tb-on-surface-variant">Kontributor</span>
+                                    <p className="mt-1 font-medium text-tb-on-surface">
+                                        {selectedIncomingRequest.contributor ?? 'Belum dicatat'}
+                                    </p>
+                                </section>
+
+                                <div className="flex flex-wrap justify-end gap-2">
+                                    {selectedIncomingRequest.person_id ? (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={copyPersonCode}
+                                        >
+                                            <Copy className="size-4" /> Kopi Kode
+                                        </Button>
+                                    ) : (
+                                        <Button type="button" variant="outline" onClick={copyPersonCode}>
+                                            <Copy className="size-4" /> Kopi Kode
+                                        </Button>
+                                    )}
+                                    {selectedIncomingRequest.person_id ? (
+                                        <Button asChild type="button" variant="outline">
+                                            <Link
+                                                href={peopleRoutes.show({
+                                                    person: selectedIncomingRequest.person_id,
+                                                })}
+                                            >
+                                                Lihat Detail
+                                            </Link>
+                                        </Button>
+                                    ) : (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={showPersonDetailUnavailable}
+                                        >
+                                            Lihat Detail
+                                        </Button>
+                                    )}
+                                    {selectedIncomingRequest.person_id &&
+                                    selectedIncomingRequest.can_edit_person ? (
+                                        <Button asChild type="button">
+                                            <Link
+                                                href={peopleRoutes.edit({
+                                                    person: selectedIncomingRequest.person_id,
+                                                })}
+                                            >
+                                                <Pencil className="size-4" /> Edit
+                                            </Link>
+                                        </Button>
+                                    ) : (
+                                        <Button type="button" disabled>
+                                            <Pencil className="size-4" /> Edit
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+
+                            <DialogFooter className="grid gap-2 sm:grid-cols-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled={reviewingIncomingRequest}
+                                    onClick={() => reviewIncomingRequest('rejected')}
+                                >
+                                    <X className="size-4" /> Tolak
+                                </Button>
+                                <Button
+                                    type="button"
+                                    disabled={reviewingIncomingRequest}
+                                    onClick={() => reviewIncomingRequest('approved')}
+                                >
+                                    <Check className="size-4" /> Setujui & Hubungkan
+                                </Button>
+                            </DialogFooter>
+                        </>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
                 open={addContactOpen}
                 onOpenChange={(open) => {
                     if (!open && requestingContactId !== null) {
@@ -1705,9 +2027,11 @@ function upsertMessage(
             }
 
             seenPersisted.add(key);
+
             if (fingerprint !== null) {
                 seenTelegramFingerprints.add(fingerprint);
             }
+
             merged.push(candidate);
 
             continue;

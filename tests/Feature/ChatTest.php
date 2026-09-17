@@ -2,8 +2,9 @@
 
 use App\Events\MessageRead;
 use App\Events\MessageSent;
-use App\Models\Conversation;
 use App\Models\ContactDisconnect;
+use App\Models\ContactRequest;
+use App\Models\Conversation;
 use App\Models\Marga;
 use App\Models\Message;
 use App\Models\MessageAttachment;
@@ -89,6 +90,110 @@ test('a user can disconnect a contact and loses access to their conversation', f
     $this->actingAs($user)
         ->get(route('contacts.show', $contact))
         ->assertForbidden();
+});
+
+test('a disconnected contact remains hidden until their reconnection request is approved', function () {
+    $marga = Marga::factory()->create();
+    $user = User::factory()->withMarga($marga->id)->create();
+    $contact = User::factory()->withMarga($marga->id)->create(['name' => 'Tunggul']);
+
+    $this->actingAs($user)
+        ->delete(route('contacts.destroy', $contact))
+        ->assertRedirect(route('contacts.index'));
+
+    $this->actingAs($user)
+        ->post(route('contact-requests.store'), ['recipient_id' => $contact->id])
+        ->assertRedirect();
+
+    expect(ContactDisconnect::query()
+        ->where(ContactDisconnect::attributesFor($user->id, $contact->id))
+        ->exists())->toBeTrue()
+        ->and(ContactRequest::query()->where([
+            'requester_id' => $user->id,
+            'recipient_id' => $contact->id,
+            'status' => ContactRequest::STATUS_PENDING,
+        ])->exists())->toBeTrue();
+
+    $this->actingAs($user)
+        ->get(route('contacts.index'))
+        ->assertInertia(fn (Assert $page) => $page->has('contacts', 0));
+
+    $request = ContactRequest::query()->where([
+        'requester_id' => $user->id,
+        'recipient_id' => $contact->id,
+    ])->firstOrFail();
+
+    $this->actingAs($contact)
+        ->patch(route('contact-requests.update', $request), ['status' => ContactRequest::STATUS_APPROVED])
+        ->assertRedirect();
+
+    expect(ContactDisconnect::query()
+        ->where(ContactDisconnect::attributesFor($user->id, $contact->id))
+        ->exists())->toBeFalse();
+
+    $this->actingAs($user)
+        ->get(route('contacts.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('contacts', 1)
+            ->where('contacts.0.name', 'Tunggul'));
+});
+
+test('incoming contact requests include the requester profile for the contact modal', function () {
+    $marga = Marga::factory()->create(['name' => 'Sitorus', 'color' => '#2255aa']);
+    $recipient = User::factory()->create();
+    $father = Person::factory()->create(['name' => 'Tunggul Sitorus']);
+    $contributor = User::factory()->create(['name' => 'Rehan2']);
+    $person = Person::factory()->create([
+        'name' => 'Borsak Sitorus',
+        'alias' => 'Borsak',
+        'marga_id' => $marga->id,
+        'image' => 'https://example.com/borsak.jpg',
+        'birth_year' => '1985',
+        'bio' => 'Anggota keluarga Sitorus.',
+        'father_id' => $father->id,
+        'spouse' => 'Risma Siahaan',
+        'related_stories' => [['title' => 'Sejarah Borsak', 'url' => 'https://example.com/sejarah-borsak']],
+        'created_by' => $contributor->id,
+    ]);
+    Person::factory()->create(['name' => 'Anak Borsak', 'father_id' => $person->id]);
+    $requester = User::factory()->asSubAdmin()->withMarga($marga->id)->create([
+        'current_person_id' => $person->id,
+        'name' => 'Akun Borsak',
+    ]);
+    $request = ContactRequest::query()->create([
+        'requester_id' => $requester->id,
+        'recipient_id' => $recipient->id,
+        'status' => ContactRequest::STATUS_PENDING,
+    ]);
+
+    $this->actingAs($recipient)
+        ->get(route('contacts.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('incomingContactRequests', 1)
+            ->where('incomingContactRequests.0.id', $request->id)
+            ->where('incomingContactRequests.0.user_id', $requester->id)
+            ->where('incomingContactRequests.0.name', 'Akun Borsak')
+            ->where('incomingContactRequests.0.person_name', 'Borsak Sitorus')
+            ->where('incomingContactRequests.0.person_id', $person->id)
+            ->where('incomingContactRequests.0.can_edit_person', true)
+            ->where('incomingContactRequests.0.person_alias', 'Borsak')
+            ->where('incomingContactRequests.0.person_image', 'https://example.com/borsak.jpg')
+            ->where('incomingContactRequests.0.birth_year', '1985')
+            ->where('incomingContactRequests.0.bio', 'Anggota keluarga Sitorus.')
+            ->where('incomingContactRequests.0.father_name', 'Tunggul Sitorus')
+            ->where('incomingContactRequests.0.spouse', 'Risma Siahaan')
+            ->where('incomingContactRequests.0.children.0', 'Anak Borsak')
+            ->where('incomingContactRequests.0.related_stories.0.title', 'Sejarah Borsak')
+            ->where('incomingContactRequests.0.related_stories.0.url', 'https://example.com/sejarah-borsak')
+            ->where('incomingContactRequests.0.contributor', 'Rehan2')
+            ->where('incomingContactRequests.0.marga', 'Sitorus')
+            ->where('incomingContactRequests.0.color', '#2255aa')
+            ->where('incomingContactRequests.0.role_label', 'Pengurus Marga'));
+
+    $this->actingAs($recipient)
+        ->get(route('people.show', $person))
+        ->assertSuccessful();
 });
 
 test('the incremental messages feed returns only newer messages as json', function () {

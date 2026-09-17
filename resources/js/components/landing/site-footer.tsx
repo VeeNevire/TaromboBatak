@@ -71,12 +71,14 @@ export function SiteFooter() {
                     <h3 className="mb-4 text-sm font-bold">Bantuan</h3>
                     <ul className="space-y-3 text-sm text-tb-on-surface-variant">
                         {footerNav.bantuan.map((item) => (
-                            <li key={item}>
+                            <li key={item.label}>
                                 <a
-                                    href="#"
+                                    href={item.href}
+                                    target={item.href ? "_blank" : undefined}
+                                    rel={item.href ? "noopener noreferrer" : undefined}
                                     className="transition-colors hover:text-tb-primary"
                                 >
-                                    {item}
+                                    {item.label}
                                 </a>
                             </li>
                         ))}

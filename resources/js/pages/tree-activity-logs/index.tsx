@@ -25,7 +25,9 @@ type TreeLog = {
     marga: string | null;
     scope: string | null;
     details: Record<string, unknown> | null;
-    created_at: string | null;
+    changed_fields: string[];
+    date: string | null;
+    time: string | null;
 };
 
 type Props = {
@@ -34,8 +36,14 @@ type Props = {
 };
 
 const actionIcon = (action: string) => {
-    if (action === 'added') return <GitBranch className="size-4 text-emerald-600" />;
-    if (action === 'removed' || action === 'delete') return <Trash2 className="size-4 text-red-600" />;
+    if (action === 'added') {
+return <GitBranch className="size-4 text-emerald-600" />;
+}
+
+    if (action === 'removed' || action === 'delete') {
+return <Trash2 className="size-4 text-red-600" />;
+}
+
     return <Pencil className="size-4 text-amber-600" />;
 };
 
@@ -43,17 +51,23 @@ export default function TreeActivityLogs({ logs, changeRequests }: Props) {
     const review = (change: ChangeRequest, approved: boolean) => {
         if (!approved) {
             const reason = window.prompt('Alasan penolakan (opsional):');
-            if (reason === null) return;
+
+            if (reason === null) {
+return;
+}
 
             router.post(
                 treeActivityLogs.reject(change.id).url,
                 { reason },
                 { preserveScroll: true },
             );
+
             return;
         }
 
-        if (!window.confirm(`Setujui ${change.action === 'delete' ? 'penghapusan' : 'perubahan'} ${change.person}?`)) return;
+        if (!window.confirm(`Setujui ${change.action === 'delete' ? 'penghapusan' : 'perubahan'} ${change.person}?`)) {
+return;
+}
 
         router.post(treeActivityLogs.approve(change.id).url, {}, { preserveScroll: true });
     };
@@ -115,10 +129,16 @@ export default function TreeActivityLogs({ logs, changeRequests }: Props) {
                                 <div className="min-w-0 flex-1">
                                     <p className="font-medium text-tb-on-surface">{log.summary}</p>
                                     <p className="mt-1 text-xs text-tb-on-surface-variant">
-                                        {log.actor ?? 'Sistem'} · {log.created_at ?? 'Waktu tidak tersedia'}
+                                        Tanggal: {log.date ?? '-'} · Jam: {log.time ?? '-'}
+                                        {' · '}{log.actor ?? 'Sistem'}
                                         {log.marga ? ` · ${log.marga}` : ''}
                                         {log.tree ? ` · ${log.tree}` : ''}
                                     </p>
+                                    {log.changed_fields.length > 0 && (
+                                        <p className="mt-1 text-xs text-tb-on-surface-variant">
+                                            Data yang diubah: {log.changed_fields.join(', ')}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         ))}

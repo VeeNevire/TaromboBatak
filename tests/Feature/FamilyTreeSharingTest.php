@@ -143,7 +143,9 @@ test('an accepted recipient submits a new member for the owner to approve', func
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->component('family-tree-activities/index')
-            ->has('activities', 1));
+            ->has('activities', 1)
+            ->where('activities.0.tree_name', $tree->name)
+            ->where('activities.0.father_name', $root->name));
 });
 
 test('the shared member form offers every male father in the active tree', function () {

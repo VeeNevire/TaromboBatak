@@ -9,16 +9,19 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\TelegramAccount;
 use App\Models\User;
+use App\Support\PersonShareCode;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class ContactController extends Controller
 {
+    public function __construct(private readonly PersonShareCode $personShareCodes) {}
+
     public function index(Request $request): Response
     {
         return $this->render($request);
@@ -195,15 +198,48 @@ class ContactController extends Controller
             'incomingContactRequests' => ContactRequest::query()
                 ->where('recipient_id', $user->id)
                 ->where('status', ContactRequest::STATUS_PENDING)
-                ->with('requester:id,name,marga_id', 'requester.marga:id,name', 'requester.telegramAccount')
+                ->with([
+                    'requester:id,name,marga_id,current_person_id,role',
+                    'requester.marga:id,name,color',
+                    'requester.currentPerson:id,name,alias,image,bio,birth_year,marga_id,father_id,spouse,related_stories,created_by',
+                    'requester.currentPerson.father:id,name',
+                    'requester.currentPerson.children:id,name,father_id',
+                    'requester.currentPerson.creator:id,name',
+                    'requester.telegramAccount',
+                ])
                 ->latest()
                 ->get()
-                ->map(fn (ContactRequest $request): array => [
-                    'id' => $request->id,
-                    'name' => $request->requester->name,
-                    'marga' => $request->requester->marga?->name,
-                    'telegram_linked' => $request->requester->telegramAccount?->isMtprotoConnected() ?? false,
-                ]),
+                ->map(function (ContactRequest $request) use ($user): array {
+                    $person = $request->requester->currentPerson;
+                    $hasCurrentPerson = $person !== null;
+                    $hasClaimedPerson = $person !== null && ! $person->isNa();
+                    $canEditPerson = $hasCurrentPerson && $user->can('update', $person);
+
+                    return [
+                        'id' => $request->id,
+                        'user_id' => $request->requester->id,
+                        'name' => $request->requester->name,
+                        'marga' => $request->requester->marga?->name,
+                        'color' => $request->requester->marga?->color,
+                        'person_name' => $hasClaimedPerson ? $person->name : null,
+                        'person_id' => $hasCurrentPerson ? $person->id : null,
+                        'share_code' => $hasCurrentPerson ? $this->personShareCodes->for($person) : null,
+                        'can_edit_person' => $canEditPerson,
+                        'person_alias' => $hasClaimedPerson ? $person->alias : null,
+                        'person_image' => $hasClaimedPerson ? $person->image : null,
+                        'birth_year' => $hasClaimedPerson ? $person->birth_year : null,
+                        'bio' => $hasClaimedPerson ? $person->bio : null,
+                        'father_name' => $hasClaimedPerson ? $person->father?->name : null,
+                        'spouse' => $hasClaimedPerson ? $person->spouse : null,
+                        'children' => $hasClaimedPerson
+                            ? $person->children->pluck('name')->values()->all()
+                            : [],
+                        'related_stories' => $hasClaimedPerson ? $person->related_stories ?? [] : [],
+                        'contributor' => $hasClaimedPerson ? $person->creator?->name : null,
+                        'role_label' => $request->requester->isSubAdmin() ? 'Pengurus Marga' : 'Anggota Marga',
+                        'telegram_linked' => $request->requester->telegramAccount?->isMtprotoConnected() ?? false,
+                    ];
+                }),
             'outgoingContactRequests' => ContactRequest::query()
                 ->where('requester_id', $user->id)
                 ->where('status', ContactRequest::STATUS_PENDING)

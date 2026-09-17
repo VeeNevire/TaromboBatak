@@ -103,11 +103,11 @@ export const footerNav = {
         { label: 'Tentang', href: tentang.view() },
     ],
     bantuan: [
-        'About & Help',
-        'Cara Menggunakan',
-        'Privasi & Keamanan',
-        'Syarat & Ketentuan',
-        'Hubungi Kami',
-        'FAQ',
+        { label : 'About & Help', href: '#' },
+        { label : 'Cara Menggunakan', href: '#' },
+        { label : 'Privasi & Keamanan', href: '#' },
+        { label : 'Syarat & Ketentuan', href: '#' },
+        { label : 'Hubungi Kami', href: 'https://wa.me/62889501863652' },
+        { label : 'FAQ', href: '#' },
     ],
 };

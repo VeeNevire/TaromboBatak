@@ -49,7 +49,9 @@ class TreeActivityLogController extends Controller
                 'marga' => $log->marga?->name,
                 'scope' => $log->protection_scope,
                 'details' => $log->details,
-                'created_at' => $log->created_at?->format('d M Y H:i'),
+                'changed_fields' => $this->changedFields($log),
+                'date' => $log->created_at?->translatedFormat('d M Y'),
+                'time' => $log->created_at?->format('H:i'),
             ]);
 
         $changeRequests = TreeChangeRequest::query()
@@ -186,5 +188,45 @@ class TreeActivityLogController extends Controller
                 && $change->reviewer_id === $user->id);
 
         abort_unless($allowed, 403, 'Anda tidak berhak meninjau perubahan ini.');
+    }
+
+    /** @return array<int, string> */
+    private function changedFields(TreeActivityLog $log): array
+    {
+        $before = $log->details['before'] ?? null;
+
+        if (! is_array($before) || $log->person === null) {
+            return [];
+        }
+
+        $labels = [
+            'name' => 'Nama',
+            'alias' => 'Nama panggilan',
+            'gender' => 'Jenis kelamin',
+            'marga_id' => 'Marga',
+            'province_code' => 'Provinsi',
+            'regency_code' => 'Kabupaten/kota',
+            'district_code' => 'Kecamatan',
+            'village_code' => 'Desa/kelurahan',
+            'father_id' => 'Ayah',
+            'mother_id' => 'Ibu',
+            'birth_order' => 'Urutan lahir',
+            'birth_year' => 'Tahun lahir',
+            'death_year' => 'Tahun meninggal',
+            'spouse' => 'Pasangan',
+            'spouse_marga' => 'Marga pasangan',
+            'image' => 'Foto',
+            'bio' => 'Biografi',
+            'related_stories' => 'Cerita terkait',
+            'is_public' => 'Status publik',
+        ];
+        $after = $log->person->only(array_keys($labels));
+
+        return collect($labels)
+            ->filter(fn (string $label, string $field): bool => array_key_exists($field, $before)
+                && array_key_exists($field, $after)
+                && $before[$field] !== $after[$field])
+            ->values()
+            ->all();
     }
 }
