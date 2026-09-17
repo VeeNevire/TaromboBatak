@@ -191,7 +191,6 @@ test('the shared member form offers every male father in the active tree', funct
         ->assertInertia(fn (Assert $page) => $page
             ->where('fatherOptions', [
                 ['id' => $fatherElsewhereNode->id, 'name' => $fatherElsewhere->name, 'chain' => null],
-                ['id' => $rootNode->id, 'name' => 'Raja Sharing', 'chain' => '1'],
                 ['id' => $leafNode->id, 'name' => 'Calon Ayah Ujung', 'chain' => '1-1'],
             ]));
 
@@ -202,15 +201,15 @@ test('the shared member form offers every male father in the active tree', funct
         ]))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('initialFatherNodeId', $rootNode->id)
-            ->has('fatherOptions', 3));
+            ->where('initialFatherNodeId', null)
+            ->has('fatherOptions', 2));
 
     $this->get(route('family-trees.people.create', [
         'familyTree' => $tree,
         'father_person_id' => $fatherElsewhere->id,
     ]))->assertSuccessful()->assertInertia(fn (Assert $page) => $page
         ->where('initialFatherNodeId', $fatherElsewhereNode->id)
-        ->has('fatherOptions', 3));
+        ->has('fatherOptions', 2));
 
     $this->actingAs($owner)->post(route('family-trees.people.store', $tree), [
         'name' => 'Anak Cabang Baru',
@@ -227,6 +226,12 @@ test('the shared member form offers every male father in the active tree', funct
         'name' => 'Tidak Boleh Berayah Perempuan',
         'father_node_id' => $womanNode->id,
     ])->assertSessionHasErrors('father_node_id');
+
+    $this->actingAs($owner)->post(route('family-trees.people.store', $tree), [
+        'name' => 'Tidak Boleh Berayah Bercabang',
+        'father_node_id' => $rootNode->id,
+    ])->assertSessionHasErrors('father_node_id');
+
 });
 
 test('adding a child from a known father preselects his node and joins the existing tree', function () {
