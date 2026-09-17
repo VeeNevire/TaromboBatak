@@ -10,6 +10,7 @@ import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import { trackGoogleAnalyticsPageView } from '@/lib/google-analytics';
+
 if (!import.meta.env.SSR) {
     configureEcho({
         broadcaster: 'reverb',
@@ -38,8 +39,8 @@ function baseLayout(
         case name === 'tarombo/public':
         case name === 'tarombo/fullscreen':
         case name === 'tarombo/public-fullscreen':
-            case name === 'traffic-monitor/public':
-            case name === 'marga/public':
+        case name === 'traffic-monitor/public':
+        case name === 'marga/public':
         case name === 'budaya/index':
         case name === 'cerita/index':
         case name === 'cerita/show':
@@ -67,24 +68,8 @@ function baseLayout(
 
 createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
-    layout: (name) => {
-        const base = baseLayout(name);
-
-        return function TransitionLayout({ children, ...props }: LayoutProps) {
-            let content = children;
-
-            if (base) {
-                const layouts = Array.isArray(base) ? base : [base];
-
-                content = layouts.reduceRight<ReactNode>(
-                    (acc, Layout) => <Layout {...props}>{acc}</Layout>,
-                    children,
-                );
-            }
-
-            return content;
-        };
-    },
+    // Return stable component references so Inertia can preserve page state.
+    layout: baseLayout,
     strictMode: true,
     withApp(app) {
         return (
