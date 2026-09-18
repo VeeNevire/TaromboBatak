@@ -536,6 +536,31 @@ test('the edit form exposes the recorded father and mother', function () {
             ->where('person.mother.name', 'Ibu Tercatat'));
 });
 
+test('the ordinary edit form keeps global children visible when a tree is missing their nodes', function () {
+    $root = Person::factory()->create(['name' => 'Raja Sapala Tua', 'gender' => 'L']);
+    $children = Person::factory()->count(3)->sequence(
+        ['name' => 'Raja Mataniari', 'birth_order' => 1],
+        ['name' => 'Raja Niapul', 'birth_order' => 2],
+        ['name' => 'Raja Siboro', 'birth_order' => 3],
+    )->create(['father_id' => $root->id]);
+    $tree = FamilyTree::create([
+        'user_id' => $this->admin->id,
+        'root_person_id' => $root->id,
+        'name' => 'Keluarga Raja Sapala Tua',
+    ]);
+    FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $root->id]);
+
+    $this->actingAs($this->admin)
+        ->get(route('people.edit', $root))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('people/form')
+            ->has('person.ownChildren', 3)
+            ->where('person.ownChildren.0.id', $children[0]->id)
+            ->where('person.ownChildren.1.id', $children[1]->id)
+            ->where('person.ownChildren.2.id', $children[2]->id));
+});
+
 test('the base edit url reads parent structure from the owned base tree', function () {
     $marga = Marga::factory()->create();
     $user = User::factory()->withMarga($marga->id)->create();

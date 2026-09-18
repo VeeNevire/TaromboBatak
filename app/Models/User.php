@@ -22,6 +22,7 @@ use Illuminate\Support\Carbon;
  * @property string $email
  * @property Carbon|null $email_verified_at
  * @property string $password
+ * @property bool $is_active
  * @property string $role
  * @property int|null $marga_id
  * @property int|null $current_person_id
@@ -56,7 +57,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, ChatGroup> $ownedChatGroups
  * @property-read Collection<int, ChatGroupMember> $chatGroupMemberships
  */
-#[Fillable(['name', 'email', 'password', 'role', 'marga_id', 'current_person_id', 'province_code', 'regency_code', 'district_code', 'village_code'])]
+#[Fillable(['name', 'email', 'password', 'is_active', 'role', 'marga_id', 'current_person_id', 'province_code', 'regency_code', 'district_code', 'village_code'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -85,6 +86,11 @@ class User extends Authenticatable
     public function isStaff(): bool
     {
         return $this->isAdmin() || $this->isSubAdmin();
+    }
+
+    public function isActive(): bool
+    {
+        return $this->is_active !== false;
     }
 
     public function isContributor(): bool
@@ -293,6 +299,7 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'is_active' => 'boolean',
             'news_feed_read_at' => 'datetime',
             'password' => 'hashed',
         ];

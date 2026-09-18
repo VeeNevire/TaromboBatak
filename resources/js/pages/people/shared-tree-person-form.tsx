@@ -31,6 +31,7 @@ type MemberRow = {
 
 type Props = {
     familyTree: { id: number; name: string; requires_approval: boolean };
+    fatherOptions: NodeOption[];
     branchFatherOptions: BranchFatherOption[];
     motherOptionsByFather: Record<string, NodeOption[]>;
     initialFatherNodeId: number | null;
@@ -77,6 +78,7 @@ const emptyMemberRow = (): MemberRow => ({
 
 export default function SharedTreePersonForm({
     familyTree,
+    fatherOptions,
     branchFatherOptions,
     motherOptionsByFather,
     initialFatherNodeId,
@@ -105,6 +107,8 @@ export default function SharedTreePersonForm({
         : data.father_node_id
           ? `node:${data.father_node_id}`
           : '';
+    const isFatherLocked =
+        initialFatherNodeId !== null || initialBranchFather !== null;
 
     const addRow = (kind: 'children' | 'siblings') => {
         setData(kind, [...data[kind], emptyMemberRow()]);
@@ -598,13 +602,14 @@ export default function SharedTreePersonForm({
                                             <Input
                                                 id="father_node_id"
                                                 value={initialBranchFather.name}
-                                                readOnly
+                                                disabled
                                                 className="border-tb-outline-variant bg-tb-surface-container text-tb-on-surface"
                                             />
                                         ) : (
                                             <select
                                                 id="father_node_id"
                                                 required
+                                                disabled={isFatherLocked}
                                                 value={fatherChoice}
                                                 onChange={(e) => {
                                                     const [source, id] =
@@ -628,11 +633,27 @@ export default function SharedTreePersonForm({
                                                         '',
                                                     );
                                                 }}
-                                                className="h-10 w-full rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 text-sm text-tb-on-surface focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20 focus:outline-none"
+                                                className="h-10 w-full rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 text-sm text-tb-on-surface focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20 focus:outline-none disabled:cursor-not-allowed disabled:bg-tb-surface-container disabled:text-tb-on-surface-variant"
                                             >
                                                 <option value="">
                                                     Pilih Ayah...
                                                 </option>
+                                                {fatherOptions.length > 0 && (
+                                                    <optgroup label="Anggota di silsilah ini">
+                                                        {fatherOptions.map(
+                                                            (option) => (
+                                                                <option
+                                                                    key={option.id}
+                                                                    value={`node:${option.id}`}
+                                                                >
+                                                                    {optionLabel(
+                                                                        option,
+                                                                    )}
+                                                                </option>
+                                                            ),
+                                                        )}
+                                                    </optgroup>
+                                                )}
                                                 {branchFatherOptions.length >
                                                     0 && (
                                                     <optgroup label="Pohon marga bawah — belum memiliki keturunan">
@@ -653,6 +674,12 @@ export default function SharedTreePersonForm({
                                                     </optgroup>
                                                 )}
                                             </select>
+                                        )}
+                                        {isFatherLocked && (
+                                            <p className="text-xs text-tb-on-surface-variant">
+                                                Ayah dikunci berdasarkan anggota
+                                                silsilah yang dipilih.
+                                            </p>
                                         )}
                                         <InputError
                                             message={

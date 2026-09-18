@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureUserCanReviewContributions;
+use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\EnsureUserIsStaff;
 use App\Http\Middleware\HandleAppearance;
@@ -37,6 +38,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             HandleAppearance::class,
             HandleInertiaRequests::class,
+            EnsureUserIsActive::class,
             AddLinkHeadersForPreloadedAssets::class,
             LogSubAdminActivity::class,
         ]);

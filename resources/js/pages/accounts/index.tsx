@@ -3,11 +3,11 @@ import {
     ArrowDown,
     ArrowUp,
     ChevronsUpDown,
+    CircleOff,
     History,
     Pencil,
     Plus,
     ShieldCheck,
-    Trash,
     UserRound,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -32,6 +32,7 @@ type Account = {
     name: string;
     email: string;
     role: string;
+    is_active: boolean;
     current_person: string | null;
     marga: string | null;
     managed_margas: string[];
@@ -140,13 +141,13 @@ export default function AccountsIndex({
     filters: Filters;
 }) {
     const [search, setSearch] = useState(filters.search);
-    const [toDelete, setToDelete] = useState<Account | null>(null);
+    const [toDeactivate, setToDeactivate] = useState<Account | null>(null);
     const [activityAccount, setActivityAccount] = useState<Account | null>(
         null,
     );
     const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
     const [activityLoading, setActivityLoading] = useState(false);
-    const deleteForm = useForm({});
+    const deactivateForm = useForm({});
 
     const applyFilters = (
         nextSearch = search,
@@ -177,14 +178,14 @@ export default function AccountsIndex({
         );
     };
 
-    const confirmDelete = () => {
-        if (!toDelete) {
+    const confirmDeactivation = () => {
+        if (!toDeactivate) {
             return;
         }
 
-        deleteForm.delete(accounts.destroy(toDelete.id).url, {
+        deactivateForm.patch(accounts.deactivate(toDeactivate.id).url, {
             preserveScroll: true,
-            onSuccess: () => setToDelete(null),
+            onSuccess: () => setToDeactivate(null),
         });
     };
 
@@ -322,6 +323,11 @@ export default function AccountsIndex({
                                                 {roleLabels[account.role] ??
                                                     account.role}
                                             </span>
+                                            {!account.is_active && (
+                                                <span className="ml-1 inline-flex rounded-full bg-tb-error-container px-2 py-1 text-xs font-medium text-tb-on-error-container">
+                                                    Non Aktif
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="px-3 py-3 text-tb-on-surface-variant">
                                             {account.current_person ?? '-'}
@@ -374,14 +380,20 @@ export default function AccountsIndex({
                                                 </Button>
                                                 <Button
                                                     variant="ghost"
-                                                    size="icon"
-                                                    title="Hapus"
-                                                    className="size-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                                                    size="sm"
+                                                    title={
+                                                        account.is_active
+                                                            ? 'Non Aktif'
+                                                            : 'Akun sudah nonaktif'
+                                                    }
+                                                    disabled={!account.is_active}
+                                                    className="gap-1.5 text-tb-error hover:bg-tb-error-container"
                                                     onClick={() =>
-                                                        setToDelete(account)
+                                                        setToDeactivate(account)
                                                     }
                                                 >
-                                                    <Trash className="size-4" />
+                                                    <CircleOff className="size-4" />
+                                                    Non Aktif
                                                 </Button>
                                             </div>
                                         </td>
@@ -435,33 +447,33 @@ export default function AccountsIndex({
             </div>
 
             <Dialog
-                open={toDelete !== null}
-                onOpenChange={(open) => !open && setToDelete(null)}
+                open={toDeactivate !== null}
+                onOpenChange={(open) => !open && setToDeactivate(null)}
             >
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Hapus Akun</DialogTitle>
+                        <DialogTitle>Nonaktifkan Akun</DialogTitle>
                         <DialogDescription>
-                            Yakin ingin menghapus{' '}
-                            <strong>{toDelete?.name}</strong>? Akun tersebut
-                            tidak akan bisa login lagi.
+                            Nonaktifkan <strong>{toDeactivate?.name}</strong>?
+                            Akun ini tidak dapat login lagi, tetapi data dan
+                            riwayatnya tetap tersimpan.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
                         <Button
                             variant="outline"
-                            onClick={() => setToDelete(null)}
+                            onClick={() => setToDeactivate(null)}
                         >
                             Batal
                         </Button>
                         <Button
                             variant="destructive"
-                            onClick={confirmDelete}
-                            disabled={deleteForm.processing}
+                            onClick={confirmDeactivation}
+                            disabled={deactivateForm.processing}
                         >
-                            {deleteForm.processing
-                                ? 'Menghapus...'
-                                : 'Ya, Hapus'}
+                            {deactivateForm.processing
+                                ? 'Menonaktifkan...'
+                                : 'Ya, Non Aktif'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

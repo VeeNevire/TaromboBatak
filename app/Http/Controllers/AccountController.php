@@ -244,19 +244,22 @@ class AccountController extends Controller
         return to_route('accounts.index');
     }
 
-    public function destroy(Request $request, User $account): RedirectResponse
+    public function deactivate(Request $request, User $account): RedirectResponse
     {
-        abort_if($account->id === $request->user()?->id, 403, 'Anda tidak dapat menghapus akun sendiri.');
+        abort_if($account->id === $request->user()?->id, 403, 'Anda tidak dapat menonaktifkan akun sendiri.');
+
         DB::transaction(function () use ($account, $request): void {
+            $account->update(['is_active' => false]);
+            DB::table(config('session.table'))->where('user_id', $account->id)->delete();
+
             app(AccountActivityLogger::class)->log(
                 $account,
                 $request->user(),
-                'deleted',
-                'Akun dihapus.',
+                'deactivated',
+                'Akun dinonaktifkan.',
             );
-            $account->delete();
         });
-        Inertia::flash('toast', ['type' => 'success', 'message' => 'Akun berhasil dihapus.']);
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'Akun berhasil dinonaktifkan.']);
 
         return to_route('accounts.index');
     }
@@ -269,6 +272,7 @@ class AccountController extends Controller
             'name' => $account->name,
             'email' => $account->email,
             'role' => $account->role,
+            'is_active' => $account->is_active,
             'marga' => $account->marga?->name,
             'marga_id' => $account->marga_id,
             'managed_margas' => $account->managedMargas->pluck('name')->values()->all(),

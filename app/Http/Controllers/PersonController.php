@@ -20,6 +20,7 @@ use App\Notifications\FatherMatchSubmitted;
 use App\Services\ChainNumberingService;
 use App\Services\FamilyEntryService;
 use App\Services\FamilyTreeActivityLogger;
+use App\Services\FamilyTreeDescendantSyncService;
 use App\Services\FamilyTreeFamilyNameService;
 use App\Services\FamilyTreeStructureService;
 use App\Services\FamilyTreeVersionService;
@@ -389,6 +390,11 @@ class PersonController extends Controller
             });
         }
 
+        $result['familyTrees']->each(
+            fn (FamilyTree $tree) => app(FamilyTreeDescendantSyncService::class)
+                ->syncTreeAndDescendantVersions($tree),
+        );
+
         $result['familyTrees']->each(fn (FamilyTree $tree) => app(FamilyTreeActivityLogger::class)->log(
             $tree,
             $user,
@@ -519,9 +525,9 @@ class PersonController extends Controller
             ->whereHas('nodes', fn ($nodes) => $nodes->where('person_id', $person->id))
             ->oldest('id')
             ->value('id');
-        $familyPayload = $structureTreeId !== null
-                ? $this->familyPayloadForVersion($person, $structureTreeId, $personMargaScope)
-                : $this->familyPayload($person, $personMargaScope);
+        $familyPayload = $selectedVersionId !== null
+            ? $this->familyPayloadForVersion($person, $selectedVersionId, $personMargaScope)
+            : $this->familyPayload($person, $personMargaScope);
         $selectedFamilyName = $structureTreeId !== null
             ? app(FamilyTreeFamilyNameService::class)->forPerson(
                 FamilyTree::query()->findOrFail($structureTreeId),
@@ -825,6 +831,16 @@ class PersonController extends Controller
         ]);
     }
 
+    /** Materialize missing descendant nodes so they can be edited in this version. */
+    public function syncFamilyTreeDescendants(Request $request, FamilyTree $familyTree): RedirectResponse
+    {
+        $this->authorizeFamilyTree($request, $familyTree);
+
+        app(FamilyTreeDescendantSyncService::class)->sync($familyTree);
+
+        return to_route('family-trees.edit', $familyTree);
+    }
+
     /**
      * Persist structural changes only in the selected version.
      */
@@ -1106,6 +1122,11 @@ class PersonController extends Controller
         } else {
             $result = app(FamilyEntryService::class)->save($validated, createdBy: $user->id);
         }
+
+        $result['familyTrees']->each(
+            fn (FamilyTree $tree) => app(FamilyTreeDescendantSyncService::class)
+                ->syncTreeAndDescendantVersions($tree),
+        );
 
         $result['familyTrees']->each(fn (FamilyTree $tree) => app(FamilyTreeActivityLogger::class)->log(
             $tree,

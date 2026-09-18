@@ -99,6 +99,37 @@ test('account changes are recorded and visible to admins', function () {
     expect(ActivityLog::query()->where('account_id', $account->id)->count())->toBe(1);
 });
 
+test('an admin can deactivate an account without deleting its data', function () {
+    $admin = User::factory()->asAdmin()->create();
+    $account = User::factory()->create();
+
+    $this->actingAs($admin)
+        ->patch(route('accounts.deactivate', $account))
+        ->assertRedirect(route('accounts.index'))
+        ->assertSessionHasNoErrors();
+
+    expect($account->fresh()->isActive())->toBeFalse();
+    $this->assertModelExists($account);
+    expect(ActivityLog::query()
+        ->where('account_id', $account->id)
+        ->value('description'))->toBe('Akun dinonaktifkan.');
+
+    $this->actingAs($admin)
+        ->get(route('accounts.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('accounts.data.0.is_active', false));
+});
+
+test('an admin cannot deactivate their own account', function () {
+    $admin = User::factory()->asAdmin()->create();
+
+    $this->actingAs($admin)
+        ->patch(route('accounts.deactivate', $admin))
+        ->assertForbidden();
+
+    expect($admin->fresh()->isActive())->toBeTrue();
+});
+
 test('legacy people activity logs show the account primary family tree without inventing member context', function () {
     $admin = User::factory()->asAdmin()->create();
     $account = User::factory()->asSubAdmin()->create();
