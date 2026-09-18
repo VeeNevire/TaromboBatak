@@ -1,6 +1,7 @@
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowLeft, ChevronDown, ChevronUp, Save } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { dashboard } from '@/routes';
 import familyTrees from '@/routes/family-trees';
 
@@ -25,6 +26,7 @@ type Props = {
 
 export default function TreeEditor({ familyTree, entries }: Props) {
     const prefersReducedMotion = useReducedMotion();
+    const [syncingDescendants, setSyncingDescendants] = useState(true);
     const { data, setData, put, processing, errors } = useForm({
         entries: entries.map((entry) => ({
             id: entry.id,
@@ -32,6 +34,30 @@ export default function TreeEditor({ familyTree, entries }: Props) {
             birth_order: entry.birthOrder,
         })),
     });
+
+    useEffect(() => {
+        router.post(
+            familyTrees.syncDescendants.url(familyTree.id),
+            {},
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onFinish: () => setSyncingDescendants(false),
+            },
+        );
+    }, [familyTree.id]);
+
+    useEffect(() => {
+        setData(
+            'entries',
+            entries.map((entry) => ({
+                id: entry.id,
+                father_node_id: entry.fatherNodeId,
+                birth_order: entry.birthOrder,
+            })),
+        );
+    }, [entries, setData]);
+
     const possibleFathers = entries.filter(
         (entry) => entry.gender === 'L' || entry.gender === null,
     );
@@ -129,11 +155,15 @@ export default function TreeEditor({ familyTree, entries }: Props) {
                         onClick={() =>
                             put(familyTrees.update.url(familyTree.id))
                         }
-                        disabled={processing}
+                        disabled={processing || syncingDescendants}
                         className="text-tb-on-primary inline-flex items-center justify-center gap-2 rounded-xl bg-tb-primary px-4 py-2.5 text-sm font-semibold transition-opacity disabled:opacity-60"
                     >
                         <Save className="size-4" />
-                        {processing ? 'Menyimpan...' : 'Simpan Struktur'}
+                        {syncingDescendants
+                            ? 'Memuat anak...'
+                            : processing
+                              ? 'Menyimpan...'
+                              : 'Simpan Struktur'}
                     </button>
                 </div>
 

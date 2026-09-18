@@ -112,6 +112,122 @@ test('an alternative version inherits new primary branches until that branch is 
             ->where('people.2.parentId', (string) $root->id));
 });
 
+test('synchronizing a tree materializes missing descendants without changing version overrides', function () {
+    $user = User::factory()->asAdmin()->create();
+    $root = Person::factory()->create(['name' => 'Akar', 'gender' => 'L']);
+    $existingChild = Person::factory()->create([
+        'name' => 'Anak Lama',
+        'gender' => 'L',
+        'father_id' => $root->id,
+        'birth_order' => 1,
+    ]);
+    $newChild = Person::factory()->create([
+        'name' => 'Anak Baru',
+        'gender' => 'L',
+        'father_id' => $root->id,
+        'birth_order' => 2,
+    ]);
+    $grandchild = Person::factory()->create([
+        'name' => 'Cucu Baru',
+        'gender' => 'L',
+        'father_id' => $newChild->id,
+        'birth_order' => 1,
+    ]);
+    $source = FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $root->id,
+        'name' => 'Versi Utama',
+    ]);
+    $rootNode = FamilyTreeNode::create([
+        'family_tree_id' => $source->id,
+        'person_id' => $root->id,
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $source->id,
+        'person_id' => $existingChild->id,
+        'father_node_id' => $rootNode->id,
+        'birth_order' => 1,
+    ]);
+    $alternative = app(FamilyTreeVersionService::class)->duplicate($source, $user, 'Versi Alternatif');
+    $alternativeExistingChild = $alternative->nodes()->where('person_id', $existingChild->id)->firstOrFail();
+    $alternativeExistingChild->update([
+        'birth_order' => 7,
+        'structure_overrides' => ['birth_order' => 7],
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('family-trees.sync-descendants', $alternative))
+        ->assertRedirect(route('family-trees.edit', $alternative));
+
+    $alternativeRoot = $alternative->nodes()->where('person_id', $root->id)->firstOrFail();
+    $alternativeNewChild = $alternative->nodes()->where('person_id', $newChild->id)->firstOrFail();
+    $alternativeGrandchild = $alternative->nodes()->where('person_id', $grandchild->id)->firstOrFail();
+
+    expect($alternativeNewChild->father_node_id)->toBe($alternativeRoot->id)
+        ->and($alternativeNewChild->birth_order)->toBe(2)
+        ->and($alternativeGrandchild->father_node_id)->toBe($alternativeNewChild->id)
+        ->and($alternativeExistingChild->fresh()->birth_order)->toBe(7)
+        ->and($alternativeExistingChild->fresh()->structure_overrides)->toBe(['birth_order' => 7])
+        ->and($alternative->people()->whereKey($newChild->id)->exists())->toBeTrue()
+        ->and($alternative->people()->whereKey($grandchild->id)->exists())->toBeTrue();
+});
+
+test('a standard family edit syncs a new child into derived family tree versions', function () {
+    $user = User::factory()->asAdmin()->create();
+    $root = Person::factory()->create(['name' => 'Ayah', 'gender' => 'L']);
+    $child = Person::factory()->create([
+        'name' => 'Anak Baru',
+        'gender' => 'L',
+        'father_id' => $root->id,
+        'birth_order' => 1,
+    ]);
+    $source = FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $root->id,
+        'name' => 'Versi Utama',
+    ]);
+    FamilyTreeNode::create(['family_tree_id' => $source->id, 'person_id' => $root->id]);
+    $alternative = app(FamilyTreeVersionService::class)->duplicate($source, $user, 'Versi Alternatif');
+
+    $this->actingAs($user)
+        ->put(route('people.update', $root), [
+            'name' => $root->name,
+            'gender' => $root->gender,
+            'birth_order' => 1,
+            'sibling_count' => 1,
+            'father' => [],
+            'mothers' => [],
+            'children' => [],
+            'ownChildren' => [[
+                'id' => $child->id,
+                'name' => $child->name,
+                'gender' => $child->gender,
+            ]],
+        ])
+        ->assertRedirect(route('people.show', $root));
+
+    $alternativeRoot = $alternative->nodes()->where('person_id', $root->id)->firstOrFail();
+    $alternativeChild = $alternative->nodes()->where('person_id', $child->id)->firstOrFail();
+
+    expect($alternativeChild->father_node_id)->toBe($alternativeRoot->id)
+        ->and($alternativeChild->birth_order)->toBe(1);
+});
+
+test('a user without edit access cannot synchronize a family tree', function () {
+    $owner = User::factory()->create();
+    $viewer = User::factory()->create();
+    $root = Person::factory()->create();
+    $tree = FamilyTree::create([
+        'user_id' => $owner->id,
+        'root_person_id' => $root->id,
+    ]);
+    FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $root->id]);
+
+    $this->actingAs($viewer)
+        ->post(route('family-trees.sync-descendants', $tree))
+        ->assertForbidden();
+});
+
 test('the existing family form updates an alternative version without changing global chains', function () {
     $user = User::factory()->asAdmin()->create();
     $root = Person::factory()->create(['name' => 'Si Raja Batak', 'gender' => 'L', 'chain' => '1']);

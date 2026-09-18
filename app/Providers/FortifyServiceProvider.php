@@ -6,9 +6,11 @@ use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
 use App\Actions\Fortify\VerifyTurnstile;
 use App\Models\Marga;
+use App\Models\User;
 use App\Support\IndonesiaRegions;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
@@ -40,6 +42,16 @@ class FortifyServiceProvider extends ServiceProvider
         $this->configureActions();
         $this->configureViews();
         $this->configureRateLimiting();
+
+        Fortify::authenticateUsing(function (Request $request): ?User {
+            $user = User::query()
+                ->where('email', $request->string(Fortify::username())->toString())
+                ->first();
+
+            return $user?->isActive() && Hash::check($request->string('password')->toString(), $user->password)
+                ? $user
+                : null;
+        });
 
         Fortify::authenticateThrough(function (Request $request) {
             return array_filter([

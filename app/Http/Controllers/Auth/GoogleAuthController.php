@@ -50,6 +50,10 @@ class GoogleAuthController extends Controller
             ->first();
 
         if ($oauthAccount !== null) {
+            if (! $oauthAccount->user->isActive()) {
+                return to_route('login')->withErrors(['email' => 'Akun ini sudah dinonaktifkan. Hubungi administrator untuk bantuan.']);
+            }
+
             $this->login($oauthAccount->user);
 
             return to_route('dashboard');
@@ -57,6 +61,10 @@ class GoogleAuthController extends Controller
 
         $existingUser = User::query()->where('email', $email)->first();
         if ($existingUser !== null) {
+            if (! $existingUser->isActive()) {
+                return to_route('login')->withErrors(['email' => 'Akun ini sudah dinonaktifkan. Hubungi administrator untuk bantuan.']);
+            }
+
             $existingUser->oauthAccounts()->create([
                 'provider' => $provider,
                 'provider_id' => $providerId,
