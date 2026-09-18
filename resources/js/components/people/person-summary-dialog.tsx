@@ -27,6 +27,7 @@ import {
 import type { TaromboPerson } from '@/data/tarombo-tree';
 import contactRequests from '@/routes/contact-requests';
 import contacts from '@/routes/contacts';
+import margaBranchEntries from '@/routes/marga-branch-entries';
 import peopleRoutes from '@/routes/people';
 
 function yearOnly(value?: string | null): string {
@@ -43,12 +44,14 @@ export function PersonSummaryDialog({
     onClose,
     currentUserId,
     versionTreeId,
+    allowBranchEntry = false,
 }: {
     person: TaromboPerson | null;
     people: TaromboPerson[];
     onClose: () => void;
     currentUserId?: number;
     versionTreeId?: number | null;
+    allowBranchEntry?: boolean;
 }) {
     const [connectingAccountId, setConnectingAccountId] = useState<
         number | null
@@ -321,10 +324,15 @@ export function PersonSummaryDialog({
                                                 <Link
                                                     key={spouse.id}
                                                     href={peopleRoutes.silsilah(
-                                                        { person: Number(spouse.id) },
+                                                        {
+                                                            person: Number(
+                                                                spouse.id,
+                                                            ),
+                                                        },
                                                         {
                                                             query: {
-                                                                context: 'close',
+                                                                context:
+                                                                    'close',
                                                             },
                                                         },
                                                     )}
@@ -335,7 +343,8 @@ export function PersonSummaryDialog({
                                             ))
                                         ) : (
                                             <span className="text-tb-on-surface">
-                                                {person.spouse || 'Belum dicatat'}
+                                                {person.spouse ||
+                                                    'Belum dicatat'}
                                             </span>
                                         )}
                                     </dd>
@@ -456,26 +465,55 @@ export function PersonSummaryDialog({
                             )}
                             <Button asChild variant="outline">
                                 <Link
-                                    href={peopleRoutes.show({
-                                        person: Number(person.id),
-                                    }, {
-                                        query: versionTreeId
-                                            ? { version_tree: versionTreeId }
-                                            : {},
-                                    })}
+                                    href={peopleRoutes.show(
+                                        {
+                                            person: Number(person.id),
+                                        },
+                                        {
+                                            query: versionTreeId
+                                                ? {
+                                                      version_tree:
+                                                          versionTreeId,
+                                                  }
+                                                : {},
+                                        },
+                                    )}
                                 >
                                     Lihat Detail
                                 </Link>
                             </Button>
+                            {allowBranchEntry &&
+                                person.gender !== 'P' && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() =>
+                                        router.post(
+                                            margaBranchEntries.store({
+                                                person: Number(person.id),
+                                            }).url,
+                                        )
+                                    }
+                                >
+                                    <UserPlus className="size-4" />
+                                    Tambah Anggota Ranting
+                                </Button>
+                            )}
                             <Button asChild>
                                 <Link
-                                    href={peopleRoutes.edit({
-                                        person: Number(person.id),
-                                    }, {
-                                        query: versionTreeId
-                                            ? { version_tree: versionTreeId }
-                                            : {},
-                                    })}
+                                    href={peopleRoutes.edit(
+                                        {
+                                            person: Number(person.id),
+                                        },
+                                        {
+                                            query: versionTreeId
+                                                ? {
+                                                      version_tree:
+                                                          versionTreeId,
+                                                  }
+                                                : {},
+                                        },
+                                    )}
                                 >
                                     <Pencil className="size-4" />
                                     Edit

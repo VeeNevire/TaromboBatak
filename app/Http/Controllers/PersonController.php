@@ -393,6 +393,7 @@ class PersonController extends Controller
             $user,
             'added',
             'Menambahkan anggota keluarga ke silsilah.',
+            ($result['focus'] ?? $result['children']->first())?->name,
         ));
 
         $message = isset($result) && $result['matchedFather'] !== null
@@ -703,7 +704,13 @@ class PersonController extends Controller
         $rootName = $familyTree->rootPerson()->value('name') ?? 'Silsilah';
         $name = $this->alternativeVersionName($request, ($familyTree->name ?? $rootName).' - Versi alternatif');
         $copy = app(FamilyTreeVersionService::class)->duplicate($familyTree, $request->user(), $name);
-        app(FamilyTreeActivityLogger::class)->log($copy, $request->user(), 'created', 'Membuat versi alternatif silsilah.');
+        app(FamilyTreeActivityLogger::class)->log(
+            $copy,
+            $request->user(),
+            'created',
+            'Membuat versi alternatif silsilah.',
+            $copy->rootPerson()->value('name'),
+        );
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Versi alternatif berhasil dibuat.')]);
 
@@ -789,7 +796,13 @@ class PersonController extends Controller
         $this->authorizeFamilyTree($request, $familyTree);
 
         app(FamilyTreeStructureService::class)->update($familyTree, $request->validated('entries'));
-        app(FamilyTreeActivityLogger::class)->log($familyTree, $request->user(), 'updated', 'Memperbarui struktur silsilah.');
+        app(FamilyTreeActivityLogger::class)->log(
+            $familyTree,
+            $request->user(),
+            'updated',
+            'Memperbarui struktur silsilah.',
+            $familyTree->rootPerson()->value('name'),
+        );
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Struktur versi silsilah berhasil diperbarui.')]);
 
@@ -804,7 +817,13 @@ class PersonController extends Controller
         $this->authorizeFamilyTree($request, $familyTree);
 
         $familyTree->update(['name' => trim($request->validated('name'))]);
-        app(FamilyTreeActivityLogger::class)->log($familyTree, $request->user(), 'updated', 'Mengubah nama silsilah.');
+        app(FamilyTreeActivityLogger::class)->log(
+            $familyTree,
+            $request->user(),
+            'updated',
+            'Mengubah nama silsilah.',
+            $familyTree->rootPerson()->value('name'),
+        );
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Nama silsilah berhasil diperbarui.')]);
 
@@ -1016,6 +1035,7 @@ class PersonController extends Controller
                 $user,
                 'updated',
                 'Memperbarui data dan struktur silsilah.',
+                $person->name,
             );
 
             Inertia::flash('toast', ['type' => 'success', 'message' => __('Versi silsilah berhasil diperbarui.')]);
@@ -1053,6 +1073,7 @@ class PersonController extends Controller
             $user,
             'updated',
             'Memperbarui data anggota pada silsilah.',
+            $person->name,
         ));
 
         if (

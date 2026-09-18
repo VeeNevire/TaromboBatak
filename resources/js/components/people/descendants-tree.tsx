@@ -29,6 +29,8 @@ type Props = {
     versionTreeId?: number | null;
     showNodeAvatar?: boolean;
     showSpouseNames?: boolean;
+    allowBranchEntry?: boolean;
+    compactTerminalBranches?: boolean;
 };
 
 type LineageLine = {
@@ -82,6 +84,7 @@ function TreeBranch({
     compact,
     showNodeAvatar,
     showSpouseNames,
+    compactTerminalBranches,
     alternativeTrees,
     nodeIdPrefix,
 }: {
@@ -107,6 +110,7 @@ function TreeBranch({
     compact?: boolean;
     showNodeAvatar?: boolean;
     showSpouseNames?: boolean;
+    compactTerminalBranches?: boolean;
 }) {
     const [activeAlternativeId, setActiveAlternativeId] = useState<
         number | null
@@ -125,10 +129,14 @@ function TreeBranch({
     // previously collapsed. The target itself is included so every ancestor
     // required to reach it is rendered for the red path overlay.
     const isCollapsed = collapsed.has(person.id) && !lineageIds.has(person.id);
+    const isTerminalBranch =
+        children.length === 0 && personAlternatives.length === 0;
+    const useCompactCard =
+        compact || (compactTerminalBranches && isTerminalBranch);
     const card = (
         <NodeCard
             node={toNode(person, numberById.get(person.id))}
-            compact={compact}
+            compact={useCompactCard}
             highlighted={isCenter || isHighlighted}
             onAvatarClick={
                 showProfileOnName ? () => onSelect?.(person.id) : undefined
@@ -143,7 +151,10 @@ function TreeBranch({
     );
 
     return (
-        <li data-female-lineage={markFemaleLineage && femaleLineage}>
+        <li
+            data-female-lineage={markFemaleLineage && femaleLineage}
+            data-terminal-branch={compactTerminalBranches && isTerminalBranch}
+        >
             {readOnly ? (
                 <div
                     id={`${nodeIdPrefix}-${person.id}`}
@@ -273,6 +284,7 @@ function TreeBranch({
                             compact={compact}
                             showNodeAvatar={showNodeAvatar}
                             showSpouseNames={showSpouseNames}
+                            compactTerminalBranches={compactTerminalBranches}
                         />
                     ))}
                 </ul>
@@ -362,6 +374,8 @@ export function DescendantsTree({
     versionTreeId,
     showNodeAvatar = true,
     showSpouseNames = false,
+    allowBranchEntry = false,
+    compactTerminalBranches = false,
 }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [profilePerson, setProfilePerson] = useState<TaromboPerson | null>(
@@ -389,8 +403,7 @@ export function DescendantsTree({
     }, [people]);
 
     const center = people.find((person) => person.id === centerId) ?? people[0];
-    const root =
-        people.find((person) => person.id === rootId) ?? center;
+    const root = people.find((person) => person.id === rootId) ?? center;
     const numberById = useMemo(() => {
         const numbers = new Map<string, number>();
 
@@ -545,11 +558,15 @@ export function DescendantsTree({
         return null;
     }
 
-    const visibleRoots = hideRoot
-        ? (childrenOf.get(root.id) ?? [])
-        : [root];
+    const visibleRoots = hideRoot ? (childrenOf.get(root.id) ?? []) : [root];
     const detachedRoots = detachedPeople.filter(
         (person) => person.id !== center.id,
+    );
+    const detachedLeafRoots = detachedRoots.filter(
+        (person) => (childrenOf.get(person.id) ?? []).length === 0,
+    );
+    const detachedBranchRoots = detachedRoots.filter(
+        (person) => (childrenOf.get(person.id) ?? []).length > 0,
     );
 
     return (
@@ -603,6 +620,7 @@ export function DescendantsTree({
                             compact={compact}
                             showNodeAvatar={showNodeAvatar}
                             showSpouseNames={showSpouseNames}
+                            compactTerminalBranches={compactTerminalBranches}
                         />
                     ))}
                 </ul>
@@ -616,45 +634,115 @@ export function DescendantsTree({
                     <p className="mb-3 text-center text-xs font-semibold text-tb-on-surface-variant">
                         Anggota marga tanpa jalur ayah tersambung
                     </p>
-                    <div className="flex w-max min-w-full flex-wrap items-start justify-center gap-x-10 gap-y-6">
-                        {detachedRoots.map((root) => (
-                            <ul
-                                key={root.id}
-                                className={
-                                    compact
-                                        ? 'tb-tree tb-tree--compact'
-                                        : 'tb-tree'
-                                }
-                            >
-                                <TreeBranch
-                                    person={root}
-                                    childrenOf={childrenOf}
-                                    centerId={centerId}
-                                    highlightId={highlightId}
-                                    numberById={numberById}
-                                    collapsed={collapsed}
-                                    onToggle={handleToggle}
-                                    onSelect={onSelect}
-                                    editNodes={editNodes}
-                                    selectOnClick={selectOnClick}
-                                    showProfileOnName={showProfileOnName}
-                                    readOnly={readOnly}
-                                    onOpenProfile={setProfilePerson}
-                                    alternativeTrees={alternativeTrees}
-                                    nodeIdPrefix={nodeIdPrefix}
-                                    lineageIds={lineageIds}
-                                    femaleLineage={
-                                        root.gender?.toUpperCase() === 'P'
-                                    }
-                                    markFemaleLineage={markFemaleLineage}
-                                    collapseDepth={collapseDepth}
-                                    compact={compact}
-                                    showNodeAvatar={showNodeAvatar}
-                                    showSpouseNames={showSpouseNames}
-                                />
-                            </ul>
-                        ))}
-                    </div>
+                    {detachedBranchRoots.length > 0 && (
+                        <div className="flex w-max min-w-full flex-wrap items-start justify-center gap-x-10 gap-y-6">
+                            {detachedBranchRoots.map((root) => (
+                                <div
+                                    key={root.id}
+                                    className="flex flex-col items-center gap-2"
+                                >
+                                    <p className="rounded-full border border-tb-outline-variant bg-tb-surface-container px-3 py-1 text-xs font-semibold text-tb-on-surface">
+                                        Nama Keluarga: {root.name}
+                                    </p>
+                                    <ul
+                                        className={
+                                            compact
+                                                ? 'tb-tree tb-tree--compact'
+                                                : 'tb-tree'
+                                        }
+                                    >
+                                        <TreeBranch
+                                            person={root}
+                                            childrenOf={childrenOf}
+                                            centerId={centerId}
+                                            highlightId={highlightId}
+                                            numberById={numberById}
+                                            collapsed={collapsed}
+                                            onToggle={handleToggle}
+                                            onSelect={onSelect}
+                                            editNodes={editNodes}
+                                            selectOnClick={selectOnClick}
+                                            showProfileOnName={
+                                                showProfileOnName
+                                            }
+                                            readOnly={readOnly}
+                                            onOpenProfile={setProfilePerson}
+                                            alternativeTrees={alternativeTrees}
+                                            nodeIdPrefix={nodeIdPrefix}
+                                            lineageIds={lineageIds}
+                                            femaleLineage={
+                                                root.gender?.toUpperCase() ===
+                                                'P'
+                                            }
+                                            markFemaleLineage={
+                                                markFemaleLineage
+                                            }
+                                            collapseDepth={collapseDepth}
+                                            compact={compact}
+                                            showNodeAvatar={showNodeAvatar}
+                                            showSpouseNames={showSpouseNames}
+                                            compactTerminalBranches={
+                                                compactTerminalBranches
+                                            }
+                                        />
+                                    </ul>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    {detachedLeafRoots.length > 0 && (
+                        <div className="mx-auto flex w-full max-w-[72rem] flex-wrap items-start justify-center gap-x-5 gap-y-6">
+                            {detachedLeafRoots.map((root) => (
+                                <div
+                                    key={root.id}
+                                    className="flex flex-col items-center gap-2"
+                                >
+                                    <p className="rounded-full border border-tb-outline-variant bg-tb-surface-container px-3 py-1 text-xs font-semibold text-tb-on-surface">
+                                        Nama Keluarga: {root.name}
+                                    </p>
+                                    <ul
+                                        className={
+                                            compact
+                                                ? 'tb-tree tb-tree--compact'
+                                                : 'tb-tree'
+                                        }
+                                    >
+                                        <TreeBranch
+                                            person={root}
+                                            childrenOf={childrenOf}
+                                            centerId={centerId}
+                                            highlightId={highlightId}
+                                            numberById={numberById}
+                                            collapsed={collapsed}
+                                            onToggle={handleToggle}
+                                            onSelect={onSelect}
+                                            editNodes={editNodes}
+                                            selectOnClick={selectOnClick}
+                                            showProfileOnName={
+                                                showProfileOnName
+                                            }
+                                            readOnly={readOnly}
+                                            onOpenProfile={setProfilePerson}
+                                            alternativeTrees={alternativeTrees}
+                                            nodeIdPrefix={nodeIdPrefix}
+                                            lineageIds={lineageIds}
+                                            femaleLineage={
+                                                root.gender?.toUpperCase() ===
+                                                'P'
+                                            }
+                                            markFemaleLineage={
+                                                markFemaleLineage
+                                            }
+                                            collapseDepth={collapseDepth}
+                                            compact={compact}
+                                            showNodeAvatar={showNodeAvatar}
+                                            showSpouseNames={showSpouseNames}
+                                        />
+                                    </ul>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             )}
             {showProfileOnName && (
@@ -664,6 +752,7 @@ export function DescendantsTree({
                     onClose={() => setProfilePerson(null)}
                     currentUserId={currentUserId}
                     versionTreeId={versionTreeId}
+                    allowBranchEntry={allowBranchEntry}
                 />
             )}
         </div>

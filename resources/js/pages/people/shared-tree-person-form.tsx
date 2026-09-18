@@ -16,6 +16,7 @@ import familyTrees from '@/routes/family-trees';
 import people from '@/routes/people';
 
 type NodeOption = { id: number; name: string; chain: string | null };
+type BranchFatherOption = { id: number; name: string };
 
 type MemberRow = {
     uid: string;
@@ -30,9 +31,10 @@ type MemberRow = {
 
 type Props = {
     familyTree: { id: number; name: string; requires_approval: boolean };
-    fatherOptions: NodeOption[];
+    branchFatherOptions: BranchFatherOption[];
     motherOptionsByFather: Record<string, NodeOption[]>;
     initialFatherNodeId: number | null;
+    initialBranchFather: { id: number; name: string } | null;
 };
 
 const MAX_EXTRA_ROWS = 20;
@@ -75,9 +77,10 @@ const emptyMemberRow = (): MemberRow => ({
 
 export default function SharedTreePersonForm({
     familyTree,
-    fatherOptions,
+    branchFatherOptions,
     motherOptionsByFather,
     initialFatherNodeId,
+    initialBranchFather,
 }: Props) {
     const { data, setData, post, transform, processing, errors } = useForm({
         name: '',
@@ -88,6 +91,7 @@ export default function SharedTreePersonForm({
         death_year: '',
         bio: '',
         father_node_id: initialFatherNodeId?.toString() ?? '',
+        branch_father_person_id: initialBranchFather?.id.toString() ?? '',
         mother_node_id: '',
         spouse: '',
         spouse_marga: '',
@@ -95,8 +99,12 @@ export default function SharedTreePersonForm({
         siblings: [] as MemberRow[],
     });
 
-    const motherOptions =
-        motherOptionsByFather[data.father_node_id] ?? [];
+    const motherOptions = motherOptionsByFather[data.father_node_id] ?? [];
+    const fatherChoice = data.branch_father_person_id
+        ? `branch:${data.branch_father_person_id}`
+        : data.father_node_id
+          ? `node:${data.father_node_id}`
+          : '';
 
     const addRow = (kind: 'children' | 'siblings') => {
         setData(kind, [...data[kind], emptyMemberRow()]);
@@ -167,8 +175,7 @@ export default function SharedTreePersonForm({
                     htmlFor={`${kind}-${index}-name`}
                     className="text-tb-on-surface"
                 >
-                    Nama Lengkap{' '}
-                    <span className="text-red-600">*</span>
+                    Nama Lengkap <span className="text-red-600">*</span>
                 </Label>
                 <Input
                     id={`${kind}-${index}-name`}
@@ -197,9 +204,7 @@ export default function SharedTreePersonForm({
                         }
                         className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                     />
-                    <InputError
-                        message={errors[`${kind}.${index}.alias`]}
-                    />
+                    <InputError message={errors[`${kind}.${index}.alias`]} />
                 </div>
                 <div className="grid gap-1.5">
                     <Label
@@ -220,9 +225,7 @@ export default function SharedTreePersonForm({
                         <option value="L">Laki-laki (L)</option>
                         <option value="P">Perempuan (P)</option>
                     </select>
-                    <InputError
-                        message={errors[`${kind}.${index}.gender`]}
-                    />
+                    <InputError message={errors[`${kind}.${index}.gender`]} />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                     <div className="grid gap-1.5">
@@ -295,9 +298,7 @@ export default function SharedTreePersonForm({
                         }
                         className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                     />
-                    <InputError
-                        message={errors[`${kind}.${index}.spouse`]}
-                    />
+                    <InputError message={errors[`${kind}.${index}.spouse`]} />
                 </div>
                 <div className="grid gap-1.5">
                     <Label
@@ -310,12 +311,7 @@ export default function SharedTreePersonForm({
                         id={`${kind}-${index}-spouse_marga`}
                         value={row.spouse_marga}
                         onChange={(e) =>
-                            setRow(
-                                kind,
-                                index,
-                                'spouse_marga',
-                                e.target.value,
-                            )
+                            setRow(kind, index, 'spouse_marga', e.target.value)
                         }
                         className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                     />
@@ -387,9 +383,7 @@ export default function SharedTreePersonForm({
                                             placeholder="Mis. Ompu Sitorus"
                                             className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                         />
-                                        <InputError
-                                            message={errors.name}
-                                        />
+                                        <InputError message={errors.name} />
                                     </div>
                                     <div className="grid gap-5 sm:grid-cols-3">
                                         <div className="grid gap-1.5">
@@ -433,9 +427,7 @@ export default function SharedTreePersonForm({
                                                 }
                                                 className="h-10 w-full rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 text-sm text-tb-on-surface focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20 focus:outline-none"
                                             >
-                                                <option value="">
-                                                    Pilih
-                                                </option>
+                                                <option value="">Pilih</option>
                                                 <option value="L">
                                                     Laki-laki (L)
                                                 </option>
@@ -469,9 +461,7 @@ export default function SharedTreePersonForm({
                                                 className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                             />
                                             <InputError
-                                                message={
-                                                    errors.birth_order
-                                                }
+                                                message={errors.birth_order}
                                             />
                                         </div>
                                     </div>
@@ -498,9 +488,7 @@ export default function SharedTreePersonForm({
                                                 className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                             />
                                             <InputError
-                                                message={
-                                                    errors.birth_year
-                                                }
+                                                message={errors.birth_year}
                                             />
                                         </div>
                                         <div className="grid gap-1.5">
@@ -525,9 +513,7 @@ export default function SharedTreePersonForm({
                                                 className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                             />
                                             <InputError
-                                                message={
-                                                    errors.death_year
-                                                }
+                                                message={errors.death_year}
                                             />
                                         </div>
                                     </div>
@@ -553,46 +539,38 @@ export default function SharedTreePersonForm({
                             </Card>
 
                             <Card className="border-tb-outline-variant bg-tb-surface-bright">
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2 font-display text-lg text-tb-on-surface">
-                                            <Users className="size-4 text-tb-primary" />{' '}
-                                            Daftar Anak
-                                        </CardTitle>
-                                        <CardDescription>
-                                            Anak dari anggota yang sedang
-                                            ditambahkan (opsional). Marga anak
-                                            akan mengikuti marga ayah secara
-                                            otomatis.
-                                        </CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="grid gap-4">
-                                        {data.children.map((row, index) =>
-                                            renderMemberRow(
-                                                'children',
-                                                row,
-                                                index,
-                                            ),
-                                        )}
-                                        {errors.children && (
-                                            <InputError
-                                                message={errors.children}
-                                            />
-                                        )}
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            disabled={
-                                                data.children.length >=
-                                                MAX_EXTRA_ROWS
-                                            }
-                                            onClick={() => addRow('children')}
-                                            className="w-fit"
-                                        >
-                                            <Plus className="size-4" />{' '}
-                                            Tambah Anak
-                                        </Button>
-                                    </CardContent>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2 font-display text-lg text-tb-on-surface">
+                                        <Users className="size-4 text-tb-primary" />{' '}
+                                        Daftar Anak
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Anak dari anggota yang sedang
+                                        ditambahkan (opsional). Marga anak akan
+                                        mengikuti marga ayah secara otomatis.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="grid gap-4">
+                                    {data.children.map((row, index) =>
+                                        renderMemberRow('children', row, index),
+                                    )}
+                                    {errors.children && (
+                                        <InputError message={errors.children} />
+                                    )}
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={
+                                            data.children.length >=
+                                            MAX_EXTRA_ROWS
+                                        }
+                                        onClick={() => addRow('children')}
+                                        className="w-fit"
+                                    >
+                                        <Plus className="size-4" /> Tambah Anak
+                                    </Button>
+                                </CardContent>
                             </Card>
 
                             <Card className="border-tb-outline-variant bg-tb-surface-bright">
@@ -611,39 +589,75 @@ export default function SharedTreePersonForm({
                                             htmlFor="father_node_id"
                                             className="text-tb-on-surface"
                                         >
-                                            Ayah di Dalam Silsilah{' '}
+                                            Ayah{' '}
                                             <span className="text-red-600">
                                                 *
                                             </span>
                                         </Label>
-                                        <select
-                                            id="father_node_id"
-                                            required
-                                            value={data.father_node_id}
-                                            onChange={(e) => {
-                                                setData(
-                                                    'father_node_id',
-                                                    e.target.value,
-                                                );
-                                                setData('mother_node_id', '');
-                                            }}
-                                            className="h-10 w-full rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 text-sm text-tb-on-surface focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20 focus:outline-none"
-                                        >
-                                            <option value="">
-                                                Pilih Ayah...
-                                            </option>
-                                            {fatherOptions.map((option) => (
-                                                <option
-                                                    key={option.id}
-                                                    value={option.id}
-                                                >
-                                                    {optionLabel(option)}
+                                        {initialBranchFather ? (
+                                            <Input
+                                                id="father_node_id"
+                                                value={initialBranchFather.name}
+                                                readOnly
+                                                className="border-tb-outline-variant bg-tb-surface-container text-tb-on-surface"
+                                            />
+                                        ) : (
+                                            <select
+                                                id="father_node_id"
+                                                required
+                                                value={fatherChoice}
+                                                onChange={(e) => {
+                                                    const [source, id] =
+                                                        e.target.value.split(
+                                                            ':',
+                                                        );
+                                                    setData(
+                                                        'father_node_id',
+                                                        source === 'node'
+                                                            ? id
+                                                            : '',
+                                                    );
+                                                    setData(
+                                                        'branch_father_person_id',
+                                                        source === 'branch'
+                                                            ? id
+                                                            : '',
+                                                    );
+                                                    setData(
+                                                        'mother_node_id',
+                                                        '',
+                                                    );
+                                                }}
+                                                className="h-10 w-full rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 text-sm text-tb-on-surface focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20 focus:outline-none"
+                                            >
+                                                <option value="">
+                                                    Pilih Ayah...
                                                 </option>
-                                            ))}
-                                        </select>
+                                                {branchFatherOptions.length >
+                                                    0 && (
+                                                    <optgroup label="Pohon marga bawah — belum memiliki keturunan">
+                                                        {branchFatherOptions.map(
+                                                            (option) => (
+                                                                <option
+                                                                    key={
+                                                                        option.id
+                                                                    }
+                                                                    value={`branch:${option.id}`}
+                                                                >
+                                                                    {
+                                                                        option.name
+                                                                    }
+                                                                </option>
+                                                            ),
+                                                        )}
+                                                    </optgroup>
+                                                )}
+                                            </select>
+                                        )}
                                         <InputError
                                             message={
-                                                errors.father_node_id
+                                                errors.father_node_id ??
+                                                errors.branch_father_person_id
                                             }
                                         />
                                     </div>
@@ -678,9 +692,7 @@ export default function SharedTreePersonForm({
                                             ))}
                                         </select>
                                         <InputError
-                                            message={
-                                                errors.mother_node_id
-                                            }
+                                            message={errors.mother_node_id}
                                         />
                                     </div>
                                     <div className="grid gap-1.5">
@@ -701,9 +713,7 @@ export default function SharedTreePersonForm({
                                             }
                                             className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                         />
-                                        <InputError
-                                            message={errors.spouse}
-                                        />
+                                        <InputError message={errors.spouse} />
                                     </div>
                                     <div className="grid gap-1.5">
                                         <Label
@@ -724,9 +734,7 @@ export default function SharedTreePersonForm({
                                             className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                         />
                                         <InputError
-                                            message={
-                                                errors.spouse_marga
-                                            }
+                                            message={errors.spouse_marga}
                                         />
                                     </div>
                                 </CardContent>
@@ -739,24 +747,17 @@ export default function SharedTreePersonForm({
                                         Data Saudara
                                     </CardTitle>
                                     <CardDescription>
-                                        Saudara kandung dari anggota yang
-                                        sedang ditambahkan (opsional). Ayah dan
-                                        ibu akan sama dengan yang dipilih di
-                                        atas.
+                                        Saudara kandung dari anggota yang sedang
+                                        ditambahkan (opsional). Ayah dan ibu
+                                        akan sama dengan yang dipilih di atas.
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent className="grid gap-4">
                                     {data.siblings.map((row, index) =>
-                                        renderMemberRow(
-                                            'siblings',
-                                            row,
-                                            index,
-                                        ),
+                                        renderMemberRow('siblings', row, index),
                                     )}
                                     {errors.siblings && (
-                                        <InputError
-                                            message={errors.siblings}
-                                        />
+                                        <InputError message={errors.siblings} />
                                     )}
                                     <Button
                                         type="button"
@@ -776,15 +777,9 @@ export default function SharedTreePersonForm({
                             </Card>
 
                             <div className="flex justify-end gap-2 border-t border-tb-outline-variant pt-4">
-                                <Button
-                                    asChild
-                                    type="button"
-                                    variant="outline"
-                                >
+                                <Button asChild type="button" variant="outline">
                                     <Link
-                                        href={familyTrees.show(
-                                            familyTree.id,
-                                        )}
+                                        href={familyTrees.show(familyTree.id)}
                                     >
                                         Batal
                                     </Link>

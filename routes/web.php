@@ -10,9 +10,9 @@ use App\Http\Controllers\ContactRequestController;
 use App\Http\Controllers\ContributionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EventController;
-use App\Http\Controllers\FamilyTreeDeletionController;
-use App\Http\Controllers\FamilyTreeAppendRequestController;
 use App\Http\Controllers\FamilyTreeActivityController;
+use App\Http\Controllers\FamilyTreeAppendRequestController;
+use App\Http\Controllers\FamilyTreeDeletionController;
 use App\Http\Controllers\FamilyTreeShareController;
 use App\Http\Controllers\FeedCommentController;
 use App\Http\Controllers\FeedItemEngagementController;
@@ -22,6 +22,7 @@ use App\Http\Controllers\GroupMessageController;
 use App\Http\Controllers\IdentityRequestController;
 use App\Http\Controllers\IndonesiaRegionController;
 use App\Http\Controllers\KomunitasController;
+use App\Http\Controllers\MargaBranchEntryController;
 use App\Http\Controllers\MargaContributorMessageController;
 use App\Http\Controllers\MargaController;
 use App\Http\Controllers\MessageAttachmentController;
@@ -108,6 +109,8 @@ Route::get('regions/villages/{districtCode}', [IndonesiaRegionController::class,
     ->name('regions.villages');
 
 Route::middleware(['auth'])->group(function () {
+    Route::post('marga-branch-entries/{person}', [MargaBranchEntryController::class, 'store'])
+        ->name('marga-branch-entries.store');
     Route::get('dashboard/log-pesan', [MessageLogController::class, 'index'])
         ->name('message-logs.index');
     Route::post('dashboard/marga/{marga}/contributors/{contributor}/messages', [MargaContributorMessageController::class, 'store'])

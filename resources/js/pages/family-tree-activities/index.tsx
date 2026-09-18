@@ -8,6 +8,7 @@ type Activity = {
     id: number;
     tree_name: string;
     father_name: string | null;
+    member_name: string | null;
     action: string;
     description: string;
     actor: string;
@@ -19,6 +20,14 @@ export default function FamilyTreeActivitiesIndex({
 }: {
     activities: Activity[];
 }) {
+    const actionLabel = (action: string) =>
+        ({
+            added: 'Tambah',
+            created: 'Tambah',
+            updated: 'Edit',
+            deleted: 'Hapus',
+        })[action] ?? action;
+
     return (
         <>
             <Head title="Log Aktivitas Silsilah" />
@@ -48,8 +57,9 @@ export default function FamilyTreeActivitiesIndex({
                                                     {activity.description}
                                                 </p>
                                                 <p className="mt-1 text-xs text-tb-on-surface-variant">
-                                                    Nama Keluarga: {activity.tree_name} · Nama Ayah:{' '}
-                                                    {activity.father_name ?? '-'} · oleh {activity.actor}
+                                                    Nama Keluarga: {activity.tree_name} · Nama Anggota:{' '}
+                                                    {activity.member_name ?? '-'} · Aksi:{' '}
+                                                    {actionLabel(activity.action)} · oleh {activity.actor}
                                                 </p>
                                             </div>
                                             <time className="text-xs text-tb-on-surface-variant">

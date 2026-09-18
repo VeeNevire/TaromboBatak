@@ -28,6 +28,7 @@ class FamilyTreeActivityController extends Controller
                 'id' => $activity->id,
                 'tree_name' => $activity->tree_name,
                 'father_name' => $activity->familyTree?->rootPerson?->name,
+                'member_name' => $activity->member_name,
                 'action' => $activity->action,
                 'description' => $activity->description,
                 'actor' => $activity->actor?->name ?? 'Sistem',

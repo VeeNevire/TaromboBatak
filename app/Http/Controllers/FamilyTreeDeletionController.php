@@ -8,8 +8,8 @@ use App\Models\FamilyTreeDeletionRequest;
 use App\Models\FamilyTreeShare;
 use App\Models\User;
 use App\Notifications\FamilyTreeDeletionSubmitted;
-use App\Services\FamilyTreeDeletionService;
 use App\Services\FamilyTreeActivityLogger;
+use App\Services\FamilyTreeDeletionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
@@ -42,6 +42,7 @@ class FamilyTreeDeletionController extends Controller
                     $user,
                     'deleted',
                     'Menghapus silsilah.',
+                    $tree->rootPerson()->value('name'),
                 );
                 $tree->delete();
 
@@ -138,6 +139,7 @@ class FamilyTreeDeletionController extends Controller
                 $request->user(),
                 'deleted',
                 'Menyetujui penghapusan silsilah.',
+                $tree->rootPerson()->value('name'),
             );
             $tree->delete();
             $this->markNotificationsRead($deletion);

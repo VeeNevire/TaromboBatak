@@ -18,7 +18,6 @@ test('staff can open an upper or lower marga tree for its identity person', func
         'gender' => 'L',
     ]);
     $marga->update(['identity_person_id' => $identity->id]);
-
     foreach (['upper', 'lower'] as $direction) {
         $this->actingAs($admin)
             ->get(route('tarombo.fullscreen', [

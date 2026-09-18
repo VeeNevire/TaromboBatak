@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeNode;
 use App\Models\Person;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
 class SharedFamilyTreeAppendService
@@ -21,7 +22,12 @@ class SharedFamilyTreeAppendService
      */
     public function append(FamilyTree $tree, array $payload, int $createdBy): Person
     {
-        $fatherNode = $tree->nodes()->with('person')->find($payload['father_node_id'] ?? null);
+        $fatherNode = isset($payload['branch_father_person_id'])
+            ? $this->includeBranchFather(
+                $tree,
+                (int) $payload['branch_father_person_id'],
+            )
+            : $tree->nodes()->with('person')->find($payload['father_node_id'] ?? null);
         $motherNode = isset($payload['mother_node_id'])
             ? $tree->nodes()->with('person')->find($payload['mother_node_id'])
             : null;
@@ -79,6 +85,97 @@ class SharedFamilyTreeAppendService
         $tree->touch();
 
         return $member;
+    }
+
+    /**
+     * Confirm that a person can be used as a branch father. This does not
+     * modify the tree.
+     */
+    public function validateBranchFather(FamilyTree $tree, Person $father): void
+    {
+        if ($father->gender === 'P') {
+            throw ValidationException::withMessages([
+                'father_person_id' => 'Ayah yang dipilih harus berjenis kelamin laki-laki.',
+            ]);
+        }
+
+        $this->paternalPath($tree, $father);
+    }
+
+    /**
+     * Include the selected father and his connected patrilineal path only when
+     * a new member is actually submitted. A detached marga branch remains a
+     * detached root in this family-tree version.
+     */
+    private function includeBranchFather(FamilyTree $tree, int $fatherPersonId): FamilyTreeNode
+    {
+        $father = Person::query()->find($fatherPersonId);
+
+        if ($father === null) {
+            throw ValidationException::withMessages([
+                'father_person_id' => 'Ayah yang dipilih sudah tidak tersedia.',
+            ]);
+        }
+
+        $this->validateBranchFather($tree, $father);
+
+        $path = $this->paternalPath($tree, $father);
+        $nodesByPersonId = $tree->nodes()->get()->keyBy('person_id');
+        $parentNode = null;
+
+        foreach ($path as $person) {
+            $node = $nodesByPersonId->get($person->id);
+
+            if ($node === null) {
+                $tree->people()->syncWithoutDetaching([$person->id]);
+                $node = FamilyTreeNode::create([
+                    'family_tree_id' => $tree->id,
+                    'person_id' => $person->id,
+                    'father_node_id' => $parentNode?->id,
+                    'birth_order' => $person->birth_order,
+                ]);
+                $nodesByPersonId->put($person->id, $node);
+            }
+
+            $parentNode = $node;
+        }
+
+        return $parentNode;
+    }
+
+    /** @return Collection<int, Person> */
+    private function paternalPath(FamilyTree $tree, Person $father): Collection
+    {
+        $path = collect();
+        $current = $father;
+        $seen = [];
+
+        while (true) {
+            if (isset($seen[$current->id])) {
+                throw ValidationException::withMessages([
+                    'father_person_id' => 'Jalur ayah mengandung siklus dan tidak dapat digunakan.',
+                ]);
+            }
+
+            $seen[$current->id] = true;
+            $path->prepend($current);
+
+            if ($current->id === $tree->root_person_id) {
+                return $path;
+            }
+
+            if ($current->father_id === null) {
+                return $path;
+            }
+
+            $current = Person::query()->find($current->father_id);
+
+            if ($current === null) {
+                throw ValidationException::withMessages([
+                    'father_person_id' => 'Jalur ayah yang dipilih tidak lengkap.',
+                ]);
+            }
+        }
     }
 
     /**

@@ -333,6 +333,11 @@
         padding-top: 0;
     }
 
+    .tb-tree li[data-terminal-branch='true'] {
+        padding-right: 1px;
+        padding-left: 1px;
+    }
+
     .tb-tree li:first-child::before,
     .tb-tree li:last-child::after {
         border: 0 none;
