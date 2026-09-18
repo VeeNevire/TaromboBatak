@@ -291,6 +291,7 @@ class FamilyEntryService
                 $ownChildren,
                 $focus,
                 $data['family_tree_name'] ?? null,
+                array_key_exists('family_tree_name', $data),
             );
 
             return [
@@ -480,6 +481,7 @@ class FamilyEntryService
         Collection $ownChildren,
         ?Person $focus,
         ?string $familyTreeName,
+        bool $hasFamilyTreeName,
     ): Collection {
         if ($createdBy === null || $focus === null) {
             return new Collection;
@@ -534,12 +536,19 @@ class FamilyEntryService
             $current = $current->father()->first();
         }
 
-        if ($tree->name === null || filled($familyTreeName)) {
+        if ($tree->name === null) {
             $tree->update(['name' => $name]);
         }
 
         $tree->people()->syncWithoutDetaching(array_values(array_unique($memberIds)));
         $this->syncLegacyNodes($tree);
+        if ($hasFamilyTreeName) {
+            app(FamilyTreeFamilyNameService::class)->setForPerson(
+                $tree,
+                $focus->id,
+                $familyTreeName,
+            );
+        }
 
         return new Collection([$tree]);
     }

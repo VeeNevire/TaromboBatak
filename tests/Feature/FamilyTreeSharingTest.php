@@ -412,6 +412,35 @@ test('marga branch entry creates a new father family when none exists', function
             ]]));
 });
 
+test('a branch submission stores the selected father with its children and siblings', function () {
+    $marga = Marga::factory()->create();
+    $owner = User::factory()->withMarga($marga->id)->create();
+    ['tree' => $tree, 'root' => $father, 'node' => $fatherNode] = sharingTree($owner, $marga);
+    $father->update(['gender' => null]);
+
+    $this->actingAs($owner)->post(route('family-trees.people.store', $tree), [
+        'name' => 'Anggota Utama Ranting',
+        'gender' => 'L',
+        'father_node_id' => $fatherNode->id,
+        'children' => [
+            ['name' => 'Anak Ranting'],
+        ],
+        'siblings' => [
+            ['name' => 'Saudara Ranting'],
+        ],
+    ])->assertRedirect(route('family-trees.show', $tree));
+
+    $member = Person::query()->where('name', 'Anggota Utama Ranting')->firstOrFail();
+    $child = Person::query()->where('name', 'Anak Ranting')->firstOrFail();
+    $sibling = Person::query()->where('name', 'Saudara Ranting')->firstOrFail();
+
+    expect($member->father_id)->toBe($father->id)
+        ->and($child->father_id)->toBe($member->id)
+        ->and($sibling->father_id)->toBe($father->id)
+        ->and($tree->nodes()->where('person_id', $child->id)->exists())->toBeTrue()
+        ->and($tree->nodes()->where('person_id', $sibling->id)->exists())->toBeTrue();
+});
+
 test('the shared member form limits mothers to the selected father wives', function () {
     $marga = Marga::factory()->create();
     $owner = User::factory()->withMarga($marga->id)->create();

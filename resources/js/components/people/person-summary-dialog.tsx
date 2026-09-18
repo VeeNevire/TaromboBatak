@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { FamilyBranchDialog } from '@/components/people/family-branch-dialog';
 import { PersonImage } from '@/components/people/person-image';
 import { Button } from '@/components/ui/button';
 import {
@@ -56,6 +57,7 @@ export function PersonSummaryDialog({
     const [connectingAccountId, setConnectingAccountId] = useState<
         number | null
     >(null);
+    const [branchDialogOpen, setBranchDialogOpen] = useState(false);
     const father = person?.parentId
         ? people.find((candidate) => candidate.id === person.parentId)
         : undefined;
@@ -71,6 +73,12 @@ export function PersonSummaryDialog({
             account.role !== 'admin' &&
             !account.isContact,
     );
+    const canAddBranch =
+        person !== null &&
+        person.gender !== 'P' &&
+        versionTreeId != null &&
+        person.treeNodeId != null &&
+        (person.childrenNames?.length ?? 0) === 0;
 
     const connect = (accountId: number) => {
         setConnectingAccountId(accountId);
@@ -463,6 +471,15 @@ export function PersonSummaryDialog({
                                     Kopi Kode
                                 </Button>
                             )}
+                            {canAddBranch && (
+                                <Button
+                                    type="button"
+                                    onClick={() => setBranchDialogOpen(true)}
+                                >
+                                    <UserPlus className="size-4" /> Tambah
+                                    Anggota Ranting
+                                </Button>
+                            )}
                             <Button asChild variant="outline">
                                 <Link
                                     href={peopleRoutes.show(
@@ -522,6 +539,20 @@ export function PersonSummaryDialog({
                         </div>
                     </DialogFooter>
                 </DialogContent>
+            )}
+            {person && canAddBranch && (
+                <FamilyBranchDialog
+                    open={branchDialogOpen}
+                    onOpenChange={setBranchDialogOpen}
+                    familyTree={{
+                        id: Number(versionTreeId),
+                        requiresApproval: false,
+                    }}
+                    father={{
+                        nodeId: Number(person.treeNodeId),
+                        name: person.name,
+                    }}
+                />
             )}
         </Dialog>
     );

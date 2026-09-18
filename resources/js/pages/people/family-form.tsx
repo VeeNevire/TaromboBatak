@@ -194,6 +194,7 @@ type Props = {
     margaAccessStatus?: 'pending' | 'approved' | 'rejected' | null;
     versionTrees?: FamilyTreeHistoryEntry[];
     selectedVersionName?: string | null;
+    selectedFamilyName?: string | null;
     selectedVersionId?: number | null;
     shareableAccounts?: ShareableAccount[];
     pendingTreeShares?: PendingTreeShare[];
@@ -1236,6 +1237,7 @@ export default function FamilyForm({
     margaAccessStatus = null,
     versionTrees = [],
     selectedVersionName = null,
+    selectedFamilyName = null,
     selectedVersionId = null,
     shareableAccounts = [],
     pendingTreeShares = [],
@@ -1267,6 +1269,13 @@ export default function FamilyForm({
 
         return index >= 0 ? index : soleMotherIndex(initialMothers);
     };
+    const initialFamilyName =
+        person === null
+            ? ''
+            : (selectedFamilyName ??
+              familyTrees.find((tree) => tree.is_primary)?.name ??
+              familyTrees[0]?.name ??
+              '');
 
     const {
         data,
@@ -1279,13 +1288,7 @@ export default function FamilyForm({
         clearErrors,
     } = useForm({
         name: person?.name ?? '',
-        family_tree_name:
-            person === null
-                ? ''
-                : (selectedVersionName ??
-                  familyTrees.find((tree) => tree.is_primary)?.name ??
-                  familyTrees[0]?.name ??
-                  ''),
+        family_tree_name: initialFamilyName,
         gender: person?.gender ?? '',
         alias: person?.alias ?? '',
         marga_id: person?.marga_id ?? lockedMarga?.id ?? null,
@@ -2263,6 +2266,16 @@ export default function FamilyForm({
                         : {},
             }).action;
 
+            transform((values) => {
+                if (values.family_tree_name !== initialFamilyName) {
+                    return values;
+                }
+
+                const { family_tree_name: _familyTreeName, ...unchangedValues } = values;
+
+                return unchangedValues;
+            });
+
             post(updateAction, {
                 forceFormData: true,
                 onError,
@@ -2783,9 +2796,9 @@ export default function FamilyForm({
                                                     className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                                 />
                                                 <p className="text-xs text-tb-on-surface-variant">
-                                                    Nama ini digunakan untuk
-                                                    membedakan silsilah keluarga
-                                                    Anda.
+                                                    Berlaku untuk cabang ini
+                                                    dan seluruh keturunannya.
+                                                    Cabang lain tidak berubah.
                                                 </p>
                                                 <InputError
                                                     message={

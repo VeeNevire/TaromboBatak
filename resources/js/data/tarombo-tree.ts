@@ -3,6 +3,7 @@ import taromboRows from '@/data/tarombo-tree.json';
 
 export type TaromboPersonRow = {
     id: string;
+    treeNodeId?: number;
     shareCode?: string;
     name: string;
     alias?: string;
@@ -41,6 +42,7 @@ export type TaromboSpouse = {
 
 export type TaromboPerson = {
     id: string;
+    treeNodeId?: number;
     shareCode?: string;
     name: string;
     alias?: string;
