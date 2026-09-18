@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\FamilyTree;
+use App\Models\Person;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -32,7 +33,8 @@ class StoreSharedFamilyTreePersonRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'alias' => ['nullable', 'string', 'max:255'],
             'gender' => ['nullable', Rule::in(['L', 'P'])],
-            'father_node_id' => ['required', 'integer', 'exists:family_tree_nodes,id'],
+            'father_node_id' => ['nullable', 'required_without:branch_father_person_id', 'integer', 'exists:family_tree_nodes,id'],
+            'branch_father_person_id' => ['nullable', 'required_without:father_node_id', 'integer', 'exists:people,id'],
             'mother_node_id' => ['nullable', 'integer', 'exists:family_tree_nodes,id'],
             'birth_order' => ['nullable', 'integer', 'min:1'],
             'birth_year' => ['nullable', 'digits:4'],
@@ -67,11 +69,17 @@ class StoreSharedFamilyTreePersonRequest extends FormRequest
         return [function (Validator $validator): void {
             $familyTree = $this->route('familyTree');
 
+            if ($this->filled('father_node_id') && $this->filled('branch_father_person_id')) {
+                $validator->errors()->add(
+                    'father_node_id',
+                    'Pilih hanya satu ayah.',
+                );
+            }
+
             $fatherNode = null;
             if ($familyTree instanceof FamilyTree && $this->filled('father_node_id')) {
                 $fatherNode = $familyTree->nodes()
                     ->with('person:id,gender')
-                    ->withCount('children')
                     ->find($this->integer('father_node_id'));
 
                 if ($fatherNode === null) {
@@ -79,15 +87,30 @@ class StoreSharedFamilyTreePersonRequest extends FormRequest
                         'father_node_id',
                         'Ayah harus berasal dari silsilah yang dibagikan ini.',
                     );
-                } elseif ($fatherNode->person->gender !== 'L') {
+                } elseif ($fatherNode->person->gender === 'P') {
                     $validator->errors()->add(
                         'father_node_id',
                         'Ayah yang dipilih harus berjenis kelamin laki-laki.',
                     );
-                } elseif ($fatherNode->children_count > 0) {
+                }
+            }
+
+            if ($familyTree instanceof FamilyTree && $this->filled('branch_father_person_id')) {
+                $branchFather = Person::query()
+                    ->select('id', 'gender')
+                    ->find($this->integer('branch_father_person_id'));
+
+                if ($branchFather === null || $branchFather->gender === 'P') {
                     $validator->errors()->add(
-                        'father_node_id',
-                        'Pilih ayah yang belum memiliki cabang keturunan di bawahnya.',
+                        'branch_father_person_id',
+                        'Ayah yang dipilih harus berjenis kelamin laki-laki.',
+                    );
+                }
+
+                if ($this->filled('mother_node_id')) {
+                    $validator->errors()->add(
+                        'mother_node_id',
+                        'Ibu tidak dapat dipilih sebelum jalur ayah masuk ke silsilah.',
                     );
                 }
             }

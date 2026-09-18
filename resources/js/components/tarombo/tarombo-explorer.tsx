@@ -75,8 +75,6 @@ type Props = {
     } | null;
 };
 
-const ANCESTOR_DEPTH = 4;
-
 // Generations shown before a branch collapses in the lower marga tree.
 const MARGA_LOWER_DEPTH = 5;
 
@@ -181,7 +179,7 @@ function ancestorPath(
     const visited = new Set<string>([selected.id]);
     let current = selected;
 
-    for (let depth = 0; depth < ANCESTOR_DEPTH; depth += 1) {
+    while (true) {
         const parent = current.parentId
             ? byId.get(current.parentId)
             : undefined;
@@ -396,8 +394,7 @@ export function TaromboExplorer({
     const [showSpouseNames, setShowSpouseNames] = useState(false);
     const [showNodeCircles, setShowNodeCircles] = useState(true);
     const [familyTreeSearch, setFamilyTreeSearch] = useState('');
-    const [familyTreeSelectorOpen, setFamilyTreeSelectorOpen] =
-        useState(false);
+    const [familyTreeSelectorOpen, setFamilyTreeSelectorOpen] = useState(false);
     const familyTreeBlurTimer = useRef<number | null>(null);
     const [savingSnapshot, setSavingSnapshot] = useState(false);
     const [snapshotMode, setSnapshotMode] = useState(false);
@@ -487,7 +484,7 @@ export function TaromboExplorer({
                 className={cn(
                     'px-3 py-2 text-xs font-semibold transition-colors',
                     showNodeCircles
-                        ? 'bg-tb-primary text-tb-on-primary'
+                        ? 'text-tb-on-primary bg-tb-primary'
                         : 'text-tb-on-surface hover:bg-tb-surface-container',
                 )}
             >
@@ -500,7 +497,7 @@ export function TaromboExplorer({
                 className={cn(
                     'border-l border-tb-outline-variant px-3 py-2 text-xs font-semibold transition-colors',
                     !showNodeCircles
-                        ? 'bg-tb-primary text-tb-on-primary'
+                        ? 'text-tb-on-primary bg-tb-primary'
                         : 'text-tb-on-surface hover:bg-tb-surface-container',
                 )}
             >
@@ -554,10 +551,11 @@ export function TaromboExplorer({
     const selectedTreeRootId = selectedAccountTree?.rootPersonId
         ? String(selectedAccountTree.rootPersonId)
         : null;
-    const verticalFocusId = selectedTreeRootId &&
+    const verticalFocusId =
+        selectedTreeRootId &&
         verticalPeople.some((person) => person.id === selectedTreeRootId)
-        ? selectedTreeRootId
-        : ancestorFocusId;
+            ? selectedTreeRootId
+            : ancestorFocusId;
     const ancestorPeople = verticalFocusId
         ? ancestorPath(verticalPeople, verticalFocusId)
         : [];
@@ -567,11 +565,7 @@ export function TaromboExplorer({
             : verticalPeople;
     const lineagePath = ancestorPeople.map((person) => person.id);
     const margaLowerLineagePath = useMemo(() => {
-        if (
-            !margaTree ||
-            margaTree.direction !== 'lower' ||
-            !margaIdentity
-        ) {
+        if (!margaTree || margaTree.direction !== 'lower' || !margaIdentity) {
             return [] as string[];
         }
 
@@ -579,7 +573,7 @@ export function TaromboExplorer({
             selectedFamilyTreePeople.map((person) => [person.id, person]),
         );
         const focus = ancestorFocusId
-            ? byId.get(ancestorFocusId) ?? margaIdentity
+            ? (byId.get(ancestorFocusId) ?? margaIdentity)
             : margaIdentity;
         const path: string[] = [];
         const visited = new Set<string>();
@@ -588,9 +582,7 @@ export function TaromboExplorer({
         while (current && !visited.has(current.id)) {
             path.unshift(current.id);
             visited.add(current.id);
-            current = current.parentId
-                ? byId.get(current.parentId)
-                : undefined;
+            current = current.parentId ? byId.get(current.parentId) : undefined;
         }
 
         return path.includes(margaIdentity.id)
@@ -634,9 +626,9 @@ export function TaromboExplorer({
     const verticalTreeDescription = margaTree
         ? `${margaTree.direction === 'upper' ? 'Si Raja Batak sampai' : 'Keturunan dari'} ${margaIdentity?.name ?? margaTree.margaName}`
         : selectedAccountTree
-          ? `Lima generasi keturunan dari ${selectedAccountTree.rootName}`
+          ? `Silsilah dari ${ancestorPeople[0]?.name ?? selectedAccountTree.rootName}`
           : ancestorFocusPerson
-            ? `Jalur ${ANCESTOR_DEPTH} tingkat leluhur dari ${ancestorFocusPerson.name}`
+            ? `Jalur leluhur dari ${ancestorFocusPerson.name} sampai leluhur tertinggi`
             : `Pohon vertikal dari ${treeCenterPerson?.name ?? 'Leluhur Utama'}`;
     const verticalTreeCollapseDepth =
         margaTree?.direction === 'lower' || selectedAccountTree
@@ -980,7 +972,8 @@ export function TaromboExplorer({
                                         }}
                                         className={cn(
                                             'flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs text-tb-on-surface transition-colors hover:bg-tb-surface-container',
-                                            tree.value === selectedOptionValue &&
+                                            tree.value ===
+                                                selectedOptionValue &&
                                                 'bg-emerald-50 text-emerald-800',
                                         )}
                                     >
@@ -1007,7 +1000,8 @@ export function TaromboExplorer({
                                         }}
                                         className={cn(
                                             'flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs text-tb-on-surface transition-colors hover:bg-tb-surface-container',
-                                            tree.value === selectedOptionValue &&
+                                            tree.value ===
+                                                selectedOptionValue &&
                                                 'bg-emerald-50 text-emerald-800',
                                         )}
                                     >
@@ -1162,6 +1156,10 @@ export function TaromboExplorer({
                         detachedPeople={margaDetachedRoots}
                         showNodeAvatar={showNodeCircles}
                         showSpouseNames={showSpouseNames}
+                        allowBranchEntry={margaTree?.direction === 'lower'}
+                        compactTerminalBranches={
+                            margaTree?.direction === 'lower'
+                        }
                         versionTreeId={selectedFamilyTreeId}
                         compact={fullscreen}
                         nodeIdPrefix={
@@ -1518,21 +1516,31 @@ export function TaromboExplorer({
                                                 markFemaleLineage={
                                                     showFemaleLineage
                                                 }
-                                                collapseDepth={verticalTreeCollapseDepth}
+                                                collapseDepth={
+                                                    verticalTreeCollapseDepth
+                                                }
                                                 detachedPeople={
                                                     margaDetachedRoots
                                                 }
-                                                showNodeAvatar={
-                                                    showNodeCircles
-                                                }
+                                                showNodeAvatar={showNodeCircles}
                                                 showSpouseNames={
                                                     showSpouseNames
+                                                }
+                                                allowBranchEntry={
+                                                    margaTree?.direction ===
+                                                    'lower'
+                                                }
+                                                compactTerminalBranches={
+                                                    margaTree?.direction ===
+                                                    'lower'
                                                 }
                                                 nodeIdPrefix="tarombo-mobile-tree-node"
                                                 currentUserId={
                                                     identity?.currentUserId
                                                 }
-                                                versionTreeId={selectedFamilyTreeId}
+                                                versionTreeId={
+                                                    selectedFamilyTreeId
+                                                }
                                             />
                                         </div>
                                         {!treeHasChildren &&

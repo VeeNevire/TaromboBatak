@@ -283,22 +283,22 @@ function FamilyTreeVersionAction({
                             'Versi alternatif keluarga',
                         )
                     }
-                aria-label={
-                    iconOnly
-                        ? 'Salin keluarga menjadi versi alternatif'
-                        : undefined
-                }
-                title={
-                    iconOnly
-                        ? 'Salin keluarga menjadi versi alternatif'
-                        : undefined
-                }
-                className={cn(
-                    'inline-flex shrink-0 items-center justify-center rounded-lg border border-tb-outline-variant text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary',
-                    iconOnly
-                        ? 'size-6 text-tb-outline opacity-70 hover:bg-tb-primary/10 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none'
-                        : 'gap-1.5 px-3 py-2 text-xs font-semibold',
-                )}
+                    aria-label={
+                        iconOnly
+                            ? 'Salin keluarga menjadi versi alternatif'
+                            : undefined
+                    }
+                    title={
+                        iconOnly
+                            ? 'Salin keluarga menjadi versi alternatif'
+                            : undefined
+                    }
+                    className={cn(
+                        'inline-flex shrink-0 items-center justify-center rounded-lg border border-tb-outline-variant text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary',
+                        iconOnly
+                            ? 'size-6 text-tb-outline opacity-70 hover:bg-tb-primary/10 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none'
+                            : 'gap-1.5 px-3 py-2 text-xs font-semibold',
+                    )}
                 >
                     <Copy className="size-3.5" />
                     {!iconOnly && ' Salin Versi'}
@@ -330,14 +330,14 @@ function FamilyTreeVersionAction({
                 {isOpenMode ? (
                     <Link
                         href={actionHref(entries[0])}
-                aria-label={iconOnly ? actionLabel : undefined}
-                title={iconOnly ? actionLabel : undefined}
-                className={cn(
-                    'inline-flex shrink-0 items-center justify-center rounded-lg border border-tb-outline-variant text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary',
-                    iconOnly
-                        ? 'size-6 text-tb-outline opacity-70 hover:bg-tb-primary/10 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none'
-                        : 'gap-1.5 px-3 py-2 text-xs font-semibold',
-                )}
+                        aria-label={iconOnly ? actionLabel : undefined}
+                        title={iconOnly ? actionLabel : undefined}
+                        className={cn(
+                            'inline-flex shrink-0 items-center justify-center rounded-lg border border-tb-outline-variant text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary',
+                            iconOnly
+                                ? 'size-6 text-tb-outline opacity-70 hover:bg-tb-primary/10 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none'
+                                : 'gap-1.5 px-3 py-2 text-xs font-semibold',
+                        )}
                     >
                         <Icon className="size-3.5" />
                         {!iconOnly && ` ${actionLabel}`}
@@ -372,58 +372,58 @@ function FamilyTreeVersionAction({
     return (
         <>
             <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <button
-                    type="button"
-                    aria-label={iconOnly ? actionLabel : undefined}
-                    title={iconOnly ? actionLabel : undefined}
-                    className={cn(
-                        'inline-flex shrink-0 items-center justify-center rounded-lg border border-tb-outline-variant text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary',
-                        iconOnly
-                            ? 'size-6 text-tb-outline opacity-70 hover:bg-tb-primary/10 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none'
-                            : 'gap-1.5 px-3 py-2 text-xs font-semibold',
-                    )}
-                >
-                    <Icon className="size-3.5" />
-                    {!iconOnly && (
-                        <>
-                            {' '}
-                            {actionLabel}
-                            <ChevronDown className="size-3.5" />
-                        </>
-                    )}
-                </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-64">
-                {orderedEntries.map((entry) => (
-                    <DropdownMenuItem key={entry.id} asChild>
-                        {isOpenMode ? (
-                            <Link
-                                href={actionHref(entry)}
-                                className="w-full text-left"
-                            >
-                                {entry.name ?? entry.root_name} (V
-                                {versionNumberById.get(entry.id)})
-                            </Link>
-                        ) : (
-                            <button
-                                type="button"
-                                className="w-full text-left"
-                                onClick={() =>
-                                    openAlternativeDialog(
-                                        familyTreeRoutes.duplicate(entry.id)
-                                            .url,
-                                        `${entry.name ?? entry.root_name} - Versi alternatif`,
-                                    )
-                                }
-                            >
-                                {entry.name ?? entry.root_name} (V
-                                {versionNumberById.get(entry.id)})
-                            </button>
+                <DropdownMenuTrigger asChild>
+                    <button
+                        type="button"
+                        aria-label={iconOnly ? actionLabel : undefined}
+                        title={iconOnly ? actionLabel : undefined}
+                        className={cn(
+                            'inline-flex shrink-0 items-center justify-center rounded-lg border border-tb-outline-variant text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary',
+                            iconOnly
+                                ? 'size-6 text-tb-outline opacity-70 hover:bg-tb-primary/10 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none'
+                                : 'gap-1.5 px-3 py-2 text-xs font-semibold',
                         )}
-                    </DropdownMenuItem>
-                ))}
-            </DropdownMenuContent>
+                    >
+                        <Icon className="size-3.5" />
+                        {!iconOnly && (
+                            <>
+                                {' '}
+                                {actionLabel}
+                                <ChevronDown className="size-3.5" />
+                            </>
+                        )}
+                    </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-64">
+                    {orderedEntries.map((entry) => (
+                        <DropdownMenuItem key={entry.id} asChild>
+                            {isOpenMode ? (
+                                <Link
+                                    href={actionHref(entry)}
+                                    className="w-full text-left"
+                                >
+                                    {entry.name ?? entry.root_name} (V
+                                    {versionNumberById.get(entry.id)})
+                                </Link>
+                            ) : (
+                                <button
+                                    type="button"
+                                    className="w-full text-left"
+                                    onClick={() =>
+                                        openAlternativeDialog(
+                                            familyTreeRoutes.duplicate(entry.id)
+                                                .url,
+                                            `${entry.name ?? entry.root_name} - Versi alternatif`,
+                                        )
+                                    }
+                                >
+                                    {entry.name ?? entry.root_name} (V
+                                    {versionNumberById.get(entry.id)})
+                                </button>
+                            )}
+                        </DropdownMenuItem>
+                    ))}
+                </DropdownMenuContent>
             </DropdownMenu>
             {alternativeDialog}
         </>
@@ -1307,16 +1307,16 @@ export default function FamilyForm({
         is_public: person?.is_public ?? false,
         cascade_public_descendants: false,
         father: person?.father
-            ? {
-                  id: person.father.id ?? null,
-                  name: person.father.name ?? '',
-                  alias: person.father.alias ?? '',
-                  birth_year: person.father.birth_year ?? '',
-                  death_year: person.father.death_year ?? '',
-                  marga_id: person.father.marga_id ?? lockedMarga?.id ?? null,
-                  new_marga: '',
-              }
-            : emptyParent(),
+              ? {
+                    id: person.father.id ?? null,
+                    name: person.father.name ?? '',
+                    alias: person.father.alias ?? '',
+                    birth_year: person.father.birth_year ?? '',
+                    death_year: person.father.death_year ?? '',
+                    marga_id: person.father.marga_id ?? lockedMarga?.id ?? null,
+                    new_marga: '',
+                }
+              : emptyParent(),
         mothers: initialMothers,
         children:
             person?.children && person.children.length > 0
@@ -2298,9 +2298,7 @@ export default function FamilyForm({
     const fatherName = data.father?.name?.trim() ?? '';
     const selectedMargaId = data.marga_id;
     const selectedMargaHasApprovedTree = approvedMargaTrees.some(
-        (tree) =>
-            tree.id === selectedMargaId &&
-            tree.people_count > 0,
+        (tree) => tree.id === selectedMargaId && tree.people_count > 0,
     );
     const selectedMargaHasAccountTree = familyTrees.some((tree) =>
         tree.member_person_ids.some((personId) =>
@@ -2381,33 +2379,36 @@ export default function FamilyForm({
                         Nama {label}
                     </Label>
                     <NameCombobox
-                        value={entry.name}
-                        onChange={(value) => setParentEntry(key, 'name', value)}
-                        suggestions={
-                            key === 'father' && canChooseExistingParent
-                                ? selectableFatherSuggestions
-                                : canChooseExistingParent
-                                  ? nameSuggestions
-                                  : []
-                        }
-                        placeholder={`Nama ${label.toLowerCase()}`}
-                        allowNa={canChooseExistingParent}
-                        showSiblingPreview
-                        siblingSuggestions={
-                            key === 'father' ? nameSuggestions : undefined
-                        }
-                        showChain={key !== 'father'}
-                        maxResults={key === 'father' ? null : undefined}
-                        onSelect={
-                            key === 'father'
-                                ? (suggestion) =>
-                                      updateParent(key, {
-                                          id: suggestion.id,
-                                          name: suggestion.name,
-                                          marga_id: suggestion.marga_id ?? null,
-                                      })
-                                : undefined
-                        }
+                            value={entry.name}
+                            onChange={(value) =>
+                                setParentEntry(key, 'name', value)
+                            }
+                            suggestions={
+                                key === 'father' && canChooseExistingParent
+                                    ? selectableFatherSuggestions
+                                    : canChooseExistingParent
+                                      ? nameSuggestions
+                                      : []
+                            }
+                            placeholder={`Nama ${label.toLowerCase()}`}
+                            allowNa={canChooseExistingParent}
+                            showSiblingPreview
+                            siblingSuggestions={
+                                key === 'father' ? nameSuggestions : undefined
+                            }
+                            showChain={key !== 'father'}
+                            maxResults={key === 'father' ? null : undefined}
+                            onSelect={
+                                key === 'father'
+                                    ? (suggestion) =>
+                                          updateParent(key, {
+                                              id: suggestion.id,
+                                              name: suggestion.name,
+                                              marga_id:
+                                                  suggestion.marga_id ?? null,
+                                          })
+                                    : undefined
+                            }
                     />
                     <InputError message={errors[`${errorPrefix}.name`]} />
                     <div className="grid gap-1.5 pt-2">
@@ -2507,7 +2508,8 @@ export default function FamilyForm({
                                     </p>
                                     <p className="truncate text-sm font-medium">
                                         {entry.name}
-                                        {entry.marga && ` · Marga ${entry.marga}`}
+                                        {entry.marga &&
+                                            ` · Marga ${entry.marga}`}
                                     </p>
                                 </div>
                             </div>
@@ -2564,9 +2566,7 @@ export default function FamilyForm({
                                 setParentEntry(key, 'father_name', value)
                             }
                             suggestions={
-                                canChooseExistingParent
-                                    ? fatherSuggestions
-                                    : []
+                                canChooseExistingParent ? fatherSuggestions : []
                             }
                             placeholder="Nama ayah dari ibu"
                             allowNa={canChooseExistingParent}
@@ -3476,7 +3476,9 @@ export default function FamilyForm({
                                                     <Checkbox
                                                         id="is_public"
                                                         checked={data.is_public}
-                                                        onCheckedChange={handlePublicChange}
+                                                        onCheckedChange={
+                                                            handlePublicChange
+                                                        }
                                                     />
                                                     <div className="grid gap-1">
                                                         <Label
@@ -4062,7 +4064,9 @@ export default function FamilyForm({
                                                         <Label>Nama</Label>
                                                         {canChooseExistingChild ? (
                                                             <NameCombobox
-                                                                value={child.name}
+                                                                value={
+                                                                    child.name
+                                                                }
                                                                 onChange={(
                                                                     value,
                                                                 ) =>
@@ -4089,7 +4093,9 @@ export default function FamilyForm({
                                                             />
                                                         ) : (
                                                             <Input
-                                                                value={child.name}
+                                                                value={
+                                                                    child.name
+                                                                }
                                                                 onChange={(e) =>
                                                                     setOwnChild(
                                                                         index,
@@ -4361,65 +4367,65 @@ export default function FamilyForm({
                         </Card>
 
                         <Card className="border-tb-outline-variant bg-tb-surface-bright">
-                                <CardHeader>
-                                    <CardTitle className="font-display text-lg text-tb-on-surface">
-                                        Orang Tua
-                                    </CardTitle>
-                                    <CardDescription>
-                                        Ayah dan istri-istrinya dari anak-anak yang
-                                        dicatat di bawah. Setiap anak dapat
-                                        ditautkan ke Ibu yang sesuai.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent className="grid gap-5 lg:grid-cols-2">
-                                    {renderParentBlock(
-                                        'father',
-                                        'Ayah',
-                                        '1950',
-                                        '2020',
-                                    )}
-                                    <div className="grid content-start gap-5">
-                                        {data.mothers.map((wife, index) => (
-                                            <div
-                                                key={
-                                                    wife.id ??
-                                                    `istri-block-${index}`
-                                                }
-                                                className="relative"
-                                            >
-                                                {data.mothers.length > 1 && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            removeMother(index)
-                                                        }
-                                                        aria-label={`Hapus Istri ${index + 1}`}
-                                                        title={`Hapus Istri ${index + 1}`}
-                                                        className="absolute top-2 right-2 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full text-tb-on-surface-variant transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
-                                                    >
-                                                        <X className="size-3.5" />
-                                                    </button>
-                                                )}
-                                                {renderParentBlock(
-                                                    index,
-                                                    `Istri ${index + 1}`,
-                                                    '1955',
-                                                    '2025',
-                                                    true,
-                                                    false,
-                                                )}
-                                            </div>
-                                        ))}
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            onClick={addMother}
-                                            className="w-full border-dashed border-tb-outline-variant text-tb-primary hover:bg-tb-primary/5"
+                            <CardHeader>
+                                <CardTitle className="font-display text-lg text-tb-on-surface">
+                                    Orang Tua
+                                </CardTitle>
+                                <CardDescription>
+                                    Ayah dan istri-istrinya dari anak-anak yang
+                                    dicatat di bawah. Setiap anak dapat
+                                    ditautkan ke Ibu yang sesuai.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="grid gap-5 lg:grid-cols-2">
+                                {renderParentBlock(
+                                    'father',
+                                    'Ayah',
+                                    '1950',
+                                    '2020',
+                                )}
+                                <div className="grid content-start gap-5">
+                                    {data.mothers.map((wife, index) => (
+                                        <div
+                                            key={
+                                                wife.id ??
+                                                `istri-block-${index}`
+                                            }
+                                            className="relative"
                                         >
-                                            <Plus className="size-4" /> Tambah Istri
-                                        </Button>
-                                    </div>
-                                </CardContent>
+                                            {data.mothers.length > 1 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        removeMother(index)
+                                                    }
+                                                    aria-label={`Hapus Istri ${index + 1}`}
+                                                    title={`Hapus Istri ${index + 1}`}
+                                                    className="absolute top-2 right-2 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full text-tb-on-surface-variant transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                                                >
+                                                    <X className="size-3.5" />
+                                                </button>
+                                            )}
+                                            {renderParentBlock(
+                                                index,
+                                                `Istri ${index + 1}`,
+                                                '1955',
+                                                '2025',
+                                                true,
+                                                false,
+                                            )}
+                                        </div>
+                                    ))}
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={addMother}
+                                        className="w-full border-dashed border-tb-outline-variant text-tb-primary hover:bg-tb-primary/5"
+                                    >
+                                        <Plus className="size-4" /> Tambah Istri
+                                    </Button>
+                                </div>
+                            </CardContent>
                         </Card>
 
                         <Card className="border-tb-outline-variant bg-tb-surface-bright">
@@ -4661,7 +4667,9 @@ export default function FamilyForm({
                                                             />
                                                         ) : (
                                                             <Input
-                                                                value={child.name}
+                                                                value={
+                                                                    child.name
+                                                                }
                                                                 onChange={(e) =>
                                                                     setChild(
                                                                         index,
@@ -4671,7 +4679,9 @@ export default function FamilyForm({
                                                                     )
                                                                 }
                                                                 placeholder={
-                                                                    isGapRow(child)
+                                                                    isGapRow(
+                                                                        child,
+                                                                    )
                                                                         ? 'N/A'
                                                                         : 'Nama saudara'
                                                                 }
@@ -4884,17 +4894,17 @@ export default function FamilyForm({
                                     Akan dijadikan private:
                                 </p>
                                 <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto text-sm text-amber-700/90 dark:text-amber-300/90">
-                                    {(person?.public_descendant_names ?? []).map(
-                                        (name, index) => (
-                                            <li
-                                                key={`${name}-${index}`}
-                                                className="flex items-center gap-2"
-                                            >
-                                                <Checkbox checked disabled />
-                                                <span>{name}</span>
-                                            </li>
-                                        ),
-                                    )}
+                                    {(
+                                        person?.public_descendant_names ?? []
+                                    ).map((name, index) => (
+                                        <li
+                                            key={`${name}-${index}`}
+                                            className="flex items-center gap-2"
+                                        >
+                                            <Checkbox checked disabled />
+                                            <span>{name}</span>
+                                        </li>
+                                    ))}
                                     {(person?.public_descendant_count ?? 0) >
                                         (person?.public_descendant_names ?? [])
                                             .length && (
@@ -4902,8 +4912,10 @@ export default function FamilyForm({
                                             …dan{' '}
                                             {(person?.public_descendant_count ??
                                                 0) -
-                                                (person?.public_descendant_names ??
-                                                    []).length}{' '}
+                                                (
+                                                    person?.public_descendant_names ??
+                                                    []
+                                                ).length}{' '}
                                             lainnya
                                         </li>
                                     )}

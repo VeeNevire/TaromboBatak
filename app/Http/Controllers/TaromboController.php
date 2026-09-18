@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ContactRequest;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeShare;
-use App\Models\ContactRequest;
 use App\Models\IdentityRequest;
 use App\Models\Marga;
 use App\Models\Person;
