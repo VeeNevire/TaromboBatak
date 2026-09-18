@@ -77,6 +77,7 @@ class TaromboTreeService
 
             return [
                 'id' => (string) $person->id,
+                'treeNodeId' => (int) $node['node_id'],
                 'shareCode' => app(PersonShareCode::class)->for($person),
                 'name' => $person->name,
                 'alias' => $person->alias,

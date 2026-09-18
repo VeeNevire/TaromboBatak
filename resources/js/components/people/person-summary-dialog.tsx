@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { FamilyBranchDialog } from '@/components/people/family-branch-dialog';
 import { PersonImage } from '@/components/people/person-image';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,6 +28,7 @@ import {
 import type { TaromboPerson } from '@/data/tarombo-tree';
 import contactRequests from '@/routes/contact-requests';
 import contacts from '@/routes/contacts';
+import margaBranchEntries from '@/routes/marga-branch-entries';
 import peopleRoutes from '@/routes/people';
 
 function yearOnly(value?: string | null): string {
@@ -43,16 +45,19 @@ export function PersonSummaryDialog({
     onClose,
     currentUserId,
     versionTreeId,
+    allowBranchEntry = false,
 }: {
     person: TaromboPerson | null;
     people: TaromboPerson[];
     onClose: () => void;
     currentUserId?: number;
     versionTreeId?: number | null;
+    allowBranchEntry?: boolean;
 }) {
     const [connectingAccountId, setConnectingAccountId] = useState<
         number | null
     >(null);
+    const [branchDialogOpen, setBranchDialogOpen] = useState(false);
     const father = person?.parentId
         ? people.find((candidate) => candidate.id === person.parentId)
         : undefined;
@@ -68,6 +73,12 @@ export function PersonSummaryDialog({
             account.role !== 'admin' &&
             !account.isContact,
     );
+    const canAddBranch =
+        person !== null &&
+        person.gender !== 'P' &&
+        versionTreeId != null &&
+        person.treeNodeId != null &&
+        (person.childrenNames?.length ?? 0) === 0;
 
     const connect = (accountId: number) => {
         setConnectingAccountId(accountId);
@@ -321,10 +332,15 @@ export function PersonSummaryDialog({
                                                 <Link
                                                     key={spouse.id}
                                                     href={peopleRoutes.silsilah(
-                                                        { person: Number(spouse.id) },
+                                                        {
+                                                            person: Number(
+                                                                spouse.id,
+                                                            ),
+                                                        },
                                                         {
                                                             query: {
-                                                                context: 'close',
+                                                                context:
+                                                                    'close',
                                                             },
                                                         },
                                                     )}
@@ -335,7 +351,8 @@ export function PersonSummaryDialog({
                                             ))
                                         ) : (
                                             <span className="text-tb-on-surface">
-                                                {person.spouse || 'Belum dicatat'}
+                                                {person.spouse ||
+                                                    'Belum dicatat'}
                                             </span>
                                         )}
                                     </dd>
@@ -454,28 +471,66 @@ export function PersonSummaryDialog({
                                     Kopi Kode
                                 </Button>
                             )}
+                            {canAddBranch && (
+                                <Button
+                                    type="button"
+                                    onClick={() => setBranchDialogOpen(true)}
+                                >
+                                    <UserPlus className="size-4" /> Tambah
+                                    Anggota Ranting
+                                </Button>
+                            )}
                             <Button asChild variant="outline">
                                 <Link
-                                    href={peopleRoutes.show({
-                                        person: Number(person.id),
-                                    }, {
-                                        query: versionTreeId
-                                            ? { version_tree: versionTreeId }
-                                            : {},
-                                    })}
+                                    href={peopleRoutes.show(
+                                        {
+                                            person: Number(person.id),
+                                        },
+                                        {
+                                            query: versionTreeId
+                                                ? {
+                                                      version_tree:
+                                                          versionTreeId,
+                                                  }
+                                                : {},
+                                        },
+                                    )}
                                 >
                                     Lihat Detail
                                 </Link>
                             </Button>
+                            {allowBranchEntry &&
+                                person.gender !== 'P' && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() =>
+                                        router.post(
+                                            margaBranchEntries.store({
+                                                person: Number(person.id),
+                                            }).url,
+                                        )
+                                    }
+                                >
+                                    <UserPlus className="size-4" />
+                                    Tambah Anggota Ranting
+                                </Button>
+                            )}
                             <Button asChild>
                                 <Link
-                                    href={peopleRoutes.edit({
-                                        person: Number(person.id),
-                                    }, {
-                                        query: versionTreeId
-                                            ? { version_tree: versionTreeId }
-                                            : {},
-                                    })}
+                                    href={peopleRoutes.edit(
+                                        {
+                                            person: Number(person.id),
+                                        },
+                                        {
+                                            query: versionTreeId
+                                                ? {
+                                                      version_tree:
+                                                          versionTreeId,
+                                                  }
+                                                : {},
+                                        },
+                                    )}
                                 >
                                     <Pencil className="size-4" />
                                     Edit
@@ -484,6 +539,20 @@ export function PersonSummaryDialog({
                         </div>
                     </DialogFooter>
                 </DialogContent>
+            )}
+            {person && canAddBranch && (
+                <FamilyBranchDialog
+                    open={branchDialogOpen}
+                    onOpenChange={setBranchDialogOpen}
+                    familyTree={{
+                        id: Number(versionTreeId),
+                        requiresApproval: false,
+                    }}
+                    father={{
+                        nodeId: Number(person.treeNodeId),
+                        name: person.name,
+                    }}
+                />
             )}
         </Dialog>
     );

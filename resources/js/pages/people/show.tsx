@@ -1,5 +1,7 @@
 import { Head, Link } from '@inertiajs/react';
 import { ArrowLeft, UserPlus } from 'lucide-react';
+import { useState } from 'react';
+import { FamilyBranchDialog } from '@/components/people/family-branch-dialog';
 import { FamilyTreeHistoryCard } from '@/components/people/family-tree-history-card';
 import type {
     ApprovedMargaTreeEntry,
@@ -14,7 +16,6 @@ import type {
     ShareableAccount,
 } from '@/pages/people/family-form';
 import { dashboard } from '@/routes';
-import familyTreeRoutes from '@/routes/family-trees';
 import people from '@/routes/people';
 
 type Props = {
@@ -34,11 +35,17 @@ type Props = {
     margaAccessStatus: 'pending' | 'approved' | 'rejected' | null;
     versionTrees: FamilyTreeHistoryEntry[];
     selectedVersionName?: string | null;
+    selectedFamilyName?: string | null;
     selectedVersionId?: number | null;
     shareableAccounts: ShareableAccount[];
     pendingTreeShares: PendingTreeShare[];
     canPublish: boolean;
     readOnly?: boolean;
+    appendTarget: {
+        familyTreeId: number;
+        fatherNodeId: number;
+        requiresApproval: boolean;
+    } | null;
 };
 
 export default function PersonShow({
@@ -54,18 +61,17 @@ export default function PersonShow({
     margaAccessStatus,
     versionTrees,
     selectedVersionName,
+    selectedFamilyName,
     selectedVersionId,
     shareableAccounts,
     pendingTreeShares,
     canPublish,
     readOnly = false,
+    appendTarget,
 }: Props) {
+    const [branchDialogOpen, setBranchDialogOpen] = useState(false);
     const activeMargaName =
         margas.find((marga) => marga.id === person.marga_id)?.name ?? null;
-    const appendTree =
-        versionTrees.find((tree) => tree.can_append && tree.is_primary) ??
-        versionTrees.find((tree) => tree.can_append);
-
     return (
         <>
             <Head title={`Jejak Keluarga ${person.name}`} />
@@ -92,19 +98,14 @@ export default function PersonShow({
                             Perubahan disimpan sekaligus.
                         </p>
                     </div>
-                    {!readOnly && person.gender !== 'P' && appendTree && (
-                        <Button asChild className="w-fit">
-                            <Link
-                                href={familyTreeRoutes.people.create(
-                                    appendTree.id,
-                                    {
-                                        query: { father_person_id: person.id },
-                                    },
-                                )}
-                            >
-                                <UserPlus className="size-4" /> Tambah Anak dari{' '}
-                                {person.name}
-                            </Link>
+                    {!readOnly && appendTarget && (
+                        <Button
+                            type="button"
+                            className="w-fit"
+                            onClick={() => setBranchDialogOpen(true)}
+                        >
+                            <UserPlus className="size-4" /> Tambah Anggota
+                            Ranting
                         </Button>
                     )}
 
@@ -133,6 +134,7 @@ export default function PersonShow({
                     approvedMargaTrees={approvedMargaTrees}
                     versionTrees={versionTrees}
                     selectedVersionName={selectedVersionName}
+                    selectedFamilyName={selectedFamilyName}
                     selectedVersionId={selectedVersionId}
                     shareableAccounts={shareableAccounts}
                     pendingTreeShares={pendingTreeShares}
@@ -141,6 +143,21 @@ export default function PersonShow({
                     showFamilyTreeHistory={false}
                 />
             </div>
+
+            {appendTarget && (
+                <FamilyBranchDialog
+                    open={branchDialogOpen}
+                    onOpenChange={setBranchDialogOpen}
+                    familyTree={{
+                        id: appendTarget.familyTreeId,
+                        requiresApproval: appendTarget.requiresApproval,
+                    }}
+                    father={{
+                        nodeId: appendTarget.fatherNodeId,
+                        name: person.name,
+                    }}
+                />
+            )}
         </>
     );
 }

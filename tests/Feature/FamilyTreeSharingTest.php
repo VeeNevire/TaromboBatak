@@ -136,6 +136,7 @@ test('an accepted recipient submits a new member for the owner to approve', func
     expect(FamilyTreeActivity::query()
         ->where('family_tree_id', $tree->id)
         ->where('action', 'added')
+        ->where('member_name', 'Anak Tambahan')
         ->exists())->toBeTrue();
 
     $this->actingAs($owner)
@@ -145,7 +146,7 @@ test('an accepted recipient submits a new member for the owner to approve', func
             ->component('family-tree-activities/index')
             ->has('activities', 1)
             ->where('activities.0.tree_name', $tree->name)
-            ->where('activities.0.father_name', $root->name));
+            ->where('activities.0.member_name', 'Anak Tambahan'));
 });
 
 test('the shared member form offers every male father in the active tree', function () {
@@ -191,6 +192,7 @@ test('the shared member form offers every male father in the active tree', funct
         ->assertInertia(fn (Assert $page) => $page
             ->where('fatherOptions', [
                 ['id' => $fatherElsewhereNode->id, 'name' => $fatherElsewhere->name, 'chain' => null],
+                ['id' => $rootNode->id, 'name' => $rootNode->person->name, 'chain' => '1'],
                 ['id' => $leafNode->id, 'name' => 'Calon Ayah Ujung', 'chain' => '1-1'],
             ]));
 
@@ -201,15 +203,15 @@ test('the shared member form offers every male father in the active tree', funct
         ]))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('initialFatherNodeId', null)
-            ->has('fatherOptions', 2));
+            ->where('initialFatherNodeId', $rootNode->id)
+            ->has('fatherOptions', 3));
 
     $this->get(route('family-trees.people.create', [
         'familyTree' => $tree,
         'father_person_id' => $fatherElsewhere->id,
     ]))->assertSuccessful()->assertInertia(fn (Assert $page) => $page
         ->where('initialFatherNodeId', $fatherElsewhereNode->id)
-        ->has('fatherOptions', 2));
+        ->has('fatherOptions', 3));
 
     $this->actingAs($owner)->post(route('family-trees.people.store', $tree), [
         'name' => 'Anak Cabang Baru',
@@ -228,9 +230,12 @@ test('the shared member form offers every male father in the active tree', funct
     ])->assertSessionHasErrors('father_node_id');
 
     $this->actingAs($owner)->post(route('family-trees.people.store', $tree), [
-        'name' => 'Tidak Boleh Berayah Bercabang',
+        'name' => 'Anak Dari Ayah Bercabang',
         'father_node_id' => $rootNode->id,
-    ])->assertSessionHasErrors('father_node_id');
+    ])->assertRedirect(route('family-trees.show', $tree));
+
+    expect(Person::query()->where('name', 'Anak Dari Ayah Bercabang')
+        ->value('father_id'))->toBe($rootNode->person_id);
 
 });
 
@@ -272,6 +277,168 @@ test('adding a child from a known father preselects his node and joins the exist
         ->and($secondChild->birth_order)->toBe(1)
         ->and($tree->nodes()->where('person_id', $secondChild->id)->value('father_node_id'))->toBe($firstChildNode->id)
         ->and(FamilyTree::query()->count())->toBe(1);
+});
+
+test('adding a marga branch member opens the form and keeps its detached root', function () {
+    $marga = Marga::factory()->create();
+    $owner = User::factory()->withMarga($marga->id)->create();
+    ['tree' => $tree] = sharingTree($owner, $marga);
+    $branchFather = Person::factory()->create([
+        'name' => 'Ayah Ranting Terpisah',
+        'gender' => null,
+        'marga_id' => $marga->id,
+        'father_id' => null,
+    ]);
+
+    $this->actingAs($owner)
+        ->get(route('family-trees.people.create', [
+            'familyTree' => $tree,
+            'father_person_id' => $branchFather->id,
+        ]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('initialFatherNodeId', null)
+            ->where('initialBranchFather', [
+                'id' => $branchFather->id,
+                'name' => $branchFather->name,
+            ]));
+
+    $this->actingAs($owner)
+        ->post(route('family-trees.people.store', $tree), [
+            'name' => 'Anak Ranting Baru',
+            'gender' => 'L',
+            'branch_father_person_id' => $branchFather->id,
+        ])
+        ->assertRedirect(route('family-trees.show', $tree));
+
+    $newChild = Person::query()->where('name', 'Anak Ranting Baru')->firstOrFail();
+    $branchFatherNode = $tree->nodes()->where('person_id', $branchFather->id)->firstOrFail();
+
+    expect($newChild->father_id)->toBe($branchFather->id)
+        ->and($branchFatherNode->father_node_id)->toBeNull()
+        ->and($tree->nodes()->where('person_id', $newChild->id)->value('father_node_id'))
+        ->toBe($branchFatherNode->id);
+});
+
+test('the shared member form offers childless fathers from the lower marga tree', function () {
+    $marga = Marga::factory()->create();
+    $personMarga = Marga::factory()->create();
+    $owner = User::factory()->withMarga($marga->id)->create();
+    ['tree' => $tree, 'root' => $root] = sharingTree($owner, $marga);
+    $root->update(['marga_id' => $personMarga->id]);
+    $marga->update(['identity_person_id' => $root->id]);
+    $childlessFather = Person::factory()->create([
+        'name' => 'Ayah Tanpa Keturunan',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'father_id' => $root->id,
+    ]);
+    $fatherWithChild = Person::factory()->create([
+        'name' => 'Ayah Sudah Punya Anak',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'father_id' => $root->id,
+    ]);
+    Person::factory()->create([
+        'gender' => 'P',
+        'marga_id' => $marga->id,
+        'father_id' => $fatherWithChild->id,
+    ]);
+    Person::factory()->create([
+        'name' => 'Perempuan Tanpa Keturunan',
+        'gender' => 'P',
+        'marga_id' => $marga->id,
+        'father_id' => $root->id,
+    ]);
+
+    $this->actingAs($owner)
+        ->get(route('family-trees.people.create', $tree))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('branchFatherOptions', [[
+                'id' => $childlessFather->id,
+                'name' => $childlessFather->name,
+            ]]));
+});
+
+test('marga branch entry opens the father family when it already exists', function () {
+    $marga = Marga::factory()->create();
+    $owner = User::factory()->withMarga($marga->id)->create();
+    ['tree' => $tree, 'root' => $father] = sharingTree($owner, $marga);
+
+    $this->actingAs($owner)
+        ->post(route('marga-branch-entries.store', $father))
+        ->assertRedirect(route('family-trees.people.create', [
+            'familyTree' => $tree,
+            'father_person_id' => $father->id,
+        ]));
+});
+
+test('marga branch entry creates a new father family when none exists', function () {
+    $marga = Marga::factory()->create();
+    $owner = User::factory()->withMarga($marga->id)->create();
+    $father = Person::factory()->create([
+        'name' => 'Ayah Keluarga Baru',
+        'gender' => null,
+        'marga_id' => $marga->id,
+    ]);
+
+    $this->actingAs($owner)
+        ->post(route('marga-branch-entries.store', $father))
+        ->assertRedirect();
+
+    $tree = FamilyTree::query()
+        ->where('user_id', $owner->id)
+        ->where('root_person_id', $father->id)
+        ->firstOrFail();
+
+    expect($tree->name)->toBe('Keluarga Ayah Keluarga Baru')
+        ->and($tree->nodes()->where('person_id', $father->id)->exists())->toBeTrue();
+
+    $fatherNode = $tree->nodes()->where('person_id', $father->id)->firstOrFail();
+
+    $this->actingAs($owner)
+        ->get(route('family-trees.people.create', [
+            'familyTree' => $tree,
+            'father_person_id' => $father->id,
+        ]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('initialFatherNodeId', $fatherNode->id)
+            ->where('fatherOptions', [[
+                'id' => $fatherNode->id,
+                'name' => $father->name,
+                'chain' => null,
+            ]]));
+});
+
+test('a branch submission stores the selected father with its children and siblings', function () {
+    $marga = Marga::factory()->create();
+    $owner = User::factory()->withMarga($marga->id)->create();
+    ['tree' => $tree, 'root' => $father, 'node' => $fatherNode] = sharingTree($owner, $marga);
+    $father->update(['gender' => null]);
+
+    $this->actingAs($owner)->post(route('family-trees.people.store', $tree), [
+        'name' => 'Anggota Utama Ranting',
+        'gender' => 'L',
+        'father_node_id' => $fatherNode->id,
+        'children' => [
+            ['name' => 'Anak Ranting'],
+        ],
+        'siblings' => [
+            ['name' => 'Saudara Ranting'],
+        ],
+    ])->assertRedirect(route('family-trees.show', $tree));
+
+    $member = Person::query()->where('name', 'Anggota Utama Ranting')->firstOrFail();
+    $child = Person::query()->where('name', 'Anak Ranting')->firstOrFail();
+    $sibling = Person::query()->where('name', 'Saudara Ranting')->firstOrFail();
+
+    expect($member->father_id)->toBe($father->id)
+        ->and($child->father_id)->toBe($member->id)
+        ->and($sibling->father_id)->toBe($father->id)
+        ->and($tree->nodes()->where('person_id', $child->id)->exists())->toBeTrue()
+        ->and($tree->nodes()->where('person_id', $sibling->id)->exists())->toBeTrue();
 });
 
 test('the shared member form limits mothers to the selected father wives', function () {

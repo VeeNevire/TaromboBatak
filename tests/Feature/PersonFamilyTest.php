@@ -71,10 +71,14 @@ test('a family store creates the father, mother, and all sibling rows as people'
         ->and($children[1]->village_code)->toBe('32.01.02.2001')
         ->and($children[0]->spouse_marga)->toBe('Hutapea')
         ->and($children[2]->name)->toBe('N/A')
-        ->and(FamilyTree::query()->sole()->name)->toBe('Keluarga Ompu Sitorus');
+        ->and(FamilyTree::query()->sole()->name)->toBe('Keluarga Ompu Sitorus')
+        ->and(FamilyTreeNode::query()
+            ->where('person_id', $children[1]->id)
+            ->sole()
+            ->family_name)->toBe('Keluarga Ompu Sitorus');
 });
 
-test('a family entry update changes its family name', function () {
+test('a family entry update changes only its family branch name', function () {
     $marga = Marga::factory()->create(['name' => 'Sitorus']);
     $person = Person::factory()->create([
         'name' => 'Ompu Sitorus',
@@ -102,7 +106,81 @@ test('a family entry update changes its family name', function () {
         ]],
     ])->assertRedirect(route('people.show', $person));
 
-    expect($familyTree->fresh()->name)->toBe('Keluarga Ompu Sitorus');
+    expect($familyTree->fresh()->name)->toBe('Keluarga Lama')
+        ->and(FamilyTreeNode::query()
+            ->where('family_tree_id', $familyTree->id)
+            ->where('person_id', $person->id)
+            ->sole()
+            ->family_name)->toBe('Keluarga Ompu Sitorus');
+});
+
+test('a descendant inherits the closest family branch name', function () {
+    $tree = FamilyTree::create([
+        'user_id' => $this->admin->id,
+        'root_person_id' => Person::factory()->create(['name' => 'Ompung'])->id,
+        'name' => 'Keluarga Lama',
+    ]);
+    $root = $tree->rootPerson;
+    $branchHead = Person::factory()->create(['name' => 'Anak Pertama', 'father_id' => $root->id]);
+    $grandchild = Person::factory()->create(['name' => 'Cucu Kedua', 'father_id' => $branchHead->id]);
+    $rootNode = FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $root->id]);
+    $branchNode = FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $branchHead->id,
+        'father_node_id' => $rootNode->id,
+        'family_name' => 'Keluarga Anak Pertama',
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $grandchild->id,
+        'father_node_id' => $branchNode->id,
+    ]);
+
+    $this->actingAs($this->admin)
+        ->get(route('people.edit', $grandchild))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('selectedFamilyName', 'Keluarga Anak Pertama'));
+});
+
+test('editing a branch name does not rename the whole tree', function () {
+    $root = Person::factory()->create(['name' => 'Ompung']);
+    $branchHead = Person::factory()->create(['name' => 'Anak Pertama', 'father_id' => $root->id]);
+    $grandchild = Person::factory()->create(['name' => 'Cucu Kedua', 'father_id' => $branchHead->id]);
+    $tree = FamilyTree::create([
+        'user_id' => $this->admin->id,
+        'root_person_id' => $root->id,
+        'name' => 'Pohon Silaban',
+    ]);
+    $rootNode = FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $root->id]);
+    $branchNode = FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $branchHead->id,
+        'father_node_id' => $rootNode->id,
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $grandchild->id,
+        'father_node_id' => $branchNode->id,
+    ]);
+
+    $this->actingAs($this->admin)
+        ->put(route('people.update', $branchHead).'?version_tree='.$tree->id, [
+            'name' => $branchHead->name,
+            'family_tree_name' => 'Keluarga Anak Pertama',
+            'gender' => 'L',
+            'birth_order' => 1,
+            'sibling_count' => 1,
+            'father' => ['id' => $root->id, 'name' => $root->name],
+        ])
+        ->assertRedirect();
+
+    expect($tree->fresh()->name)->toBe('Pohon Silaban');
+
+    $this->get(route('people.edit', $grandchild).'?version_tree='.$tree->id)
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('selectedFamilyName', 'Keluarga Anak Pertama'));
 });
 
 test('related story links are stored and exposed on the person form', function () {

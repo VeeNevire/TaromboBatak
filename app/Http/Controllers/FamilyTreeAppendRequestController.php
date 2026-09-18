@@ -11,7 +11,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class FamilyTreeAppendRequestController extends Controller
@@ -50,7 +49,13 @@ class FamilyTreeAppendRequestController extends Controller
         });
 
         Inertia::flash('toast', ['type' => 'success', 'message' => "$memberName berhasil ditambahkan ke silsilah."]);
-        app(FamilyTreeActivityLogger::class)->log($tree, $request->user(), 'added', "Menyetujui penambahan anggota $memberName.");
+        app(FamilyTreeActivityLogger::class)->log(
+            $tree,
+            $request->user(),
+            'added',
+            "Menyetujui penambahan anggota $memberName.",
+            $memberName,
+        );
 
         return back();
     }

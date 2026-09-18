@@ -352,6 +352,19 @@ export function FamilyTreeHistoryCard({
     );
     const showPagination =
         filteredEntries.length > ACCOUNT_FAMILY_TREE_ITEMS_PER_PAGE;
+    const pendingAppendRequests = useMemo(
+        () =>
+            entries.flatMap((entry) =>
+                entry.can_manage
+                    ? entry.append_requests.map((request) => ({
+                          ...request,
+                          tree_name:
+                              entry.name ?? `Silsilah ${entry.root_name}`,
+                      }))
+                    : [],
+            ),
+        [entries],
+    );
 
     const availableRecipients = useMemo(() => {
         const query = recipientSearch.trim().toLowerCase();
@@ -505,6 +518,77 @@ export function FamilyTreeHistoryCard({
                     </div>
                 </CardHeader>
                 <CardContent className="grid min-w-0 gap-6">
+                    {accountTreesOnly && pendingAppendRequests.length > 0 && (
+                        <section className="grid gap-3 rounded-xl border-2 border-amber-400 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-950/30">
+                            <div>
+                                <h3 className="font-display text-base font-bold text-amber-950 dark:text-amber-100">
+                                    Pengajuan Tambah Anggota
+                                </h3>
+                                <p className="mt-1 text-xs text-amber-900 dark:text-amber-200">
+                                    Tinjau pengajuan anggota baru sebelum masuk
+                                    ke silsilah.
+                                </p>
+                            </div>
+                            <div className="grid gap-2">
+                                {pendingAppendRequests.map((request) => (
+                                    <div
+                                        key={request.id}
+                                        className="flex flex-col gap-3 rounded-lg border border-amber-300 bg-white p-3 sm:flex-row sm:items-center sm:justify-between dark:border-amber-800 dark:bg-amber-950/40"
+                                    >
+                                        <div className="text-sm text-amber-950 dark:text-amber-100">
+                                            <p className="font-semibold">
+                                                {request.member_name}
+                                            </p>
+                                            <p className="text-xs text-amber-800 dark:text-amber-200">
+                                                Diajukan oleh{' '}
+                                                {request.requester_name} ·{' '}
+                                                {request.tree_name}
+                                            </p>
+                                        </div>
+                                        <div className="flex shrink-0 gap-2">
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                onClick={() =>
+                                                    router.post(
+                                                        familyTreeAppendRequests.approve(
+                                                            request.id,
+                                                        ).url,
+                                                        {},
+                                                        {
+                                                            preserveScroll: true,
+                                                        },
+                                                    )
+                                                }
+                                            >
+                                                <Check className="size-3.5" />{' '}
+                                                Setujui
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                className="border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950"
+                                                onClick={() =>
+                                                    router.post(
+                                                        familyTreeAppendRequests.reject(
+                                                            request.id,
+                                                        ).url,
+                                                        {},
+                                                        {
+                                                            preserveScroll: true,
+                                                        },
+                                                    )
+                                                }
+                                            >
+                                                <X className="size-3.5" /> Tolak
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    )}
                     {pendingTreeShares.length > 0 && (
                         <section className="grid gap-3 rounded-xl border border-tb-primary/25 bg-tb-primary/5 p-4">
                             <div>
@@ -913,84 +997,6 @@ export function FamilyTreeHistoryCard({
                                                         ) : null}
                                                     </div>
                                                 </div>
-                                                {entry.can_manage &&
-                                                    entry.append_requests
-                                                        .length > 0 && (
-                                                        <div className="basis-full rounded-lg border border-amber-300 bg-amber-50/70 p-3 dark:border-amber-800 dark:bg-amber-950/30">
-                                                            <p className="text-xs font-semibold text-amber-900 dark:text-amber-100">
-                                                                Permintaan tambah anggota
-                                                            </p>
-                                                            <div className="mt-2 grid gap-2">
-                                                                {entry.append_requests.map(
-                                                                    (
-                                                                        appendRequest,
-                                                                    ) => (
-                                                                        <div
-                                                                            key={
-                                                                                appendRequest.id
-                                                                            }
-                                                                            className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
-                                                                        >
-                                                                            <p className="text-xs text-amber-900 dark:text-amber-100">
-                                                                                <span className="font-semibold">
-                                                                                    {
-                                                                                        appendRequest.requester_name
-                                                                                    }
-                                                                                </span>{' '}
-                                                                                mengajukan{' '}
-                                                                                <span className="font-semibold">
-                                                                                    {
-                                                                                        appendRequest.member_name
-                                                                                    }
-                                                                                </span>
-                                                                            </p>
-                                                                            <div className="flex gap-2">
-                                                                                <Button
-                                                                                    type="button"
-                                                                                    size="sm"
-                                                                                    className="h-8 text-xs"
-                                                                                    onClick={() =>
-                                                                                        router.post(
-                                                                                            familyTreeAppendRequests.approve(
-                                                                                                appendRequest.id,
-                                                                                            )
-                                                                                                .url,
-                                                                                            {},
-                                                                                            {
-                                                                                                preserveScroll: true,
-                                                                                            },
-                                                                                        )
-                                                                                    }
-                                                                                >
-                                                                                    Setujui
-                                                                                </Button>
-                                                                                <Button
-                                                                                    type="button"
-                                                                                    size="sm"
-                                                                                    variant="outline"
-                                                                                    className="h-8 border-red-300 text-xs text-red-700 hover:bg-red-50 hover:text-red-800 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950"
-                                                                                    onClick={() =>
-                                                                                        router.post(
-                                                                                            familyTreeAppendRequests.reject(
-                                                                                                appendRequest.id,
-                                                                                            )
-                                                                                                .url,
-                                                                                            {},
-                                                                                            {
-                                                                                                preserveScroll: true,
-                                                                                            },
-                                                                                        )
-                                                                                    }
-                                                                                >
-                                                                                    Tolak
-                                                                                </Button>
-                                                                            </div>
-                                                                        </div>
-                                                                    ),
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    )}
                                             </li>
                                         ))}
                                     </ol>

@@ -13,6 +13,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $owner_id
  * @property int|null $actor_id
  * @property string $tree_name
+ * @property string|null $member_name
  * @property string $action
  * @property string $description
  * @property Carbon|null $created_at
@@ -20,7 +21,7 @@ use Illuminate\Support\Carbon;
  * @property-read User|null $owner
  * @property-read User|null $actor
  */
-#[Fillable(['family_tree_id', 'owner_id', 'actor_id', 'tree_name', 'action', 'description'])]
+#[Fillable(['family_tree_id', 'owner_id', 'actor_id', 'tree_name', 'member_name', 'action', 'description'])]
 class FamilyTreeActivity extends Model
 {
     /** @return BelongsTo<FamilyTree, $this> */

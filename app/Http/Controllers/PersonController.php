@@ -20,6 +20,7 @@ use App\Notifications\FatherMatchSubmitted;
 use App\Services\ChainNumberingService;
 use App\Services\FamilyEntryService;
 use App\Services\FamilyTreeActivityLogger;
+use App\Services\FamilyTreeFamilyNameService;
 use App\Services\FamilyTreeStructureService;
 use App\Services\FamilyTreeVersionService;
 use App\Services\TaromboTreeService;
@@ -393,6 +394,7 @@ class PersonController extends Controller
             $user,
             'added',
             'Menambahkan anggota keluarga ke silsilah.',
+            ($result['focus'] ?? $result['children']->first())?->name,
         ));
 
         $message = isset($result) && $result['matchedFather'] !== null
@@ -423,6 +425,27 @@ class PersonController extends Controller
         );
         $selectedVersionId = $selectedVersionName !== null ? $request->integer('version_tree') : null;
         $personMargaScope = $user->isStaff() ? null : ($user->isContributor() ? $person->marga_id : $user->marga_id);
+        $appendTree = collect($versionTrees)->first(
+            fn (array $tree): bool => $tree['can_append'] && $tree['is_primary'],
+        ) ?? collect($versionTrees)->first(
+            fn (array $tree): bool => $tree['can_append'],
+        );
+        $familyNameTreeId = $selectedVersionId
+            ?? data_get(collect($versionTrees)->firstWhere('is_primary'), 'id')
+            ?? data_get($versionTrees, '0.id');
+        $selectedFamilyName = $familyNameTreeId !== null
+            ? app(FamilyTreeFamilyNameService::class)->forPerson(
+                FamilyTree::query()->findOrFail($familyNameTreeId),
+                $person->id,
+            )
+            : null;
+        $appendNode = $appendTree !== null && $person->gender === 'L'
+            ? FamilyTreeNode::query()
+                ->where('family_tree_id', $appendTree['id'])
+                ->where('person_id', $person->id)
+                ->withCount('children')
+                ->first()
+            : null;
 
         return Inertia::render('people/show', [
             'person' => $this->familyPayloadVisibleToUser(
@@ -442,10 +465,18 @@ class PersonController extends Controller
             'margaAccessStatus' => $this->margaAccessStatus($user, $user->marga_id),
             'versionTrees' => $versionTrees,
             'selectedVersionName' => $selectedVersionName,
+            'selectedFamilyName' => $selectedFamilyName,
             'selectedVersionId' => $selectedVersionId,
             ...$this->familyTreeSharingPayload($user),
             'canPublish' => $user->isStaff(),
             'readOnly' => ! $user->isStaff(),
+            'appendTarget' => $appendNode !== null && $appendNode->children_count === 0
+                ? [
+                    'familyTreeId' => $appendTree['id'],
+                    'fatherNodeId' => $appendNode->id,
+                    'requiresApproval' => ! $appendTree['can_manage'],
+                ]
+                : null,
         ]);
     }
 
@@ -491,6 +522,12 @@ class PersonController extends Controller
         $familyPayload = $structureTreeId !== null
                 ? $this->familyPayloadForVersion($person, $structureTreeId, $personMargaScope)
                 : $this->familyPayload($person, $personMargaScope);
+        $selectedFamilyName = $structureTreeId !== null
+            ? app(FamilyTreeFamilyNameService::class)->forPerson(
+                FamilyTree::query()->findOrFail($structureTreeId),
+                $person->id,
+            )
+            : null;
 
         return Inertia::render('people/form', [
             'person' => $this->familyPayloadVisibleToUser($familyPayload, $user),
@@ -512,6 +549,7 @@ class PersonController extends Controller
             'margaAccessStatus' => $this->margaAccessStatus($user, $user->marga_id),
             'versionTrees' => $versionTrees,
             'selectedVersionName' => $selectedVersionName,
+            'selectedFamilyName' => $selectedFamilyName,
             'selectedVersionId' => $selectedVersionId,
             ...$this->familyTreeSharingPayload($user),
             'canPublish' => $isStaff,
@@ -703,7 +741,13 @@ class PersonController extends Controller
         $rootName = $familyTree->rootPerson()->value('name') ?? 'Silsilah';
         $name = $this->alternativeVersionName($request, ($familyTree->name ?? $rootName).' - Versi alternatif');
         $copy = app(FamilyTreeVersionService::class)->duplicate($familyTree, $request->user(), $name);
-        app(FamilyTreeActivityLogger::class)->log($copy, $request->user(), 'created', 'Membuat versi alternatif silsilah.');
+        app(FamilyTreeActivityLogger::class)->log(
+            $copy,
+            $request->user(),
+            'created',
+            'Membuat versi alternatif silsilah.',
+            $copy->rootPerson()->value('name'),
+        );
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Versi alternatif berhasil dibuat.')]);
 
@@ -789,7 +833,13 @@ class PersonController extends Controller
         $this->authorizeFamilyTree($request, $familyTree);
 
         app(FamilyTreeStructureService::class)->update($familyTree, $request->validated('entries'));
-        app(FamilyTreeActivityLogger::class)->log($familyTree, $request->user(), 'updated', 'Memperbarui struktur silsilah.');
+        app(FamilyTreeActivityLogger::class)->log(
+            $familyTree,
+            $request->user(),
+            'updated',
+            'Memperbarui struktur silsilah.',
+            $familyTree->rootPerson()->value('name'),
+        );
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Struktur versi silsilah berhasil diperbarui.')]);
 
@@ -804,7 +854,13 @@ class PersonController extends Controller
         $this->authorizeFamilyTree($request, $familyTree);
 
         $familyTree->update(['name' => trim($request->validated('name'))]);
-        app(FamilyTreeActivityLogger::class)->log($familyTree, $request->user(), 'updated', 'Mengubah nama silsilah.');
+        app(FamilyTreeActivityLogger::class)->log(
+            $familyTree,
+            $request->user(),
+            'updated',
+            'Mengubah nama silsilah.',
+            $familyTree->rootPerson()->value('name'),
+        );
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Nama silsilah berhasil diperbarui.')]);
 
@@ -997,10 +1053,12 @@ class PersonController extends Controller
             $this->authorizeFamilyTree($request, $familyTree);
 
             DB::transaction(function () use ($familyTree, $person, $validated, $user): void {
-                if (filled($validated['family_tree_name'] ?? null)) {
-                    $familyTree->update([
-                        'name' => trim($validated['family_tree_name']),
-                    ]);
+                if (array_key_exists('family_tree_name', $validated)) {
+                    app(FamilyTreeFamilyNameService::class)->setForPerson(
+                        $familyTree,
+                        $person->id,
+                        $validated['family_tree_name'],
+                    );
                 }
 
                 // Biography and story links describe the person, not their
@@ -1016,6 +1074,7 @@ class PersonController extends Controller
                 $user,
                 'updated',
                 'Memperbarui data dan struktur silsilah.',
+                $person->name,
             );
 
             Inertia::flash('toast', ['type' => 'success', 'message' => __('Versi silsilah berhasil diperbarui.')]);
@@ -1053,6 +1112,7 @@ class PersonController extends Controller
             $user,
             'updated',
             'Memperbarui data anggota pada silsilah.',
+            $person->name,
         ));
 
         if (
