@@ -30,7 +30,15 @@ export default function MargaChat({
     const { auth } = usePage().props;
     const endRef = useRef<HTMLDivElement>(null);
     const [messages, setMessages] = useState(initialMessages);
+    const [syncedMessages, setSyncedMessages] = useState(initialMessages);
     const form = useForm({ body: '' });
+
+    // Resync when the server sends fresh props (e.g. right after sending), so
+    // the sender's own message shows even if the Reverb socket is offline.
+    if (syncedMessages !== initialMessages) {
+        setSyncedMessages(initialMessages);
+        setMessages(initialMessages);
+    }
 
     useEcho<Message>(
         `marga.${margaItem.id}`,
