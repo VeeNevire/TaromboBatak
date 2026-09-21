@@ -63,4 +63,10 @@ class Marga extends Model
     {
         return $this->hasMany(MargaAccessRequest::class);
     }
+
+    /** @return HasMany<MargaMessage, $this> */
+    public function messages(): HasMany
+    {
+        return $this->hasMany(MargaMessage::class);
+    }
 }

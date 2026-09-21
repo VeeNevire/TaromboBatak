@@ -1,4 +1,4 @@
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
     ArrowDown,
@@ -17,6 +17,7 @@ import { useMemo, useRef, useState } from 'react';
 import InputError from '@/components/input-error';
 import MargaDetailDialog from '@/components/marga-detail-dialog';
 import { PersonTreePickerDialog } from '@/components/tarombo/person-tree-picker-dialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -47,11 +48,7 @@ type MargaItem = {
     identity_person_id: number | null;
     identity_person_name: string | null;
     is_public: boolean;
-    contributors: {
-        id: number;
-        name: string;
-        role: 'contributor_main' | 'contributor_member';
-    }[];
+    unread_count: number;
 };
 
 type Props = {
@@ -222,7 +219,6 @@ export default function MargaIndex({
 }: Props) {
     const [dialog, setDialog] = useState<null | 'create' | MargaItem>(null);
     const [detailMarga, setDetailMarga] = useState<MargaItem | null>(null);
-    const [messageMargaId, setMessageMargaId] = useState<number | null>(null);
     const [toDelete, setToDelete] = useState<MargaItem | null>(null);
     const [identityPickerOpen, setIdentityPickerOpen] = useState(false);
     const [search, setSearch] = useState('');
@@ -331,11 +327,7 @@ export default function MargaIndex({
                     key={detailMarga.id}
                     marga={detailMarga}
                     canSendMessage={canSendContributorMessage}
-                    openMessageOnMount={messageMargaId === detailMarga.id}
-                    onClose={() => {
-                        setDetailMarga(null);
-                        setMessageMargaId(null);
-                    }}
+                    onClose={() => setDetailMarga(null)}
                 />
             )}
 
@@ -557,22 +549,32 @@ export default function MargaIndex({
                                                 </span>
                                             )}
                                         </div>
-                                        {canSendContributorMessage &&
-                                            m.contributors.length > 0 && (
+                                        {canSendContributorMessage && (
+                                            <div className="mt-1 flex items-center gap-2">
                                                 <Button
-                                                    type="button"
+                                                    asChild
                                                     variant="outline"
                                                     size="sm"
-                                                    className="mt-1 w-fit"
-                                                    onClick={(event) => {
-                                                        event.stopPropagation();
-                                                        setDetailMarga(m);
-                                                        setMessageMargaId(m.id);
-                                                    }}
+                                                    className="w-fit"
                                                 >
-                                                    <MessageCircle className="size-3.5" /> Kirim Pesan
+                                                    <Link
+                                                        href={marga.chat(m.id)}
+                                                        onClick={(event) =>
+                                                            event.stopPropagation()
+                                                        }
+                                                    >
+                                                        <MessageCircle className="size-3.5" />{' '}
+                                                        Kirim Pesan
+                                                    </Link>
                                                 </Button>
-                                            )}
+                                                {m.unread_count > 0 && (
+                                                    <Badge variant="destructive">
+                                                        {m.unread_count} pesan
+                                                        baru
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        )}
                                     </CardContent>
                                 </Card>
                             </motion.div>

@@ -1,4 +1,4 @@
-import { Link, router } from '@inertiajs/react';
+import { Link } from '@inertiajs/react';
 import { MessageCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { relatedContent } from '@/actions/App/Http/Controllers/MargaController';
@@ -20,12 +20,8 @@ type MargaSummary = {
     name: string;
     description: string | null;
     people_count: number;
-    contributors: {
-        id: number;
-        name: string;
-        role: 'contributor_main' | 'contributor_member';
-    }[];
 };
+
 type ContentTab = 'stories' | 'events' | 'statuses';
 type ContentResult = {
     items: {
@@ -49,29 +45,15 @@ const tabs = [
 export default function MargaDetailDialog({
     marga,
     canSendMessage,
-    openMessageOnMount = false,
     onClose,
 }: {
     marga: MargaSummary;
     canSendMessage: boolean;
-    openMessageOnMount?: boolean;
     onClose: () => void;
 }) {
     const [tab, setTab] = useState<ContentTab>('stories');
     const [page, setPage] = useState(1);
     const [retry, setRetry] = useState(0);
-    const [messageRecipientId, setMessageRecipientId] = useState<number | null>(null);
-    const [messageBody, setMessageBody] = useState('');
-    const [sendingMessage, setSendingMessage] = useState(false);
-    const recipient = marga.contributors.find(
-        (contributor) => contributor.id === messageRecipientId,
-    );
-
-    useEffect(() => {
-        if (openMessageOnMount && marga.contributors.length > 0) {
-            setMessageRecipientId(marga.contributors[0].id);
-        }
-    }, [marga.contributors, openMessageOnMount]);
 
     return (
         <Dialog
@@ -97,16 +79,11 @@ export default function MargaDetailDialog({
                         {marga.description}
                     </p>
                 )}
-                {canSendMessage && marga.contributors.length > 0 && (
-                    <Button
-                        type="button"
-                        variant="outline"
-                        className="w-fit"
-                        onClick={() =>
-                            setMessageRecipientId(marga.contributors[0].id)
-                        }
-                    >
-                        <MessageCircle className="size-4" /> Kirim Pesan
+                {canSendMessage && (
+                    <Button asChild variant="outline" className="w-fit">
+                        <Link href={margaRoutes.chat(marga.id)}>
+                            <MessageCircle className="size-4" /> Kirim Pesan
+                        </Link>
                     </Button>
                 )}
                 <Tabs
@@ -141,91 +118,6 @@ export default function MargaDetailDialog({
                         </TabsContent>
                     ))}
                 </Tabs>
-                <Dialog
-                    open={messageRecipientId !== null}
-                    onOpenChange={(open) => {
-                        if (!open) {
-                            setMessageRecipientId(null);
-                            setMessageBody('');
-                        }
-                    }}
-                >
-                    <DialogContent className="sm:max-w-md">
-                        <DialogHeader>
-                            <DialogTitle>Kirim Pesan ke Kontributor</DialogTitle>
-                            <DialogDescription>
-                                Pesan akan dikirim ke Kontributor Utama atau Anggota untuk marga {marga.name}.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <form
-                            className="grid gap-4"
-                            onSubmit={(event) => {
-                                event.preventDefault();
-
-                                if (!recipient || !messageBody.trim()) {
-                                    return;
-                                }
-
-                                setSendingMessage(true);
-                                router.post(
-                                    margaRoutes.contributors.messages.store([
-                                        marga.id,
-                                        recipient.id,
-                                    ]).url,
-                                    { body: messageBody.trim() },
-                                    {
-                                        preserveScroll: true,
-                                        onSuccess: () => {
-                                            setMessageRecipientId(null);
-                                            setMessageBody('');
-                                        },
-                                        onFinish: () => setSendingMessage(false),
-                                    },
-                                );
-                            }}
-                        >
-                            <div className="grid gap-2">
-                                <label htmlFor="marga-contributor" className="text-sm font-medium text-tb-on-surface">
-                                    Penerima
-                                </label>
-                                <select
-                                    id="marga-contributor"
-                                    value={messageRecipientId ?? ''}
-                                    onChange={(event) => setMessageRecipientId(Number(event.target.value))}
-                                    className="h-10 rounded-md border border-tb-outline-variant bg-tb-surface-bright px-3 text-sm text-tb-on-surface"
-                                >
-                                    {marga.contributors.map((contributor) => (
-                                        <option key={contributor.id} value={contributor.id}>
-                                            {contributor.name} ({contributor.role === 'contributor_main' ? 'Kontributor Utama' : 'Kontributor Anggota'})
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="grid gap-2">
-                                <label htmlFor="marga-message" className="text-sm font-medium text-tb-on-surface">
-                                    Pesan
-                                </label>
-                                <textarea
-                                    id="marga-message"
-                                    value={messageBody}
-                                    onChange={(event) => setMessageBody(event.target.value)}
-                                    maxLength={2000}
-                                    rows={5}
-                                    placeholder="Tulis pesan untuk kontributor..."
-                                    className="resize-none rounded-md border border-tb-outline-variant bg-tb-surface-bright px-3 py-2 text-sm text-tb-on-surface"
-                                />
-                            </div>
-                            <div className="flex justify-end gap-2">
-                                <Button type="button" variant="outline" onClick={() => setMessageRecipientId(null)}>
-                                    Batal
-                                </Button>
-                                <Button type="submit" disabled={sendingMessage || !messageBody.trim()}>
-                                    {sendingMessage ? 'Mengirim...' : 'Kirim Pesan'}
-                                </Button>
-                            </div>
-                        </form>
-                    </DialogContent>
-                </Dialog>
             </DialogContent>
         </Dialog>
     );

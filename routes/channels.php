@@ -11,3 +11,6 @@ Broadcast::channel('users.{userId}', function (User $user, int $userId): bool {
 Broadcast::channel('groups.{chatGroupId}', function (User $user, int $chatGroupId): bool {
     return ChatGroup::query()->find($chatGroupId)?->hasMember($user) ?? false;
 });
+
+// Any signed-in user may watch a marga chat room (they can all post to it).
+Broadcast::channel('marga.{margaId}', fn (User $user, int $margaId): bool => true);

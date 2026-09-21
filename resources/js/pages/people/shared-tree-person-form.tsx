@@ -16,7 +16,6 @@ import familyTrees from '@/routes/family-trees';
 import people from '@/routes/people';
 
 type NodeOption = { id: number; name: string; chain: string | null };
-type BranchFatherOption = { id: number; name: string };
 
 type MemberRow = {
     uid: string;
@@ -32,7 +31,6 @@ type MemberRow = {
 type Props = {
     familyTree: { id: number; name: string; requires_approval: boolean };
     fatherOptions: NodeOption[];
-    branchFatherOptions: BranchFatherOption[];
     motherOptionsByFather: Record<string, NodeOption[]>;
     initialFatherNodeId: number | null;
     initialBranchFather: { id: number; name: string } | null;
@@ -79,7 +77,6 @@ const emptyMemberRow = (): MemberRow => ({
 export default function SharedTreePersonForm({
     familyTree,
     fatherOptions,
-    branchFatherOptions,
     motherOptionsByFather,
     initialFatherNodeId,
     initialBranchFather,
@@ -102,11 +99,7 @@ export default function SharedTreePersonForm({
     });
 
     const motherOptions = motherOptionsByFather[data.father_node_id] ?? [];
-    const fatherChoice = data.branch_father_person_id
-        ? `branch:${data.branch_father_person_id}`
-        : data.father_node_id
-          ? `node:${data.father_node_id}`
-          : '';
+    const fatherChoice = data.father_node_id;
     const isFatherLocked =
         initialFatherNodeId !== null || initialBranchFather !== null;
 
@@ -612,21 +605,13 @@ export default function SharedTreePersonForm({
                                                 disabled={isFatherLocked}
                                                 value={fatherChoice}
                                                 onChange={(e) => {
-                                                    const [source, id] =
-                                                        e.target.value.split(
-                                                            ':',
-                                                        );
                                                     setData(
                                                         'father_node_id',
-                                                        source === 'node'
-                                                            ? id
-                                                            : '',
+                                                        e.target.value,
                                                     );
                                                     setData(
                                                         'branch_father_person_id',
-                                                        source === 'branch'
-                                                            ? id
-                                                            : '',
+                                                        '',
                                                     );
                                                     setData(
                                                         'mother_node_id',
@@ -638,41 +623,14 @@ export default function SharedTreePersonForm({
                                                 <option value="">
                                                     Pilih Ayah...
                                                 </option>
-                                                {fatherOptions.length > 0 && (
-                                                    <optgroup label="Anggota di silsilah ini">
-                                                        {fatherOptions.map(
-                                                            (option) => (
-                                                                <option
-                                                                    key={option.id}
-                                                                    value={`node:${option.id}`}
-                                                                >
-                                                                    {optionLabel(
-                                                                        option,
-                                                                    )}
-                                                                </option>
-                                                            ),
-                                                        )}
-                                                    </optgroup>
-                                                )}
-                                                {branchFatherOptions.length >
-                                                    0 && (
-                                                    <optgroup label="Pohon marga bawah — belum memiliki keturunan">
-                                                        {branchFatherOptions.map(
-                                                            (option) => (
-                                                                <option
-                                                                    key={
-                                                                        option.id
-                                                                    }
-                                                                    value={`branch:${option.id}`}
-                                                                >
-                                                                    {
-                                                                        option.name
-                                                                    }
-                                                                </option>
-                                                            ),
-                                                        )}
-                                                    </optgroup>
-                                                )}
+                                                {fatherOptions.map((option) => (
+                                                    <option
+                                                        key={option.id}
+                                                        value={option.id}
+                                                    >
+                                                        {optionLabel(option)}
+                                                    </option>
+                                                ))}
                                             </select>
                                         )}
                                         {isFatherLocked && (

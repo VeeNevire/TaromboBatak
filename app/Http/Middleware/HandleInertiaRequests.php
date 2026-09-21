@@ -109,6 +109,7 @@ class HandleInertiaRequests extends Middleware
             'unreadNewsFeedCount' => fn () => $request->user() === null
                 ? 0
                 : app(NewsFeedService::class)->unreadCount($request->user()),
+            'unreadMargaMessageCount' => fn (): int => (int) ($request->user()?->unreadMargaMessageCounts()->sum() ?? 0),
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
     }

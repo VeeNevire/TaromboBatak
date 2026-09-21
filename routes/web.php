@@ -23,7 +23,7 @@ use App\Http\Controllers\IdentityRequestController;
 use App\Http\Controllers\IndonesiaRegionController;
 use App\Http\Controllers\KomunitasController;
 use App\Http\Controllers\MargaBranchEntryController;
-use App\Http\Controllers\MargaContributorMessageController;
+use App\Http\Controllers\MargaChatController;
 use App\Http\Controllers\MargaController;
 use App\Http\Controllers\MessageAttachmentController;
 use App\Http\Controllers\MessageController;
@@ -113,9 +113,11 @@ Route::middleware(['auth'])->group(function () {
         ->name('marga-branch-entries.store');
     Route::get('dashboard/log-pesan', [MessageLogController::class, 'index'])
         ->name('message-logs.index');
-    Route::post('dashboard/marga/{marga}/contributors/{contributor}/messages', [MargaContributorMessageController::class, 'store'])
+    Route::get('dashboard/marga/{marga}/chat', [MargaChatController::class, 'show'])
+        ->name('marga.chat');
+    Route::post('dashboard/marga/{marga}/messages', [MargaChatController::class, 'store'])
         ->middleware('throttle:20,1')
-        ->name('marga.contributors.messages.store');
+        ->name('marga.messages.store');
     Route::get('dashboard/log-pohon-besar', [TreeActivityLogController::class, 'index'])
         ->name('tree-activity-logs.index');
     Route::post('dashboard/log-pohon-besar/perubahan/{treeChangeRequest}/setujui', [TreeActivityLogController::class, 'approve'])

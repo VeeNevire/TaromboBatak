@@ -199,6 +199,47 @@ class User extends Authenticatable
             ->values();
     }
 
+    /**
+     * Unread chat message count per visible marga, for any signed-in user.
+     * Margas with nothing unread are omitted.
+     *
+     * @return \Illuminate\Support\Collection<int, int> Keyed by marga id.
+     */
+    public function unreadMargaMessageCounts(): \Illuminate\Support\Collection
+    {
+        $margaIds = Marga::query()
+            ->when(! $this->isStaff(), fn ($query) => $query->where('is_public', true))
+            ->pluck('id');
+
+        if ($margaIds->isEmpty()) {
+            return collect();
+        }
+
+        $reads = MargaChatRead::query()
+            ->where('user_id', $this->id)
+            ->whereIn('marga_id', $margaIds)
+            ->get(['marga_id', 'last_read_at'])
+            ->mapWithKeys(fn (MargaChatRead $read) => [$read->marga_id => $read->last_read_at]);
+
+        // ponytail: load-and-filter; move to a join if message volume grows.
+        return MargaMessage::query()
+            ->whereIn('marga_id', $margaIds)
+            ->where(fn ($query) => $query
+                ->whereNull('sender_id')
+                ->orWhere('sender_id', '!=', $this->id))
+            ->get(['id', 'marga_id', 'created_at'])
+            ->groupBy('marga_id')
+            ->map(function ($messages, int $margaId) use ($reads): int {
+                $readAt = $reads->get($margaId);
+
+                return $messages
+                    ->filter(fn (MargaMessage $message) => $readAt === null
+                        || $message->created_at->gt($readAt))
+                    ->count();
+            })
+            ->filter(fn (int $count) => $count > 0);
+    }
+
     /** @return BelongsTo<Person, $this> */
     public function currentPerson(): BelongsTo
     {

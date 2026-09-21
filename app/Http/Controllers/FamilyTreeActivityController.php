@@ -32,7 +32,9 @@ class FamilyTreeActivityController extends Controller
                 'action' => $activity->action,
                 'description' => $activity->description,
                 'actor' => $activity->actor?->name ?? 'Sistem',
-                'created_at' => $activity->created_at?->translatedFormat('d M Y, H:i'),
+                'created_at' => $activity->created_at
+                    ? $activity->created_at->setTimezone('Asia/Jakarta')->translatedFormat('d M Y, H:i').' WIB'
+                    : null,
             ]);
 
         return Inertia::render('family-tree-activities/index', [
