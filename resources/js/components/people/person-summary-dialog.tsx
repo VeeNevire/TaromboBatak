@@ -61,6 +61,8 @@ export function PersonSummaryDialog({
     const father = person?.parentId
         ? people.find((candidate) => candidate.id === person.parentId)
         : undefined;
+    const fatherName = father?.name ?? person?.fatherName ?? null;
+    const fatherMarga = father?.marga ?? person?.fatherMarga ?? null;
     const children = person
         ? (person.childrenNames ??
           people
@@ -79,6 +81,9 @@ export function PersonSummaryDialog({
         versionTreeId != null &&
         person.treeNodeId != null &&
         (person.childrenNames?.length ?? 0) === 0;
+    const canEdit = person?.canEdit !== false;
+    const editLockedHint =
+        'Data ini bukan dibuat akun anggota dan hanya menyambung ke ayah, jadi tidak dapat diubah.';
 
     const connect = (accountId: number) => {
         setConnectingAccountId(accountId);
@@ -319,7 +324,9 @@ export function PersonSummaryDialog({
                                         Ayah
                                     </dt>
                                     <dd className="text-right font-medium text-tb-on-surface">
-                                        {father?.name ?? 'Belum dicatat'}
+                                        {fatherName
+                                            ? `${fatherName}${fatherMarga ? ` (${fatherMarga})` : ''}`
+                                            : 'Belum dicatat'}
                                     </dd>
                                 </div>
                                 <div className="flex items-start justify-between gap-4">
@@ -396,13 +403,25 @@ export function PersonSummaryDialog({
                                     <BookOpen className="size-4 text-tb-primary" />
                                     Sejarah/Cerita Terkait
                                 </h3>
-                                <Button asChild size="sm" variant="outline">
-                                    <Link
-                                        href={`${peopleRoutes.edit({ person: Number(person.id) }).url}#related-stories`}
+                                {canEdit ? (
+                                    <Button asChild size="sm" variant="outline">
+                                        <Link
+                                            href={`${peopleRoutes.edit({ person: Number(person.id) }).url}#related-stories`}
+                                        >
+                                            Tambah Link
+                                        </Link>
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        disabled
+                                        title={editLockedHint}
                                     >
                                         Tambah Link
-                                    </Link>
-                                </Button>
+                                    </Button>
+                                )}
                             </div>
                             {person.relatedStories &&
                             person.relatedStories.length > 0 ? (
@@ -499,8 +518,7 @@ export function PersonSummaryDialog({
                                     Lihat Detail
                                 </Link>
                             </Button>
-                            {allowBranchEntry &&
-                                person.gender !== 'P' && (
+                            {allowBranchEntry && person.gender !== 'P' && (
                                 <Button
                                     type="button"
                                     variant="outline"
@@ -516,26 +534,37 @@ export function PersonSummaryDialog({
                                     Tambah Anggota Ranting
                                 </Button>
                             )}
-                            <Button asChild>
-                                <Link
-                                    href={peopleRoutes.edit(
-                                        {
-                                            person: Number(person.id),
-                                        },
-                                        {
-                                            query: versionTreeId
-                                                ? {
-                                                      version_tree:
-                                                          versionTreeId,
-                                                  }
-                                                : {},
-                                        },
-                                    )}
+                            {canEdit ? (
+                                <Button asChild>
+                                    <Link
+                                        href={peopleRoutes.edit(
+                                            {
+                                                person: Number(person.id),
+                                            },
+                                            {
+                                                query: versionTreeId
+                                                    ? {
+                                                          version_tree:
+                                                              versionTreeId,
+                                                      }
+                                                    : {},
+                                            },
+                                        )}
+                                    >
+                                        <Pencil className="size-4" />
+                                        Edit
+                                    </Link>
+                                </Button>
+                            ) : (
+                                <Button
+                                    type="button"
+                                    disabled
+                                    title={editLockedHint}
                                 >
                                     <Pencil className="size-4" />
                                     Edit
-                                </Link>
-                            </Button>
+                                </Button>
+                            )}
                         </div>
                     </DialogFooter>
                 </DialogContent>

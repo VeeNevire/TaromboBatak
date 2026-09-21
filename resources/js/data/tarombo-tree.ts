@@ -18,6 +18,9 @@ export type TaromboPersonRow = {
     image?: string | null;
     bio?: string;
     createdBy?: string | null;
+    canEdit?: boolean;
+    fatherName?: string | null;
+    fatherMarga?: string | null;
     relatedStories?: RelatedStory[];
     location?: RegionLocation;
     chain?: string | null;
@@ -58,6 +61,9 @@ export type TaromboPerson = {
     image?: string | null;
     bio?: string;
     createdBy?: string | null;
+    canEdit?: boolean;
+    fatherName?: string | null;
+    fatherMarga?: string | null;
     relatedStories?: RelatedStory[];
     location?: RegionLocation;
     chain?: string | null;
