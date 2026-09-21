@@ -60,6 +60,7 @@ export function AppSidebar() {
         unreadContactCount,
         unreadGroupMessageCount,
         unreadNewsFeedCount,
+        unreadMargaMessageCount,
     } = usePage().props;
     const isAdmin = auth.user?.role === 'admin';
     const isStaff = isAdmin || auth.user?.role === 'subadmin';
@@ -86,6 +87,7 @@ export function AppSidebar() {
                     title: 'Daftar Marga',
                     href: marga.index(),
                     icon: Shapes,
+                    badge: unreadMargaMessageCount,
                 },
                 {
                     title: 'Pohon Tarombo',

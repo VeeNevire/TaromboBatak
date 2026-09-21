@@ -9,7 +9,6 @@ use App\Models\FeedPost;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Models\Story;
-use App\Models\User;
 use App\Services\MargaIdentityPersonService;
 use App\Services\TaromboStatisticsService;
 use App\Services\TaromboTreeService;
@@ -30,13 +29,7 @@ class MargaController extends Controller
     public function index(Request $request): Response
     {
         $canManage = $request->user()?->isStaff() ?? false;
-
-        $contributorsByMarga = User::query()
-            ->whereIn('role', ['contributor_main', 'contributor_member'])
-            ->whereNotNull('marga_id')
-            ->orderBy('name')
-            ->get(['id', 'name', 'marga_id', 'role'])
-            ->groupBy('marga_id');
+        $unreadByMarga = $request->user()?->unreadMargaMessageCounts() ?? collect();
 
         $margas = Marga::query()
             ->when(! $canManage, fn ($query) => $query->where('is_public', true))
@@ -44,6 +37,9 @@ class MargaController extends Controller
             ->withCount('people')
             ->orderBy('name')
             ->get()
+            // Marga with unread chat messages float to the top; the stable sort
+            // keeps the name order within each group.
+            ->sortBy(fn (Marga $marga) => $unreadByMarga->get($marga->id, 0) > 0 ? 0 : 1)
             ->map(fn (Marga $marga) => [
                 'id' => $marga->id,
                 'name' => $marga->name,
@@ -55,13 +51,9 @@ class MargaController extends Controller
                 'identity_person_name' => $marga->identityPerson?->name,
                 'people_count' => $marga->people_count,
                 'is_public' => $marga->is_public,
-                'contributors' => ($contributorsByMarga->get($marga->id) ?? collect())
-                    ->map(fn (User $contributor) => [
-                        'id' => $contributor->id,
-                        'name' => $contributor->name,
-                        'role' => $contributor->role,
-                    ])->values(),
-            ]);
+                'unread_count' => (int) ($unreadByMarga->get($marga->id) ?? 0),
+            ])
+            ->values();
 
         return Inertia::render('marga/index', [
             'margas' => $margas,

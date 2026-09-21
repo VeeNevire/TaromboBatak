@@ -6,16 +6,13 @@ use App\Http\Requests\StoreSharedFamilyTreePersonRequest;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeAppendRequest;
 use App\Models\FamilyTreeNode;
-use App\Models\Marga;
 use App\Models\Person;
 use App\Notifications\FamilyTreeAppendSubmitted;
 use App\Services\FamilyTreeActivityLogger;
 use App\Services\SharedFamilyTreeAppendService;
-use App\Services\TaromboTreeService;
 use App\Services\TreeActivityLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
@@ -28,7 +25,6 @@ class SharedFamilyTreePersonController extends Controller
         Request $request,
         FamilyTree $familyTree,
         SharedFamilyTreeAppendService $appendService,
-        TaromboTreeService $tarombo,
     ): Response {
         Gate::authorize('append', $familyTree);
 
@@ -42,6 +38,11 @@ class SharedFamilyTreePersonController extends Controller
             ->get();
         $fatherNodes = $nodes->filter(
             fn (FamilyTreeNode $node) => $node->person->gender !== 'P',
+        );
+        // Only fathers without descendants in this tree can take a new member.
+        $parentNodeIds = $nodes->pluck('father_node_id')->filter()->unique();
+        $fatherOptionNodes = $fatherNodes->reject(
+            fn (FamilyTreeNode $node) => $parentNodeIds->contains($node->id),
         );
         $fatherPersonId = $request->integer('father_person_id');
         $initialFatherNode = $fatherPersonId > 0
@@ -70,23 +71,6 @@ class SharedFamilyTreePersonController extends Controller
         $motherNodesByPersonId = $nodes
             ->filter(fn (FamilyTreeNode $node) => $node->person->gender === 'P')
             ->keyBy('person_id');
-        $rootPersonId = $familyTree->root_person_id;
-        $marga = Marga::query()
-            ->where('identity_person_id', $rootPersonId)
-            ->first();
-
-        if ($marga === null) {
-            $rootMargaId = $familyTree->rootPerson()->value('marga_id');
-            $marga = $rootMargaId === null
-                ? null
-                : Marga::query()->find($rootMargaId);
-        }
-
-        $branchFatherOptions = $this->branchFatherOptions(
-            $marga,
-            $tarombo,
-            $fatherNodes->pluck('person_id'),
-        );
 
         return Inertia::render('people/shared-tree-person-form', [
             'familyTree' => [
@@ -96,14 +80,13 @@ class SharedFamilyTreePersonController extends Controller
             ],
             'initialFatherNodeId' => $initialFatherNode?->id,
             'initialBranchFather' => $initialBranchFather,
-            'branchFatherOptions' => $branchFatherOptions->all(),
-            'fatherOptions' => $fatherNodes
+            'fatherOptions' => $fatherOptionNodes
                 ->map(fn (FamilyTreeNode $node) => [
                     'id' => $node->id,
                     'name' => $node->person->name,
                     'chain' => $node->chain,
                 ])->values()->all(),
-            'motherOptionsByFather' => $fatherNodes
+            'motherOptionsByFather' => $fatherOptionNodes
                 ->mapWithKeys(fn (FamilyTreeNode $fatherNode) => [
                     (string) $fatherNode->id => $fatherNode->person->wives
                         ->map(fn (Person $wife) => $motherNodesByPersonId->get($wife->id))
@@ -115,38 +98,6 @@ class SharedFamilyTreePersonController extends Controller
                         ])->values()->all(),
                 ])->all(),
         ]);
-    }
-
-    /**
-     * @param  Collection<int, int>  $treeFatherPersonIds
-     * @return Collection<int, array{id: int, name: string}>
-     */
-    private function branchFatherOptions(
-        ?Marga $marga,
-        TaromboTreeService $tarombo,
-        Collection $treeFatherPersonIds,
-    ): Collection {
-        if ($marga === null) {
-            return collect();
-        }
-
-        $personIds = collect($tarombo->rowsForMarga($marga, 'lower'))
-            ->pluck('id')
-            ->map(fn (mixed $id) => (int) $id);
-
-        return Person::query()
-            ->whereKey($personIds)
-            ->whereNotIn('id', $treeFatherPersonIds)
-            ->where(fn ($query) => $query
-                ->whereNull('gender')
-                ->orWhere('gender', '!=', 'P'))
-            ->whereDoesntHave('children')
-            ->orderBy('name')
-            ->get(['id', 'name'])
-            ->map(fn (Person $person) => [
-                'id' => $person->id,
-                'name' => $person->name,
-            ]);
     }
 
     public function store(
