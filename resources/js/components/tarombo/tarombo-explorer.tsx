@@ -386,6 +386,7 @@ export function TaromboExplorer({
     const [submittingIdentity, setSubmittingIdentity] = useState(false);
     const [selectedId, setSelectedId] = useState<string | null>(initialFocusId);
     const [search, setSearch] = useState('');
+    const [searchedId, setSearchedId] = useState<string | null>(null);
     const [searchOpen, setSearchOpen] = useState(false);
     const [history, setHistory] = useState<string[]>([]);
     const [expanded, setExpanded] = useState<'diagram' | 'tree' | null>(null);
@@ -551,11 +552,12 @@ export function TaromboExplorer({
     const selectedTreeRootId = selectedAccountTree?.rootPersonId
         ? String(selectedAccountTree.rootPersonId)
         : null;
-    const verticalFocusId =
+    const accountRootId =
         selectedTreeRootId &&
         verticalPeople.some((person) => person.id === selectedTreeRootId)
             ? selectedTreeRootId
-            : ancestorFocusId;
+            : null;
+    const verticalFocusId = accountRootId ?? ancestorFocusId;
     const ancestorPeople = verticalFocusId
         ? ancestorPath(verticalPeople, verticalFocusId)
         : [];
@@ -563,7 +565,19 @@ export function TaromboExplorer({
         ancestorPeople.length > 0
             ? descendantSubtree(verticalPeople, ancestorPeople[0].id)
             : verticalPeople;
-    const lineagePath = ancestorPeople.map((person) => person.id);
+    // In an account tree the tree's root person is fixed (its ancestors reach
+    // up to the top of the tree), but a searched/selected person elsewhere in
+    // the same tree still needs its own path drawn (and opened) from the top.
+    const accountFocusPath =
+        accountRootId && ancestorFocusId
+            ? ancestorPath(verticalPeople, ancestorFocusId)
+            : [];
+    const lineagePath = (
+        accountFocusPath.length > 0 &&
+        accountFocusPath[0].id === ancestorPeople[0]?.id
+            ? accountFocusPath
+            : ancestorPeople
+    ).map((person) => person.id);
     const margaLowerLineagePath = useMemo(() => {
         if (!margaTree || margaTree.direction !== 'lower' || !margaIdentity) {
             return [] as string[];
@@ -658,9 +672,14 @@ export function TaromboExplorer({
             setHistory((prev) => [...prev, centerPersonId]);
         }
 
+        if (person.gender === 'P') {
+            setShowFemaleLineage(true);
+        }
+
         setSelectedId(person.id);
         setCenterPersonId(person.id);
         setAncestorFocusId(person.id);
+        setSearchedId(person.id);
         setSearch(person.name);
         setSearchOpen(false);
     };
@@ -1153,6 +1172,7 @@ export function TaromboExplorer({
                             margaTree ? false : showFemaleLineage
                         }
                         collapseDepth={verticalTreeCollapseDepth}
+                        scrollToLineageEnd={searchedId !== null}
                         detachedPeople={margaDetachedRoots}
                         showNodeAvatar={showNodeCircles}
                         showSpouseNames={showSpouseNames}
@@ -1533,6 +1553,9 @@ export function TaromboExplorer({
                                                 compactTerminalBranches={
                                                     margaTree?.direction ===
                                                     'lower'
+                                                }
+                                                scrollToLineageEnd={
+                                                    searchedId !== null
                                                 }
                                                 nodeIdPrefix="tarombo-mobile-tree-node"
                                                 currentUserId={
