@@ -58,8 +58,11 @@ class LogSubAdminActivity
     {
         $person = $request->route('person');
 
+        // Load the full father model: a partial select (e.g. father:id,name)
+        // would hide father.marga_id from the edit form's payload and make an
+        // existing father look missing.
         return $person instanceof Person
-            ? $person->loadMissing('father:id,name')
+            ? $person->loadMissing('father')
             : null;
     }
 
