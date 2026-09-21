@@ -802,3 +802,76 @@ test('a version form saves wives and their fathers for the selected father', fun
     expect($father->wives()->whereKey($wife->id)->exists())->toBeTrue()
         ->and($wife->father?->name)->toBe('Ayah Istri Darma');
 });
+
+test('a version edit can attach a father from the same marga that is not yet in the version', function () {
+    $marga = Marga::factory()->create();
+    $user = User::factory()->withMarga($marga->id)->create();
+
+    $grandfather = Person::factory()->create(['name' => 'Ompu Raja', 'marga_id' => $marga->id]);
+    $father = Person::factory()->create([
+        'name' => 'Tuan Sihubil',
+        'marga_id' => $marga->id,
+        'father_id' => $grandfather->id,
+    ]);
+    $focus = Person::factory()->create(['name' => 'Anak Fokus', 'marga_id' => $marga->id]);
+
+    $tree = FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $focus->id,
+        'name' => 'Keluarga Fokus',
+    ]);
+    $focusNode = FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $focus->id, 'chain' => '1']);
+
+    $this->actingAs($user)
+        ->put(route('people.update', ['person' => $focus, 'version_tree' => $tree->id]), [
+            'name' => $focus->name,
+            'gender' => 'L',
+            'marga_id' => $marga->id,
+            'birth_order' => 1,
+            'sibling_count' => 1,
+            'father' => ['id' => $father->id, 'name' => $father->name, 'marga_id' => $marga->id],
+            'mothers' => [],
+            'children' => [],
+            'ownChildren' => [],
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    $fatherNode = $tree->nodes()->where('person_id', $father->id)->firstOrFail();
+    $grandfatherNode = $tree->nodes()->where('person_id', $grandfather->id)->firstOrFail();
+
+    expect($focusNode->fresh()->father_node_id)->toBe($fatherNode->id)
+        ->and($fatherNode->father_node_id)->toBe($grandfatherNode->id);
+});
+
+test('a version edit rejects a father from another marga', function () {
+    $marga = Marga::factory()->create();
+    $otherMarga = Marga::factory()->create();
+    $user = User::factory()->withMarga($marga->id)->create();
+
+    $outsider = Person::factory()->create(['name' => 'Ayah Marga Lain', 'marga_id' => $otherMarga->id]);
+    $focus = Person::factory()->create(['name' => 'Anak Fokus', 'marga_id' => $marga->id]);
+
+    $tree = FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $focus->id,
+        'name' => 'Keluarga Fokus',
+    ]);
+    FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $focus->id, 'chain' => '1']);
+
+    $this->actingAs($user)
+        ->put(route('people.update', ['person' => $focus, 'version_tree' => $tree->id]), [
+            'name' => $focus->name,
+            'gender' => 'L',
+            'marga_id' => $marga->id,
+            'birth_order' => 1,
+            'sibling_count' => 1,
+            'father' => ['id' => $outsider->id, 'name' => $outsider->name, 'marga_id' => $otherMarga->id],
+            'mothers' => [],
+            'children' => [],
+            'ownChildren' => [],
+        ])
+        ->assertSessionHasErrors('father.id');
+
+    expect($tree->nodes()->where('person_id', $outsider->id)->exists())->toBeFalse();
+});
