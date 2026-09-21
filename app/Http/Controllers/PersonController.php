@@ -514,6 +514,25 @@ class PersonController extends Controller
         );
         $selectedVersionId = $selectedVersionName !== null ? $request->integer('version_tree') : null;
 
+        // The shared Person graph may not carry a father even though a family
+        // tree version records one. Default to that version so the form shows
+        // the real siblings and new ones attach under the correct father.
+        if ($selectedVersionId === null && $person->father_id === null) {
+            $selectedVersionId = FamilyTreeNode::query()
+                ->whereIn('family_tree_id', collect($versionTrees)->pluck('id'))
+                ->where('person_id', $person->id)
+                ->whereNotNull('father_node_id')
+                ->oldest('family_tree_id')
+                ->value('family_tree_id');
+
+            if ($selectedVersionId !== null) {
+                $selectedVersionName = data_get(
+                    collect($versionTrees)->firstWhere('id', $selectedVersionId),
+                    'name',
+                );
+            }
+        }
+
         $personMargaScope = $isStaff ? null : ($user->isContributor() ? $person->marga_id : $user->marga_id);
         $structureTreeId = $selectedVersionId ?? FamilyTree::query()
             ->whereNull('based_on_id')

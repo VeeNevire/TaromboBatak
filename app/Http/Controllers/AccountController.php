@@ -295,8 +295,11 @@ class AccountController extends Controller
     private function managedMargaOptions(): array
     {
         return Marga::query()
-            ->whereNotNull('identity_person_id')
-            ->whereHas('people')
+            ->where(fn ($query) => $query
+                ->where('is_public', true)
+                ->orWhere(fn ($query) => $query
+                    ->whereNotNull('identity_person_id')
+                    ->whereHas('people')))
             ->orderBy('name')
             ->get(['id', 'name'])
             ->map(fn (Marga $marga) => ['id' => $marga->id, 'name' => $marga->name])

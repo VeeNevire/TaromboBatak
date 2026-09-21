@@ -30,6 +30,40 @@ test('account form exposes only margas with lower-tree data for contributor mana
             ->where('managedMargaIds', []));
 });
 
+test('account form exposes public margas without lower-tree data for management', function () {
+    $admin = User::factory()->asAdmin()->create();
+    $public = Marga::factory()->public()->create(['name' => 'Marga Publik']);
+
+    $this->actingAs($admin)
+        ->get(route('accounts.create'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('managedMargaOptions', fn ($options) => collect($options)
+                ->contains('id', $public->id)));
+});
+
+test('admin can assign a public marga without lower-tree data to a contributor', function () {
+    $admin = User::factory()->asAdmin()->create();
+    $public = Marga::factory()->public()->create(['name' => 'Marga Publik']);
+
+    $this->actingAs($admin)
+        ->post(route('accounts.store'), [
+            'name' => 'Kontributor Publik',
+            'email' => 'kontributor-publik@example.com',
+            'role' => 'contributor_main',
+            'marga_id' => $public->id,
+            'managed_marga_ids' => [$public->id],
+            'password' => 'password',
+            'password_confirmation' => 'password',
+        ])
+        ->assertRedirect(route('accounts.index'))
+        ->assertSessionHasNoErrors();
+
+    $account = User::query()->where('email', 'kontributor-publik@example.com')->firstOrFail();
+
+    expect($account->managedMargas()->pluck('margas.id')->all())->toBe([$public->id]);
+});
+
 test('admin can assign multiple lower-tree margas to a contributor', function () {
     $admin = User::factory()->asAdmin()->create();
     $first = margaWithLowerTree('Sitorus');

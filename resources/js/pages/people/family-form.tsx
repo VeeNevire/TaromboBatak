@@ -1310,16 +1310,16 @@ export default function FamilyForm({
         is_public: person?.is_public ?? false,
         cascade_public_descendants: false,
         father: person?.father
-              ? {
-                    id: person.father.id ?? null,
-                    name: person.father.name ?? '',
-                    alias: person.father.alias ?? '',
-                    birth_year: person.father.birth_year ?? '',
-                    death_year: person.father.death_year ?? '',
-                    marga_id: person.father.marga_id ?? lockedMarga?.id ?? null,
-                    new_marga: '',
-                }
-              : emptyParent(),
+            ? {
+                  id: person.father.id ?? null,
+                  name: person.father.name ?? '',
+                  alias: person.father.alias ?? '',
+                  birth_year: person.father.birth_year ?? '',
+                  death_year: person.father.death_year ?? '',
+                  marga_id: person.father.marga_id ?? lockedMarga?.id ?? null,
+                  new_marga: '',
+              }
+            : emptyParent(),
         mothers: initialMothers,
         children:
             person?.children && person.children.length > 0
@@ -1460,6 +1460,8 @@ export default function FamilyForm({
 
     const birthOrder = Number(data.birth_order) || 1;
     const siblingCount = Number(data.sibling_count) || 1;
+    const hasFather =
+        Boolean(data.father?.id) || (data.father?.name?.trim() ?? '') !== '';
     const listFamilyTrees = familyTrees;
     const selectedVersionNumber =
         selectedVersionId === null
@@ -1815,6 +1817,10 @@ export default function FamilyForm({
     };
 
     const addChild = () => {
+        if (!hasFather) {
+            return;
+        }
+
         setData('children', [...data.children, emptyRow()]);
         setData('sibling_count', siblingCount + 1);
     };
@@ -1856,6 +1862,10 @@ export default function FamilyForm({
     };
 
     const insertChildAbove = (index: number) => {
+        if (!hasFather) {
+            return;
+        }
+
         const next = [...data.children];
         next.splice(index, 0, emptyRow());
         setData('children', next);
@@ -2266,16 +2276,6 @@ export default function FamilyForm({
                         : {},
             }).action;
 
-            transform((values) => {
-                if (values.family_tree_name !== initialFamilyName) {
-                    return values;
-                }
-
-                const { family_tree_name: _familyTreeName, ...unchangedValues } = values;
-
-                return unchangedValues;
-            });
-
             post(updateAction, {
                 forceFormData: true,
                 onError,
@@ -2392,36 +2392,33 @@ export default function FamilyForm({
                         Nama {label}
                     </Label>
                     <NameCombobox
-                            value={entry.name}
-                            onChange={(value) =>
-                                setParentEntry(key, 'name', value)
-                            }
-                            suggestions={
-                                key === 'father' && canChooseExistingParent
-                                    ? selectableFatherSuggestions
-                                    : canChooseExistingParent
-                                      ? nameSuggestions
-                                      : []
-                            }
-                            placeholder={`Nama ${label.toLowerCase()}`}
-                            allowNa={canChooseExistingParent}
-                            showSiblingPreview
-                            siblingSuggestions={
-                                key === 'father' ? nameSuggestions : undefined
-                            }
-                            showChain={key !== 'father'}
-                            maxResults={key === 'father' ? null : undefined}
-                            onSelect={
-                                key === 'father'
-                                    ? (suggestion) =>
-                                          updateParent(key, {
-                                              id: suggestion.id,
-                                              name: suggestion.name,
-                                              marga_id:
-                                                  suggestion.marga_id ?? null,
-                                          })
-                                    : undefined
-                            }
+                        value={entry.name}
+                        onChange={(value) => setParentEntry(key, 'name', value)}
+                        suggestions={
+                            key === 'father' && canChooseExistingParent
+                                ? selectableFatherSuggestions
+                                : canChooseExistingParent
+                                  ? nameSuggestions
+                                  : []
+                        }
+                        placeholder={`Nama ${label.toLowerCase()}`}
+                        allowNa={canChooseExistingParent}
+                        showSiblingPreview
+                        siblingSuggestions={
+                            key === 'father' ? nameSuggestions : undefined
+                        }
+                        showChain={key !== 'father'}
+                        maxResults={key === 'father' ? null : undefined}
+                        onSelect={
+                            key === 'father'
+                                ? (suggestion) =>
+                                      updateParent(key, {
+                                          id: suggestion.id,
+                                          name: suggestion.name,
+                                          marga_id: suggestion.marga_id ?? null,
+                                      })
+                                : undefined
+                        }
                     />
                     <InputError message={errors[`${errorPrefix}.name`]} />
                     <div className="grid gap-1.5 pt-2">
@@ -2708,6 +2705,11 @@ export default function FamilyForm({
                 .cascade_public_descendants;
         }
 
+        if (isEdit && submitData.family_tree_name === initialFamilyName) {
+            delete (submitData as { family_tree_name?: string })
+                .family_tree_name;
+        }
+
         return {
             ...submitData,
             children: sorted,
@@ -2796,9 +2798,9 @@ export default function FamilyForm({
                                                     className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                                 />
                                                 <p className="text-xs text-tb-on-surface-variant">
-                                                    Berlaku untuk cabang ini
-                                                    dan seluruh keturunannya.
-                                                    Cabang lain tidak berubah.
+                                                    Berlaku untuk cabang ini dan
+                                                    seluruh keturunannya. Cabang
+                                                    lain tidak berubah.
                                                 </p>
                                                 <InputError
                                                     message={
@@ -4533,9 +4535,16 @@ export default function FamilyForm({
                                                                     index,
                                                                 )
                                                             }
+                                                            disabled={
+                                                                !hasFather
+                                                            }
                                                             aria-label="Sisipkan saudara di atas"
-                                                            title="Sisipkan saudara di atas"
-                                                            className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-tb-outline-variant text-tb-outline transition-colors hover:border-tb-primary hover:text-tb-primary"
+                                                            title={
+                                                                hasFather
+                                                                    ? 'Sisipkan saudara di atas'
+                                                                    : 'Isi data Ayah terlebih dahulu'
+                                                            }
+                                                            className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-tb-outline-variant text-tb-outline transition-colors hover:border-tb-primary hover:text-tb-primary disabled:cursor-not-allowed disabled:opacity-50"
                                                         >
                                                             <Plus className="h-3.5 w-3.5" />
                                                         </button>
@@ -4857,10 +4866,22 @@ export default function FamilyForm({
                                     type="button"
                                     variant="outline"
                                     onClick={addChild}
+                                    disabled={!hasFather}
+                                    title={
+                                        hasFather
+                                            ? undefined
+                                            : 'Isi data Ayah terlebih dahulu untuk menambah saudara.'
+                                    }
                                     className="mt-1 w-full border-dashed border-tb-outline-variant text-tb-primary hover:bg-tb-primary/5"
                                 >
                                     <Plus className="size-4" /> Tambah Saudara
                                 </Button>
+                                {!hasFather && (
+                                    <p className="text-xs text-tb-on-surface-variant">
+                                        Isi data Ayah terlebih dahulu untuk
+                                        menambah saudara.
+                                    </p>
+                                )}
                             </CardContent>
                         </Card>
 

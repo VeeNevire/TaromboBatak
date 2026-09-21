@@ -119,7 +119,9 @@ export default function AccountForm({
                 }
             })
             .catch((error: unknown) => {
-                if (!(error instanceof DOMException && error.name === 'AbortError')) {
+                if (!(
+                    error instanceof DOMException && error.name === 'AbortError'
+                )) {
                     setDistrictOptions([]);
                 }
             })
@@ -156,7 +158,9 @@ export default function AccountForm({
                 }
             })
             .catch((error: unknown) => {
-                if (!(error instanceof DOMException && error.name === 'AbortError')) {
+                if (!(
+                    error instanceof DOMException && error.name === 'AbortError'
+                )) {
                     setVillageOptions([]);
                 }
             })
@@ -193,10 +197,10 @@ export default function AccountForm({
         }));
 
         if (account) {
-put(accounts.update(account.id).url);
-} else {
-post(accounts.store().url);
-}
+            put(accounts.update(account.id).url);
+        } else {
+            post(accounts.store().url);
+        }
     };
 
     return (
@@ -311,7 +315,8 @@ post(accounts.store().url);
                                         Domisili
                                     </div>
                                     <p className="mt-1 text-xs text-tb-on-surface-variant">
-                                        Opsional. Jika diisi, pilih alamat secara lengkap dan berurutan.
+                                        Opsional. Jika diisi, pilih alamat
+                                        secara lengkap dan berurutan.
                                     </p>
                                 </div>
                                 <Field
@@ -323,7 +328,10 @@ post(accounts.store().url);
                                         id="province_code"
                                         value={data.province_code}
                                         onChange={(event) => {
-                                            setData('province_code', event.target.value);
+                                            setData(
+                                                'province_code',
+                                                event.target.value,
+                                            );
                                             setData('regency_code', '');
                                             setData('district_code', '');
                                             setData('village_code', '');
@@ -336,7 +344,10 @@ post(accounts.store().url);
                                     >
                                         <option value="">Pilih provinsi</option>
                                         {regions.map((province) => (
-                                            <option key={province.code} value={province.code}>
+                                            <option
+                                                key={province.code}
+                                                value={province.code}
+                                            >
                                                 {province.name}
                                             </option>
                                         ))}
@@ -352,14 +363,20 @@ post(accounts.store().url);
                                         value={data.regency_code}
                                         disabled={!data.province_code}
                                         onChange={(event) => {
-                                            const regencyCode = event.target.value;
+                                            const regencyCode =
+                                                event.target.value;
 
-                                            setData('regency_code', regencyCode);
+                                            setData(
+                                                'regency_code',
+                                                regencyCode,
+                                            );
                                             setData('district_code', '');
                                             setData('village_code', '');
                                             setDistrictOptions([]);
                                             setVillageOptions([]);
-                                            setDistrictsLoading(Boolean(regencyCode));
+                                            setDistrictsLoading(
+                                                Boolean(regencyCode),
+                                            );
                                             setVillagesLoading(false);
                                         }}
                                         className="h-10 rounded-md border border-tb-outline-variant bg-tb-surface-bright px-3 text-sm text-tb-on-surface focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
@@ -370,7 +387,10 @@ post(accounts.store().url);
                                                 : 'Pilih provinsi dahulu'}
                                         </option>
                                         {regencyOptions.map((regency) => (
-                                            <option key={regency.code} value={regency.code}>
+                                            <option
+                                                key={regency.code}
+                                                value={regency.code}
+                                            >
                                                 {regency.name}
                                             </option>
                                         ))}
@@ -384,15 +404,24 @@ post(accounts.store().url);
                                     <select
                                         id="district_code"
                                         value={data.district_code}
-                                        disabled={!data.regency_code || districtsLoading}
+                                        disabled={
+                                            !data.regency_code ||
+                                            districtsLoading
+                                        }
                                         aria-busy={districtsLoading}
                                         onChange={(event) => {
-                                            const districtCode = event.target.value;
+                                            const districtCode =
+                                                event.target.value;
 
-                                            setData('district_code', districtCode);
+                                            setData(
+                                                'district_code',
+                                                districtCode,
+                                            );
                                             setData('village_code', '');
                                             setVillageOptions([]);
-                                            setVillagesLoading(Boolean(districtCode));
+                                            setVillagesLoading(
+                                                Boolean(districtCode),
+                                            );
                                         }}
                                         className="h-10 rounded-md border border-tb-outline-variant bg-tb-surface-bright px-3 text-sm text-tb-on-surface focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                                     >
@@ -404,7 +433,10 @@ post(accounts.store().url);
                                                   : 'Pilih kabupaten/kota dahulu'}
                                         </option>
                                         {districtOptions.map((district) => (
-                                            <option key={district.code} value={district.code}>
+                                            <option
+                                                key={district.code}
+                                                value={district.code}
+                                            >
                                                 {district.name}
                                             </option>
                                         ))}
@@ -418,10 +450,16 @@ post(accounts.store().url);
                                     <select
                                         id="village_code"
                                         value={data.village_code}
-                                        disabled={!data.district_code || villagesLoading}
+                                        disabled={
+                                            !data.district_code ||
+                                            villagesLoading
+                                        }
                                         aria-busy={villagesLoading}
                                         onChange={(event) =>
-                                            setData('village_code', event.target.value)
+                                            setData(
+                                                'village_code',
+                                                event.target.value,
+                                            )
                                         }
                                         className="h-10 rounded-md border border-tb-outline-variant bg-tb-surface-bright px-3 text-sm text-tb-on-surface focus:border-tb-primary focus:ring-2 focus:ring-tb-primary/20 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                                     >
@@ -433,7 +471,10 @@ post(accounts.store().url);
                                                   : 'Pilih kecamatan dahulu'}
                                         </option>
                                         {villageOptions.map((village) => (
-                                            <option key={village.code} value={village.code}>
+                                            <option
+                                                key={village.code}
+                                                value={village.code}
+                                            >
                                                 {village.name}
                                             </option>
                                         ))}
@@ -451,13 +492,16 @@ post(accounts.store().url);
                                             type="button"
                                             variant="outline"
                                             className="w-fit border-tb-primary text-tb-primary hover:bg-tb-primary/10"
-                                            onClick={() => setManagementOpen(true)}
+                                            onClick={() =>
+                                                setManagementOpen(true)
+                                            }
                                         >
                                             <ListTree className="size-4" />
                                             Daftar Manajemen Marga
                                         </Button>
                                         <span className="text-xs text-tb-on-surface-variant">
-                                            {data.managed_marga_ids.length} marga dipilih
+                                            {data.managed_marga_ids.length}{' '}
+                                            marga dipilih
                                         </span>
                                     </div>
                                 </Field>
@@ -530,7 +574,8 @@ post(accounts.store().url);
                     <DialogHeader>
                         <DialogTitle>Daftar Manajemen Marga</DialogTitle>
                         <DialogDescription>
-                            Pilih marga yang memiliki Pohon Silsilah Bawah dan dapat dikelola akun ini.
+                            Pilih marga publik atau marga yang memiliki Pohon
+                            Silsilah Bawah dan dapat dikelola akun ini.
                         </DialogDescription>
                     </DialogHeader>
                     <Input
@@ -545,22 +590,33 @@ post(accounts.store().url);
                                 className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 hover:bg-tb-surface-container"
                             >
                                 <Checkbox
-                                    checked={data.managed_marga_ids.includes(marga.id)}
+                                    checked={data.managed_marga_ids.includes(
+                                        marga.id,
+                                    )}
                                     onCheckedChange={(checked) =>
-                                        toggleManagedMarga(marga.id, checked === true)
+                                        toggleManagedMarga(
+                                            marga.id,
+                                            checked === true,
+                                        )
                                     }
                                 />
-                                <span className="text-sm text-tb-on-surface">{marga.name}</span>
+                                <span className="text-sm text-tb-on-surface">
+                                    {marga.name}
+                                </span>
                             </label>
                         ))}
                         {filteredManagedMargas.length === 0 && (
                             <p className="px-3 py-5 text-center text-sm text-tb-on-surface-variant">
-                                Marga dengan Pohon Silsilah Bawah belum tersedia.
+                                Belum ada marga publik atau Pohon Silsilah Bawah
+                                yang tersedia.
                             </p>
                         )}
                     </div>
                     <DialogFooter>
-                        <Button type="button" onClick={() => setManagementOpen(false)}>
+                        <Button
+                            type="button"
+                            onClick={() => setManagementOpen(false)}
+                        >
                             Selesai ({data.managed_marga_ids.length})
                         </Button>
                     </DialogFooter>

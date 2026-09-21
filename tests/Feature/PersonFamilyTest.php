@@ -561,7 +561,7 @@ test('the ordinary edit form keeps global children visible when a tree is missin
             ->where('person.ownChildren.2.id', $children[2]->id));
 });
 
-test('the base edit url reads parent structure from the owned base tree', function () {
+test('editing a person without a shared father reads parent structure from the tree version', function () {
     $marga = Marga::factory()->create();
     $user = User::factory()->withMarga($marga->id)->create();
     $father = Person::factory()->create([
@@ -594,9 +594,10 @@ test('the base edit url reads parent structure from the owned base tree', functi
         ->get(route('people.edit', $child))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('selectedVersionId', null)
+            ->where('selectedVersionId', $tree->id)
             ->where('person.father.id', $father->id)
-            ->where('person.father.name', 'Ayah dari Pohon'));
+            ->where('person.father.name', 'Ayah dari Pohon')
+            ->has('person.children', 1));
 });
 
 test('the member list exposes its family tree version for edit links', function () {
