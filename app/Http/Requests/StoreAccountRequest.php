@@ -55,7 +55,9 @@ class StoreAccountRequest extends FormRequest
             'managed_marga_ids.*' => [
                 'integer',
                 'distinct',
-                Rule::exists('margas', 'id')->whereNotNull('identity_person_id'),
+                Rule::exists('margas', 'id')->where(fn ($query) => $query
+                    ->where('is_public', true)
+                    ->orWhereNotNull('identity_person_id')),
             ],
             'password' => ['required', 'confirmed', Password::defaults()],
         ];
