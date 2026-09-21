@@ -49,12 +49,12 @@ type MargaItem = {
     identity_person_name: string | null;
     is_public: boolean;
     unread_count: number;
+    can_chat: boolean;
 };
 
 type Props = {
     margas: MargaItem[];
     canManage: boolean;
-    canSendContributorMessage: boolean;
     identityPersonOptions: IdentityPersonOption[];
 };
 
@@ -214,7 +214,6 @@ function ImageInput({
 export default function MargaIndex({
     margas,
     canManage,
-    canSendContributorMessage,
     identityPersonOptions,
 }: Props) {
     const [dialog, setDialog] = useState<null | 'create' | MargaItem>(null);
@@ -326,7 +325,7 @@ export default function MargaIndex({
                 <MargaDetailDialog
                     key={detailMarga.id}
                     marga={detailMarga}
-                    canSendMessage={canSendContributorMessage}
+                    canSendMessage={detailMarga.can_chat}
                     onClose={() => setDetailMarga(null)}
                 />
             )}
@@ -549,7 +548,7 @@ export default function MargaIndex({
                                                 </span>
                                             )}
                                         </div>
-                                        {canSendContributorMessage && (
+                                        {m.can_chat && (
                                             <div className="mt-1 flex items-center gap-2">
                                                 <Button
                                                     asChild

@@ -98,6 +98,14 @@ class User extends Authenticatable
         return in_array($this->role, ['contributor_main', 'contributor_member'], true);
     }
 
+    /**
+     * Whether this account is a contributor that manages the given marga.
+     */
+    public function isContributorOf(int $margaId): bool
+    {
+        return $this->isContributor() && $this->accessibleMargaIds()->contains($margaId);
+    }
+
     public function canReviewContributions(): bool
     {
         return $this->isAdmin() || $this->isContributor();
@@ -200,44 +208,37 @@ class User extends Authenticatable
     }
 
     /**
-     * Unread chat message count per visible marga, for any signed-in user.
-     * Margas with nothing unread are omitted.
+     * Unread marga chat messages per marga, keyed by marga id. Marga chats are
+     * private threads with a marga's contributors, so unread counts come from
+     * the threads tagged with that marga.
      *
-     * @return \Illuminate\Support\Collection<int, int> Keyed by marga id.
+     * @return \Illuminate\Support\Collection<int, int>
      */
     public function unreadMargaMessageCounts(): \Illuminate\Support\Collection
     {
-        $margaIds = Marga::query()
-            ->when(! $this->isStaff(), fn ($query) => $query->where('is_public', true))
-            ->pluck('id');
+        $threads = MargaChatConversation::query()
+            ->whereHas('conversation', fn ($query) => $query
+                ->where('user_one_id', $this->id)
+                ->orWhere('user_two_id', $this->id))
+            ->with(['conversation' => fn ($query) => $query
+                ->withCount(['messages as unread_count' => fn ($messages) => $messages
+                    ->where('sender_id', '!=', $this->id)
+                    ->whereNull('read_at')])])
+            ->get();
 
-        if ($margaIds->isEmpty()) {
-            return collect();
+        $counts = collect();
+
+        foreach ($threads as $thread) {
+            $count = (int) ($thread->conversation->unread_count ?? 0);
+
+            if ($count === 0) {
+                continue;
+            }
+
+            $counts[$thread->marga_id] = ($counts[$thread->marga_id] ?? 0) + $count;
         }
 
-        $reads = MargaChatRead::query()
-            ->where('user_id', $this->id)
-            ->whereIn('marga_id', $margaIds)
-            ->get(['marga_id', 'last_read_at'])
-            ->mapWithKeys(fn (MargaChatRead $read) => [$read->marga_id => $read->last_read_at]);
-
-        // ponytail: load-and-filter; move to a join if message volume grows.
-        return MargaMessage::query()
-            ->whereIn('marga_id', $margaIds)
-            ->where(fn ($query) => $query
-                ->whereNull('sender_id')
-                ->orWhere('sender_id', '!=', $this->id))
-            ->get(['id', 'marga_id', 'created_at'])
-            ->groupBy('marga_id')
-            ->map(function ($messages, int $margaId) use ($reads): int {
-                $readAt = $reads->get($margaId);
-
-                return $messages
-                    ->filter(fn (MargaMessage $message) => $readAt === null
-                        || $message->created_at->gt($readAt))
-                    ->count();
-            })
-            ->filter(fn (int $count) => $count > 0);
+        return $counts;
     }
 
     /** @return BelongsTo<Person, $this> */

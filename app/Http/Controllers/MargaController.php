@@ -29,7 +29,9 @@ class MargaController extends Controller
     public function index(Request $request): Response
     {
         $canManage = $request->user()?->isStaff() ?? false;
-        $unreadByMarga = $request->user()?->unreadMargaMessageCounts() ?? collect();
+        $viewer = $request->user();
+        $unreadByMarga = $viewer?->unreadMargaMessageCounts() ?? collect();
+        $canChat = $viewer !== null;
 
         $margas = Marga::query()
             ->when(! $canManage, fn ($query) => $query->where('is_public', true))
@@ -52,13 +54,13 @@ class MargaController extends Controller
                 'people_count' => $marga->people_count,
                 'is_public' => $marga->is_public,
                 'unread_count' => (int) ($unreadByMarga->get($marga->id) ?? 0),
+                'can_chat' => $canChat,
             ])
             ->values();
 
         return Inertia::render('marga/index', [
             'margas' => $margas,
             'canManage' => $canManage,
-            'canSendContributorMessage' => $request->user() !== null,
             'identityPersonOptions' => $canManage
                 ? app(MargaIdentityPersonService::class)->options()->all()
                 : [],

@@ -22,16 +22,25 @@ export default function MargaChat({
     marga: margaItem,
     members,
     messages: initialMessages,
+    is_contributor: isContributor,
 }: {
     marga: { id: number; name: string; color: string | null };
     members: Member[];
     messages: Message[];
+    is_contributor: boolean;
 }) {
     const { auth } = usePage().props;
     const endRef = useRef<HTMLDivElement>(null);
     const [messages, setMessages] = useState(initialMessages);
     const [syncedMessages, setSyncedMessages] = useState(initialMessages);
+    const [recipientId, setRecipientId] = useState<number | null>(
+        members[0]?.id ?? null,
+    );
     const form = useForm({ body: '' });
+
+    const activeRecipient = members.some((member) => member.id === recipientId)
+        ? recipientId
+        : (members[0]?.id ?? null);
 
     // Resync when the server sends fresh props (e.g. right after sending), so
     // the sender's own message shows even if the Reverb socket is offline.
@@ -40,18 +49,37 @@ export default function MargaChat({
         setMessages(initialMessages);
     }
 
-    useEcho<Message>(
-        `marga.${margaItem.id}`,
-        '.marga.message.sent',
+    useEcho<{
+        id: number;
+        sender_id: number;
+        body: string | null;
+        created_at: string | null;
+    }>(
+        `users.${auth.user.id}`,
+        '.message.sent',
         (incoming) => {
+            const member = members.find(
+                (item) => item.id === incoming.sender_id,
+            );
+
+            if (!member) {
+                return;
+            }
+
             setMessages((current) =>
                 [
                     ...current.filter((item) => item.id !== incoming.id),
-                    incoming,
+                    {
+                        id: incoming.id,
+                        sender_id: incoming.sender_id,
+                        sender_name: member.name,
+                        body: incoming.body ?? '',
+                        created_at: incoming.created_at,
+                    },
                 ].sort((a, b) => a.id - b.id),
             );
         },
-        [margaItem.id],
+        [auth.user.id, members],
     );
 
     useEffect(() => {
@@ -60,6 +88,11 @@ export default function MargaChat({
 
     const send = (event: FormEvent) => {
         event.preventDefault();
+        form.transform((data) =>
+            isContributor && activeRecipient
+                ? { ...data, recipient_id: activeRecipient }
+                : data,
+        );
         form.post(marga.messages.store(margaItem.id).url, {
             preserveScroll: true,
             onSuccess: () => form.reset(),
@@ -81,7 +114,7 @@ export default function MargaChat({
                             Chat Marga {margaItem.name}
                         </h1>
                         <p className="text-sm text-tb-on-surface-variant">
-                            {members.length} anggota dan pengurus marga
+                            {members.length} kontributor marga
                         </p>
                     </div>
                 </div>
@@ -124,36 +157,75 @@ export default function MargaChat({
                                 )}
                                 <div ref={endRef} />
                             </div>
-                            <form
-                                onSubmit={send}
-                                className="flex items-end gap-2 border-t border-tb-outline-variant pt-4"
-                            >
-                                <div className="flex-1">
-                                    <textarea
-                                        value={form.data.body}
-                                        onChange={(event) =>
-                                            form.setData(
-                                                'body',
-                                                event.target.value,
-                                            )
-                                        }
-                                        rows={2}
-                                        maxLength={2000}
-                                        placeholder="Tulis pesan untuk marga ini…"
-                                        className="w-full resize-none rounded-xl border border-tb-outline-variant bg-transparent px-3 py-2 text-sm outline-none focus:border-tb-primary"
-                                    />
-                                    <InputError message={form.errors.body} />
-                                </div>
-                                <Button
-                                    size="icon"
-                                    disabled={
-                                        form.processing ||
-                                        !form.data.body.trim()
-                                    }
+                            {isContributor && members.length === 0 ? (
+                                <p className="border-t border-tb-outline-variant pt-4 text-sm text-tb-on-surface-variant">
+                                    Belum ada pesan dari anggota untuk dibalas.
+                                </p>
+                            ) : (
+                                <form
+                                    onSubmit={send}
+                                    className="grid gap-2 border-t border-tb-outline-variant pt-4"
                                 >
-                                    <Send className="size-4" />
-                                </Button>
-                            </form>
+                                    {isContributor && (
+                                        <label className="grid gap-1 text-sm text-tb-on-surface-variant">
+                                            Balas ke
+                                            <select
+                                                value={activeRecipient ?? ''}
+                                                onChange={(event) =>
+                                                    setRecipientId(
+                                                        Number(
+                                                            event.target.value,
+                                                        ),
+                                                    )
+                                                }
+                                                className="h-10 w-full rounded-xl border border-tb-outline-variant bg-tb-surface-bright px-3 text-sm text-tb-on-surface"
+                                            >
+                                                {members.map((member) => (
+                                                    <option
+                                                        key={member.id}
+                                                        value={member.id}
+                                                    >
+                                                        {member.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </label>
+                                    )}
+                                    <div className="flex items-end gap-2">
+                                        <div className="flex-1">
+                                            <textarea
+                                                value={form.data.body}
+                                                onChange={(event) =>
+                                                    form.setData(
+                                                        'body',
+                                                        event.target.value,
+                                                    )
+                                                }
+                                                rows={2}
+                                                maxLength={2000}
+                                                placeholder={
+                                                    isContributor
+                                                        ? 'Tulis balasan…'
+                                                        : 'Tulis pesan untuk marga ini…'
+                                                }
+                                                className="w-full resize-none rounded-xl border border-tb-outline-variant bg-transparent px-3 py-2 text-sm outline-none focus:border-tb-primary"
+                                            />
+                                            <InputError
+                                                message={form.errors.body}
+                                            />
+                                        </div>
+                                        <Button
+                                            size="icon"
+                                            disabled={
+                                                form.processing ||
+                                                !form.data.body.trim()
+                                            }
+                                        >
+                                            <Send className="size-4" />
+                                        </Button>
+                                    </div>
+                                </form>
+                            )}
                         </CardContent>
                     </Card>
 
@@ -161,13 +233,15 @@ export default function MargaChat({
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <Users className="size-5" />
-                                Anggota
+                                {isContributor ? 'Pengirim' : 'Kontributor'}
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="max-h-80 space-y-2 overflow-y-auto">
                             {members.length === 0 && (
                                 <p className="text-sm text-tb-on-surface-variant">
-                                    Belum ada akun anggota terdaftar.
+                                    {isContributor
+                                        ? 'Belum ada anggota yang mengirim pesan.'
+                                        : 'Belum ada kontributor terdaftar.'}
                                 </p>
                             )}
                             {members.map((member) => (
