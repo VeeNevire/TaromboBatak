@@ -10,6 +10,7 @@ use App\Support\IndonesiaRegions;
 use App\Support\PersonShareCode;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 
 class TaromboTreeService
 {
@@ -62,8 +63,10 @@ class TaromboTreeService
                 : $query->where('marga_id', $margaId))
             ->with([
                 'marga',
+                'father:id,name,marga_id',
+                'father.marga:id,name',
                 'wives.father.marga',
-                'creator:id,name',
+                'creator:id,name,role',
                 'claimingUsers:id,name,role,current_person_id',
             ])
             ->get()
@@ -74,6 +77,10 @@ class TaromboTreeService
 
         return $nodes->map(function (array $node) use ($people, $includedPersonIds, $children): array {
             $person = $people->get($node['person_id']);
+            $hasFather = ! $node['pending_father'] && $node['father_person_id'] !== null;
+            $fatherPerson = $hasFather
+                ? ($people->get($node['father_person_id']) ?? $person->father)
+                : null;
 
             return [
                 'id' => (string) $person->id,
@@ -98,6 +105,9 @@ class TaromboTreeService
                 'image' => $person->image,
                 'bio' => $person->bio,
                 'createdBy' => $person->creator?->name,
+                'canEdit' => $this->canEdit($person, $hasFather),
+                'fatherName' => $fatherPerson?->name,
+                'fatherMarga' => $fatherPerson?->marga?->name,
                 'claimedAccounts' => $this->claimedAccountsFor($person),
                 'relatedStories' => $person->related_stories ?? [],
                 'location' => $this->locationFor($person),
@@ -128,43 +138,52 @@ class TaromboTreeService
         return $query
             ->with([
                 'marga',
+                'father:id,name,marga_id',
+                'father.marga:id,name',
                 'wives.father.marga',
-                'creator:id,name',
+                'creator:id,name,role',
                 'claimingUsers:id,name,role,current_person_id',
                 'children' => fn ($query) => $query
                     ->when($familyTreeId !== null, fn ($query) => $query
                         ->whereHas('familyTrees', fn ($query) => $query->whereKey($familyTreeId))),
             ])
             ->get()
-            ->map(fn (Person $person) => [
-                'id' => (string) $person->id,
-                'shareCode' => app(PersonShareCode::class)->for($person),
-                'name' => $person->name,
-                'alias' => $person->alias,
-                'marga' => $person->marga->name ?? 'Batak',
-                'hasMarga' => $person->marga_id !== null,
-                'parentId' => $person->father_id !== null ? (string) $person->father_id : null,
-                'birthYear' => $person->birth_year,
-                'birthOrder' => $person->birth_order,
-                'chain' => $person->chain,
-                'pending' => (bool) $person->pending_father,
-                'gender' => $person->gender,
-                'spouse' => $person->spouse,
-                'spouses' => $this->spousesFor($person),
-                'image' => $person->image,
-                'bio' => $person->bio,
-                'createdBy' => $person->creator?->name,
-                'claimedAccounts' => $this->claimedAccountsFor($person),
-                'relatedStories' => $person->related_stories ?? [],
-                'location' => $this->locationFor($person),
-                'childrenNames' => $person->children
-                    ->sortBy('birth_year')
-                    ->map(fn (Person $child) => $child->birth_year
-                        ? $child->name.' ('.$child->birth_year.')'
-                        : $child->name)
-                    ->values()
-                    ->all(),
-            ])
+            ->map(function (Person $person): array {
+                $hasFather = $person->father_id !== null;
+
+                return [
+                    'id' => (string) $person->id,
+                    'shareCode' => app(PersonShareCode::class)->for($person),
+                    'name' => $person->name,
+                    'alias' => $person->alias,
+                    'marga' => $person->marga->name ?? 'Batak',
+                    'hasMarga' => $person->marga_id !== null,
+                    'parentId' => $hasFather ? (string) $person->father_id : null,
+                    'birthYear' => $person->birth_year,
+                    'birthOrder' => $person->birth_order,
+                    'chain' => $person->chain,
+                    'pending' => (bool) $person->pending_father,
+                    'gender' => $person->gender,
+                    'spouse' => $person->spouse,
+                    'spouses' => $this->spousesFor($person),
+                    'image' => $person->image,
+                    'bio' => $person->bio,
+                    'createdBy' => $person->creator?->name,
+                    'canEdit' => $this->canEdit($person, $hasFather),
+                    'fatherName' => $person->father?->name,
+                    'fatherMarga' => $person->father?->marga?->name,
+                    'claimedAccounts' => $this->claimedAccountsFor($person),
+                    'relatedStories' => $person->related_stories ?? [],
+                    'location' => $this->locationFor($person),
+                    'childrenNames' => $person->children
+                        ->sortBy('birth_year')
+                        ->map(fn (Person $child) => $child->birth_year
+                            ? $child->name.' ('.$child->birth_year.')'
+                            : $child->name)
+                        ->values()
+                        ->all(),
+                ];
+            })
             ->values()
             ->all();
     }
@@ -255,6 +274,7 @@ class TaromboTreeService
                     'birthOrder' => $person->birth_order,
                     'chain' => $person->chain,
                     'pending' => (bool) $person->pending_father,
+                    'canEdit' => false,
                     'location' => $this->locationFor($person),
                 ])
                 ->values()
@@ -453,5 +473,29 @@ class TaromboTreeService
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * Whether the signed-in account may edit this person. A person that has a
+     * father and was not created by a regular "user" account is read-only
+     * (staff exempt).
+     */
+    private function canEdit(Person $person, bool $hasFather): bool
+    {
+        $user = Auth::user();
+
+        if (! $user instanceof User) {
+            return false;
+        }
+
+        if ($user->isStaff()) {
+            return true;
+        }
+
+        if ($hasFather && $person->creator?->role !== 'user') {
+            return false;
+        }
+
+        return true;
     }
 }
