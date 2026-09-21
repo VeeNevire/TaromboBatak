@@ -75,12 +75,21 @@ class TaromboTreeService
         $includedPersonIds = $nodes->pluck('person_id')->flip();
         $children = $nodes->groupBy('father_person_id');
 
-        return $nodes->map(function (array $node) use ($people, $includedPersonIds, $children): array {
+        // Fathers may sit in a different marga and be filtered out of $people;
+        // load them separately so the modal can still name the father.
+        $fatherPersons = Person::query()
+            ->whereIn('id', $nodes->pluck('father_person_id')->filter()->unique()->diff($people->keys()))
+            ->with('marga:id,name')
+            ->get(['id', 'name', 'marga_id'])
+            ->keyBy('id');
+
+        return $nodes->map(function (array $node) use ($people, $includedPersonIds, $children, $fatherPersons): array {
             $person = $people->get($node['person_id']);
-            $hasFather = ! $node['pending_father'] && $node['father_person_id'] !== null;
-            $fatherPerson = $hasFather
-                ? ($people->get($node['father_person_id']) ?? $person->father)
-                : null;
+            $nodeFatherId = $node['pending_father'] ? null : $node['father_person_id'];
+            $hasFather = $nodeFatherId !== null || $person->father_id !== null;
+            $fatherPerson = $nodeFatherId !== null
+                ? ($people->get($nodeFatherId) ?? $fatherPersons->get($nodeFatherId) ?? $person->father)
+                : $person->father;
 
             return [
                 'id' => (string) $person->id,
