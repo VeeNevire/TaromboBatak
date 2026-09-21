@@ -89,3 +89,76 @@ test('a father recorded only in the tree makes the person read-only and is shown
         ->and($rows[(string) $focus->id]['fatherName'])->toBe('Ayah Node')
         ->and($rows[(string) $focus->id]['fatherMarga'])->toBe('Silaban');
 });
+
+test('a father recorded only in the person graph is shown in the tree modal', function () {
+    $viewer = User::factory()->create(['role' => 'user']);
+    $contributor = User::factory()->asMainContributor()->create();
+    $marga = Marga::factory()->create(['name' => 'Silaban']);
+
+    $father = Person::factory()->create([
+        'name' => 'Ayah Global',
+        'marga_id' => $marga->id,
+        'created_by' => $contributor->id,
+    ]);
+    $focus = Person::factory()->create([
+        'name' => 'Fokus',
+        'marga_id' => $marga->id,
+        'father_id' => $father->id,
+        'created_by' => $contributor->id,
+    ]);
+
+    $tree = FamilyTree::create([
+        'user_id' => $contributor->id,
+        'root_person_id' => $focus->id,
+        'name' => 'Keluarga Uji',
+    ]);
+    FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $focus->id, 'chain' => '1']);
+
+    $this->actingAs($viewer);
+
+    $rows = collect(app(TaromboTreeService::class)->rowsForFamilyTree($tree))->keyBy('id');
+
+    expect($rows[(string) $focus->id]['fatherName'])->toBe('Ayah Global')
+        ->and($rows[(string) $focus->id]['fatherMarga'])->toBe('Silaban')
+        ->and($rows[(string) $focus->id]['canEdit'])->toBeFalse();
+});
+
+test('a father from a different marga is still named in the tree modal', function () {
+    $viewer = User::factory()->create(['role' => 'user']);
+    $contributor = User::factory()->asMainContributor()->create();
+    $marga = Marga::factory()->create(['name' => 'Silaban']);
+    $otherMarga = Marga::factory()->create(['name' => 'Hutabarat']);
+
+    $father = Person::factory()->create([
+        'name' => 'Ayah Beda Marga',
+        'marga_id' => $otherMarga->id,
+        'created_by' => $contributor->id,
+    ]);
+    $focus = Person::factory()->create([
+        'name' => 'Fokus',
+        'marga_id' => $marga->id,
+        'father_id' => null,
+        'created_by' => $contributor->id,
+    ]);
+
+    $tree = FamilyTree::create([
+        'user_id' => $contributor->id,
+        'root_person_id' => $focus->id,
+        'name' => 'Keluarga Uji',
+    ]);
+    $fatherNode = FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $father->id, 'chain' => '1']);
+    FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $focus->id,
+        'father_node_id' => $fatherNode->id,
+        'birth_order' => 1,
+        'chain' => '1-1',
+    ]);
+
+    $this->actingAs($viewer);
+
+    $rows = collect(app(TaromboTreeService::class)->rowsForFamilyTree($tree, $marga->id))->keyBy('id');
+
+    expect($rows[(string) $focus->id]['fatherName'])->toBe('Ayah Beda Marga')
+        ->and($rows[(string) $focus->id]['fatherMarga'])->toBe('Hutabarat');
+});
