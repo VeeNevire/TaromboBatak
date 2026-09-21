@@ -1,6 +1,6 @@
 import { Link } from '@inertiajs/react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { NodeCard } from '@/components/people/node-card';
 import type { TreeNode } from '@/components/people/node-card';
 import { PersonSummaryDialog } from '@/components/people/person-summary-dialog';
@@ -31,6 +31,7 @@ type Props = {
     showSpouseNames?: boolean;
     allowBranchEntry?: boolean;
     compactTerminalBranches?: boolean;
+    scrollToLineageEnd?: boolean;
 };
 
 type LineageLine = {
@@ -376,6 +377,7 @@ export function DescendantsTree({
     showSpouseNames = false,
     allowBranchEntry = false,
     compactTerminalBranches = false,
+    scrollToLineageEnd = false,
 }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [profilePerson, setProfilePerson] = useState<TaromboPerson | null>(
@@ -553,6 +555,29 @@ export function DescendantsTree({
             window.removeEventListener('resize', updateLines);
         };
     }, [collapsed, lineagePath, nodeIdPrefix, people]);
+
+    const focusTargetId =
+        scrollToLineageEnd && lineagePath.length > 1
+            ? lineagePath[lineagePath.length - 1]
+            : null;
+
+    useEffect(() => {
+        if (!focusTargetId) {
+            return;
+        }
+
+        const frame = window.requestAnimationFrame(() => {
+            document
+                .getElementById(`${nodeIdPrefix}-${focusTargetId}`)
+                ?.scrollIntoView({
+                    block: 'center',
+                    inline: 'center',
+                    behavior: 'smooth',
+                });
+        });
+
+        return () => window.cancelAnimationFrame(frame);
+    }, [focusTargetId, nodeIdPrefix]);
 
     if (!center) {
         return null;
