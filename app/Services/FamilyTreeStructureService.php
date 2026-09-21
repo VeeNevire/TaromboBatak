@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeNode;
 use App\Models\Person;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -130,9 +131,25 @@ class FamilyTreeStructureService
 
         $entries = [];
         $fatherNode = $nodeForPerson(data_get($data, 'father.id'));
-        if (filled(data_get($data, 'father.id')) && $fatherNode === null) {
-            throw ValidationException::withMessages(['father.id' => 'Ayah harus berasal dari versi silsilah yang sama.']);
+        $fatherId = data_get($data, 'father.id');
+
+        if (filled($fatherId) && $fatherNode === null) {
+            // Allow a father from the same marga even when he is not part of
+            // this version yet: attach him (and his same-marga ancestors) as
+            // nodes so the version stays unified within one marga.
+            $father = Person::query()->find((int) $fatherId);
+            $allowedMargaId = $focus->marga_id ?? $tree->rootPerson()->value('marga_id');
+
+            if ($father === null
+                || ($allowedMargaId !== null && (int) $father->marga_id !== (int) $allowedMargaId)) {
+                throw ValidationException::withMessages([
+                    'father.id' => 'Ayah harus berasal dari marga yang sama.',
+                ]);
+            }
+
+            $fatherNode = $this->attachPersonNode($tree, $father, $nodes, $allowedMargaId);
         }
+
         $entries[$focusNode->id] = [
             'id' => $focusNode->id,
             'father_node_id' => $fatherNode?->id,
@@ -219,6 +236,51 @@ class FamilyTreeStructureService
         }
 
         $this->update($tree, array_values($entries));
+    }
+
+    /**
+     * Attach an existing person as a node of the version, walking up the
+     * same-marga father chain so the lineage stays intact.
+     *
+     * @param  Collection<int, FamilyTreeNode>  $nodes
+     * @param  array<int, bool>  $seen
+     */
+    private function attachPersonNode(FamilyTree $tree, Person $person, Collection $nodes, ?int $allowedMargaId, array $seen = []): FamilyTreeNode
+    {
+        $existing = $nodes->get($person->id);
+
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        if (isset($seen[$person->id])) {
+            throw ValidationException::withMessages([
+                'father.id' => 'Relasi ayah akan membentuk siklus silsilah pada versi ini.',
+            ]);
+        }
+
+        $seen[$person->id] = true;
+        $parentNode = null;
+
+        if ($person->father_id !== null) {
+            $parent = Person::query()->find($person->father_id);
+
+            if ($parent !== null
+                && ($allowedMargaId === null || (int) $parent->marga_id === $allowedMargaId)
+                && ! isset($seen[$parent->id])) {
+                $parentNode = $this->attachPersonNode($tree, $parent, $nodes, $allowedMargaId, $seen);
+            }
+        }
+
+        $node = $tree->nodes()->create([
+            'person_id' => $person->id,
+            'father_node_id' => $parentNode?->id,
+            'pending_father' => (bool) $person->pending_father,
+        ]);
+
+        $nodes->put($person->id, $node);
+
+        return $node;
     }
 
     /** @param array<int, int|null> $parents */
