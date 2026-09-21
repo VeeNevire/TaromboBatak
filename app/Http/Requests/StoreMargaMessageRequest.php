@@ -14,7 +14,10 @@ class StoreMargaMessageRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['body' => ['required', 'string', 'max:2000']];
+        return [
+            'body' => ['required', 'string', 'max:2000'],
+            'recipient_id' => ['nullable', 'integer'],
+        ];
     }
 
     protected function prepareForValidation(): void

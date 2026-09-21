@@ -1,71 +1,127 @@
 <?php
 
-use App\Events\MargaMessageSent;
+use App\Events\MessageSent;
+use App\Models\Conversation;
 use App\Models\Marga;
-use App\Models\MargaMessage;
+use App\Models\MargaChatConversation;
+use App\Models\Message;
 use App\Models\User;
 use Illuminate\Support\Facades\Event;
 use Inertia\Testing\AssertableInertia as Assert;
 
-test('a signed in user can open a marga chat room and see its members', function () {
+test('a senders message reaches every contributor of the marga', function () {
     $marga = Marga::factory()->create(['is_public' => true]);
-    $viewer = User::factory()->create();
-    $member = User::factory()->create([
-        'marga_id' => $marga->id,
-        'role' => 'contributor_main',
-        'name' => 'Kontributor Utama',
-    ]);
+    $sender = User::factory()->withMarga($marga->id)->create(['role' => 'user']);
+    $main = User::factory()->asMainContributor()->withMarga($marga->id)->create();
+    $member = User::factory()->asContributorMember()->withMarga($marga->id)->create();
 
-    $this->actingAs($viewer)
+    $this->actingAs($sender)
+        ->post(route('marga.messages.store', $marga), ['body' => 'Halo pengurus'])
+        ->assertRedirect();
+
+    expect(Message::query()->count())->toBe(2)
+        ->and(Conversation::between($sender, $main)->exists())->toBeTrue()
+        ->and(Conversation::between($sender, $member)->exists())->toBeTrue();
+
+    expect(Message::query()->where('body', 'Halo pengurus')->count())->toBe(2);
+});
+
+test('the marga chat page aggregates the senders thread with contributors', function () {
+    $marga = Marga::factory()->create(['is_public' => true]);
+    $sender = User::factory()->withMarga($marga->id)->create(['role' => 'user']);
+    User::factory()->asMainContributor()->withMarga($marga->id)->create();
+    User::factory()->asContributorMember()->withMarga($marga->id)->create();
+
+    $this->actingAs($sender)->post(route('marga.messages.store', $marga), ['body' => 'Pesan saya']);
+
+    $this->actingAs($sender)
         ->get(route('marga.chat', $marga))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('marga/chat')
-            ->where('marga.id', $marga->id)
-            ->has('members', 1)
-            ->where('members.0.id', $member->id)
-            ->has('messages', 0));
+            ->has('members', 2)
+            ->has('messages', 2));
 });
 
-test('any signed in user can post to a marga chat room', function () {
+test('a contributor sees the senders message on the marga chat page', function () {
     $marga = Marga::factory()->create(['is_public' => true]);
-    $sender = User::factory()->create();
+    $sender = User::factory()->withMarga($marga->id)->create(['role' => 'user']);
+    $main = User::factory()->asMainContributor()->withMarga($marga->id)->create();
 
     $this->actingAs($sender)
-        ->post(route('marga.messages.store', $marga), [
-            'body' => '  Mohon bantuan data silsilah.  ',
-        ])
-        ->assertRedirect();
+        ->post(route('marga.messages.store', $marga), ['body' => 'Pesan untuk pengurus']);
 
-    $message = MargaMessage::query()->firstOrFail();
-
-    expect($message->marga_id)->toBe($marga->id)
-        ->and($message->sender_id)->toBe($sender->id)
-        ->and($message->body)->toBe('Mohon bantuan data silsilah.');
+    $this->actingAs($main)
+        ->get(route('marga.chat', $marga))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('messages.0.body', 'Pesan untuk pengurus')
+            ->where('messages.0.sender_id', $sender->id)
+            ->where('members.0.id', $sender->id));
 });
 
-test('the chat room shows previous messages in order', function () {
+test('a contributor reply is delivered to the original sender', function () {
     $marga = Marga::factory()->create(['is_public' => true]);
-    $sender = User::factory()->create();
-    $first = MargaMessage::query()->create([
+    $sender = User::factory()->withMarga($marga->id)->create(['role' => 'user']);
+    $main = User::factory()->asMainContributor()->withMarga($marga->id)->create();
+
+    $this->actingAs($sender)
+        ->post(route('marga.messages.store', $marga), ['body' => 'Halo pengurus']);
+
+    $this->actingAs($main)
+        ->post(route('marga.messages.store', $marga), [
+            'body' => 'Halo juga',
+            'recipient_id' => $sender->id,
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    $conversation = Conversation::between($sender, $main)->firstOrFail();
+
+    expect(Message::query()
+        ->where('conversation_id', $conversation->id)
+        ->where('sender_id', $main->id)
+        ->where('body', 'Halo juga')
+        ->exists())->toBeTrue();
+
+    $this->actingAs($sender)
+        ->get(route('marga.chat', $marga))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('messages.1.body', 'Halo juga')
+            ->where('messages.1.sender_id', $main->id));
+});
+
+test('a contributor reply is visible only to the sender', function () {
+    $marga = Marga::factory()->create(['is_public' => true]);
+    $sender = User::factory()->withMarga($marga->id)->create(['role' => 'user']);
+    $main = User::factory()->asMainContributor()->withMarga($marga->id)->create();
+    $other = User::factory()->asContributorMember()->withMarga($marga->id)->create();
+
+    $conversation = Conversation::query()->firstOrCreate(
+        Conversation::participantAttributes($sender, $main),
+    );
+    MargaChatConversation::query()->create([
         'marga_id' => $marga->id,
+        'conversation_id' => $conversation->id,
         'sender_id' => $sender->id,
-        'body' => 'Pesan pertama',
     ]);
-    $second = MargaMessage::query()->create([
-        'marga_id' => $marga->id,
-        'sender_id' => $sender->id,
-        'body' => 'Pesan kedua',
+    $conversation->messages()->create([
+        'sender_id' => $main->id,
+        'body' => 'Balasan untukmu',
     ]);
 
     $this->actingAs($sender)
         ->get(route('marga.chat', $marga))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('messages.0.id', $first->id)
-            ->where('messages.1.id', $second->id));
+            ->where('messages.0.body', 'Balasan untukmu')
+            ->where('messages.0.sender_id', $main->id));
+
+    $this->actingAs($other)
+        ->get(route('marga.chat', $marga))
+        ->assertInertia(fn (Assert $page) => $page->has('messages', 0));
 });
 
-test('guests cannot open or post to a marga chat room', function () {
+test('guests cannot open or post to a marga chat', function () {
     $marga = Marga::factory()->create();
 
     $this->get(route('marga.chat', $marga))->assertRedirect(route('login'));
@@ -76,7 +132,7 @@ test('guests cannot open or post to a marga chat room', function () {
 
 test('a marga message requires a body', function () {
     $marga = Marga::factory()->create();
-    $sender = User::factory()->create();
+    $sender = User::factory()->withMarga($marga->id)->create(['role' => 'user']);
 
     $this->actingAs($sender)
         ->from(route('marga.chat', $marga))
@@ -84,75 +140,112 @@ test('a marga message requires a body', function () {
         ->assertSessionHasErrors('body');
 });
 
-test('unread marga messages are counted in the sidebar and marga list, then cleared after opening the chat', function () {
+test('sending to a marga without contributors does not create messages', function () {
     $marga = Marga::factory()->create(['is_public' => true]);
-    $member = User::factory()->create(['marga_id' => $marga->id, 'role' => 'user']);
-    $sender = User::factory()->create(['marga_id' => $marga->id, 'role' => 'user']);
-    $outsider = User::factory()->create();
+    $sender = User::factory()->withMarga($marga->id)->create(['role' => 'user']);
 
-    MargaMessage::query()->create([
+    $this->actingAs($sender)
+        ->post(route('marga.messages.store', $marga), ['body' => 'Halo'])
+        ->assertRedirect();
+
+    expect(Message::query()->count())->toBe(0);
+});
+
+test('each marga message broadcast notifies its recipient', function () {
+    Event::fake([MessageSent::class]);
+    $marga = Marga::factory()->create(['is_public' => true]);
+    $sender = User::factory()->withMarga($marga->id)->create(['role' => 'user']);
+    User::factory()->asMainContributor()->withMarga($marga->id)->create();
+    User::factory()->asContributorMember()->withMarga($marga->id)->create();
+
+    $this->actingAs($sender)->post(route('marga.messages.store', $marga), ['body' => 'Halo']);
+
+    Event::assertDispatchedTimes(MessageSent::class, 2);
+});
+
+test('unread marga replies are counted then cleared after opening the chat', function () {
+    $marga = Marga::factory()->create(['is_public' => true]);
+    $sender = User::factory()->withMarga($marga->id)->create(['role' => 'user']);
+    $main = User::factory()->asMainContributor()->withMarga($marga->id)->create();
+
+    $conversation = Conversation::query()->firstOrCreate(
+        Conversation::participantAttributes($sender, $main),
+    );
+    MargaChatConversation::query()->create([
         'marga_id' => $marga->id,
+        'conversation_id' => $conversation->id,
         'sender_id' => $sender->id,
-        'body' => 'Pesan baru',
+    ]);
+    $conversation->messages()->create([
+        'sender_id' => $main->id,
+        'body' => 'Balasan',
     ]);
 
-    $this->actingAs($member)
+    $this->actingAs($sender)
         ->get(route('marga.index'))
         ->assertInertia(fn (Assert $page) => $page
             ->where('unreadMargaMessageCount', 1)
             ->where('margas.0.unread_count', 1));
 
     $this->actingAs($sender)
-        ->get(route('marga.index'))
-        ->assertInertia(fn (Assert $page) => $page
-            ->where('unreadMargaMessageCount', 0)
-            ->where('margas.0.unread_count', 0));
-
-    $this->actingAs($outsider)
-        ->get(route('marga.index'))
-        ->assertInertia(fn (Assert $page) => $page
-            ->where('unreadMargaMessageCount', 1)
-            ->where('margas.0.unread_count', 1));
-
-    $this->actingAs($member)
         ->get(route('marga.chat', $marga))
         ->assertInertia(fn (Assert $page) => $page
             ->where('unreadMargaMessageCount', 0));
 
-    $this->actingAs($member)
+    $this->actingAs($sender)
         ->get(route('marga.index'))
         ->assertInertia(fn (Assert $page) => $page
             ->where('margas.0.unread_count', 0));
 });
 
-test('posting a marga message broadcasts it to the marga channel', function () {
-    Event::fake([MargaMessageSent::class]);
-    $marga = Marga::factory()->create();
+test('a contributor linked only through marga management receives the message', function () {
+    $marga = Marga::factory()->create(['is_public' => true, 'name' => 'Ambarita']);
+    $homeMarga = Marga::factory()->create();
+
+    $contributor = User::factory()->asMainContributor()->withMarga($homeMarga->id)->create();
+    $contributor->managedMargas()->attach($marga);
+
     $sender = User::factory()->create();
 
-    $this->actingAs($sender)->post(route('marga.messages.store', $marga), [
-        'body' => 'Halo semua',
-    ]);
+    $this->actingAs($sender)
+        ->post(route('marga.messages.store', $marga), ['body' => 'Halo Ambarita'])
+        ->assertRedirect();
 
-    Event::assertDispatched(MargaMessageSent::class, function (MargaMessageSent $event) use ($marga): bool {
-        return $event->message->marga_id === $marga->id
-            && $event->broadcastAs() === 'marga.message.sent'
-            && $event->broadcastOn()[0]->name === 'private-marga.'.$marga->id;
-    });
+    expect(Conversation::between($sender, $contributor)->exists())->toBeTrue()
+        ->and(MargaChatConversation::query()
+            ->where('marga_id', $marga->id)
+            ->where('sender_id', $sender->id)
+            ->exists())->toBeTrue();
+
+    $this->actingAs($contributor)
+        ->get(route('marga.chat', $marga))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('messages.0.body', 'Halo Ambarita')
+            ->where('messages.0.sender_id', $sender->id)
+            ->where('members.0.id', $sender->id));
 });
 
-test('margas with unread messages are listed first', function () {
+test('margas with unread replies are listed first', function () {
     $alpha = Marga::factory()->create(['is_public' => true, 'name' => 'Alpha']);
     $beta = Marga::factory()->create(['is_public' => true, 'name' => 'Beta']);
-    $member = User::factory()->create(['marga_id' => $beta->id, 'role' => 'user']);
+    $sender = User::factory()->withMarga($beta->id)->create(['role' => 'user']);
+    $main = User::factory()->asMainContributor()->withMarga($beta->id)->create();
 
-    MargaMessage::query()->create([
+    $conversation = Conversation::query()->firstOrCreate(
+        Conversation::participantAttributes($sender, $main),
+    );
+    MargaChatConversation::query()->create([
         'marga_id' => $beta->id,
-        'sender_id' => null,
-        'body' => 'Halo',
+        'conversation_id' => $conversation->id,
+        'sender_id' => $sender->id,
+    ]);
+    $conversation->messages()->create([
+        'sender_id' => $main->id,
+        'body' => 'Balasan',
     ]);
 
-    $this->actingAs($member)
+    $this->actingAs($sender)
         ->get(route('marga.index'))
         ->assertInertia(fn (Assert $page) => $page
             ->where('margas.0.id', $beta->id)
