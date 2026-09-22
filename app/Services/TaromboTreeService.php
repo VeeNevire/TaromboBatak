@@ -396,7 +396,7 @@ class TaromboTreeService
      *
      * @return array<int, array<string, mixed>>
      */
-    public function rowsForMarga(Marga $marga, string $direction): array
+    public function rowsForMarga(Marga $marga, string $direction, ?int $maxDepth = null, ?int $maxNodes = null): array
     {
         $identity = $marga->identityPerson;
 
@@ -413,8 +413,8 @@ class TaromboTreeService
                 ? $this->rowsForPersonWithAncestors($identity)
                 : $this->rowsForPerson(
                     $identity,
-                    maxDepth: (int) config('tarombo.public_max_depth'),
-                    maxNodes: (int) config('tarombo.public_max_nodes'),
+                    maxDepth: $maxDepth ?? (int) config('tarombo.public_max_depth'),
+                    maxNodes: $maxNodes ?? (int) config('tarombo.public_max_nodes'),
                 ),
         );
 
