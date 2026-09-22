@@ -4,6 +4,7 @@ use App\Models\ContributionRequest;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeNode;
 use App\Models\Marga;
+use App\Models\MargaAccessRequest;
 use App\Models\Person;
 use App\Models\User;
 use App\Services\ChainNumberingService;
@@ -2101,4 +2102,127 @@ test('ordinary users can select all registered margas for wives while paternal o
         ->and($focus->marga_id)->toBe($marga->id);
     $this->get(route('people.edit', $focus))->assertOk()->assertInertia(fn (Assert $page) => $page
         ->has('spouseMargas', 3)->has('margas', 1)->has('person.mothers', 2));
+});
+
+test('an approved cross-marga viewer still sees the father on the person page', function () {
+    $viewerMarga = Marga::factory()->create(['name' => 'Silaban']);
+    $targetMarga = Marga::factory()->create(['name' => 'Isumbaon']);
+
+    $viewer = User::factory()->withMarga($viewerMarga->id)->create();
+
+    MargaAccessRequest::create([
+        'requester_id' => $viewer->id,
+        'marga_id' => $targetMarga->id,
+        'status' => MargaAccessRequest::STATUS_APPROVED,
+    ]);
+
+    $father = Person::factory()->create([
+        'name' => 'Ompu Sotangguon',
+        'gender' => 'L',
+        'marga_id' => $targetMarga->id,
+    ]);
+    $focus = Person::factory()->create([
+        'name' => 'Guru Sotadingon',
+        'gender' => 'L',
+        'marga_id' => $targetMarga->id,
+        'father_id' => $father->id,
+    ]);
+
+    $this->actingAs($viewer)
+        ->get(route('people.show', $focus))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('person.father.name', 'Ompu Sotangguon')
+            ->where('person.father.marga', 'Isumbaon'));
+});
+
+test('a version tree without a father link still shows the global father', function () {
+    $viewerMarga = Marga::factory()->create(['name' => 'Silaban']);
+    $fatherMarga = Marga::factory()->create(['name' => 'Isumbaon']);
+
+    $viewer = User::factory()->withMarga($viewerMarga->id)->create();
+
+    $father = Person::factory()->create([
+        'name' => 'Ompu Sotangguon',
+        'gender' => 'L',
+        'marga_id' => $fatherMarga->id,
+    ]);
+    $focus = Person::factory()->create([
+        'name' => 'Guru Sotadingon',
+        'gender' => 'L',
+        'marga_id' => $viewerMarga->id,
+        'father_id' => $father->id,
+    ]);
+
+    $tree = FamilyTree::create([
+        'user_id' => $viewer->id,
+        'root_person_id' => $focus->id,
+        'name' => 'Keluarga Uji',
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $focus->id,
+        'chain' => '4',
+    ]);
+
+    $this->actingAs($viewer)
+        ->get(route('people.show', $focus).'?version_tree='.$tree->id)
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('person.father.name', 'Ompu Sotangguon')
+            ->where('person.father.marga', 'Isumbaon'));
+
+    $this->actingAs($viewer)
+        ->get(route('people.edit', $focus).'?version_tree='.$tree->id)
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('person.father.name', 'Ompu Sotangguon')
+            ->where('person.father.marga', 'Isumbaon'));
+});
+
+test('saving the edit form keeps the unlinked global father without erroring', function () {
+    $viewerMarga = Marga::factory()->create(['name' => 'Silaban']);
+    $fatherMarga = Marga::factory()->create(['name' => 'Isumbaon']);
+
+    $viewer = User::factory()->withMarga($viewerMarga->id)->create();
+
+    $father = Person::factory()->create([
+        'name' => 'Ompu Sotangguon',
+        'gender' => 'L',
+        'marga_id' => $fatherMarga->id,
+    ]);
+    $focus = Person::factory()->create([
+        'name' => 'Guru Sotadingon',
+        'gender' => 'L',
+        'marga_id' => $viewerMarga->id,
+        'father_id' => $father->id,
+    ]);
+
+    $tree = FamilyTree::create([
+        'user_id' => $viewer->id,
+        'root_person_id' => $focus->id,
+        'name' => 'Keluarga Uji',
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $focus->id,
+        'chain' => '4',
+    ]);
+
+    $this->actingAs($viewer)
+        ->put(route('people.update', ['person' => $focus, 'version_tree' => $tree->id]), [
+            'name' => $focus->name,
+            'gender' => $focus->gender,
+            'marga_id' => $focus->marga_id,
+            'birth_order' => 1,
+            'sibling_count' => 1,
+            'father' => ['id' => $father->id, 'name' => $father->name, 'marga_id' => $father->marga_id],
+            'mothers' => [],
+            'children' => [],
+            'ownChildren' => [],
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect(FamilyTreeNode::query()->where('person_id', $focus->id)->value('father_node_id'))->toBeNull();
 });
