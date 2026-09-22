@@ -2,9 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\Models\FamilyTree;
+use App\Services\LocalOnlyFatherLinkFinder;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
 
 class AuditLocalOnlyFatherLinks extends Command
 {
@@ -25,45 +24,11 @@ class AuditLocalOnlyFatherLinks extends Command
     /**
      * Execute the console command.
      */
-    public function handle(): int
+    public function handle(LocalOnlyFatherLinkFinder $finder): int
     {
-        $treeIds = FamilyTree::query()->whereNull('based_on_id')->pluck('id');
+        $mismatches = $finder->find();
 
-        $rows = [];
-
-        foreach ($treeIds as $treeId) {
-            $nodes = DB::table('family_tree_nodes')
-                ->where('family_tree_id', $treeId)
-                ->get(['id', 'person_id', 'father_node_id']);
-            $nodesById = $nodes->keyBy('id');
-
-            foreach ($nodes as $node) {
-                $localFatherPersonId = $node->father_node_id !== null
-                    ? ($nodesById[$node->father_node_id]->person_id ?? null)
-                    : null;
-
-                if ($localFatherPersonId === null) {
-                    continue;
-                }
-
-                $globalFatherId = DB::table('people')->where('id', $node->person_id)->value('father_id');
-
-                if ((int) $globalFatherId === (int) $localFatherPersonId) {
-                    continue;
-                }
-
-                $rows[] = [
-                    $treeId,
-                    $node->person_id,
-                    DB::table('people')->where('id', $node->person_id)->value('name'),
-                    $localFatherPersonId,
-                    DB::table('people')->where('id', $localFatherPersonId)->value('name'),
-                    $globalFatherId,
-                ];
-            }
-        }
-
-        if ($rows === []) {
+        if ($mismatches === []) {
             $this->info('No local-only father links found.');
 
             return Command::SUCCESS;
@@ -71,9 +36,16 @@ class AuditLocalOnlyFatherLinks extends Command
 
         $this->table(
             ['tree_id', 'person_id', 'name', 'local father (node)', 'local father name', 'global father_id'],
-            $rows,
+            array_map(fn (array $row) => [
+                $row['tree_id'],
+                $row['person_id'],
+                $row['person_name'],
+                $row['local_father_id'],
+                $row['local_father_name'],
+                $row['global_father_id'],
+            ], $mismatches),
         );
-        $this->warn(sprintf('%d node(s) placed locally under a father that does not match their global father_id.', count($rows)));
+        $this->warn(sprintf('%d node(s) placed locally under a father that does not match their global father_id.', count($mismatches)));
 
         return Command::SUCCESS;
     }
