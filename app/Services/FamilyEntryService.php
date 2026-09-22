@@ -426,17 +426,7 @@ class FamilyEntryService
      */
     protected function ownsFamilyTreeContaining(?int $userId, Person $person): bool
     {
-        if ($userId === null) {
-            return false;
-        }
-
-        return FamilyTree::query()
-            ->where('user_id', $userId)
-            ->where(fn ($query) => $query
-                ->where('root_person_id', $person->id)
-                ->orWhereHas('people', fn ($people) => $people->whereKey($person))
-                ->orWhereHas('nodes', fn ($nodes) => $nodes->where('person_id', $person->id)))
-            ->exists();
+        return app(FatherConnectionService::class)->ownsFamilyTreeContaining($userId, $person);
     }
 
     /**

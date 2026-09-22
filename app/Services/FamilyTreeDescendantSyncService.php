@@ -35,8 +35,11 @@ class FamilyTreeDescendantSyncService
 
             $this->sync($currentTree);
 
+            // based_on_id alone establishes the derivation: a version can be
+            // owned by a different user than its source (see
+            // FamilyTreeVersionService::duplicate()), so ownership is not a
+            // valid filter here.
             $childTreeIds = FamilyTree::query()
-                ->where('user_id', $tree->user_id)
                 ->where('based_on_id', $currentTree->id)
                 ->pluck('id')
                 ->all();
