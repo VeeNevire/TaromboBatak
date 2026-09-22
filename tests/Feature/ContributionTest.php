@@ -105,6 +105,58 @@ test('a contributor for the same marga can approve a pending father match', func
         ->and($request->fresh()->reviewed_by)->toBe($contributor->id);
 });
 
+test('approving a father match also connects the person in alternative tree versions', function () {
+    $marga = Marga::factory()->create();
+    $user = User::factory()->withMarga($marga->id)->create();
+    $contributor = User::factory()->asMainContributor()->withMarga($marga->id)->create();
+    $father = Person::factory()->create(['marga_id' => $marga->id, 'gender' => 'L']);
+    $child = Person::factory()->create([
+        'marga_id' => $marga->id,
+        'created_by' => $user->id,
+        'father_id' => null,
+        'pending_father' => true,
+    ]);
+
+    $source = FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $father->id,
+    ]);
+    FamilyTreeNode::create(['family_tree_id' => $source->id, 'person_id' => $father->id]);
+    $alternative = FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $father->id,
+        'based_on_id' => $source->id,
+    ]);
+    FamilyTreeNode::create(['family_tree_id' => $alternative->id, 'person_id' => $father->id]);
+
+    $request = ContributionRequest::factory()->create([
+        'requester_id' => $user->id,
+        'matched_father_id' => $father->id,
+        'subject_person_id' => $child->id,
+        'affected_person_ids' => [$child->id],
+        'family_tree_id' => $source->id,
+    ]);
+
+    $this->actingAs($contributor)
+        ->post(route('contributions.approve', $request))
+        ->assertRedirect(route('contributions.index'))
+        ->assertSessionHasNoErrors();
+
+    expect($child->fresh()->father_id)->toBe($father->id)
+        ->and(
+            FamilyTreeNode::query()
+                ->where('family_tree_id', $source->id)
+                ->where('person_id', $child->id)
+                ->exists()
+        )->toBeTrue()
+        ->and(
+            FamilyTreeNode::query()
+                ->where('family_tree_id', $alternative->id)
+                ->where('person_id', $child->id)
+                ->exists()
+        )->toBeTrue();
+});
+
 test('an ordinary user cannot edit the approved matched father or ancestors above him', function () {
     $marga = Marga::factory()->create();
     $user = User::factory()->withMarga($marga->id)->create();

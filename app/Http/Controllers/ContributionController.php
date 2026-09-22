@@ -20,7 +20,7 @@ use App\Notifications\FatherMatchSubmitted;
 use App\Notifications\MargaAccessRequested;
 use App\Notifications\StorySubmitted;
 use App\Services\ChainNumberingService;
-use App\Services\FamilyEntryService;
+use App\Services\FamilyTreeDescendantSyncService;
 use App\Services\TreeActivityLogger;
 use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
@@ -397,7 +397,8 @@ class ContributionController extends Controller
                 }
 
                 $contribution->familyTree->people()->syncWithoutDetaching($ancestorIds);
-                app(FamilyEntryService::class)->syncTreeNodes($contribution->familyTree);
+                app(FamilyTreeDescendantSyncService::class)
+                    ->syncTreeAndDescendantVersions($contribution->familyTree);
             }
 
             app(ChainNumberingService::class)->recomputeFromAncestor($contribution->matchedFather);
