@@ -55,7 +55,7 @@ class UpdateAccountRequest extends FormRequest
                     }
                 },
             ],
-            'managed_marga_ids' => ['required_if:role,contributor_main,contributor_member', 'array', 'min:1'],
+            'managed_marga_ids' => ['exclude_unless:role,contributor_main,contributor_member', 'required', 'array', 'min:1'],
             'managed_marga_ids.*' => [
                 'integer',
                 'distinct',

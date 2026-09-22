@@ -140,14 +140,25 @@ class FamilyTreeStructureService
             $father = Person::query()->find((int) $fatherId);
             $allowedMargaId = $focus->marga_id ?? $tree->rootPerson()->value('marga_id');
 
-            if ($father === null
-                || ($allowedMargaId !== null && (int) $father->marga_id !== (int) $allowedMargaId)) {
+            // The form pre-fills the global father even when this version does
+            // not link him (e.g. a cross-marga father or a root node). Keep the
+            // version placement untouched for that unchanged father instead of
+            // rejecting the save.
+            $isUnchangedGlobalFather = $father !== null
+                && ! $focus->pending_father
+                && (int) $focus->father_id === (int) $fatherId;
+
+            if (! $isUnchangedGlobalFather
+                && ($father === null
+                    || ($allowedMargaId !== null && (int) $father->marga_id !== (int) $allowedMargaId))) {
                 throw ValidationException::withMessages([
                     'father.id' => 'Ayah harus berasal dari marga yang sama.',
                 ]);
             }
 
-            $fatherNode = $this->attachPersonNode($tree, $father, $nodes, $allowedMargaId);
+            if (! $isUnchangedGlobalFather) {
+                $fatherNode = $this->attachPersonNode($tree, $father, $nodes, $allowedMargaId);
+            }
         }
 
         $entries[$focusNode->id] = [

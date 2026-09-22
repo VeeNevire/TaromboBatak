@@ -11,7 +11,10 @@ if (file_exists($maintenance = __DIR__.'/../storage/framework/maintenance.php'))
 }
 
 // Register the Composer autoloader...
+// MadelineProto's autoloaded polyfill echoes a warning on Windows, which corrupts Inertia JSON responses.
+ob_start();
 require __DIR__.'/../vendor/autoload.php';
+ob_end_clean();
 
 // Bootstrap Laravel and handle the request...
 /** @var Application $app */

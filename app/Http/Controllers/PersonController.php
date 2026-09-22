@@ -287,7 +287,9 @@ class PersonController extends Controller
     protected function createMargaLineage(User $user, bool $isStaff): array
     {
         $canBrowseMarga = $isStaff || $user->isContributor();
-        $margaIds = $isStaff ? null : $user->accessibleMargaIds();
+        $margaIds = $isStaff
+            ? null
+            : ($user->isContributor() ? $user->accessibleMargaIds() : $this->visibleMargaIds($user));
         $treeService = app(TaromboTreeService::class);
 
         return Marga::query()
@@ -430,7 +432,7 @@ class PersonController extends Controller
             'Versi silsilah tidak tersedia untuk orang ini.',
         );
         $selectedVersionId = $selectedVersionName !== null ? $request->integer('version_tree') : null;
-        $personMargaScope = $user->isStaff() ? null : ($user->isContributor() ? $person->marga_id : $user->marga_id);
+        $personMargaScope = $user->isStaff() ? null : ($user->isContributor() ? $person->marga_id : $this->visibleMargaIds($user));
         $appendTree = collect($versionTrees)->first(
             fn (array $tree): bool => $tree['can_append'] && $tree['is_primary'],
         ) ?? collect($versionTrees)->first(
@@ -533,7 +535,7 @@ class PersonController extends Controller
             }
         }
 
-        $personMargaScope = $isStaff ? null : ($user->isContributor() ? $person->marga_id : $user->marga_id);
+        $personMargaScope = $isStaff ? null : ($user->isContributor() ? $person->marga_id : $this->visibleMargaIds($user));
         $structureTreeId = $selectedVersionId ?? FamilyTree::query()
             ->whereNull('based_on_id')
             ->when(! $user->isAdmin(), fn ($query) => $query->where(fn ($access) => $access
@@ -1330,12 +1332,32 @@ class PersonController extends Controller
     }
 
     /**
+     * Margas a regular account may see, including approved cross-marga access,
+     * so kin in those margas still resolve in the family payload.
+     *
+     * @return \Illuminate\Support\Collection<int, int>
+     */
+    protected function visibleMargaIds(User $user): \Illuminate\Support\Collection
+    {
+        return $user->accessibleMargaIds()
+            ->merge($user->approvedMargaAccessIds())
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+    }
+
+    /**
      * Build the family payload for the form (focused person + parents + siblings).
      *
+     * @param  int|\Illuminate\Support\Collection<int, int>|null  $margaId
      * @return array<string, mixed>
      */
-    protected function familyPayload(Person $person, ?int $margaId = null): array
+    protected function familyPayload(Person $person, int|\Illuminate\Support\Collection|null $margaId = null): array
     {
+        $margaIds = $margaId instanceof \Illuminate\Support\Collection
+            ? $margaId
+            : ($margaId !== null ? collect([$margaId]) : null);
+
         if ($person->pending_father) {
             $siblings = collect([$person]);
             $lineageIds = [$person->id];
@@ -1343,7 +1365,7 @@ class PersonController extends Controller
             $siblings = $person->father_id !== null
                 ? Person::query()
                     ->where('father_id', $person->father_id)
-                    ->when($margaId !== null, fn ($query) => $query->where('marga_id', $margaId))
+                    ->when($margaIds !== null, fn ($query) => $query->whereIn('marga_id', $margaIds))
                     ->where(fn ($query) => $query
                         ->where('pending_father', false)
                         ->orWhere('id', $person->id))
@@ -1361,14 +1383,14 @@ class PersonController extends Controller
 
         $lineage = Person::query()
             ->whereIn('id', $lineageIds)
-            ->when($margaId !== null, fn ($query) => $query->where('marga_id', $margaId))
+            ->when($margaIds !== null, fn ($query) => $query->whereIn('marga_id', $margaIds))
             ->where(fn ($query) => $query
                 ->where('gender', 'L')
                 ->orWhereNull('gender'))
             ->with([
                 'marga',
                 'children' => fn ($query) => $query
-                    ->when($margaId !== null, fn ($childQuery) => $childQuery->where('marga_id', $margaId))
+                    ->when($margaIds !== null, fn ($childQuery) => $childQuery->whereIn('marga_id', $margaIds))
                     ->where(fn ($childQuery) => $childQuery
                         ->where('gender', 'L')
                         ->orWhereNull('gender'))
@@ -1379,17 +1401,14 @@ class PersonController extends Controller
             ->values();
 
         $ownChildrenRows = $person->children()
-            ->when($margaId !== null, fn ($query) => $query->where('marga_id', $margaId))
+            ->when($margaIds !== null, fn ($query) => $query->whereIn('marga_id', $margaIds))
             ->orderBy('birth_order')
             ->get();
 
-        $father = ! $person->pending_father
-            && ($margaId === null || $person->father?->marga_id === $margaId)
-                ? $person->father
-                : null;
-        $mother = $margaId === null || $person->mother?->marga_id === $margaId
-            ? $person->mother
-            : null;
+        // The father and mother anchor the person's identity; keep naming them
+        // even when their marga sits outside the viewer's scoped margas.
+        $father = $person->pending_father ? null : $person->father;
+        $mother = $person->mother;
 
         $inferredMothers = $siblings
             ->map(fn (Person $sibling) => $sibling->mother)
@@ -1543,9 +1562,10 @@ class PersonController extends Controller
      * Use the same family form payload, but read parent and child placement
      * from the selected version's nodes instead of the shared Person graph.
      *
+     * @param  int|\Illuminate\Support\Collection<int, int>|null  $margaId
      * @return array<string, mixed>
      */
-    protected function familyPayloadForVersion(Person $person, int $treeId, ?int $margaId = null): array
+    protected function familyPayloadForVersion(Person $person, int $treeId, int|\Illuminate\Support\Collection|null $margaId = null): array
     {
         $payload = $this->familyPayload($person, $margaId);
         $tree = FamilyTree::query()->with(['nodes.person.marga'])->findOrFail($treeId);
@@ -1580,9 +1600,13 @@ class PersonController extends Controller
         $fatherNode = $focusNode->fatherNode;
         $payload['birth_order'] = $focusNode->birth_order;
         $payload['chain'] = $focusNode->chain;
-        $payload['father_id'] = $fatherNode?->person_id;
-        $payload['father'] = $fatherNode?->person
-            ? [
+
+        // Only a father recorded in this version overrides the global father.
+        // When the version leaves the node unlinked, keep naming the father
+        // from the shared person graph instead of blanking it.
+        if ($fatherNode?->person) {
+            $payload['father_id'] = $fatherNode->person_id;
+            $payload['father'] = [
                 'id' => $fatherNode->person->id,
                 'name' => $fatherNode->person->name,
                 'alias' => $fatherNode->person->alias,
@@ -1591,8 +1615,8 @@ class PersonController extends Controller
                 'chain' => $fatherNode->chain,
                 'birth_year' => $fatherNode->person->birth_year,
                 'death_year' => $fatherNode->person->death_year,
-            ]
-            : null;
+            ];
+        }
 
         $siblingNodes = $fatherNode?->children()->with('person.marga')->orderBy('birth_order')->orderBy('id')->get()
             ?? collect([$focusNode]);

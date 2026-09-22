@@ -262,6 +262,29 @@ test('admin can save a complete hierarchical domicile on an account', function (
         ->and($account->village_code)->toBe('12.71.01.1001');
 });
 
+test('admin can create a non-contributor account with the payload sent by the account form', function () {
+    $admin = User::factory()->asAdmin()->create();
+
+    $this->actingAs($admin)
+        ->post(route('accounts.store'), [
+            'name' => 'Pengguna Biasa',
+            'email' => 'pengguna-biasa@example.com',
+            'role' => 'user',
+            'marga_id' => null,
+            'province_code' => '',
+            'regency_code' => '',
+            'district_code' => '',
+            'village_code' => '',
+            'managed_marga_ids' => [],
+            'password' => 'password',
+            'password_confirmation' => 'password',
+        ])
+        ->assertRedirect(route('accounts.index'))
+        ->assertSessionHasNoErrors();
+
+    expect(User::query()->where('email', 'pengguna-biasa@example.com')->exists())->toBeTrue();
+});
+
 test('account domicile rejects a district or village outside its parent region', function () {
     $admin = User::factory()->asAdmin()->create();
 
