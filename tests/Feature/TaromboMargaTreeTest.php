@@ -39,6 +39,44 @@ test('staff can open an upper or lower marga tree for its identity person', func
     }
 });
 
+test('a dashboard lower marga tree shows descendants deeper than the public depth limit', function () {
+    config(['tarombo.public_max_depth' => 3]);
+    config(['tarombo.dashboard_max_depth' => 20]);
+
+    // Mirrors the real "Aruan" case: descendants keep carrying a broader
+    // ancestor marga (e.g. "Isumbaon") rather than the specific marga's own
+    // id, so the unlimited marga_id merge in rowsForMarga contributes
+    // nothing and the depth-limited BFS is the only source of rows.
+    $broaderMarga = Marga::factory()->create();
+    $admin = User::factory()->asAdmin()->create();
+    $marga = Marga::factory()->create();
+    $identity = Person::factory()->create(['name' => 'Identitas Marga', 'marga_id' => $broaderMarga->id, 'gender' => 'L']);
+    $marga->update(['identity_person_id' => $identity->id]);
+
+    $current = $identity;
+    for ($depth = 2; $depth <= 6; $depth++) {
+        $current = Person::factory()->create([
+            'name' => "Generasi {$depth}",
+            'marga_id' => $broaderMarga->id,
+            'gender' => 'L',
+            'father_id' => $current->id,
+        ]);
+    }
+    $deepest = $current;
+
+    $response = $this->actingAs($admin)
+        ->get(route('tarombo.fullscreen', [
+            'view' => 'tree',
+            'marga_id' => $marga->id,
+            'marga_direction' => 'lower',
+        ]))
+        ->assertOk();
+
+    $people = $response->viewData('page')['props']['people'];
+
+    expect(collect($people)->pluck('id'))->toContain((string) $deepest->id);
+});
+
 test('marga tree without an identity falls back to every marga member for staff', function () {
     $marga = Marga::factory()->create();
     $user = User::factory()->create();

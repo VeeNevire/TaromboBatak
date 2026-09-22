@@ -147,7 +147,12 @@ class TaromboController extends Controller
         $selectedMargaId = $selectedMarga?->id;
         $selectedTreePeople = match (true) {
             $selectedFamilyTree instanceof FamilyTree => $service->rowsForFamilyTree($selectedFamilyTree),
-            $selectedMarga instanceof Marga => $service->rowsForMarga($selectedMarga, $direction),
+            $selectedMarga instanceof Marga => $service->rowsForMarga(
+                $selectedMarga,
+                $direction,
+                maxDepth: (int) config('tarombo.dashboard_max_depth'),
+                maxNodes: (int) config('tarombo.dashboard_max_nodes'),
+            ),
             default => [],
         };
         $selectedTreePeople = $this->withContactState($selectedTreePeople, $user);
