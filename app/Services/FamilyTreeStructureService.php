@@ -158,6 +158,10 @@ class FamilyTreeStructureService
 
             if (! $isUnchangedGlobalFather) {
                 $fatherNode = $this->attachPersonNode($tree, $father, $nodes, $allowedMargaId);
+
+                if ($tree->based_on_id === null) {
+                    app(FatherConnectionService::class)->connect($focus, $father, $createdBy, $tree);
+                }
             }
         }
 
@@ -214,6 +218,14 @@ class FamilyTreeStructureService
                     throw ValidationException::withMessages([
                         $group.'.'.$index.'.id' => 'Anggota harus berasal dari versi silsilah yang sama.',
                     ]);
+                }
+
+                if ($tree->based_on_id === null && $parentNode !== null) {
+                    $childPerson = $node->person()->firstOrFail();
+
+                    if ((int) $childPerson->father_id !== $parentNode->person_id || $childPerson->pending_father) {
+                        app(FatherConnectionService::class)->connect($childPerson, $parentNode->person()->firstOrFail(), $createdBy, $tree);
+                    }
                 }
 
                 $entries[$node->id] = [

@@ -522,9 +522,12 @@ export function TaromboExplorer({
     const [centerPersonId, setCenterPersonId] = useState<string>(
         initialFocusId ?? rootPerson?.id ?? '',
     );
+    const searchPool = margaTree
+        ? [...margaTreePeople, ...margaDetachedPeople]
+        : people;
     const normalizedSearch = search.trim().toLowerCase();
     const searchResults = normalizedSearch
-        ? people
+        ? searchPool
               .filter((person) =>
                   person.name.toLowerCase().includes(normalizedSearch),
               )
@@ -1358,10 +1361,7 @@ export function TaromboExplorer({
                 </div>
 
                 <div
-                    className={cn(
-                        'relative mx-auto mb-4 w-full max-w-md',
-                        margaTree && 'hidden',
-                    )}
+                    className="relative mx-auto mb-4 w-full max-w-md"
                     onBlur={(event) => {
                         if (
                             !event.currentTarget.contains(event.relatedTarget)
