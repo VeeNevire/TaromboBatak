@@ -8,12 +8,14 @@ use App\Http\Requests\UpdateTaromboAiPromptRequest;
 use App\Models\TaromboAiPrompt;
 use App\Models\TaromboFrame;
 use App\Models\TaromboSnapshot;
+use App\Services\FamilyTreeActivityLogger;
 use App\Services\TaromboFrameComposer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -25,24 +27,36 @@ class TaromboSnapshotController extends Controller
     {
         Gate::authorize('viewAny', TaromboSnapshot::class);
 
-        $canManageAiPrompt = $request->user()->isAdmin();
+        $user = $request->user();
+        $canManageAiPrompt = $user->isAdmin();
+        $canDownload = $user->isStaff();
+        $ownerScope = fn ($query) => $query->when(
+            ! $user->isStaff(),
+            fn ($scoped) => $scoped->whereBelongsTo($user),
+        );
 
         $snapshots = TaromboSnapshot::query()
-            ->whereBelongsTo($request->user())
-            ->with('centerPerson:id,name')
+            ->tap($ownerScope)
+            ->with(['centerPerson:id,name', 'user:id,name'])
             ->latest()
             ->paginate(12)
             ->through(fn (TaromboSnapshot $snapshot) => [
                 'id' => $snapshot->id,
                 'view' => $snapshot->view,
+                'title' => $snapshot->title,
                 'center_person_name' => $snapshot->centerPerson?->name,
+                'owner_name' => $snapshot->user?->name,
                 'image_url' => route('tarombo.snapshots.image', $snapshot),
+                'download_url' => $canDownload
+                    ? route('tarombo.snapshots.download', $snapshot)
+                    : null,
+                'can_delete' => $snapshot->user_id === $user->id,
                 'created_at' => $snapshot->created_at?->toISOString(),
             ]);
 
         $snapshotOptions = TaromboSnapshot::query()
-            ->whereBelongsTo($request->user())
-            ->with('centerPerson:id,name')
+            ->tap($ownerScope)
+            ->with(['centerPerson:id,name', 'user:id,name'])
             ->latest()
             ->limit(60)
             ->get()
@@ -62,7 +76,8 @@ class TaromboSnapshotController extends Controller
             'snapshots' => $snapshots,
             'snapshotOptions' => $snapshotOptions,
             'activeFrames' => $activeFrames,
-            'accountName' => $request->user()->name,
+            'accountName' => $user->name,
+            'canDownload' => $canDownload,
             'canManageAiPrompt' => $canManageAiPrompt,
             'aiPrompt' => $canManageAiPrompt
                 ? TaromboAiPrompt::query()
@@ -102,6 +117,10 @@ class TaromboSnapshotController extends Controller
         $request->user()->taromboSnapshots()->create([
             'center_person_id' => $request->validated('center_person_id'),
             'view' => $request->validated('view'),
+            'title' => $request->validated('title'),
+            'resolution' => $request->validated('resolution'),
+            'paper_size' => $request->validated('paper_size'),
+            'included_person_ids' => $request->validated('included_person_ids'),
             'path' => $path,
         ]);
 
@@ -118,7 +137,10 @@ class TaromboSnapshotController extends Controller
         TaromboFrameComposer $composer,
     ): RedirectResponse {
         $snapshot = TaromboSnapshot::query()
-            ->whereBelongsTo($request->user())
+            ->when(
+                ! $request->user()->isStaff(),
+                fn ($query) => $query->whereBelongsTo($request->user()),
+            )
             ->findOrFail($request->integer('snapshot_id'));
         $frame = TaromboFrame::query()
             ->active()
@@ -166,6 +188,29 @@ class TaromboSnapshotController extends Controller
         );
     }
 
+    public function download(Request $request, TaromboSnapshot $taromboSnapshot): StreamedResponse
+    {
+        Gate::authorize('download', $taromboSnapshot);
+        abort_unless(Storage::disk('local')->exists($taromboSnapshot->path), 404);
+
+        $taromboSnapshot->loadMissing(['centerPerson:id,name', 'user:id,name']);
+
+        app(FamilyTreeActivityLogger::class)->logSnapshotDownload($taromboSnapshot, $request->user());
+
+        $name = $taromboSnapshot->title
+            ?: $taromboSnapshot->centerPerson?->name
+            ?: 'pohon-tarombo';
+
+        return Storage::disk('local')->download(
+            $taromboSnapshot->path,
+            Str::slug($name).'-'.now()->format('Ymd-His').'.jpg',
+            [
+                'Cache-Control' => 'private, no-store, max-age=0',
+                'X-Content-Type-Options' => 'nosniff',
+            ],
+        );
+    }
+
     public function destroy(TaromboSnapshot $taromboSnapshot): RedirectResponse
     {
         Gate::authorize('delete', $taromboSnapshot);
@@ -187,7 +232,9 @@ class TaromboSnapshotController extends Controller
         return [
             'id' => $snapshot->id,
             'view' => $snapshot->view,
+            'title' => $snapshot->title,
             'center_person_name' => $snapshot->centerPerson?->name,
+            'owner_name' => $snapshot->user?->name,
             'image_url' => route('tarombo.snapshots.image', $snapshot),
             'created_at' => $snapshot->created_at?->toISOString(),
         ];

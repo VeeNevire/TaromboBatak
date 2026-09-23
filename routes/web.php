@@ -222,6 +222,9 @@ Route::middleware(['auth'])->group(function () {
         ->name('tarombo.snapshots.store');
     Route::get('dashboard/tarombo/snapshots/{taromboSnapshot}/image', [TaromboSnapshotController::class, 'image'])
         ->name('tarombo.snapshots.image');
+    Route::get('dashboard/tarombo/snapshots/{taromboSnapshot}/download', [TaromboSnapshotController::class, 'download'])
+        ->middleware('throttle:30,1')
+        ->name('tarombo.snapshots.download');
     Route::delete('dashboard/tarombo/snapshots/{taromboSnapshot}', [TaromboSnapshotController::class, 'destroy'])
         ->name('tarombo.snapshots.destroy');
     Route::post('dashboard/tarombo/snapshots/generate', [TaromboSnapshotController::class, 'generate'])

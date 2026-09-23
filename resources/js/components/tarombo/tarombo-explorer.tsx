@@ -23,7 +23,23 @@ import { DescendantsTree } from '@/components/people/descendants-tree';
 import type { DescendantsAlternativeTree } from '@/components/people/descendants-tree';
 import { PersonTreePickerDialog } from '@/components/tarombo/person-tree-picker-dialog';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { buildTaromboPeople } from '@/data/tarombo-tree';
 import type {
@@ -238,6 +254,84 @@ function descendantSubtree(
     return result;
 }
 
+const PAPER_SIZES: Record<string, { width: number; height: number }> = {
+    A4: { width: 595, height: 842 },
+    A3: { width: 842, height: 1191 },
+    A2: { width: 1191, height: 1684 },
+    A1: { width: 1684, height: 2384 },
+    A0: { width: 2384, height: 3370 },
+};
+
+const SNAPSHOT_RESOLUTIONS = [360, 480, 720, 1080, 1440, 2160, 4320];
+
+function snapshotResolutionLabel(resolution: number): string {
+    if (resolution === 2160) {
+        return '2160p (4K)';
+    }
+
+    if (resolution === 4320) {
+        return '4320p (8K)';
+    }
+
+    return `${resolution}p`;
+}
+
+function snapshotFileName(view: FullscreenView): string {
+    return `pohon-tarombo-${view}-${Date.now()}.jpg`;
+}
+
+async function composeOnPaper(
+    dataUrl: string,
+    paper: string,
+    resolution: number,
+): Promise<Blob> {
+    const base = PAPER_SIZES[paper] ?? PAPER_SIZES.A4;
+    const height = resolution;
+    const width = Math.round(height * (base.width / base.height));
+    const image = new Image();
+    await new Promise<void>((resolve, reject) => {
+        image.onload = () => resolve();
+        image.onerror = () => reject(new Error('gagal memuat gambar'));
+        image.src = dataUrl;
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+
+    if (!context) {
+        throw new Error('canvas tidak tersedia');
+    }
+
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, width, height);
+    const margin = Math.round(Math.min(width, height) * 0.04);
+    const scale = Math.min(
+        (width - margin * 2) / image.width,
+        (height - margin * 2) / image.height,
+    );
+    const drawWidth = image.width * scale;
+    const drawHeight = image.height * scale;
+    context.drawImage(
+        image,
+        (width - drawWidth) / 2,
+        (height - drawHeight) / 2,
+        drawWidth,
+        drawHeight,
+    );
+
+    return await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+            (blob) =>
+                blob
+                    ? resolve(blob)
+                    : reject(new Error('gagal membuat gambar')),
+            'image/jpeg',
+            0.92,
+        );
+    });
+}
+
 export function TaromboExplorer({
     people: rows,
     margas,
@@ -416,6 +510,11 @@ export function TaromboExplorer({
     const [ancestorFocusId, setAncestorFocusId] = useState<string | null>(
         initialFocusId,
     );
+    const [saveModalOpen, setSaveModalOpen] = useState(false);
+    const [snapshotTitle, setSnapshotTitle] = useState('');
+    const [snapshotResolution, setSnapshotResolution] = useState(1080);
+    const [snapshotPaper, setSnapshotPaper] = useState('A4');
+    const [excludedBranchIds, setExcludedBranchIds] = useState<string[]>([]);
 
     const clampZoom = (value: number) =>
         Math.round(Math.min(2, Math.max(0.5, value)) * 100) / 100;
@@ -639,6 +738,26 @@ export function TaromboExplorer({
         ? (margaTreePeople[0]?.id ?? '')
         : treeCenterId;
     const renderedHighlightId = margaTree ? margaIdentity?.id : selectedId;
+    const snapshotBranches =
+        margaTree && renderedTreeCenterId !== ''
+            ? renderedTreePeople.filter(
+                  (person) => person.parentId === renderedTreeCenterId,
+              )
+            : [];
+    const excludedPersonIds = new Set<string>();
+
+    for (const branchId of excludedBranchIds) {
+        for (const person of descendantSubtree(renderedTreePeople, branchId)) {
+            excludedPersonIds.add(person.id);
+        }
+    }
+
+    const displayPeople =
+        excludedPersonIds.size === 0
+            ? renderedTreePeople
+            : renderedTreePeople.filter(
+                  (person) => !excludedPersonIds.has(person.id),
+              );
     const diagramPeople = margaTree ? renderedTreePeople : people;
     const diagramCenterPersonId = margaTree
         ? renderedTreeCenterId
@@ -802,11 +921,9 @@ export function TaromboExplorer({
             const image = await fetch(dataUrl).then((response) =>
                 response.blob(),
             );
-            const file = new File(
-                [image],
-                `pohon-tarombo-${fullscreenView}-${Date.now()}.jpg`,
-                { type: 'image/jpeg' },
-            );
+            const file = new File([image], snapshotFileName(fullscreenView), {
+                type: 'image/jpeg',
+            });
 
             router.post(
                 tarombo.snapshots.store(),
@@ -830,6 +947,98 @@ export function TaromboExplorer({
         } finally {
             setSnapshotMode(false);
         }
+    };
+
+    const toggleBranch = (branchId: string, checked: boolean) => {
+        setExcludedBranchIds((current) =>
+            checked
+                ? current.filter((id) => id !== branchId)
+                : [...current, branchId],
+        );
+    };
+
+    const handleCreateSnapshot = async () => {
+        const snapshotNode = snapshotRef.current;
+
+        if (!snapshotNode || savingSnapshot) {
+            return;
+        }
+
+        setSavingSnapshot(true);
+        setSnapshotMode(true);
+
+        try {
+            await new Promise<void>((resolve) =>
+                requestAnimationFrame(() =>
+                    requestAnimationFrame(() => resolve()),
+                ),
+            );
+            await document.fonts.ready;
+
+            const domHeight =
+                snapshotNode.getBoundingClientRect().height ||
+                snapshotResolution;
+            const pixelRatio = Math.min(
+                4,
+                Math.max(1, snapshotResolution / domHeight),
+            );
+
+            const dataUrl = await toJpeg(snapshotNode, {
+                quality: 0.92,
+                pixelRatio,
+                backgroundColor:
+                    window.getComputedStyle(snapshotNode).backgroundColor,
+                cacheBust: true,
+            });
+            const blob = await composeOnPaper(
+                dataUrl,
+                snapshotPaper,
+                snapshotResolution,
+            );
+            const file = new File([blob], snapshotFileName(fullscreenView), {
+                type: 'image/jpeg',
+            });
+            const includedIds = snapshotBranches
+                .filter((branch) => !excludedBranchIds.includes(branch.id))
+                .map((branch) => Number(branch.id));
+
+            router.post(
+                tarombo.snapshots.store(),
+                {
+                    image: file,
+                    view: fullscreenView,
+                    center_person_id: Number(renderedTreeCenterId) || null,
+                    title: snapshotTitle.trim() || null,
+                    resolution: snapshotResolution,
+                    paper_size: snapshotPaper,
+                    included_person_ids: includedIds,
+                },
+                {
+                    forceFormData: true,
+                    preserveScroll: true,
+                    onSuccess: () => setSaveModalOpen(false),
+                    onError: () => toast.error('Gambar pohon gagal disimpan.'),
+                    onFinish: () => setSavingSnapshot(false),
+                },
+            );
+        } catch {
+            setSavingSnapshot(false);
+            toast.error(
+                'Tampilan pohon gagal dibuat menjadi gambar. Coba kembali.',
+            );
+        } finally {
+            setSnapshotMode(false);
+        }
+    };
+
+    const handleSaveClick = () => {
+        if (margaTree) {
+            setSaveModalOpen(true);
+
+            return;
+        }
+
+        void handleSaveSnapshot();
     };
 
     const backButton = (
@@ -1168,7 +1377,7 @@ export function TaromboExplorer({
                 <div style={{ zoom: treeZoom }}>
                     <DescendantsTree
                         key={`${renderedTreeCenterId}-${margaTree?.direction ?? ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
-                        people={renderedTreePeople}
+                        people={displayPeople}
                         centerId={renderedTreeCenterId}
                         onSelect={margaTree ? undefined : handlePersonSelect}
                         highlightId={renderedHighlightId}
@@ -1270,7 +1479,7 @@ export function TaromboExplorer({
                         <Button
                             type="button"
                             size="sm"
-                            onClick={handleSaveSnapshot}
+                            onClick={handleSaveClick}
                             disabled={savingSnapshot}
                             className="text-tb-on-primary bg-tb-primary hover:bg-tb-primary/90"
                         >
@@ -1517,7 +1726,7 @@ export function TaromboExplorer({
                                         <div style={{ zoom: treeZoom }}>
                                             <DescendantsTree
                                                 key={`${renderedTreeCenterId}-${margaTree?.direction ?? ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
-                                                people={renderedTreePeople}
+                                                people={displayPeople}
                                                 centerId={renderedTreeCenterId}
                                                 onSelect={
                                                     margaTree
@@ -1603,6 +1812,136 @@ export function TaromboExplorer({
                 currentId={pendingIdentity?.id ?? myId}
                 onSelect={handleIdentitySelect}
             />
+
+            <Dialog
+                open={saveModalOpen}
+                onOpenChange={(open) => {
+                    if (!open && savingSnapshot) {
+                        return;
+                    }
+
+                    setSaveModalOpen(open);
+
+                    if (!open) {
+                        setExcludedBranchIds([]);
+                    }
+                }}
+            >
+                <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Simpan Pohon Tarombo</DialogTitle>
+                        <DialogDescription>
+                            Atur resolusi, ukuran kertas, dan cabang yang
+                            ditampilkan sebelum menyimpan gambar.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4">
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="snapshot-title">Judul</Label>
+                            <Input
+                                id="snapshot-title"
+                                value={snapshotTitle}
+                                onChange={(event) =>
+                                    setSnapshotTitle(event.target.value)
+                                }
+                                placeholder={`Pohon ${margaIdentity?.name ?? 'Tarombo'}`}
+                                maxLength={120}
+                            />
+                        </div>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <div className="grid gap-1.5">
+                                <Label>Resolusi</Label>
+                                <Select
+                                    value={String(snapshotResolution)}
+                                    onValueChange={(value) =>
+                                        setSnapshotResolution(Number(value))
+                                    }
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {SNAPSHOT_RESOLUTIONS.map((level) => (
+                                            <SelectItem
+                                                key={level}
+                                                value={String(level)}
+                                            >
+                                                {snapshotResolutionLabel(level)}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="grid gap-1.5">
+                                <Label>Ukuran Kertas</Label>
+                                <Select
+                                    value={snapshotPaper}
+                                    onValueChange={setSnapshotPaper}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {Object.keys(PAPER_SIZES).map(
+                                            (paper) => (
+                                                <SelectItem
+                                                    key={paper}
+                                                    value={paper}
+                                                >
+                                                    {paper}
+                                                </SelectItem>
+                                            ),
+                                        )}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label>Pilih Pohon yang Ditampilkan</Label>
+                            {snapshotBranches.length === 0 ? (
+                                <p className="text-sm text-tb-on-surface-variant">
+                                    Tidak ada cabang keturunan langsung pada
+                                    tampilan ini.
+                                </p>
+                            ) : (
+                                <div className="grid gap-1.5">
+                                    {snapshotBranches.map((branch) => (
+                                        <label
+                                            key={branch.id}
+                                            className="flex cursor-pointer items-center gap-3 rounded-lg border border-tb-outline-variant p-2 hover:bg-tb-surface-container"
+                                        >
+                                            <Checkbox
+                                                checked={
+                                                    !excludedBranchIds.includes(
+                                                        branch.id,
+                                                    )
+                                                }
+                                                onCheckedChange={(value) =>
+                                                    toggleBranch(
+                                                        branch.id,
+                                                        value === true,
+                                                    )
+                                                }
+                                            />
+                                            <span className="text-sm text-tb-on-surface">
+                                                {branch.name}
+                                            </span>
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <Button
+                            type="button"
+                            onClick={handleCreateSnapshot}
+                            disabled={savingSnapshot}
+                            className="text-tb-on-primary bg-tb-primary hover:bg-tb-primary-light"
+                        >
+                            {savingSnapshot ? 'Membuat...' : 'Buat'}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

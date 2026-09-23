@@ -20,7 +20,15 @@ class TaromboSnapshotPolicy
      */
     public function view(User $user, TaromboSnapshot $taromboSnapshot): bool
     {
-        return $taromboSnapshot->user_id === $user->id;
+        return $taromboSnapshot->user_id === $user->id || $user->isStaff();
+    }
+
+    /**
+     * Determine whether the user can download the snapshot image.
+     */
+    public function download(User $user, TaromboSnapshot $taromboSnapshot): bool
+    {
+        return $user->isStaff();
     }
 
     /**

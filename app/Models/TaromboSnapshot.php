@@ -15,13 +15,17 @@ use Illuminate\Support\Carbon;
  * @property int|null $center_person_id
  * @property int|null $tarombo_frame_id
  * @property string $view
+ * @property string|null $title
+ * @property int|null $resolution
+ * @property string|null $paper_size
+ * @property array<int, int>|null $included_person_ids
  * @property string $path
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read User $user
  * @property-read Person|null $centerPerson
  */
-#[Fillable(['user_id', 'center_person_id', 'tarombo_frame_id', 'view', 'path'])]
+#[Fillable(['user_id', 'center_person_id', 'tarombo_frame_id', 'view', 'title', 'resolution', 'paper_size', 'included_person_ids', 'path'])]
 class TaromboSnapshot extends Model
 {
     /** @use HasFactory<TaromboSnapshotFactory> */
@@ -43,5 +47,10 @@ class TaromboSnapshot extends Model
     public function taromboFrame(): BelongsTo
     {
         return $this->belongsTo(TaromboFrame::class);
+    }
+
+    protected function casts(): array
+    {
+        return ['included_person_ids' => 'array'];
     }
 }
