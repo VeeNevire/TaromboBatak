@@ -2,13 +2,9 @@ import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useEcho } from '@laravel/echo-react';
 import {
     ArrowLeft,
-    Check,
-    Copy,
-    Link2,
     Megaphone,
     Send,
     Trash2,
-    Unlink,
     Users,
 } from 'lucide-react';
 import type { FormEvent} from 'react';
@@ -20,7 +16,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import announcements from '@/routes/announcements';
 import groups from '@/routes/groups';
-import { edit as editProfile } from '@/routes/profile';
 
 type Member = { id: number; name: string; role: string };
 type Contact = { id: number; name: string };
@@ -50,12 +45,10 @@ export default function GroupShow({
     group,
     messages: initialMessages,
     availableContacts,
-    telegramLinkCode,
 }: {
     group: Group;
     messages: Message[];
     availableContacts: Contact[];
-    telegramLinkCode: string | null;
 }) {
     const { auth } = usePage().props;
     const [messages, setMessages] = useState(initialMessages);
@@ -287,98 +280,6 @@ export default function GroupShow({
                                     >
                                         Simpan anggota
                                     </Button>
-                                </CardContent>
-                            </Card>
-                        )}
-                        {group.can_manage && (
-                            <Card className="border-tb-outline-variant bg-tb-surface-bright">
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2">
-                                        <Send className="size-5 text-sky-500" />
-                                        Telegram
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-3">
-                                    {group.telegram_linked ? (
-                                        <>
-                                            <div className="rounded-xl bg-emerald-500/10 p-3 text-sm text-emerald-700">
-                                                <Check className="mr-1 inline size-4" />
-                                                Terhubung ke{' '}
-                                                {group.telegram_title ??
-                                                    'grup Telegram'}
-                                            </div>
-                                            <Button
-                                                className="w-full"
-                                                variant="outline"
-                                                onClick={() =>
-                                                    router.delete(
-                                                        groups.telegramLink.destroy(
-                                                            group.id,
-                                                        ).url,
-                                                    )
-                                                }
-                                            >
-                                                <Unlink className="size-4" />
-                                                Putuskan
-                                            </Button>
-                                        </>
-                                    ) : !group.telegram_account_linked ? (
-                                        <>
-                                            <p className="text-sm text-tb-on-surface-variant">
-                                                Hubungkan akun Telegram Anda
-                                                terlebih dahulu sebelum
-                                                memasangkan grup.
-                                            </p>
-                                            <Button
-                                                asChild
-                                                className="w-full"
-                                                variant="outline"
-                                            >
-                                                <Link href={editProfile()}>
-                                                    <Link2 className="size-4" />
-                                                    Buka Pengaturan Profil
-                                                </Link>
-                                            </Button>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <p className="text-sm text-tb-on-surface-variant">
-                                                Tambahkan bot sebagai admin grup
-                                                Telegram, lalu kirim kode
-                                                berikut.
-                                            </p>
-                                            {telegramLinkCode && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                        navigator.clipboard.writeText(
-                                                            `/link ${telegramLinkCode}`,
-                                                        )
-                                                    }
-                                                    className="flex w-full items-center justify-between rounded-xl bg-tb-surface-container p-3 font-mono text-sm"
-                                                >
-                                                    <span>
-                                                        /link {telegramLinkCode}
-                                                    </span>
-                                                    <Copy className="size-4" />
-                                                </button>
-                                            )}
-                                            <Button
-                                                className="w-full"
-                                                variant="outline"
-                                                onClick={() =>
-                                                    router.post(
-                                                        groups.telegramLink.store(
-                                                            group.id,
-                                                        ).url,
-                                                    )
-                                                }
-                                            >
-                                                <Link2 className="size-4" />
-                                                Buat kode pemasangan
-                                            </Button>
-                                        </>
-                                    )}
                                 </CardContent>
                             </Card>
                         )}

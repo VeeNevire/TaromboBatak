@@ -9,6 +9,7 @@ use App\Models\IdentityRequest;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
+use App\Services\FamilyTreeInheritanceService;
 use App\Services\TaromboStatisticsService;
 use App\Services\TaromboTreeService;
 use Illuminate\Database\Eloquent\Builder;
@@ -43,7 +44,7 @@ class TaromboController extends Controller
             ]);
         }
 
-        [$people, $margas, $alternativeTrees, $identity, $familyTreeOptions, $selectedFamilyTreeId, $selectedMargaId, $selectedTreePeople, $margaTree] = $this->treeData($request);
+        [$people, $margas, $alternativeTrees, $identity, $familyTreeOptions, $selectedFamilyTreeId, $selectedMargaId, $selectedTreePeople, $margaTree, $accountTreePersonIds] = $this->treeData($request);
 
         return Inertia::render('tarombo/index', [
             'people' => $people,
@@ -55,6 +56,7 @@ class TaromboController extends Controller
             'selectedMargaId' => $selectedMargaId,
             'selectedTreePeople' => $selectedTreePeople,
             'margaTree' => $margaTree,
+            'accountTreePersonIds' => $accountTreePersonIds,
         ]);
     }
 
@@ -63,7 +65,7 @@ class TaromboController extends Controller
      */
     public function fullscreen(Request $request, string $view): Response
     {
-        [$people, $margas, $alternativeTrees, $identity, $familyTreeOptions, $selectedFamilyTreeId, $selectedMargaId, $selectedTreePeople, $margaTree] = $this->treeData($request);
+        [$people, $margas, $alternativeTrees, $identity, $familyTreeOptions, $selectedFamilyTreeId, $selectedMargaId, $selectedTreePeople, $margaTree, $accountTreePersonIds] = $this->treeData($request);
 
         return Inertia::render('tarombo/fullscreen', [
             'people' => $people,
@@ -77,13 +79,14 @@ class TaromboController extends Controller
             'selectedMargaId' => $selectedMargaId,
             'selectedTreePeople' => $selectedTreePeople,
             'margaTree' => $margaTree,
+            'accountTreePersonIds' => $accountTreePersonIds,
         ]);
     }
 
     /**
      * Build the scoped tarombo rows and marga legend for the current user.
      *
-     * @return array{0: array<int, array<string, mixed>>, 1: array<int, array<string, mixed>>, 2: array<int, array<string, mixed>>, 3: array<string, mixed>, 4: array<int, array<string, mixed>>, 5: int|null, 6: int|null, 7: array<int, array<string, mixed>>, 8: array<string, mixed>|null}
+     * @return array{0: array<int, array<string, mixed>>, 1: array<int, array<string, mixed>>, 2: array<int, array<string, mixed>>, 3: array<string, mixed>, 4: array<int, array<string, mixed>>, 5: int|null, 6: int|null, 7: array<int, array<string, mixed>>, 8: array<string, mixed>|null, 9: array<int, string>}
      */
     private function treeData(Request $request): array
     {
@@ -91,6 +94,7 @@ class TaromboController extends Controller
         $user->loadMissing('currentPerson');
         $service = app(TaromboTreeService::class);
         $accountFamilyTrees = $this->accountFamilyTrees($user);
+        $accountTreePersonIds = $this->accountTreePersonIds($accountFamilyTrees);
         $approvedMargas = $this->approvedMargas($user);
         $requestedFamilyTreeId = $request->filled('family_tree')
             ? $request->integer('family_tree')
@@ -264,7 +268,27 @@ class TaromboController extends Controller
             $selectedMargaId,
             $selectedTreePeople,
             $margaTree,
+            $accountTreePersonIds,
         ];
+    }
+
+    /**
+     * Person ids that appear in any of the account's Silsilah Milik Akun.
+     * Resolved through inheritance so versions based on another tree are included.
+     *
+     * @param  Collection<int, FamilyTree>  $accountFamilyTrees
+     * @return array<int, string>
+     */
+    private function accountTreePersonIds(Collection $accountFamilyTrees): array
+    {
+        $inheritance = app(FamilyTreeInheritanceService::class);
+
+        return $accountFamilyTrees
+            ->flatMap(fn (FamilyTree $tree) => $inheritance->nodesFor($tree)->pluck('person_id'))
+            ->map(fn (int|string $id): string => (string) $id)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /** @return Collection<int, FamilyTree> */
