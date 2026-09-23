@@ -1082,9 +1082,15 @@ class PersonController extends Controller
             return back();
         }
 
-        Gate::authorize('update', $person);
-
         $versionTreeId = $request->integer('version_tree');
+
+        // A family-tree edit is authorized like its form (edit()): by owning
+        // the tree, checked below. The global person policy — which also locks
+        // contributor-approved ancestors — only guards the global form.
+        if ($versionTreeId < 1) {
+            Gate::authorize('update', $person);
+        }
+
         if ($versionTreeId > 0) {
             $familyTree = FamilyTree::query()->findOrFail($versionTreeId);
             $this->authorizeFamilyTree($request, $familyTree);

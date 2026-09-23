@@ -129,6 +129,21 @@ class FamilyTreeStructureService
             return $nodes->get((int) $personId);
         };
 
+        // A father typed by name (not picked from the list) must be found or
+        // created, then attached below like a picked one — never dropped.
+        if (! filled(data_get($data, 'father.id')) && filled(data_get($data, 'father.name'))) {
+            $typedFather = app(FamilyEntryService::class)->resolveFatherFromForm(
+                (array) data_get($data, 'father'),
+                $focus->marga_id ?? $tree->rootPerson()->value('marga_id'),
+                $createdBy,
+                $focus->ineligibleFatherIds(),
+            );
+
+            if ($typedFather !== null) {
+                data_set($data, 'father.id', $typedFather->id);
+            }
+        }
+
         $entries = [];
         $fatherNode = $nodeForPerson(data_get($data, 'father.id'));
         $fatherId = data_get($data, 'father.id');

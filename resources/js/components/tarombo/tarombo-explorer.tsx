@@ -406,6 +406,7 @@ export function TaromboExplorer({
     const [treeZoom, setTreeZoom] = useState(1);
     const [showFemaleLineage, setShowFemaleLineage] = useState(false);
     const [showSpouseNames, setShowSpouseNames] = useState(false);
+    const [compactTree, setCompactTree] = useState(false);
     const [showNodeCircles, setShowNodeCircles] = useState(true);
     const [familyTreeSearch, setFamilyTreeSearch] = useState('');
     const [familyTreeSelectorOpen, setFamilyTreeSelectorOpen] = useState(false);
@@ -482,6 +483,23 @@ export function TaromboExplorer({
                 className="size-4 rounded border-emerald-600 text-emerald-600 accent-emerald-600 focus:ring-2 focus:ring-emerald-500/30"
             />
             Nama Pasangan Ditampilkan
+        </label>
+    );
+
+    const compactTreeToggle = (
+        <label
+            className={cn(
+                'flex cursor-pointer items-center justify-end gap-2 text-xs font-semibold text-emerald-700 select-none dark:text-emerald-300',
+                snapshotMode && 'invisible',
+            )}
+        >
+            <input
+                type="checkbox"
+                checked={compactTree}
+                onChange={(event) => setCompactTree(event.target.checked)}
+                className="size-4 rounded border-emerald-600 text-emerald-600 accent-emerald-600 focus:ring-2 focus:ring-emerald-500/30"
+            />
+            Rapat
         </label>
     );
 
@@ -1162,6 +1180,7 @@ export function TaromboExplorer({
                         {(!margaTree || !fullscreen) && familyTreeSelector}
                         {!margaTree && femaleLineageToggle}
                         {spouseNamesToggle}
+                        {compactTreeToggle}
                         {!fullscreen && nodeCircleToggle}
                     </div>
                 </div>
@@ -1196,6 +1215,7 @@ export function TaromboExplorer({
                         compactTerminalBranches={
                             margaTree?.direction === 'lower'
                         }
+                        packCollapsed={compactTree}
                         versionTreeId={selectedFamilyTreeId}
                         compact={fullscreen}
                         nodeIdPrefix={
@@ -1511,6 +1531,7 @@ export function TaromboExplorer({
                                                 {!margaTree &&
                                                     femaleLineageToggle}
                                                 {spouseNamesToggle}
+                                                {compactTreeToggle}
                                                 {nodeCircleToggle}
                                             </div>
                                         </div>
@@ -1567,6 +1588,7 @@ export function TaromboExplorer({
                                                     margaTree?.direction ===
                                                     'lower'
                                                 }
+                                                packCollapsed={compactTree}
                                                 scrollToLineageEnd={
                                                     searchedId !== null
                                                 }
