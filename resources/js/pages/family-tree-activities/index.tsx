@@ -1,6 +1,12 @@
 import { Head } from '@inertiajs/react';
 import { History } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
 import { dashboard } from '@/routes';
 import familyTreeActivities from '@/routes/family-tree-activities';
 
@@ -26,6 +32,7 @@ export default function FamilyTreeActivitiesIndex({
             created: 'Tambah',
             updated: 'Edit',
             deleted: 'Hapus',
+            downloaded: 'Unduh',
         })[action] ?? action;
 
     return (
@@ -39,7 +46,8 @@ export default function FamilyTreeActivitiesIndex({
                             Aktivitas Silsilah
                         </CardTitle>
                         <CardDescription>
-                            Riwayat penambahan, perubahan, dan penghapusan pada silsilah milik akun.
+                            Riwayat penambahan, perubahan, dan penghapusan pada
+                            silsilah milik akun.
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -51,15 +59,25 @@ export default function FamilyTreeActivitiesIndex({
                             <div className="overflow-hidden rounded-xl border border-tb-outline-variant">
                                 <div className="divide-y divide-tb-outline-variant">
                                     {activities.map((activity) => (
-                                        <div key={activity.id} className="grid gap-1 p-4 sm:grid-cols-[1fr_auto] sm:items-center">
+                                        <div
+                                            key={activity.id}
+                                            className="grid gap-1 p-4 sm:grid-cols-[1fr_auto] sm:items-center"
+                                        >
                                             <div>
                                                 <p className="text-sm font-semibold text-tb-on-surface">
                                                     {activity.description}
                                                 </p>
                                                 <p className="mt-1 text-xs text-tb-on-surface-variant">
-                                                    Nama Keluarga: {activity.tree_name} · Nama Anggota:{' '}
-                                                    {activity.member_name ?? '-'} · Aksi:{' '}
-                                                    {actionLabel(activity.action)} · oleh {activity.actor}
+                                                    Nama Keluarga:{' '}
+                                                    {activity.tree_name} · Nama
+                                                    Anggota:{' '}
+                                                    {activity.member_name ??
+                                                        '-'}{' '}
+                                                    · Aksi:{' '}
+                                                    {actionLabel(
+                                                        activity.action,
+                                                    )}{' '}
+                                                    · oleh {activity.actor}
                                                 </p>
                                             </div>
                                             <time className="text-xs text-tb-on-surface-variant">

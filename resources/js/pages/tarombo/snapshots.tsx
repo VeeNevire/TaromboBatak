@@ -1,6 +1,7 @@
 import { Head, Link, router } from '@inertiajs/react';
 import {
     ArrowLeft,
+    Download,
     Images,
     PanelsTopLeft,
     ShieldCheck,
@@ -25,8 +26,12 @@ import tarombo from '@/routes/tarombo';
 type Snapshot = {
     id: number;
     view: 'diagram' | 'tree';
+    title: string | null;
     center_person_name: string | null;
+    owner_name: string | null;
     image_url: string;
+    download_url?: string | null;
+    can_delete?: boolean;
     created_at: string | null;
 };
 
@@ -50,6 +55,7 @@ export default function TaromboSnapshots({
     snapshotOptions,
     activeFrames,
     accountName,
+    canDownload,
     canManageAiPrompt,
     aiPrompt,
 }: {
@@ -57,6 +63,7 @@ export default function TaromboSnapshots({
     snapshotOptions: Snapshot[];
     activeFrames: Frame[];
     accountName: string;
+    canDownload: boolean;
     canManageAiPrompt: boolean;
     aiPrompt: string | null;
 }) {
@@ -75,6 +82,9 @@ export default function TaromboSnapshots({
         dateStyle: 'long',
         timeStyle: 'short',
     });
+
+    const snapshotLabel = (snapshot: Snapshot) =>
+        snapshot.title ?? snapshot.center_person_name ?? 'Pohon Tarombo';
 
     const removeSnapshot = (snapshot: Snapshot) => {
         if (!window.confirm('Hapus gambar Tarombo tersimpan ini?')) {
@@ -176,8 +186,7 @@ export default function TaromboSnapshots({
                             <Images className="size-4 shrink-0" />
                             <span className="truncate">
                                 {sourceSnapshot
-                                    ? (sourceSnapshot.center_person_name ??
-                                      'Pohon Tarombo')
+                                    ? snapshotLabel(sourceSnapshot)
                                     : 'Pilih Gambar'}
                             </span>
                         </Button>
@@ -213,13 +222,25 @@ export default function TaromboSnapshots({
 
                 <div className="flex items-start gap-3 rounded-xl border border-tb-outline-variant bg-tb-surface-container/50 p-4 text-sm text-tb-on-surface-variant">
                     <ShieldCheck className="mt-0.5 size-5 shrink-0 text-tb-primary" />
-                    <p>
-                        Gambar dilayani melalui akses privat, tanpa tombol
-                        download, serta tidak dapat diklik kanan atau ditarik
-                        dari galeri. Saat Gen AI dipilih, gambar Tarombo dan
-                        frame dikirim sebagai dua referensi ke AI untuk
-                        dianalisis dan disatukan secara proporsional.
-                    </p>
+                    {canDownload ? (
+                        <p>
+                            Gambar dilayani melalui akses privat. Sebagai staff,
+                            Anda dapat melihat dan mengunduh gambar Tarombo
+                            seluruh akun. Setiap aksi unduh tercatat pada Log
+                            Aktivitas. Saat Gen AI dipilih, gambar Tarombo dan
+                            frame dikirim sebagai dua referensi ke AI untuk
+                            dianalisis dan disatukan secara proporsional.
+                        </p>
+                    ) : (
+                        <p>
+                            Gambar dilayani melalui akses privat, tanpa tombol
+                            download, serta tidak dapat diklik kanan atau
+                            ditarik dari galeri. Saat Gen AI dipilih, gambar
+                            Tarombo dan frame dikirim sebagai dua referensi ke
+                            AI untuk dianalisis dan disatukan secara
+                            proporsional.
+                        </p>
+                    )}
                 </div>
 
                 {snapshots.data.length === 0 ? (
@@ -271,8 +292,7 @@ export default function TaromboSnapshots({
                                     <div className="min-w-0">
                                         <div className="flex flex-wrap items-center gap-2">
                                             <p className="truncate text-sm font-semibold text-tb-on-surface">
-                                                {snapshot.center_person_name ??
-                                                    'Pohon Tarombo'}
+                                                {snapshotLabel(snapshot)}
                                             </p>
                                             <Badge variant="outline">
                                                 {snapshot.view === 'tree'
@@ -281,6 +301,9 @@ export default function TaromboSnapshots({
                                             </Badge>
                                         </div>
                                         <p className="mt-1 text-xs text-tb-on-surface-variant">
+                                            {snapshot.owner_name
+                                                ? `Milik ${snapshot.owner_name} · `
+                                                : ''}
                                             {snapshot.created_at
                                                 ? dateFormatter.format(
                                                       new Date(
@@ -290,16 +313,37 @@ export default function TaromboSnapshots({
                                                 : 'Waktu tidak tersedia'}
                                         </p>
                                     </div>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => removeSnapshot(snapshot)}
-                                        aria-label="Hapus gambar Tarombo"
-                                        className="shrink-0 text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/40"
-                                    >
-                                        <Trash2 className="size-4" />
-                                    </Button>
+                                    <div className="flex shrink-0 items-center gap-1">
+                                        {snapshot.download_url && (
+                                            <Button
+                                                asChild
+                                                variant="ghost"
+                                                size="icon"
+                                            >
+                                                <a
+                                                    href={snapshot.download_url}
+                                                    aria-label="Unduh gambar Tarombo"
+                                                    title="Unduh"
+                                                >
+                                                    <Download className="size-4" />
+                                                </a>
+                                            </Button>
+                                        )}
+                                        {snapshot.can_delete && (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() =>
+                                                    removeSnapshot(snapshot)
+                                                }
+                                                aria-label="Hapus gambar Tarombo"
+                                                className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/40"
+                                            >
+                                                <Trash2 className="size-4" />
+                                            </Button>
+                                        )}
+                                    </div>
                                 </CardContent>
                             </Card>
                         ))}
@@ -351,15 +395,27 @@ export default function TaromboSnapshots({
                     onContextMenu={(event) => event.preventDefault()}
                 >
                     <DialogHeader className="pr-8">
-                        <DialogTitle className="font-display text-tb-on-surface">
-                            {selectedSnapshot?.center_person_name ??
-                                'Pohon Tarombo'}
-                        </DialogTitle>
-                        <DialogDescription>
-                            {selectedSnapshot?.view === 'tree'
-                                ? 'Tampilan silsilah vertikal'
-                                : 'Tampilan diagram radial'}
-                        </DialogDescription>
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <DialogTitle className="font-display text-tb-on-surface">
+                                    {selectedSnapshot
+                                        ? snapshotLabel(selectedSnapshot)
+                                        : 'Pohon Tarombo'}
+                                </DialogTitle>
+                                <DialogDescription>
+                                    {selectedSnapshot?.view === 'tree'
+                                        ? 'Tampilan silsilah vertikal'
+                                        : 'Tampilan diagram radial'}
+                                </DialogDescription>
+                            </div>
+                            {selectedSnapshot?.download_url && (
+                                <Button asChild variant="outline">
+                                    <a href={selectedSnapshot.download_url}>
+                                        <Download className="size-4" /> Unduh
+                                    </a>
+                                </Button>
+                            )}
+                        </div>
                     </DialogHeader>
                     {selectedSnapshot && (
                         <div
@@ -402,15 +458,14 @@ export default function TaromboSnapshots({
                             >
                                 <img
                                     src={snapshot.image_url}
-                                    alt={
-                                        snapshot.center_person_name ??
-                                        'Pohon Tarombo'
-                                    }
+                                    alt={snapshotLabel(snapshot)}
                                     className="aspect-video w-full bg-tb-surface-container object-contain"
                                 />
                                 <p className="truncate px-3 py-2 text-sm font-medium text-tb-on-surface">
-                                    {snapshot.center_person_name ??
-                                        'Pohon Tarombo'}
+                                    {snapshotLabel(snapshot)}
+                                    {snapshot.owner_name
+                                        ? ` · ${snapshot.owner_name}`
+                                        : ''}
                                 </p>
                             </button>
                         ))}
@@ -474,8 +529,8 @@ export default function TaromboSnapshots({
                             <DialogTitle>Prompt Gen AI</DialogTitle>
                             <DialogDescription>
                                 Prompt ini digunakan saat AI menggabungkan
-                                gambar Tarombo dengan template frame untuk
-                                semua pengguna.
+                                gambar Tarombo dengan template frame untuk semua
+                                pengguna.
                             </DialogDescription>
                         </DialogHeader>
                         <label
@@ -505,7 +560,9 @@ export default function TaromboSnapshots({
                                 onClick={savePrompt}
                                 className="bg-tb-primary hover:bg-tb-primary-light"
                             >
-                                {savingPrompt ? 'Menyimpan...' : 'Simpan Prompt'}
+                                {savingPrompt
+                                    ? 'Menyimpan...'
+                                    : 'Simpan Prompt'}
                             </Button>
                         </div>
                     </DialogContent>

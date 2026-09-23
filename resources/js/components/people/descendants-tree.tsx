@@ -31,6 +31,7 @@ type Props = {
     showSpouseNames?: boolean;
     allowBranchEntry?: boolean;
     compactTerminalBranches?: boolean;
+    packCollapsed?: boolean;
     scrollToLineageEnd?: boolean;
 };
 
@@ -116,6 +117,7 @@ function TreeBranch({
     nodeIdPrefix,
     leafSiblings = EMPTY_LEAF_SIBLINGS,
     leafSiblingsFemaleLineage = false,
+    packCollapsed = false,
 }: {
     person: TaromboPerson;
     childrenOf: Map<string, TaromboPerson[]>;
@@ -142,6 +144,7 @@ function TreeBranch({
     compactTerminalBranches?: boolean;
     leafSiblings?: TaromboPerson[];
     leafSiblingsFemaleLineage?: boolean;
+    packCollapsed?: boolean;
 }) {
     const [activeAlternativeId, setActiveAlternativeId] = useState<
         number | null
@@ -167,40 +170,48 @@ function TreeBranch({
     );
     const useCompactCard =
         compact || (compactTerminalBranches && isTerminalBranch);
-    // Childless siblings are stacked beside this card instead of each taking
-    // their own column past the whole subtree.
-    const branchChildren = children.filter((child) =>
-        hasDescendants(child, childrenOf, alternativeTrees),
-    );
+    // Childless siblings — and, in the "Rapat" view, siblings whose branch is
+    // still folded — sit beside this card instead of each taking their own
+    // column past the whole subtree. Unfolding one turns it back into a branch.
+    const isPackable = (child: TaromboPerson) =>
+        !hasDescendants(child, childrenOf, alternativeTrees) ||
+        (packCollapsed &&
+            collapsed.has(child.id) &&
+            !lineageIds.has(child.id));
+    const branchChildren = children.filter((child) => !isPackable(child));
     const leafChildren =
         branchChildren.length > 0
-            ? children.filter(
-                  (child) => !hasDescendants(child, childrenOf, alternativeTrees),
-              )
+            ? children.filter(isPackable)
             : EMPTY_LEAF_SIBLINGS;
     const renderedChildren =
         leafChildren.length > 0 ? branchChildren : children;
-    // Leaves are terminal, so their cards are compact whenever this tree
-    // compacts terminal branches — not only in the fullscreen compact tree.
-    const leafCardWidth =
-        compact || compactTerminalBranches
+    // Each leaf's card width, mirroring the mode its own TreeBranch renders:
+    // terminal leaves go compact when this tree compacts terminal branches,
+    // folded ones keep the regular narrow card.
+    const leafCardWidths = leafSiblings.map((leaf) =>
+        compact ||
+        (compactTerminalBranches &&
+            !hasDescendants(leaf, childrenOf, alternativeTrees))
             ? CLUSTER_CARD_WIDTH.compact
-            : CLUSTER_CARD_WIDTH.normal;
+            : CLUSTER_CARD_WIDTH.normal,
+    );
     const leafCount = leafSiblings.length;
+    const leafWidthSum = leafCardWidths.reduce((sum, width) => sum + width, 0);
+    const lastLeafWidth = leafCardWidths[leafCount - 1] ?? 0;
     // Footprint of the leaf group itself; the row's own flex gap sits on both
     // sides of the card, so the phantom spacer only mirrors the group's width.
-    const leafGroupWidth =
-        leafCount * leafCardWidth + (leafCount - 1) * CLUSTER_GAP;
+    const leafGroupWidth = leafWidthSum + (leafCount - 1) * CLUSTER_GAP;
     // Card centre → last leaf's centre, the span the sibling bar has to cover.
     const leafBarLength =
         CLUSTER_GAP +
-        (leafCount - 1) * (leafCardWidth + CLUSTER_GAP) +
-        leafCardWidth / 2;
+        (leafWidthSum - lastLeafWidth) +
+        (leafCount - 1) * CLUSTER_GAP +
+        lastLeafWidth / 2;
     const card = (
         <NodeCard
             node={toNode(person, numberById.get(person.id))}
             compact={useCompactCard}
-            narrow={isTerminalBranch}
+            narrow={isTerminalBranch || (packCollapsed && isCollapsed)}
             highlighted={isCenter || isHighlighted}
             onAvatarClick={
                 showProfileOnName ? () => onSelect?.(person.id) : undefined
@@ -361,6 +372,7 @@ function TreeBranch({
                             showNodeAvatar={showNodeAvatar}
                             showSpouseNames={showSpouseNames}
                             compactTerminalBranches={compactTerminalBranches}
+                            packCollapsed={packCollapsed}
                         />
                     ))}
                 </ul>
@@ -403,6 +415,7 @@ function TreeBranch({
                             showNodeAvatar={showNodeAvatar}
                             showSpouseNames={showSpouseNames}
                             compactTerminalBranches={compactTerminalBranches}
+                            packCollapsed={packCollapsed}
                         />
                     ))}
                 </ul>
@@ -494,6 +507,7 @@ export function DescendantsTree({
     showSpouseNames = false,
     allowBranchEntry = false,
     compactTerminalBranches = false,
+    packCollapsed = false,
     scrollToLineageEnd = false,
 }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -671,7 +685,7 @@ export function DescendantsTree({
             observer.disconnect();
             window.removeEventListener('resize', updateLines);
         };
-    }, [collapsed, lineagePath, nodeIdPrefix, people]);
+    }, [collapsed, lineagePath, nodeIdPrefix, packCollapsed, people]);
 
     const focusTargetId =
         scrollToLineageEnd && lineagePath.length > 1
@@ -763,6 +777,7 @@ export function DescendantsTree({
                             showNodeAvatar={showNodeAvatar}
                             showSpouseNames={showSpouseNames}
                             compactTerminalBranches={compactTerminalBranches}
+                            packCollapsed={packCollapsed}
                         />
                     ))}
                 </ul>
@@ -826,6 +841,7 @@ export function DescendantsTree({
                                             compactTerminalBranches={
                                                 compactTerminalBranches
                                             }
+                                            packCollapsed={packCollapsed}
                                         />
                                     </ul>
                                 </div>
@@ -879,6 +895,7 @@ export function DescendantsTree({
                                             compact={compact}
                                             showNodeAvatar={showNodeAvatar}
                                             showSpouseNames={showSpouseNames}
+                                            packCollapsed={packCollapsed}
                                         />
                                     </ul>
                                 </div>
