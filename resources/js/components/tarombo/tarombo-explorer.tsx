@@ -68,6 +68,7 @@ type Props = {
     selectedFamilyTreeId: number | null;
     selectedMargaId: number | null;
     selectedTreePeople: TaromboPersonRow[] | null;
+    accountTreePersonIds?: string[];
     margaTree?: {
         margaName: string;
         identityPersonId: string | null;
@@ -249,6 +250,7 @@ export function TaromboExplorer({
     selectedFamilyTreeId,
     selectedMargaId,
     selectedTreePeople,
+    accountTreePersonIds = [],
     margaTree = null,
 }: Props) {
     const people = buildTaromboPeople(rows);
@@ -321,6 +323,10 @@ export function TaromboExplorer({
             ),
         ];
     }, [margaIdentity, margaLineagePath, margaTree, selectedFamilyTreePeople]);
+    const accountTreePersonIdSet = useMemo(
+        () => new Set(accountTreePersonIds),
+        [accountTreePersonIds],
+    );
     const margaDetachedRoots = useMemo(() => {
         if (!margaTree || margaTree.direction !== 'lower' || !margaIdentity) {
             return [] as TaromboPerson[];
@@ -336,9 +342,16 @@ export function TaromboExplorer({
             (person) =>
                 person.marga === margaTree.margaName &&
                 !connectedIds.has(person.id) &&
-                !person.parentId,
+                !person.parentId &&
+                (accountTreePersonIdSet.size === 0 ||
+                    accountTreePersonIdSet.has(person.id)),
         );
-    }, [margaIdentity, margaTree, selectedFamilyTreePeople]);
+    }, [
+        accountTreePersonIdSet,
+        margaIdentity,
+        margaTree,
+        selectedFamilyTreePeople,
+    ]);
     const margaDetachedPeople = useMemo(
         () =>
             margaDetachedRoots.flatMap((root) =>
@@ -1225,7 +1238,7 @@ export function TaromboExplorer({
         <div
             className={cn(
                 'flex flex-col gap-6 p-4 md:p-6',
-                fullscreen ? 'h-dvh gap-4 md:p-4' : 'h-full flex-1',
+                fullscreen ? 'h-full gap-4 md:p-4' : 'h-full flex-1',
             )}
         >
             <div className="flex items-start justify-between gap-3">

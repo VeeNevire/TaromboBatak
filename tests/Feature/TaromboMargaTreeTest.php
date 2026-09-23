@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\FamilyTree;
+use App\Models\FamilyTreeNode;
 use App\Models\Marga;
 use App\Models\MargaAccessRequest;
 use App\Models\Person;
@@ -251,4 +253,79 @@ test('marga tree marks people claimed by an account and exposes that account for
             ->where('people.0.claimedAccounts.0.id', $account->id)
             ->where('people.0.claimedAccounts.0.name', $account->name)
             ->where('people.0.claimedAccounts.0.isContact', true));
+});
+
+test('marga tree exposes only account silsilah members for the detached branches', function () {
+    $marga = Marga::factory()->create();
+    $viewer = User::factory()->withMarga($marga->id)->create();
+    $identity = Person::factory()->create([
+        'marga_id' => $marga->id,
+        'gender' => 'L',
+    ]);
+    $accountMember = Person::factory()->create([
+        'name' => 'Anggota Silsilah Akun',
+        'marga_id' => $marga->id,
+        'gender' => 'L',
+    ]);
+    $otherMember = Person::factory()->create([
+        'name' => 'Anggota Marga Lain',
+        'marga_id' => $marga->id,
+        'gender' => 'L',
+    ]);
+    $marga->update(['identity_person_id' => $identity->id]);
+
+    $tree = FamilyTree::create([
+        'user_id' => $viewer->id,
+        'root_person_id' => $accountMember->id,
+        'name' => 'Silsilah Milik Akun',
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $accountMember->id,
+        'chain' => '1',
+    ]);
+
+    MargaAccessRequest::create([
+        'requester_id' => $viewer->id,
+        'marga_id' => $marga->id,
+        'status' => MargaAccessRequest::STATUS_APPROVED,
+    ]);
+
+    $this->actingAs($viewer)
+        ->get(route('tarombo.fullscreen', [
+            'view' => 'tree',
+            'marga_id' => $marga->id,
+            'marga_direction' => 'lower',
+        ]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('accountTreePersonIds', [(string) $accountMember->id])
+            ->where('people', fn ($people) => collect($people)
+                ->contains(fn (array $person) => $person['id'] === (string) $otherMember->id)));
+});
+
+test('marga tree exposes an empty account silsilah list when the account owns no tree', function () {
+    $marga = Marga::factory()->create();
+    $viewer = User::factory()->withMarga($marga->id)->create();
+    $identity = Person::factory()->create([
+        'marga_id' => $marga->id,
+        'gender' => 'L',
+    ]);
+    $marga->update(['identity_person_id' => $identity->id]);
+
+    MargaAccessRequest::create([
+        'requester_id' => $viewer->id,
+        'marga_id' => $marga->id,
+        'status' => MargaAccessRequest::STATUS_APPROVED,
+    ]);
+
+    $this->actingAs($viewer)
+        ->get(route('tarombo.fullscreen', [
+            'view' => 'tree',
+            'marga_id' => $marga->id,
+            'marga_direction' => 'lower',
+        ]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('accountTreePersonIds', []));
 });

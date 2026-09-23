@@ -18,6 +18,7 @@ type Props = {
     selectedFamilyTreeId: number | null;
     selectedMargaId: number | null;
     selectedTreePeople: TaromboPersonRow[] | null;
+    accountTreePersonIds: string[];
     margaTree: {
         margaName: string;
         identityPersonId: string | null;
@@ -43,6 +44,7 @@ export default function TaromboIndex({
     selectedFamilyTreeId,
     selectedMargaId,
     selectedTreePeople,
+    accountTreePersonIds,
     margaTree,
 }: Props) {
     const selectedTreeKey =
@@ -65,6 +67,7 @@ export default function TaromboIndex({
                 selectedFamilyTreeId={selectedFamilyTreeId}
                 selectedMargaId={selectedMargaId}
                 selectedTreePeople={selectedTreePeople}
+                accountTreePersonIds={accountTreePersonIds}
                 margaTree={margaTree}
             />
         </>

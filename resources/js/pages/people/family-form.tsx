@@ -516,6 +516,28 @@ function treeBelongsToFamily(
     return Number(tree.root_person_id) === Number(personId);
 }
 
+/**
+ * Open the editable family entry for a person. Prefers a silsilah version the
+ * account can manage so the edit route is not blocked by the read-only gate on
+ * the shared Person graph; falls back to the plain edit route.
+ */
+function personEntryHref(
+    personId: number,
+    familyTrees: FamilyTreeHistoryEntry[],
+    selectedVersionId: number | null,
+) {
+    const manageable = familyTrees.filter(
+        (tree) => tree.can_manage && tree.member_person_ids.includes(personId),
+    );
+    const versionTree =
+        manageable.find((tree) => tree.id === selectedVersionId) ??
+        manageable[0];
+
+    return versionTree
+        ? people.edit(personId, { query: { version_tree: versionTree.id } })
+        : people.edit(personId);
+}
+
 /** Chain codes are an internal numbering aid, so only staff see them. */
 function useCanSeeChain(): boolean {
     const role = usePage().props.auth.user?.role;
@@ -527,10 +549,12 @@ export function SilsilahListCard({
     lineage,
     selfId,
     familyTrees,
+    selectedVersionId = null,
 }: {
     lineage: LineageEntry[];
     selfId?: number | null;
     familyTrees: FamilyTreeHistoryEntry[];
+    selectedVersionId?: number | null;
 }) {
     const canSeeChain = useCanSeeChain();
     const [expanded, setExpanded] = useState<Set<number>>(() => {
@@ -615,7 +639,11 @@ export function SilsilahListCard({
                                             )}
                                             <div className="mt-1 flex items-start gap-1.5">
                                                 <Link
-                                                    href={people.show(entry.id)}
+                                                    href={personEntryHref(
+                                                        entry.id,
+                                                        familyTrees,
+                                                        selectedVersionId,
+                                                    )}
                                                     className="min-w-0 flex-1 text-sm leading-snug font-semibold break-words whitespace-normal text-tb-on-surface hover:text-tb-primary"
                                                 >
                                                     {displayRowName(entry.name)}
@@ -674,8 +702,10 @@ export function SilsilahListCard({
                                                                 >
                                                                     <div className="group flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors hover:bg-tb-surface-container/70">
                                                                         <Link
-                                                                            href={people.show(
+                                                                            href={personEntryHref(
                                                                                 child.id,
+                                                                                familyTrees,
+                                                                                selectedVersionId,
                                                                             )}
                                                                             className="flex min-w-0 flex-1 flex-col items-start rounded-md"
                                                                         >
@@ -745,11 +775,13 @@ export function MargaLineageCard({
     fatherChain,
     focusChain,
     familyTrees,
+    selectedVersionId = null,
 }: {
     entries: MargaLineageEntry[];
     fatherChain?: string | null;
     focusChain?: string | null;
     familyTrees: FamilyTreeHistoryEntry[];
+    selectedVersionId?: number | null;
 }) {
     const canSeeChain = useCanSeeChain();
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -838,7 +870,11 @@ export function MargaLineageCard({
                                             )}
                                             <div className="mt-1 flex items-start gap-1.5">
                                                 <Link
-                                                    href={people.show(entry.id)}
+                                                    href={personEntryHref(
+                                                        entry.id,
+                                                        familyTrees,
+                                                        selectedVersionId,
+                                                    )}
                                                     className="min-w-0 flex-1 text-sm leading-snug font-medium break-words whitespace-normal text-tb-on-surface hover:text-tb-primary"
                                                 >
                                                     {displayRowName(entry.name)}
@@ -889,8 +925,10 @@ export function MargaLineageCard({
                                                                 >
                                                                     <div className="group flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors hover:bg-tb-surface-container/70">
                                                                         <Link
-                                                                            href={people.show(
+                                                                            href={personEntryHref(
                                                                                 child.id,
+                                                                                familyTrees,
+                                                                                selectedVersionId,
                                                                             )}
                                                                             className="flex min-w-0 flex-1 flex-col items-start rounded-md"
                                                                         >
@@ -3528,6 +3566,7 @@ export default function FamilyForm({
                                         lineage={person.lineage}
                                         selfId={person.id}
                                         familyTrees={listFamilyTrees}
+                                        selectedVersionId={selectedVersionId}
                                     />
                                 ) : (
                                     <MargaLineageCard
@@ -3535,6 +3574,7 @@ export default function FamilyForm({
                                         fatherChain={null}
                                         focusChain={null}
                                         familyTrees={listFamilyTrees}
+                                        selectedVersionId={selectedVersionId}
                                     />
                                 )}
                                 {showFamilyTreeHistory && (

@@ -124,11 +124,29 @@ class Person extends Model
     }
 
     /**
+     * @return HasMany<Person, $this>
+     */
+    public function childrenAsMother(): HasMany
+    {
+        return $this->hasMany(Person::class, 'mother_id');
+    }
+
+    /**
      * @return BelongsToMany<Person, $this>
      */
     public function wives(): BelongsToMany
     {
         return $this->belongsToMany(Person::class, 'person_wife', 'husband_id', 'wife_id')
+            ->withPivot('position')
+            ->orderByPivot('position');
+    }
+
+    /**
+     * @return BelongsToMany<Person, $this>
+     */
+    public function husbands(): BelongsToMany
+    {
+        return $this->belongsToMany(Person::class, 'person_wife', 'wife_id', 'husband_id')
             ->withPivot('position')
             ->orderByPivot('position');
     }

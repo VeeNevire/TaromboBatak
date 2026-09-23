@@ -266,6 +266,7 @@
     }
 
     .tb-tree {
+        --tb-link: 14px;
         display: flex;
         width: max-content;
         margin: 0 auto;
@@ -334,8 +335,71 @@
     }
 
     .tb-tree li[data-terminal-branch='true'] {
-        padding-right: 1px;
-        padding-left: 1px;
+        padding-right: 4px;
+        padding-left: 4px;
+    }
+
+    .tb-tree .tb-node-main {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    /* Childless siblings sit right beside their brother's card, in the empty
+       band above his children, instead of each taking a column past his whole
+       subtree. A phantom spacer mirrors the group on the other side so the card
+       stays centred on the li and every existing connector still lines up. */
+    /* Child combinators throughout: the leaves inside the group are full nodes
+       with their own .tb-node-row / .tb-node-main, which must not inherit the
+       group's spacer or bar. */
+    .tb-tree li[data-leaf-cluster='true'] > .tb-node-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+    }
+
+    .tb-tree li[data-leaf-cluster='true'] > .tb-node-row::before {
+        content: '';
+        flex: none;
+        width: var(--tb-leaf-width);
+    }
+
+    /* Sibling bar: starts where the parent's line lands on this card and runs
+       to the last leaf, so the group reads as siblings of this node, not as
+       its descendants. */
+    .tb-tree li[data-leaf-cluster='true'] > .tb-node-row > .tb-node-main::after {
+        content: '';
+        position: absolute;
+        top: calc(-1 * var(--tb-link));
+        left: 50%;
+        width: calc(50% + var(--tb-leaf-bar));
+        border-top: 1px solid #a79e8c;
+    }
+
+    .tb-tree ul.tb-leaf-cluster {
+        gap: 6px;
+    }
+
+    /* Leaf cards line up with their brother's card. */
+    .tb-tree ul.tb-leaf-cluster > li {
+        padding: 0;
+    }
+
+    /* Each leaf drops straight from the sibling bar down to its own card. */
+    .tb-tree ul.tb-leaf-cluster > li::before {
+        top: calc(-1 * var(--tb-link));
+        right: auto;
+        left: 50%;
+        width: 0;
+        height: var(--tb-link);
+        border-top: 0 none;
+        border-left: 1px solid #a79e8c;
+        border-radius: 0;
+    }
+
+    .tb-tree ul.tb-leaf-cluster > li::after {
+        display: none;
     }
 
     .tb-tree li:first-child::before,
@@ -359,11 +423,12 @@
     }
 
     .tb-tree--compact li {
-        padding: 3px 0 0;
+        padding: 3px 3px 0;
     }
 
     /* Keep broad descendant branches from pushing their siblings too far apart. */
     .tb-tree--compact {
+        --tb-link: 3px;
         zoom: 0.72;
         transform-origin: top center;
     }
@@ -376,6 +441,13 @@
 
     .tb-tree--compact li:only-child {
         padding-top: 0;
+    }
+
+    /* A node carrying a leaf group has siblings, so it keeps the connector band
+       even when it is the only li left in its row. Must come after the
+       :only-child rules above, which share its specificity. */
+    .tb-tree li[data-leaf-cluster='true'] {
+        padding-top: var(--tb-link);
     }
 
 }

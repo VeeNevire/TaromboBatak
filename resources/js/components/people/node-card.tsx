@@ -37,6 +37,7 @@ export function NodeCard({
     node,
     highlighted = false,
     compact = false,
+    narrow = false,
     badge,
     onAvatarClick,
     onNameClick,
@@ -47,6 +48,7 @@ export function NodeCard({
     node: TreeNode;
     highlighted?: boolean;
     compact?: boolean;
+    narrow?: boolean;
     badge?: string;
     onAvatarClick?: () => void;
     onNameClick?: () => void;
@@ -59,8 +61,12 @@ export function NodeCard({
             className={cn(
                 'flex flex-col items-center',
                 compact
-                    ? 'max-w-[88px] min-w-[48px]'
-                    : 'max-w-[150px] min-w-[96px]',
+                    ? narrow
+                        ? 'w-[64px]'
+                        : 'max-w-[88px] min-w-[48px]'
+                    : narrow
+                      ? 'w-[80px]'
+                      : 'max-w-[150px] min-w-[96px]',
             )}
         >
             {showAvatar && (
@@ -128,10 +134,14 @@ export function NodeCard({
                 }}
                 className={cn(
                  compact
-    ? 'mt-0.5 rounded-md border px-1 py-0.5 text-center text-[8px] leading-tight font-semibold'
+    ? cn(
+          narrow && 'w-full',
+          'mt-0.5 rounded-md border px-1 py-0.5 text-center text-[8px] leading-tight font-semibold',
+      )
     : cn(
           showAvatar ? 'mt-2' : 'mt-0',
-          'rounded-md border px-2 py-1 text-center text-[11px] leading-snug font-semibold',
+          narrow ? 'w-full px-1' : 'px-2',
+          'rounded-md border py-1 text-center text-[11px] leading-snug font-semibold',
       ),
 node.claimed
     ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
@@ -158,7 +168,14 @@ node.claimed
                         —
                     </span>
                 ) : null}
-                <span className="block break-words">
+                <span
+                    className={cn(
+                        'block break-words',
+                        // A long single word must break inside a fixed-width
+                        // card instead of widening it over its neighbour.
+                        narrow && 'wrap-anywhere',
+                    )}
+                >
                     {node.displayNumber != null
                         ? `${node.displayNumber}. `
                         : ''}
