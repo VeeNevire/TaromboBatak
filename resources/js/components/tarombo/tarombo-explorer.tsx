@@ -85,6 +85,7 @@ type Props = {
     selectedMargaId: number | null;
     selectedTreePeople: TaromboPersonRow[] | null;
     accountTreePersonIds?: string[];
+    familyName?: string | null;
     margaTree?: {
         margaName: string;
         identityPersonId: string | null;
@@ -345,6 +346,7 @@ export function TaromboExplorer({
     selectedMargaId,
     selectedTreePeople,
     accountTreePersonIds = [],
+    familyName = null,
     margaTree = null,
 }: Props) {
     const people = buildTaromboPeople(rows);
@@ -513,6 +515,9 @@ export function TaromboExplorer({
     );
     const [saveModalOpen, setSaveModalOpen] = useState(false);
     const [snapshotTitle, setSnapshotTitle] = useState('');
+    // "Nama Keluarga" heading the tree on screen and in saved images: the
+    // account tree's own family name, or what was typed on the save form.
+    const [treeFamilyName, setTreeFamilyName] = useState(familyName ?? '');
     const [snapshotResolution, setSnapshotResolution] = useState(1080);
     const [snapshotPaper, setSnapshotPaper] = useState('A4');
     const [excludedBranchIds, setExcludedBranchIds] = useState<string[]>([]);
@@ -762,6 +767,10 @@ export function TaromboExplorer({
                   (person) => person.parentId === renderedTreeCenterId,
               )
             : [];
+    // The separate "Nama Keluarga" trees below the main one can be left out of
+    // a saved image just like a main-tree branch; unchecking one drops its
+    // root and every descendant.
+    const snapshotDetachedTrees = margaTree ? margaDetachedRoots : [];
     const excludedPersonIds = new Set<string>();
 
     for (const branchId of excludedBranchIds) {
@@ -769,6 +778,13 @@ export function TaromboExplorer({
             excludedPersonIds.add(person.id);
         }
     }
+
+    const displayedDetachedRoots =
+        excludedPersonIds.size === 0
+            ? margaDetachedRoots
+            : margaDetachedRoots.filter(
+                  (root) => !excludedPersonIds.has(root.id),
+              );
 
     const displayPeople =
         excludedPersonIds.size === 0
@@ -785,12 +801,17 @@ export function TaromboExplorer({
         ancestorFocusId && ancestorPeople.length > 0
             ? verticalPeople.find((person) => person.id === ancestorFocusId)
             : undefined;
-    const verticalTreeTitle = margaTree
-        ? `Pohon Silsilah ${margaTree.direction === 'upper' ? 'Atas' : 'Bawah'}`
-        : selectedAccountTree
-          ? `Pohon Silsilah ${selectedAccountTree.name}`
-          : 'Silsilah Keturunan';
-    const verticalTreeDescription = margaTree
+    const familyNameHeading = treeFamilyName.trim();
+    const verticalTreeTitle = familyNameHeading
+        ? familyNameHeading
+        : margaTree
+          ? `Pohon Silsilah ${margaTree.direction === 'upper' ? 'Atas' : 'Bawah'}`
+          : selectedAccountTree
+            ? `Pohon Silsilah ${selectedAccountTree.name}`
+            : 'Silsilah Keturunan';
+    const verticalTreeDescription = familyNameHeading
+        ? ''
+        : margaTree
         ? `${margaTree.direction === 'upper' ? 'Si Raja Batak sampai' : 'Keturunan dari'} ${margaIdentity?.name ?? margaTree.margaName}`
         : selectedAccountTree
           ? `Silsilah dari ${ancestorPeople[0]?.name ?? selectedAccountTree.rootName}`
@@ -1016,7 +1037,7 @@ export function TaromboExplorer({
             const file = new File([blob], snapshotFileName(fullscreenView), {
                 type: 'image/jpeg',
             });
-            const includedIds = snapshotBranches
+            const includedIds = [...snapshotBranches, ...snapshotDetachedTrees]
                 .filter((branch) => !excludedBranchIds.includes(branch.id))
                 .map((branch) => Number(branch.id));
 
@@ -1381,9 +1402,11 @@ export function TaromboExplorer({
                         <h3 className="font-display text-lg font-bold text-tb-on-surface">
                             {verticalTreeTitle}
                         </h3>
-                        <p className="mt-1 max-w-64 truncate text-xs text-tb-on-surface-variant">
-                            {verticalTreeDescription}
-                        </p>
+                        {verticalTreeDescription && (
+                            <p className="mt-1 max-w-64 truncate text-xs text-tb-on-surface-variant">
+                                {verticalTreeDescription}
+                            </p>
+                        )}
                     </div>
                     <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
                         {(!margaTree || !fullscreen) && familyTreeSelector}
@@ -1417,7 +1440,7 @@ export function TaromboExplorer({
                         }
                         collapseDepth={verticalTreeCollapseDepth}
                         scrollToLineageEnd={searchedId !== null}
-                        detachedPeople={margaDetachedRoots}
+                        detachedPeople={displayedDetachedRoots}
                         showNodeAvatar={showNodeCircles}
                         showSpouseNames={showSpouseNames}
                         allowBranchEntry={margaTree?.direction === 'lower'}
@@ -1732,9 +1755,11 @@ export function TaromboExplorer({
                                             <h3 className="font-display text-lg font-bold text-tb-on-surface">
                                                 {verticalTreeTitle}
                                             </h3>
-                                            <p className="mt-1 text-xs text-tb-on-surface-variant">
-                                                {verticalTreeDescription}
-                                            </p>
+                                            {verticalTreeDescription && (
+                                                <p className="mt-1 text-xs text-tb-on-surface-variant">
+                                                    {verticalTreeDescription}
+                                                </p>
+                                            )}
                                             <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
                                                 {familyTreeSelector}
                                                 {!margaTree &&
@@ -1783,7 +1808,7 @@ export function TaromboExplorer({
                                                     verticalTreeCollapseDepth
                                                 }
                                                 detachedPeople={
-                                                    margaDetachedRoots
+                                                    displayedDetachedRoots
                                                 }
                                                 showNodeAvatar={showNodeCircles}
                                                 showSpouseNames={
@@ -1870,6 +1895,24 @@ export function TaromboExplorer({
                                 maxLength={120}
                             />
                         </div>
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="snapshot-family-name">
+                                Nama Keluarga
+                            </Label>
+                            <Input
+                                id="snapshot-family-name"
+                                value={treeFamilyName}
+                                onChange={(event) =>
+                                    setTreeFamilyName(event.target.value)
+                                }
+                                placeholder={`Mis. Keluarga ${margaIdentity?.name ?? 'Silaban'}`}
+                                maxLength={120}
+                            />
+                            <p className="text-xs text-tb-on-surface-variant">
+                                Menjadi judul di atas pohon dan pada gambar yang
+                                disimpan.
+                            </p>
+                        </div>
                         <div className="grid gap-4 sm:grid-cols-2">
                             <div className="grid gap-1.5">
                                 <Label>Resolusi</Label>
@@ -1920,36 +1963,72 @@ export function TaromboExplorer({
                         </div>
                         <div className="grid gap-2">
                             <Label>Pilih Pohon yang Ditampilkan</Label>
-                            {snapshotBranches.length === 0 ? (
+                            {snapshotBranches.length === 0 &&
+                            snapshotDetachedTrees.length === 0 ? (
                                 <p className="text-sm text-tb-on-surface-variant">
                                     Tidak ada cabang keturunan langsung pada
                                     tampilan ini.
                                 </p>
                             ) : (
-                                <div className="grid gap-1.5">
-                                    {snapshotBranches.map((branch) => (
-                                        <label
-                                            key={branch.id}
-                                            className="flex cursor-pointer items-center gap-3 rounded-lg border border-tb-outline-variant p-2 hover:bg-tb-surface-container"
-                                        >
-                                            <Checkbox
-                                                checked={
-                                                    !excludedBranchIds.includes(
-                                                        branch.id,
-                                                    )
-                                                }
-                                                onCheckedChange={(value) =>
-                                                    toggleBranch(
-                                                        branch.id,
-                                                        value === true,
-                                                    )
-                                                }
-                                            />
-                                            <span className="text-sm text-tb-on-surface">
-                                                {branch.name}
-                                            </span>
-                                        </label>
-                                    ))}
+                                <div className="grid gap-3">
+                                    {[
+                                        {
+                                            key: 'main',
+                                            heading: 'Cabang pohon utama',
+                                            items: snapshotBranches,
+                                            label: (person: TaromboPerson) =>
+                                                person.name,
+                                        },
+                                        {
+                                            key: 'detached',
+                                            heading:
+                                                'Anggota marga tanpa jalur ayah tersambung',
+                                            items: snapshotDetachedTrees,
+                                            label: (person: TaromboPerson) =>
+                                                `Nama Keluarga: ${person.name}`,
+                                        },
+                                    ]
+                                        .filter(
+                                            (group) => group.items.length > 0,
+                                        )
+                                        .map((group) => (
+                                            <div
+                                                key={group.key}
+                                                className="grid gap-1.5"
+                                            >
+                                                <p className="text-xs font-semibold text-tb-on-surface-variant">
+                                                    {group.heading}
+                                                </p>
+                                                {group.items.map((branch) => (
+                                                    <label
+                                                        key={branch.id}
+                                                        className="flex cursor-pointer items-center gap-3 rounded-lg border border-tb-outline-variant p-2 hover:bg-tb-surface-container"
+                                                    >
+                                                        <Checkbox
+                                                            checked={
+                                                                !excludedBranchIds.includes(
+                                                                    branch.id,
+                                                                )
+                                                            }
+                                                            onCheckedChange={(
+                                                                value,
+                                                            ) =>
+                                                                toggleBranch(
+                                                                    branch.id,
+                                                                    value ===
+                                                                        true,
+                                                                )
+                                                            }
+                                                        />
+                                                        <span className="text-sm text-tb-on-surface">
+                                                            {group.label(
+                                                                branch,
+                                                            )}
+                                                        </span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        ))}
                                 </div>
                             )}
                         </div>
