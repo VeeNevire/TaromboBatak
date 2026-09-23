@@ -812,6 +812,17 @@ class FamilyEntryService
     }
 
     /**
+     * Find or create the father typed by name on a family form.
+     *
+     * @param  array<string, mixed>  $fatherData
+     * @param  array<int, int>  $excludedIds
+     */
+    public function resolveFatherFromForm(array $fatherData, ?int $margaId, int $createdBy, array $excludedIds): ?Person
+    {
+        return $this->resolveParent(null, $fatherData, $margaId, null, $createdBy, 'L', $excludedIds);
+    }
+
+    /**
      * Resolve a parent record from a linked id or a free-text entry.
      * Reuses an existing record with the same name to avoid duplicates.
      *
