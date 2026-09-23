@@ -462,6 +462,28 @@ test('regular users can view and edit any person inside their marga', function (
             ->component('people/form'));
 });
 
+test('staff also see a read-only detail page, editing only through the edit route', function () {
+    $marga = Marga::factory()->create();
+    $admin = User::factory()->asAdmin()->create();
+    $person = Person::factory()->create([
+        'name' => 'Ompu Staff',
+        'marga_id' => $marga->id,
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('people.show', $person))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('people/show')
+            ->where('readOnly', true));
+
+    $this->actingAs($admin)
+        ->get(route('people.edit', $person))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('people/form'));
+});
+
 test('regular users cannot open people outside their marga', function () {
     $marga = Marga::factory()->create();
     $otherMarga = Marga::factory()->create();

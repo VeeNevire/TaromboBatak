@@ -19,6 +19,7 @@ export type TaromboPersonRow = {
     bio?: string;
     createdBy?: string | null;
     canEdit?: boolean;
+    canCopyCode?: boolean;
     fatherName?: string | null;
     fatherMarga?: string | null;
     relatedStories?: RelatedStory[];
@@ -26,6 +27,8 @@ export type TaromboPersonRow = {
     chain?: string | null;
     pending?: boolean;
     childrenNames?: string[];
+    sonsNames?: string[];
+    daughtersNames?: string[];
     claimedAccounts?: ClaimedAccount[];
 };
 
@@ -62,6 +65,7 @@ export type TaromboPerson = {
     bio?: string;
     createdBy?: string | null;
     canEdit?: boolean;
+    canCopyCode?: boolean;
     fatherName?: string | null;
     fatherMarga?: string | null;
     relatedStories?: RelatedStory[];
@@ -69,6 +73,8 @@ export type TaromboPerson = {
     chain?: string | null;
     pending?: boolean;
     childrenNames?: string[];
+    sonsNames?: string[];
+    daughtersNames?: string[];
     claimedAccounts?: ClaimedAccount[];
 };
 

@@ -66,8 +66,10 @@ class TaromboTreeService
                 'father:id,name,marga_id',
                 'father.marga:id,name',
                 'wives.father.marga',
+                'husbands.father.marga',
                 'creator:id,name,role',
                 'claimingUsers:id,name,role,current_person_id',
+                'childrenAsMother',
             ])
             ->get()
             ->keyBy('id');
@@ -90,6 +92,16 @@ class TaromboTreeService
             $fatherPerson = $nodeFatherId !== null
                 ? ($people->get($nodeFatherId) ?? $fatherPersons->get($nodeFatherId) ?? $person->father)
                 : $person->father;
+            $childPersons = $children->get($person->id, collect())
+                ->sortBy('birth_order')
+                ->map(fn (array $child) => $people->get($child['person_id']))
+                ->filter();
+
+            if ($childPersons->isEmpty()) {
+                $childPersons = $person->childrenAsMother->sortBy('birth_year');
+            }
+
+            $childrenSplit = $this->splitChildrenByGender($childPersons);
 
             return [
                 'id' => (string) $person->id,
@@ -115,23 +127,21 @@ class TaromboTreeService
                 'bio' => $person->bio,
                 'createdBy' => $person->creator?->name,
                 'canEdit' => $this->canEdit($person, $hasFather),
+                'canCopyCode' => $this->canCopyCode($person),
                 'fatherName' => $fatherPerson?->name,
                 'fatherMarga' => $fatherPerson?->marga?->name,
                 'claimedAccounts' => $this->claimedAccountsFor($person),
                 'relatedStories' => $person->related_stories ?? [],
                 'location' => $this->locationFor($person),
-                'childrenNames' => $children->get($person->id, collect())
-                    ->sortBy('birth_order')
-                    ->map(function (array $child) use ($people): ?string {
-                        $childPerson = $people->get($child['person_id']);
-
-                        return $childPerson?->birth_year
-                            ? $childPerson->name.' ('.$childPerson->birth_year.')'
-                            : $childPerson?->name;
-                    })
+                'childrenNames' => $childPersons
+                    ->map(fn (?Person $child): ?string => $child?->birth_year
+                        ? $child->name.' ('.$child->birth_year.')'
+                        : $child?->name)
                     ->filter()
                     ->values()
                     ->all(),
+                'sonsNames' => $childrenSplit['sons'],
+                'daughtersNames' => $childrenSplit['daughters'],
             ];
         })->all();
     }
@@ -150,15 +160,22 @@ class TaromboTreeService
                 'father:id,name,marga_id',
                 'father.marga:id,name',
                 'wives.father.marga',
+                'husbands.father.marga',
                 'creator:id,name,role',
                 'claimingUsers:id,name,role,current_person_id',
                 'children' => fn ($query) => $query
+                    ->when($familyTreeId !== null, fn ($query) => $query
+                        ->whereHas('familyTrees', fn ($query) => $query->whereKey($familyTreeId))),
+                'childrenAsMother' => fn ($query) => $query
                     ->when($familyTreeId !== null, fn ($query) => $query
                         ->whereHas('familyTrees', fn ($query) => $query->whereKey($familyTreeId))),
             ])
             ->get()
             ->map(function (Person $person): array {
                 $hasFather = $person->father_id !== null;
+                $children = $person->children->isNotEmpty() ? $person->children : $person->childrenAsMother;
+                $sortedChildren = $children->sortBy('birth_year');
+                $childrenSplit = $this->splitChildrenByGender($sortedChildren);
 
                 return [
                     'id' => (string) $person->id,
@@ -179,18 +196,20 @@ class TaromboTreeService
                     'bio' => $person->bio,
                     'createdBy' => $person->creator?->name,
                     'canEdit' => $this->canEdit($person, $hasFather),
+                    'canCopyCode' => $this->canCopyCode($person),
                     'fatherName' => $person->father?->name,
                     'fatherMarga' => $person->father?->marga?->name,
                     'claimedAccounts' => $this->claimedAccountsFor($person),
                     'relatedStories' => $person->related_stories ?? [],
                     'location' => $this->locationFor($person),
-                    'childrenNames' => $person->children
-                        ->sortBy('birth_year')
+                    'childrenNames' => $sortedChildren
                         ->map(fn (Person $child) => $child->birth_year
                             ? $child->name.' ('.$child->birth_year.')'
                             : $child->name)
                         ->values()
                         ->all(),
+                    'sonsNames' => $childrenSplit['sons'],
+                    'daughtersNames' => $childrenSplit['daughters'],
                 ];
             })
             ->values()
@@ -202,12 +221,14 @@ class TaromboTreeService
      */
     protected function spousesFor(Person $person): array
     {
-        return $person->wives
-            ->map(fn (Person $wife): array => [
-                'id' => (string) $wife->id,
-                'name' => $wife->name,
-                'fatherName' => $wife->father?->name,
-                'fatherMarga' => $wife->father?->marga?->name,
+        $spouses = $person->wives->isNotEmpty() ? $person->wives : $person->husbands;
+
+        return $spouses
+            ->map(fn (Person $spouse): array => [
+                'id' => (string) $spouse->id,
+                'name' => $spouse->name,
+                'fatherName' => $spouse->father?->name,
+                'fatherMarga' => $spouse->father?->marga?->name,
             ])
             ->all();
     }
@@ -506,5 +527,45 @@ class TaromboTreeService
         }
 
         return true;
+    }
+
+    /**
+     * Whether the signed-in account may copy this person's share code. Only
+     * contributors who manage this person's marga may do so (staff exempt).
+     */
+    private function canCopyCode(Person $person): bool
+    {
+        $user = Auth::user();
+
+        if (! $user instanceof User) {
+            return false;
+        }
+
+        if ($user->isStaff()) {
+            return true;
+        }
+
+        return $person->marga_id !== null && $user->isContributorOf($person->marga_id);
+    }
+
+    /**
+     * Split a collection of children into "son" and "daughter" name lists.
+     * A child without a recorded gender is treated as a son.
+     *
+     * @param  Collection<int, Person>  $children
+     * @return array{sons: array<int, string>, daughters: array<int, string>}
+     */
+    private function splitChildrenByGender(Collection $children): array
+    {
+        $format = fn (Person $child): string => $child->birth_year
+            ? $child->name.' ('.$child->birth_year.')'
+            : $child->name;
+
+        $isDaughter = fn (Person $child): bool => strtoupper((string) $child->gender) === 'P';
+
+        return [
+            'sons' => $children->reject($isDaughter)->map($format)->values()->all(),
+            'daughters' => $children->filter($isDaughter)->map($format)->values()->all(),
+        ];
     }
 }

@@ -40,6 +40,32 @@ type LineageLine = {
 };
 
 const EMPTY_LINEAGE_PATH: readonly string[] = [];
+const EMPTY_LEAF_SIBLINGS: TaromboPerson[] = [];
+
+// Childless siblings sit beside the card rather than past the whole subtree.
+// Their cards are fixed width, so the group's footprint and the length of the
+// connector bar reaching them are exact constants — a phantom spacer of the
+// same footprint balances the group on the other side, keeping the card centred
+// on the li so every existing connector still lines up.
+const CLUSTER_CARD_WIDTH = { compact: 64, normal: 80 } as const;
+const CLUSTER_GAP = 6;
+
+/**
+ * Whether a person has descendants at all — not merely whether any are drawn.
+ * Nodes at the render depth limit have no rendered children but do carry
+ * childrenNames from the database, and must not be treated as childless.
+ */
+function hasDescendants(
+    person: TaromboPerson,
+    childrenOf: Map<string, TaromboPerson[]>,
+    alternativeTrees: DescendantsAlternativeTree[],
+): boolean {
+    return (
+        (childrenOf.get(person.id)?.length ?? 0) > 0 ||
+        (person.childrenNames?.length ?? 0) > 0 ||
+        alternativeTrees.some((tree) => tree.rootId === person.id)
+    );
+}
 
 export type DescendantsAlternativeTree = {
     id: number;
@@ -88,6 +114,8 @@ function TreeBranch({
     compactTerminalBranches,
     alternativeTrees,
     nodeIdPrefix,
+    leafSiblings = EMPTY_LEAF_SIBLINGS,
+    leafSiblingsFemaleLineage = false,
 }: {
     person: TaromboPerson;
     childrenOf: Map<string, TaromboPerson[]>;
@@ -112,6 +140,8 @@ function TreeBranch({
     showNodeAvatar?: boolean;
     showSpouseNames?: boolean;
     compactTerminalBranches?: boolean;
+    leafSiblings?: TaromboPerson[];
+    leafSiblingsFemaleLineage?: boolean;
 }) {
     const [activeAlternativeId, setActiveAlternativeId] = useState<
         number | null
@@ -130,14 +160,47 @@ function TreeBranch({
     // previously collapsed. The target itself is included so every ancestor
     // required to reach it is rendered for the red path overlay.
     const isCollapsed = collapsed.has(person.id) && !lineageIds.has(person.id);
-    const isTerminalBranch =
-        children.length === 0 && personAlternatives.length === 0;
+    const isTerminalBranch = !hasDescendants(
+        person,
+        childrenOf,
+        alternativeTrees,
+    );
     const useCompactCard =
         compact || (compactTerminalBranches && isTerminalBranch);
+    // Childless siblings are stacked beside this card instead of each taking
+    // their own column past the whole subtree.
+    const branchChildren = children.filter((child) =>
+        hasDescendants(child, childrenOf, alternativeTrees),
+    );
+    const leafChildren =
+        branchChildren.length > 0
+            ? children.filter(
+                  (child) => !hasDescendants(child, childrenOf, alternativeTrees),
+              )
+            : EMPTY_LEAF_SIBLINGS;
+    const renderedChildren =
+        leafChildren.length > 0 ? branchChildren : children;
+    // Leaves are terminal, so their cards are compact whenever this tree
+    // compacts terminal branches — not only in the fullscreen compact tree.
+    const leafCardWidth =
+        compact || compactTerminalBranches
+            ? CLUSTER_CARD_WIDTH.compact
+            : CLUSTER_CARD_WIDTH.normal;
+    const leafCount = leafSiblings.length;
+    // Footprint of the leaf group itself; the row's own flex gap sits on both
+    // sides of the card, so the phantom spacer only mirrors the group's width.
+    const leafGroupWidth =
+        leafCount * leafCardWidth + (leafCount - 1) * CLUSTER_GAP;
+    // Card centre → last leaf's centre, the span the sibling bar has to cover.
+    const leafBarLength =
+        CLUSTER_GAP +
+        (leafCount - 1) * (leafCardWidth + CLUSTER_GAP) +
+        leafCardWidth / 2;
     const card = (
         <NodeCard
             node={toNode(person, numberById.get(person.id))}
             compact={useCompactCard}
+            narrow={isTerminalBranch}
             highlighted={isCenter || isHighlighted}
             onAvatarClick={
                 showProfileOnName ? () => onSelect?.(person.id) : undefined
@@ -154,8 +217,19 @@ function TreeBranch({
     return (
         <li
             data-female-lineage={markFemaleLineage && femaleLineage}
-            data-terminal-branch={compactTerminalBranches && isTerminalBranch}
+            data-terminal-branch={isTerminalBranch}
+            data-leaf-cluster={leafSiblings.length > 0}
+            style={
+                leafCount > 0
+                    ? ({
+                          '--tb-leaf-width': `${leafGroupWidth}px`,
+                          '--tb-leaf-bar': `${leafBarLength}px`,
+                      } as React.CSSProperties)
+                    : undefined
+            }
         >
+            <div className="tb-node-row">
+            <div className="tb-node-main">
             {readOnly ? (
                 <div
                     id={`${nodeIdPrefix}-${person.id}`}
@@ -189,7 +263,7 @@ function TreeBranch({
                     {card}
                 </button>
             )}
-            {(children.length > 0 || personAlternatives.length > 0) && (
+            {(renderedChildren.length > 0 || personAlternatives.length > 0) && (
                 <div
                     className={
                         compact
@@ -197,7 +271,7 @@ function TreeBranch({
                             : 'mt-1 flex items-center gap-1.5'
                     }
                 >
-                    {children.length > 0 && !activeAlternative && (
+                    {renderedChildren.length > 0 && !activeAlternative && (
                         <button
                             type="button"
                             onClick={() => onToggle(person.id)}
@@ -255,12 +329,55 @@ function TreeBranch({
                     )}
                 </div>
             )}
-            {!activeAlternative && !isCollapsed && children.length > 0 && (
+            </div>
+            {leafSiblings.length > 0 && (
+                <ul className="tb-leaf-cluster">
+                    {leafSiblings.map((leaf) => (
+                        <TreeBranch
+                            key={leaf.id}
+                            person={leaf}
+                            childrenOf={childrenOf}
+                            centerId={centerId}
+                            highlightId={highlightId}
+                            numberById={numberById}
+                            collapsed={collapsed}
+                            onToggle={onToggle}
+                            onSelect={onSelect}
+                            editNodes={editNodes}
+                            selectOnClick={selectOnClick}
+                            showProfileOnName={showProfileOnName}
+                            readOnly={readOnly}
+                            onOpenProfile={onOpenProfile}
+                            alternativeTrees={alternativeTrees}
+                            nodeIdPrefix={nodeIdPrefix}
+                            lineageIds={lineageIds}
+                            femaleLineage={
+                                leafSiblingsFemaleLineage ||
+                                leaf.gender?.toUpperCase() === 'P'
+                            }
+                            markFemaleLineage={markFemaleLineage}
+                            collapseDepth={collapseDepth}
+                            compact={compact}
+                            showNodeAvatar={showNodeAvatar}
+                            showSpouseNames={showSpouseNames}
+                            compactTerminalBranches={compactTerminalBranches}
+                        />
+                    ))}
+                </ul>
+            )}
+            </div>
+            {!activeAlternative && !isCollapsed && renderedChildren.length > 0 && (
                 <ul>
-                    {children.map((child) => (
+                    {renderedChildren.map((child, index) => (
                         <TreeBranch
                             key={child.id}
                             person={child}
+                            leafSiblings={
+                                index === renderedChildren.length - 1
+                                    ? leafChildren
+                                    : EMPTY_LEAF_SIBLINGS
+                            }
+                            leafSiblingsFemaleLineage={femaleLineage}
                             childrenOf={childrenOf}
                             centerId={centerId}
                             highlightId={highlightId}

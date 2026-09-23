@@ -63,12 +63,17 @@ export function PersonSummaryDialog({
         : undefined;
     const fatherName = father?.name ?? person?.fatherName ?? null;
     const fatherMarga = father?.marga ?? person?.fatherMarga ?? null;
-    const children = person
-        ? (person.childrenNames ??
-          people
-              .filter((candidate) => candidate.parentId === person.id)
-              .map((child) => child.name))
+    const childCandidates = person
+        ? people.filter((candidate) => candidate.parentId === person.id)
         : [];
+    const isDaughter = (candidate: TaromboPerson) =>
+        candidate.gender?.toUpperCase() === 'P';
+    const sons =
+        person?.sonsNames ??
+        childCandidates.filter((c) => !isDaughter(c)).map((c) => c.name);
+    const daughters =
+        person?.daughtersNames ??
+        childCandidates.filter(isDaughter).map((c) => c.name);
     const connectableAccounts = (person?.claimedAccounts ?? []).filter(
         (account) =>
             account.id !== currentUserId &&
@@ -370,7 +375,10 @@ export function PersonSummaryDialog({
                                         className="grid gap-1 rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 py-2"
                                     >
                                         <dt className="text-tb-on-surface-variant">
-                                            Ayah dari Ibu {spouse.name}
+                                            {person.gender?.toUpperCase() ===
+                                            'P'
+                                                ? `Ayah dari ${spouse.name}`
+                                                : `Ayah dari Ibu ${spouse.name}`}
                                         </dt>
                                         <dd className="font-medium text-tb-on-surface">
                                             {spouse.fatherName ??
@@ -383,11 +391,21 @@ export function PersonSummaryDialog({
                                 ))}
                                 <div className="grid gap-1">
                                     <dt className="text-tb-on-surface-variant">
-                                        Anak
+                                        Anak Laki-laki
                                     </dt>
                                     <dd className="leading-relaxed font-medium text-tb-on-surface">
-                                        {children.length > 0
-                                            ? children.join(', ')
+                                        {sons.length > 0
+                                            ? sons.join(', ')
+                                            : 'Belum dicatat'}
+                                    </dd>
+                                </div>
+                                <div className="grid gap-1">
+                                    <dt className="text-tb-on-surface-variant">
+                                        Anak Perempuan
+                                    </dt>
+                                    <dd className="leading-relaxed font-medium text-tb-on-surface">
+                                        {daughters.length > 0
+                                            ? daughters.join(', ')
                                             : 'Belum dicatat'}
                                     </dd>
                                 </div>
@@ -480,7 +498,7 @@ export function PersonSummaryDialog({
                             </Button>
                         </DialogClose>
                         <div className="flex flex-wrap justify-end gap-2">
-                            {person.shareCode && (
+                            {person.shareCode && person.canCopyCode && (
                                 <Button
                                     type="button"
                                     variant="outline"

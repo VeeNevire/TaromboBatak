@@ -477,7 +477,7 @@ class PersonController extends Controller
             'selectedVersionId' => $selectedVersionId,
             ...$this->familyTreeSharingPayload($user),
             'canPublish' => $user->isStaff(),
-            'readOnly' => ! $user->isStaff(),
+            'readOnly' => true,
             'appendTarget' => $appendNode !== null && $appendNode->children_count === 0
                 ? [
                     'familyTreeId' => $appendTree['id'],

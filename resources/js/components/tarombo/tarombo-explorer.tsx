@@ -1238,7 +1238,7 @@ export function TaromboExplorer({
         <div
             className={cn(
                 'flex flex-col gap-6 p-4 md:p-6',
-                fullscreen ? 'h-dvh gap-4 md:p-4' : 'h-full flex-1',
+                fullscreen ? 'h-full gap-4 md:p-4' : 'h-full flex-1',
             )}
         >
             <div className="flex items-start justify-between gap-3">
