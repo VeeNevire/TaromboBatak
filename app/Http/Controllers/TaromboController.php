@@ -9,6 +9,7 @@ use App\Models\IdentityRequest;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
+use App\Services\FamilyTreeFamilyNameService;
 use App\Services\FamilyTreeInheritanceService;
 use App\Services\TaromboStatisticsService;
 use App\Services\TaromboTreeService;
@@ -57,6 +58,7 @@ class TaromboController extends Controller
             'selectedTreePeople' => $selectedTreePeople,
             'margaTree' => $margaTree,
             'accountTreePersonIds' => $accountTreePersonIds,
+            'familyName' => $this->familyName($selectedFamilyTreeId, $margaTree),
         ]);
     }
 
@@ -80,7 +82,41 @@ class TaromboController extends Controller
             'selectedTreePeople' => $selectedTreePeople,
             'margaTree' => $margaTree,
             'accountTreePersonIds' => $accountTreePersonIds,
+            'familyName' => $this->familyName($selectedFamilyTreeId, $margaTree),
         ]);
+    }
+
+    /**
+     * The "Nama Keluarga" heading the tree: for an account tree, the name
+     * entered on its root branch; for a marga's lower tree, the name of the
+     * family tree rooted at the marga's identity person. Both fall back to the
+     * tree's own name. The upper tree has no single family, so it has none.
+     *
+     * @param  array{identityPersonId: string|null, direction: string}|null  $margaTree
+     */
+    private function familyName(?int $familyTreeId, ?array $margaTree): ?string
+    {
+        if ($familyTreeId !== null) {
+            $tree = FamilyTree::query()->find($familyTreeId);
+            $personId = $tree?->root_person_id;
+        } elseif ($margaTree !== null && $margaTree['direction'] === 'lower' && $margaTree['identityPersonId'] !== null) {
+            $personId = (int) $margaTree['identityPersonId'];
+            $tree = FamilyTree::query()
+                ->where('root_person_id', $personId)
+                ->whereNull('based_on_id')
+                ->oldest('id')
+                ->first();
+        } else {
+            return null;
+        }
+
+        if ($tree === null) {
+            return null;
+        }
+
+        return $personId !== null
+            ? app(FamilyTreeFamilyNameService::class)->forPerson($tree, (int) $personId)
+            : $tree->name;
     }
 
     /**
