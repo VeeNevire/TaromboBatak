@@ -84,7 +84,11 @@ class TaromboFrameController extends Controller
 
     public function upscale(TaromboFrame $taromboFrame, TaromboFrameUpscaler $upscaler): RedirectResponse
     {
-        abort_unless(Storage::disk('local')->exists($taromboFrame->path), 422, 'Frame tidak tersedia.');
+        if (! Storage::disk('local')->exists($taromboFrame->path)) {
+            throw ValidationException::withMessages([
+                'frame' => 'Gambar frame tidak ditemukan di server. Ganti gambarnya lewat tombol Ubah terlebih dahulu.',
+            ]);
+        }
 
         try {
             $result = $upscaler->upscale($taromboFrame);

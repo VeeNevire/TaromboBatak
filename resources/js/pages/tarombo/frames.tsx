@@ -1,6 +1,7 @@
 import { Head, router, useForm } from '@inertiajs/react';
 import { LoaderCircle, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { CollageBoxEditor } from '@/components/collage-box-editor';
 import { FormatThumbnail } from '@/components/format-thumbnail';
 import InputError from '@/components/input-error';
@@ -169,6 +170,11 @@ export default function TaromboFrames({ frames }: { frames: Frame[] }) {
             {},
             {
                 preserveScroll: true,
+                onError: (errors) => {
+                    toast.error(
+                        errors.frame ?? 'Resolusi frame gagal ditingkatkan.',
+                    );
+                },
                 onFinish: () => setUpscalingId(null),
             },
         );
