@@ -204,7 +204,7 @@ test('a standard family edit syncs a new child into derived family tree versions
                 'gender' => $child->gender,
             ]],
         ])
-        ->assertRedirect(route('people.show', $root));
+        ->assertRedirect(route('people.edit', $root));
 
     $alternativeRoot = $alternative->nodes()->where('person_id', $root->id)->firstOrFail();
     $alternativeChild = $alternative->nodes()->where('person_id', $child->id)->firstOrFail();
@@ -271,7 +271,7 @@ test('the existing family form updates an alternative version without changing g
                 ['id' => $firstChild->id, 'name' => $firstChild->name, 'gender' => 'L'],
             ],
         ])
-        ->assertRedirect(route('people.show', ['person' => $root, 'version_tree' => $alternative->id]));
+        ->assertRedirect(route('people.edit', ['person' => $root, 'version_tree' => $alternative->id]));
 
     expect($tree->nodes()->where('person_id', $firstChild->id)->value('birth_order'))->toBe(1)
         ->and($tree->nodes()->where('person_id', $secondChild->id)->value('birth_order'))->toBe(2)
@@ -350,7 +350,7 @@ test('editing a member from a tree modal retains and updates that tree parent', 
             'children' => [],
             'ownChildren' => [],
         ])
-        ->assertRedirect(route('people.show', ['person' => $child, 'version_tree' => $tree->id]));
+        ->assertRedirect(route('people.edit', ['person' => $child, 'version_tree' => $tree->id]));
 
     expect($childNode->fresh()->father_node_id)->toBe($replacementFatherNode->id)
         ->and($child->fresh()->father_id)->toBe($globalFather->id);
@@ -733,7 +733,7 @@ test('a family form can append a new child only to the selected alternative', fu
     $this->actingAs($user)
         ->put(route('people.update', ['person' => $focus, 'version_tree' => $alternative->id]), $payload)
         ->assertSessionHasNoErrors()
-        ->assertRedirect(route('people.show', ['person' => $focus, 'version_tree' => $alternative->id]));
+        ->assertRedirect(route('people.edit', ['person' => $focus, 'version_tree' => $alternative->id]));
 
     $child = Person::query()->where('name', 'Anak Ketiga Saya Damanik')->sole();
     $node = $alternative->nodes()->where('person_id', $child->id)->sole();

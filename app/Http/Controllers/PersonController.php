@@ -1122,7 +1122,7 @@ class PersonController extends Controller
 
             Inertia::flash('toast', ['type' => 'success', 'message' => __('Versi silsilah berhasil diperbarui.')]);
 
-            return to_route('people.show', ['person' => $person, 'version_tree' => $familyTree->id]);
+            return to_route('people.edit', ['person' => $person, 'version_tree' => $familyTree->id]);
         }
 
         if (! $isStaff) {
@@ -1176,7 +1176,7 @@ class PersonController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => $message]);
         $this->logFamilyEntryChanges($result, $user, 'edited', $before);
 
-        return to_route('people.show', $person);
+        return to_route('people.edit', $person);
     }
 
     /**

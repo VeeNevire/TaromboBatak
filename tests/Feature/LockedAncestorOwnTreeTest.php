@@ -67,7 +67,7 @@ test('a father typed by name on the tree form is created and connected above a l
             'father' => ['name' => 'Ayah Kakek Darma'],
         ])
         ->assertSessionHasNoErrors()
-        ->assertRedirect(route('people.show', ['person' => $kakek, 'version_tree' => $tree->id]));
+        ->assertRedirect(route('people.edit', ['person' => $kakek, 'version_tree' => $tree->id]));
 
     $father = Person::query()->where('name', 'Ayah Kakek Darma')->firstOrFail();
     $fatherNode = $tree->nodes()->where('person_id', $father->id)->first();

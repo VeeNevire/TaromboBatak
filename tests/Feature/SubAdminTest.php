@@ -138,7 +138,7 @@ test('a sub-admin activity log identifies the edited person and their father', f
             'father_id' => $father->id,
             'children' => [['id' => $child->id, 'name' => $child->name]],
         ])
-        ->assertRedirect(route('people.show', $child));
+        ->assertRedirect(route('people.edit', $child));
 
     $log = ActivityLog::query()
         ->where('account_id', $subAdmin->id)
@@ -194,7 +194,7 @@ test('a sub-admin activity log snapshots the family tree selected by version_tre
             'children' => [],
             'ownChildren' => [['id' => $child->id, 'name' => $child->name, 'gender' => $child->gender]],
         ])
-        ->assertRedirect(route('people.show', ['person' => $root, 'version_tree' => $tree->id]));
+        ->assertRedirect(route('people.edit', ['person' => $root, 'version_tree' => $tree->id]));
 
     expect(ActivityLog::query()->where('account_id', $subAdmin->id)->latest()->firstOrFail()->metadata)
         ->toMatchArray([
