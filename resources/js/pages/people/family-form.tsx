@@ -164,6 +164,7 @@ export type FamilyData = {
     father: ParentEntry | null;
     mother: ParentEntry | null;
     mothers?: ParentEntry[] | null;
+    wives?: ParentEntry[] | null;
     lineage: LineageEntry[];
     children: ChildRow[];
     ownChildren?: ChildRow[];
@@ -225,9 +226,13 @@ const normalizeNameForMatch = (value: string): string =>
     value.trim().replace(/\s+/g, ' ').toLocaleUpperCase();
 
 type ParentKey = 'father' | number;
+type ParentCollection = 'mothers' | 'wives';
 
-const parentErrorPrefix = (key: ParentKey): 'father' | `mothers.${number}` =>
-    key === 'father' ? 'father' : `mothers.${key}`;
+const parentErrorPrefix = (
+    key: ParentKey,
+    collection: ParentCollection = 'mothers',
+): 'father' | `mothers.${number}` | `wives.${number}` =>
+    key === 'father' ? 'father' : `${collection}.${key}`;
 
 const orderFamilyTreeVersions = (entries: FamilyTreeHistoryEntry[]) =>
     [...entries].sort(
@@ -1048,38 +1053,39 @@ const emptyParent = (): ParentEntry => ({
     father_name: '',
 });
 
+function toParentRows(
+    entries: ParentEntry[] | null | undefined,
+): ParentEntry[] {
+    return (entries ?? [])
+        .map((entry) => ({
+            id: entry.id ?? null,
+            name: entry.name ?? '',
+            alias: entry.alias ?? '',
+            birth_year: entry.birth_year ?? '',
+            death_year: entry.death_year ?? '',
+            marga_id: entry.marga_id ?? null,
+            new_marga: '',
+            father_name: entry.father_name ?? '',
+            father_marga_id: entry.father_marga_id ?? null,
+            father_marga: entry.father_marga ?? null,
+            share_code: entry.share_code ?? '',
+        }))
+        .filter(
+            (entry, index, all) =>
+                index ===
+                all.findIndex(
+                    (other) =>
+                        other.name.trim().toUpperCase() ===
+                        entry.name.trim().toUpperCase(),
+                ),
+        );
+}
+
 function toMotherRows(person: FamilyData | null): ParentEntry[] {
-    const fromList = (entries: ParentEntry[] | null | undefined) =>
-        (entries ?? [])
-            .map((entry) => ({
-                id: entry.id ?? null,
-                name: entry.name ?? '',
-                alias: entry.alias ?? '',
-                birth_year: entry.birth_year ?? '',
-                death_year: entry.death_year ?? '',
-                marga_id: entry.marga_id ?? null,
-                new_marga: '',
-                father_name: entry.father_name ?? '',
-                father_marga_id: entry.father_marga_id ?? null,
-                father_marga: entry.father_marga ?? null,
-                share_code: entry.share_code ?? '',
-            }))
-            .filter(
-                (entry, index, all) =>
-                    index ===
-                    all.findIndex(
-                        (other) =>
-                            other.name.trim().toUpperCase() ===
-                            entry.name.trim().toUpperCase(),
-                    ),
-            );
+    const rows = toParentRows(person?.mothers);
 
-    if (person?.mothers && person.mothers.length > 0) {
-        const rows = fromList(person.mothers);
-
-        if (rows.length > 0) {
-            return rows;
-        }
+    if (rows.length > 0) {
+        return rows;
     }
 
     if (person?.mother && isNameFilled(person.mother.name ?? '')) {
@@ -1101,6 +1107,10 @@ function toMotherRows(person: FamilyData | null): ParentEntry[] {
     }
 
     return [emptyParent()];
+}
+
+function toWifeRows(person: FamilyData | null): ParentEntry[] {
+    return toParentRows(person?.wives);
 }
 
 function soleMotherIndex(mothers: ParentEntry[]): number | null {
@@ -1289,6 +1299,7 @@ export default function FamilyForm({
     const initialImageMode: 'url' | 'upload' =
         person?.image && !/^https?:\/\//i.test(person.image) ? 'upload' : 'url';
     const initialMothers = toMotherRows(person);
+    const initialWives = toWifeRows(person);
     const [districtOptions, setDistrictOptions] = useState<RegionOption[]>([]);
     const [villageOptions, setVillageOptions] = useState<RegionOption[]>([]);
     const [districtsLoading, setDistrictsLoading] = useState(
@@ -1359,6 +1370,7 @@ export default function FamilyForm({
               }
             : emptyParent(),
         mothers: initialMothers,
+        wives: initialWives,
         children:
             person?.children && person.children.length > 0
                 ? person.children.map((child) => ({
@@ -2097,10 +2109,19 @@ export default function FamilyForm({
         setRemovalConfirm(null);
     };
 
-    const parentAt = (key: ParentKey): ParentEntry =>
-        key === 'father' ? (data.father ?? emptyParent()) : data.mothers[key];
+    const parentAt = (
+        key: ParentKey,
+        collection: ParentCollection = 'mothers',
+    ): ParentEntry =>
+        key === 'father'
+            ? (data.father ?? emptyParent())
+            : data[collection][key];
 
-    const updateParent = (key: ParentKey, patch: Partial<ParentEntry>) => {
+    const updateParent = (
+        key: ParentKey,
+        patch: Partial<ParentEntry>,
+        collection: ParentCollection = 'mothers',
+    ) => {
         if (key === 'father') {
             setData('father', { ...data.father, ...patch } as ParentEntry);
 
@@ -2108,10 +2129,21 @@ export default function FamilyForm({
         }
 
         setData(
-            'mothers',
-            data.mothers.map((entry, index) =>
+            collection,
+            data[collection].map((entry, index) =>
                 index === key ? { ...entry, ...patch } : entry,
             ),
+        );
+    };
+
+    const addWife = () => {
+        setData('wives', [...data.wives, emptyParent()]);
+    };
+
+    const removeWife = (index: number) => {
+        setData(
+            'wives',
+            data.wives.filter((_, i) => i !== index),
         );
     };
 
@@ -2169,18 +2201,26 @@ export default function FamilyForm({
             | 'father_name'
             | 'share_code',
         value: string,
+        collection: ParentCollection = 'mothers',
     ) => {
-        updateParent(key, {
-            [field]: value,
-            ...(key === 'father' && field === 'name' ? { id: null } : {}),
-            ...(typeof key === 'number' && field === 'name'
-                ? { id: null, share_code: '' }
-                : {}),
-        });
+        updateParent(
+            key,
+            {
+                [field]: value,
+                ...(key === 'father' && field === 'name' ? { id: null } : {}),
+                ...(typeof key === 'number' && field === 'name'
+                    ? { id: null, share_code: '' }
+                    : {}),
+            },
+            collection,
+        );
     };
 
-    const resolveMotherCode = async (index: number) => {
-        const code = data.mothers[index]?.share_code?.trim();
+    const resolveMotherCode = async (
+        index: number,
+        collection: ParentCollection = 'mothers',
+    ) => {
+        const code = data[collection][index]?.share_code?.trim();
 
         if (!code) {
             toast.error('Tempel kode dari kontributor terlebih dahulu.');
@@ -2233,20 +2273,24 @@ export default function FamilyForm({
                 );
             }
 
-            updateParent(index, {
-                id: result.id,
-                name: result.name,
-                alias: result.alias ?? '',
-                marga_id: result.marga_id ?? null,
-                marga: result.marga ?? null,
-                birth_year: result.birth_year ?? '',
-                death_year: result.death_year ?? '',
-                father_name: result.father_name ?? '',
-                father_marga_id: result.father_marga_id ?? null,
-                father_marga: result.father_marga ?? null,
-                share_code: result.code,
-                new_marga: '',
-            });
+            updateParent(
+                index,
+                {
+                    id: result.id,
+                    name: result.name,
+                    alias: result.alias ?? '',
+                    marga_id: result.marga_id ?? null,
+                    marga: result.marga ?? null,
+                    birth_year: result.birth_year ?? '',
+                    death_year: result.death_year ?? '',
+                    father_name: result.father_name ?? '',
+                    father_marga_id: result.father_marga_id ?? null,
+                    father_marga: result.father_marga ?? null,
+                    share_code: result.code,
+                    new_marga: '',
+                },
+                collection,
+            );
             toast.success(`${result.name} berhasil ditautkan sebagai istri.`);
         } catch (error) {
             toast.error(
@@ -2259,12 +2303,20 @@ export default function FamilyForm({
         }
     };
 
-    const setParentMarga = (key: ParentKey, margaId: number | null) => {
-        updateParent(key, { marga_id: margaId });
+    const setParentMarga = (
+        key: ParentKey,
+        margaId: number | null,
+        collection: ParentCollection = 'mothers',
+    ) => {
+        updateParent(key, { marga_id: margaId }, collection);
     };
 
-    const setParentNewMarga = (key: ParentKey, name: string) => {
-        updateParent(key, { new_marga: name });
+    const setParentNewMarga = (
+        key: ParentKey,
+        name: string,
+        collection: ParentCollection = 'mothers',
+    ) => {
+        updateParent(key, { new_marga: name }, collection);
     };
 
     const submit = (e: React.FormEvent) => {
@@ -2413,9 +2465,10 @@ export default function FamilyForm({
         deathPlace: string,
         showMarga = true,
         lockMarga = lockedMarga !== null,
+        collection: ParentCollection = 'mothers',
     ) => {
-        const entry = parentAt(key);
-        const errorPrefix = parentErrorPrefix(key);
+        const entry = parentAt(key, collection);
+        const errorPrefix = parentErrorPrefix(key, collection);
 
         return (
             <div className="space-y-4 rounded-lg border border-tb-outline-variant p-4">
@@ -2431,7 +2484,9 @@ export default function FamilyForm({
                     </Label>
                     <NameCombobox
                         value={entry.name}
-                        onChange={(value) => setParentEntry(key, 'name', value)}
+                        onChange={(value) =>
+                            setParentEntry(key, 'name', value, collection)
+                        }
                         suggestions={
                             key === 'father' && canChooseExistingParent
                                 ? selectableFatherSuggestions
@@ -2470,7 +2525,12 @@ export default function FamilyForm({
                             id={`${errorPrefix}-alias`}
                             value={entry.alias}
                             onChange={(e) =>
-                                setParentEntry(key, 'alias', e.target.value)
+                                setParentEntry(
+                                    key,
+                                    'alias',
+                                    e.target.value,
+                                    collection,
+                                )
                             }
                             placeholder="Tuan Sorba Dibanua"
                             className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
@@ -2532,9 +2592,11 @@ export default function FamilyForm({
                         <MargaField
                             value={entry.marga_id ?? null}
                             newMarga={entry.new_marga ?? ''}
-                            onValue={(value) => setParentMarga(key, value)}
+                            onValue={(value) =>
+                                setParentMarga(key, value, collection)
+                            }
                             onNewMarga={(value) =>
-                                setParentNewMarga(key, value)
+                                setParentNewMarga(key, value, collection)
                             }
                             margas={key === 'father' ? margas : spouseMargas}
                             placeholder={`Marga ${label.toLowerCase()}`}
@@ -2577,6 +2639,7 @@ export default function FamilyForm({
                                         key,
                                         'share_code',
                                         event.target.value,
+                                        collection,
                                     )
                                 }
                                 placeholder="Tempel kode yang diterima"
@@ -2585,7 +2648,9 @@ export default function FamilyForm({
                             <Button
                                 type="button"
                                 variant="outline"
-                                onClick={() => resolveMotherCode(key)}
+                                onClick={() =>
+                                    resolveMotherCode(key, collection)
+                                }
                                 disabled={resolvingMotherIndex !== null}
                                 className="shrink-0"
                             >
@@ -2611,7 +2676,12 @@ export default function FamilyForm({
                         <NameCombobox
                             value={entry.father_name ?? ''}
                             onChange={(value) =>
-                                setParentEntry(key, 'father_name', value)
+                                setParentEntry(
+                                    key,
+                                    'father_name',
+                                    value,
+                                    collection,
+                                )
                             }
                             suggestions={
                                 canChooseExistingParent ? fatherSuggestions : []
@@ -2644,6 +2714,7 @@ export default function FamilyForm({
                                     key,
                                     'birth_year',
                                     e.target.value,
+                                    collection,
                                 )
                             }
                             placeholder={birthPlace}
@@ -2665,6 +2736,7 @@ export default function FamilyForm({
                                     key,
                                     'death_year',
                                     e.target.value,
+                                    collection,
                                 )
                             }
                             placeholder={deathPlace}
@@ -3186,6 +3258,55 @@ export default function FamilyForm({
                                                         }
                                                     />
                                                 </div>
+                                            </div>
+
+                                            <div className="grid gap-3">
+                                                <Label className="text-tb-on-surface">
+                                                    Istri
+                                                </Label>
+                                                {data.wives.map(
+                                                    (wife, index) => (
+                                                        <div
+                                                            key={
+                                                                wife.id ??
+                                                                `istri-${index}`
+                                                            }
+                                                            className="relative"
+                                                        >
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    removeWife(
+                                                                        index,
+                                                                    )
+                                                                }
+                                                                aria-label={`Hapus Istri ${index + 1}`}
+                                                                title={`Hapus Istri ${index + 1}`}
+                                                                className="absolute top-2 right-2 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full text-tb-on-surface-variant transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                                                            >
+                                                                <X className="size-3.5" />
+                                                            </button>
+                                                            {renderParentBlock(
+                                                                index,
+                                                                `Istri ${index + 1}`,
+                                                                '1955',
+                                                                '2025',
+                                                                true,
+                                                                false,
+                                                                'wives',
+                                                            )}
+                                                        </div>
+                                                    ),
+                                                )}
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    onClick={addWife}
+                                                    className="w-full border-dashed border-tb-outline-variant text-tb-primary hover:bg-tb-primary/5"
+                                                >
+                                                    <Plus className="size-4" />{' '}
+                                                    Tambah Istri
+                                                </Button>
                                             </div>
 
                                             <div className="grid gap-2">
@@ -4427,7 +4548,7 @@ export default function FamilyForm({
                                     Orang Tua
                                 </CardTitle>
                                 <CardDescription>
-                                    Ayah dan istri-istrinya dari anak-anak yang
+                                    Ayah dan ibu-ibunya dari anak-anak yang
                                     dicatat di bawah. Setiap anak dapat
                                     ditautkan ke Ibu yang sesuai.
                                 </CardDescription>
@@ -4454,8 +4575,8 @@ export default function FamilyForm({
                                                     onClick={() =>
                                                         removeMother(index)
                                                     }
-                                                    aria-label={`Hapus Istri ${index + 1}`}
-                                                    title={`Hapus Istri ${index + 1}`}
+                                                    aria-label="Hapus Ibu"
+                                                    title="Hapus Ibu"
                                                     className="absolute top-2 right-2 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full text-tb-on-surface-variant transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
                                                 >
                                                     <X className="size-3.5" />
@@ -4463,7 +4584,7 @@ export default function FamilyForm({
                                             )}
                                             {renderParentBlock(
                                                 index,
-                                                `Istri ${index + 1}`,
+                                                'Ibu',
                                                 '1955',
                                                 '2025',
                                                 true,
@@ -4477,7 +4598,7 @@ export default function FamilyForm({
                                         onClick={addMother}
                                         className="w-full border-dashed border-tb-outline-variant text-tb-primary hover:bg-tb-primary/5"
                                     >
-                                        <Plus className="size-4" /> Tambah Istri
+                                        <Plus className="size-4" /> Tambah Ibu
                                     </Button>
                                 </div>
                             </CardContent>

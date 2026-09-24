@@ -279,6 +279,45 @@ test('a family store supports multiple wives with their own marga', function () 
             ->where('person.mothers.1.id', $secondWife->id));
 });
 
+test('a family store records the focus person own wives separately from the father wives', function () {
+    $marga = Marga::factory()->create(['name' => 'Sitorus']);
+    $wifeMarga = Marga::factory()->create(['name' => 'Panjaitan']);
+
+    $this->actingAs($this->admin)->post(route('people.store'), [
+        'name' => 'Ompu Sitorus',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'birth_order' => 1,
+        'sibling_count' => 1,
+        'father' => ['name' => 'Si Raja Batak'],
+        'mothers' => [['name' => 'Borbor']],
+        'wives' => [
+            ['name' => 'Boru Panjaitan', 'marga_id' => $wifeMarga->id],
+            ['name' => 'Boru Simbolon'],
+        ],
+        'children' => [['name' => 'Ompu Sitorus', 'gender' => 'L']],
+    ])->assertRedirect(route('people.index'));
+
+    $focus = Person::where('name', 'Ompu Sitorus')->firstOrFail();
+    $firstWife = Person::where('name', 'Boru Panjaitan')->firstOrFail();
+    $secondWife = Person::where('name', 'Boru Simbolon')->firstOrFail();
+    $mother = Person::where('name', 'Borbor')->firstOrFail();
+
+    expect($focus->wives()->pluck('people.id')->all())
+        ->toBe([$firstWife->id, $secondWife->id])
+        ->and($firstWife->gender)->toBe('P')
+        ->and($firstWife->marga_id)->toBe($wifeMarga->id)
+        ->and($focus->wives()->whereKey($mother->id)->exists())->toBeFalse();
+
+    $this->actingAs($this->admin)
+        ->get(route('people.show', $focus))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('person.wives', 2)
+            ->where('person.wives.0.id', $firstWife->id)
+            ->where('person.wives.1.id', $secondWife->id));
+});
+
 test('a signed person code links an existing wife shared by another contributor', function () {
     $familyMarga = Marga::factory()->create(['name' => 'Sitorus']);
     $wifeMarga = Marga::factory()->create(['name' => 'Panjaitan']);
