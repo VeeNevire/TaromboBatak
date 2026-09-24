@@ -1212,7 +1212,7 @@ class FamilyEntryService
      * provided it is reused when it already exists, otherwise a new marga is
      * created on the fly.
      */
-    protected function resolveMargaId(mixed $margaId, mixed $newMarga): ?int
+    public function resolveMargaId(mixed $margaId, mixed $newMarga): ?int
     {
         $name = $this->normalizeName($newMarga);
 

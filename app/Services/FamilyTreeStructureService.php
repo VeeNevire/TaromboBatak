@@ -225,6 +225,8 @@ class FamilyTreeStructureService
                         'gender' => $row['gender'] ?? null,
                         'spouse' => $row['spouse'] ?? null,
                         'spouse_marga' => $row['spouse_marga'] ?? null,
+                        'marga_id' => $row['marga_id'] ?? null,
+                        'new_marga' => $row['new_marga'] ?? null,
                         'father_node_id' => $parentNode->id,
                         'birth_order' => $index + 1,
                     ], $createdBy);
@@ -245,6 +247,25 @@ class FamilyTreeStructureService
                     if ((int) $childPerson->father_id !== $parentNode->person_id || $childPerson->pending_father) {
                         app(FatherConnectionService::class)->connect($childPerson, $parentNode->person()->firstOrFail(), $createdBy, $tree);
                     }
+                }
+
+                // The version form also shows person-level fields (spouse,
+                // marga) for existing rows. Persist them globally so they are
+                // not silently dropped; the focus's own biodata stays guarded
+                // by the name check above.
+                if ($node->id !== $focusNode->id) {
+                    $resolvedMargaId = app(FamilyEntryService::class)->resolveMargaId(
+                        $row['marga_id'] ?? null,
+                        $row['new_marga'] ?? null,
+                    );
+
+                    $node->person()->firstOrFail()->update(array_filter([
+                        'alias' => $row['alias'] ?? null,
+                        'gender' => $row['gender'] ?? null,
+                        'spouse' => $row['spouse'] ?? null,
+                        'spouse_marga' => $row['spouse_marga'] ?? null,
+                        'marga_id' => $resolvedMargaId,
+                    ], fn ($value) => $value !== null));
                 }
 
                 $entries[$node->id] = [

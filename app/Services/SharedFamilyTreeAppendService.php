@@ -193,11 +193,16 @@ class SharedFamilyTreeAppendService
             ->where('father_node_id', $fatherNode->id)
             ->max('birth_order') + 1;
 
+        $memberMargaId = app(FamilyEntryService::class)->resolveMargaId(
+            $payload['marga_id'] ?? null,
+            $payload['new_marga'] ?? null,
+        ) ?? $fatherNode->person->marga_id;
+
         $person = Person::create([
             'name' => $payload['name'],
             'alias' => $payload['alias'] ?? null,
             'gender' => $payload['gender'] ?? null,
-            'marga_id' => $fatherNode->person->marga_id,
+            'marga_id' => $memberMargaId,
             'created_by' => $createdBy,
             'father_id' => $fatherNode->person_id,
             'mother_id' => $motherNode?->person_id,
