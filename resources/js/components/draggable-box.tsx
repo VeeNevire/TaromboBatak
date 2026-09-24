@@ -10,6 +10,7 @@ const clamp = (value: number, min: number, max: number) =>
 /**
  * A move/resize box drawn over an element whose coordinate space is spaceWidth × spaceHeight.
  * Place it inside a relatively positioned container that shows that whole space.
+ * With bounded={false} the box may grow past the space; minSize of it always stays inside.
  */
 export function DraggableBox({
     spaceWidth,
@@ -19,6 +20,7 @@ export function DraggableBox({
     lockAspect = false,
     dimOutside = false,
     minSize = 50,
+    bounded = true,
 }: {
     spaceWidth: number;
     spaceHeight: number;
@@ -27,6 +29,7 @@ export function DraggableBox({
     lockAspect?: boolean;
     dimOutside?: boolean;
     minSize?: number;
+    bounded?: boolean;
 }) {
     const layerRef = useRef<HTMLDivElement>(null);
     const dragRef = useRef<{
@@ -78,9 +81,23 @@ export function DraggableBox({
         if (drag.handle === 'move') {
             onChange({
                 ...start,
-                x: Math.round(clamp(start.x + dx, 0, spaceWidth - start.width)),
+                x: Math.round(
+                    bounded
+                        ? clamp(start.x + dx, 0, spaceWidth - start.width)
+                        : clamp(
+                              start.x + dx,
+                              minSize - start.width,
+                              spaceWidth - minSize,
+                          ),
+                ),
                 y: Math.round(
-                    clamp(start.y + dy, 0, spaceHeight - start.height),
+                    bounded
+                        ? clamp(start.y + dy, 0, spaceHeight - start.height)
+                        : clamp(
+                              start.y + dy,
+                              minSize - start.height,
+                              spaceHeight - minSize,
+                          ),
                 ),
             });
 
@@ -92,8 +109,16 @@ export function DraggableBox({
         // The corner opposite the dragged handle stays in place.
         const anchorX = west ? start.x + start.width : start.x;
         const anchorY = north ? start.y + start.height : start.y;
-        const maxWidth = west ? anchorX : spaceWidth - anchorX;
-        const maxHeight = north ? anchorY : spaceHeight - anchorY;
+        const maxWidth = bounded
+            ? west
+                ? anchorX
+                : spaceWidth - anchorX
+            : Infinity;
+        const maxHeight = bounded
+            ? north
+                ? anchorY
+                : spaceHeight - anchorY
+            : Infinity;
         let width = clamp(start.width + (west ? -dx : dx), minSize, maxWidth);
         let height = clamp(
             start.height + (north ? -dy : dy),
@@ -125,7 +150,9 @@ export function DraggableBox({
     return (
         <div
             ref={layerRef}
-            className="absolute inset-0 touch-none overflow-hidden select-none"
+            className={`absolute inset-0 touch-none select-none ${
+                dimOutside ? 'overflow-hidden' : ''
+            }`}
             onPointerMove={onPointerMove}
             onPointerUp={endDrag}
             onPointerCancel={endDrag}
