@@ -18,6 +18,7 @@ class GenerateTaromboFrameRequest extends FormRequest
         return [
             'snapshot_id' => ['required', 'integer', 'exists:tarombo_snapshots,id'],
             'frame_id' => ['required', 'integer', 'exists:tarombo_frames,id'],
+            'image' => ['required', 'image', 'mimes:jpg,jpeg', 'mimetypes:image/jpeg', 'max:20480'],
         ];
     }
 }

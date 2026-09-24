@@ -215,11 +215,11 @@ Route::middleware(['auth'])->group(function () {
         ->name('tarombo.fullscreen');
     Route::get('dashboard/tarombo/snapshots', [TaromboSnapshotController::class, 'index'])
         ->name('tarombo.snapshots.index');
-    Route::put('dashboard/tarombo/snapshots/ai-prompt', [TaromboSnapshotController::class, 'updatePrompt'])
-        ->name('tarombo.snapshots.prompt.update');
     Route::post('dashboard/tarombo/snapshots', [TaromboSnapshotController::class, 'store'])
         ->middleware('throttle:10,1')
         ->name('tarombo.snapshots.store');
+    Route::get('dashboard/tarombo/snapshots/{taromboSnapshot}/compile', [TaromboSnapshotController::class, 'compile'])
+        ->name('tarombo.snapshots.compile');
     Route::get('dashboard/tarombo/snapshots/{taromboSnapshot}/image', [TaromboSnapshotController::class, 'image'])
         ->name('tarombo.snapshots.image');
     Route::get('dashboard/tarombo/snapshots/{taromboSnapshot}/download', [TaromboSnapshotController::class, 'download'])
@@ -288,6 +288,8 @@ Route::middleware(['auth', 'role.admin'])->group(function () {
     Route::post('dashboard/tarombo/frames/{taromboFrame}/upscale', [TaromboFrameController::class, 'upscale'])
         ->middleware('throttle:10,1')
         ->name('tarombo-frames.upscale');
+    Route::put('dashboard/tarombo/frames/{taromboFrame}/area', [TaromboFrameController::class, 'updateArea'])
+        ->name('tarombo-frames.area.update');
     Route::get('dashboard/silsilah-akun', [PersonController::class, 'familyTreeIndex'])
         ->name('family-trees.index');
     Route::resource('accounts', AccountController::class)->except(['show', 'destroy']);

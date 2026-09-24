@@ -4,15 +4,12 @@ import {
     Download,
     Images,
     LayoutGrid,
-    PanelsTopLeft,
     ShieldCheck,
-    SlidersHorizontal,
-    Sparkles,
     Trash2,
+    Wand2,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
-import { CollageBoxEditor } from '@/components/collage-box-editor';
-import { FormatThumbnail } from '@/components/format-thumbnail';
+import { useState } from 'react';
+import { CollageDialog } from '@/components/collage-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -20,15 +17,9 @@ import {
     Dialog,
     DialogContent,
     DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import {
-    COLLAGE_FORMATS,
-    type CollageFormat,
-    composeCanvasToFile,
-} from '@/lib/collage';
 import { dashboard } from '@/routes';
 import tarombo from '@/routes/tarombo';
 
@@ -54,122 +45,27 @@ type SnapshotPage = {
     next_page_url: string | null;
 };
 
-type Frame = {
-    id: number;
-    name: string;
-    image_url: string;
-};
-
 export default function TaromboSnapshots({
     snapshots,
     snapshotOptions,
-    activeFrames,
     accountName,
     canDownload,
-    canManageAiPrompt,
-    aiPrompt,
 }: {
     snapshots: SnapshotPage;
     snapshotOptions: Snapshot[];
-    activeFrames: Frame[];
     accountName: string;
     canDownload: boolean;
-    canManageAiPrompt: boolean;
-    aiPrompt: string | null;
 }) {
     const [selectedSnapshot, setSelectedSnapshot] = useState<Snapshot | null>(
         null,
     );
     const [sourceSnapshot, setSourceSnapshot] = useState<Snapshot | null>(null);
-    const [selectedFrame, setSelectedFrame] = useState<Frame | null>(null);
     const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
-    const [framePickerOpen, setFramePickerOpen] = useState(false);
-    const [promptEditorOpen, setPromptEditorOpen] = useState(false);
-    const [promptDraft, setPromptDraft] = useState(aiPrompt ?? '');
-    const [savingPrompt, setSavingPrompt] = useState(false);
-    const [generating, setGenerating] = useState(false);
-    const [collageStep, setCollageStep] = useState<
-        'closed' | 'format' | 'boxes' | 'preview'
-    >('closed');
-    const [collageFormat, setCollageFormat] = useState<CollageFormat | null>(
-        null,
-    );
-    const [collageBoxFiles, setCollageBoxFiles] = useState<(File | null)[]>(
-        [],
-    );
-    const [collageError, setCollageError] = useState<string | null>(null);
-    const [collagePreviewUrl, setCollagePreviewUrl] = useState<string | null>(
-        null,
-    );
-    const collageCanvasRef = useRef<HTMLCanvasElement>(null);
+    const [collageOpen, setCollageOpen] = useState(false);
     const dateFormatter = new Intl.DateTimeFormat('id-ID', {
         dateStyle: 'long',
         timeStyle: 'short',
     });
-
-    useEffect(() => {
-        return () => {
-            if (collagePreviewUrl) {
-                URL.revokeObjectURL(collagePreviewUrl);
-            }
-        };
-    }, [collagePreviewUrl]);
-
-    const closeCollage = () => {
-        setCollageStep('closed');
-        setCollageFormat(null);
-        setCollageBoxFiles([]);
-        setCollageError(null);
-        if (collagePreviewUrl) {
-            URL.revokeObjectURL(collagePreviewUrl);
-        }
-        setCollagePreviewUrl(null);
-    };
-
-    const pickCollageFormat = (format: CollageFormat) => {
-        setCollageFormat(format);
-        setCollageBoxFiles(new Array(format.boxes.length).fill(null));
-        setCollageError(null);
-        setCollageStep('boxes');
-    };
-
-    const setCollageBoxFile = (index: number, file: File | null) => {
-        setCollageBoxFiles((current) => {
-            const next = [...current];
-            next[index] = file;
-            return next;
-        });
-        setCollageError(null);
-    };
-
-    const previewCollage = async () => {
-        if (!collageFormat) {
-            return;
-        }
-
-        if (collageBoxFiles.some((file) => !file)) {
-            setCollageError('Isi semua kotak dengan gambar terlebih dahulu.');
-            return;
-        }
-
-        const file = collageCanvasRef.current
-            ? await composeCanvasToFile(
-                  collageCanvasRef.current,
-                  'kolase-tarombo.jpg',
-              )
-            : null;
-
-        if (!file) {
-            setCollageError('Gagal membuat gambar kolase, coba lagi.');
-            return;
-        }
-
-        if (collagePreviewUrl) {
-            URL.revokeObjectURL(collagePreviewUrl);
-        }
-        setCollagePreviewUrl(URL.createObjectURL(file));
-        setCollageStep('preview');
-    };
 
     const snapshotLabel = (snapshot: Snapshot) =>
         snapshot.title ?? snapshot.center_person_name ?? 'Pohon Tarombo';
@@ -185,55 +81,6 @@ export default function TaromboSnapshots({
         router.delete(tarombo.snapshots.destroy(snapshot.id).url, {
             preserveScroll: true,
         });
-    };
-
-    const generateFrame = () => {
-        if (!sourceSnapshot || !selectedFrame || generating) {
-            return;
-        }
-
-        setGenerating(true);
-        router.post(
-            tarombo.snapshots.generate().url,
-            {
-                snapshot_id: sourceSnapshot.id,
-                frame_id: selectedFrame.id,
-            },
-            {
-                preserveScroll: true,
-                onSuccess: () => {
-                    setSourceSnapshot(null);
-                    setSelectedFrame(null);
-                },
-                onError: (errors) => {
-                    window.alert(
-                        errors.frame_id ??
-                            'Generator AI gagal membuat gambar. Silakan coba lagi.',
-                    );
-                },
-                onFinish: () => setGenerating(false),
-            },
-        );
-    };
-
-    const savePrompt = () => {
-        if (savingPrompt) {
-            return;
-        }
-
-        setSavingPrompt(true);
-        router.put(
-            tarombo.snapshots.prompt.update().url,
-            { prompt: promptDraft },
-            {
-                preserveScroll: true,
-                onSuccess: () => setPromptEditorOpen(false),
-                onError: (errors) => {
-                    window.alert(errors.prompt ?? 'Prompt gagal disimpan.');
-                },
-                onFinish: () => setSavingPrompt(false),
-            },
-        );
     };
 
     return (
@@ -255,19 +102,6 @@ export default function TaromboSnapshots({
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                        {canManageAiPrompt && (
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => {
-                                    setPromptDraft(aiPrompt ?? '');
-                                    setPromptEditorOpen(true);
-                                }}
-                            >
-                                <SlidersHorizontal className="size-4" />
-                                Prompt Gen AI
-                            </Button>
-                        )}
                         <Button
                             type="button"
                             variant="outline"
@@ -284,33 +118,36 @@ export default function TaromboSnapshots({
                         <Button
                             type="button"
                             variant="outline"
-                            onClick={() => setFramePickerOpen(true)}
-                            className="max-w-52 justify-start"
-                        >
-                            <PanelsTopLeft className="size-4 shrink-0" />
-                            <span className="truncate">
-                                {selectedFrame?.name ?? 'Pilih Frame'}
-                            </span>
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setCollageStep('format')}
+                            onClick={() => setCollageOpen(true)}
                         >
                             <LayoutGrid className="size-4" />
                             Pilih Format Frame
                         </Button>
-                        <Button
-                            type="button"
-                            disabled={
-                                !sourceSnapshot || !selectedFrame || generating
-                            }
-                            onClick={generateFrame}
-                            className="bg-tb-primary hover:bg-tb-primary-light"
-                        >
-                            <Sparkles className="size-4" />
-                            {generating ? 'Membuat...' : 'Gen AI'}
-                        </Button>
+                        {sourceSnapshot ? (
+                            <Button
+                                asChild
+                                className="bg-tb-primary hover:bg-tb-primary-light"
+                            >
+                                <Link
+                                    href={tarombo.snapshots.compile(
+                                        sourceSnapshot.id,
+                                    )}
+                                >
+                                    <Wand2 className="size-4" />
+                                    Compile Gambar
+                                </Link>
+                            </Button>
+                        ) : (
+                            <Button
+                                type="button"
+                                disabled
+                                title="Pilih gambar terlebih dahulu"
+                                className="bg-tb-primary hover:bg-tb-primary-light"
+                            >
+                                <Wand2 className="size-4" />
+                                Compile Gambar
+                            </Button>
+                        )}
                         <Button asChild variant="outline">
                             <Link href={tarombo.index()}>
                                 <ArrowLeft className="size-4" /> Pohon Tarombo
@@ -326,18 +163,16 @@ export default function TaromboSnapshots({
                             Gambar dilayani melalui akses privat. Sebagai staff,
                             Anda dapat melihat dan mengunduh gambar Tarombo
                             seluruh akun. Setiap aksi unduh tercatat pada Log
-                            Aktivitas. Saat Gen AI dipilih, gambar Tarombo dan
-                            frame dikirim sebagai dua referensi ke AI untuk
-                            dianalisis dan disatukan secara proporsional.
+                            Aktivitas. Pilih gambar lalu tekan Compile Gambar
+                            untuk menempatkan Tarombo utuh di dalam frame.
                         </p>
                     ) : (
                         <p>
                             Gambar dilayani melalui akses privat, tanpa tombol
                             download, serta tidak dapat diklik kanan atau
-                            ditarik dari galeri. Saat Gen AI dipilih, gambar
-                            Tarombo dan frame dikirim sebagai dua referensi ke
-                            AI untuk dianalisis dan disatukan secara
-                            proporsional.
+                            ditarik dari galeri. Pilih gambar lalu tekan Compile
+                            Gambar untuk menempatkan Tarombo utuh di dalam
+                            frame.
                         </p>
                     )}
                 </div>
@@ -579,204 +414,10 @@ export default function TaromboSnapshots({
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={framePickerOpen} onOpenChange={setFramePickerOpen}>
-                <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
-                    <DialogHeader>
-                        <DialogTitle>Pilih Template Frame</DialogTitle>
-                        <DialogDescription>
-                            AI akan menganalisis area konten dari template ini,
-                            lalu menempatkan gambar Tarombo tanpa menutupi
-                            ornamen frame.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-                        {activeFrames.map((frame) => (
-                            <button
-                                key={frame.id}
-                                type="button"
-                                onClick={() => {
-                                    setSelectedFrame(frame);
-                                    setFramePickerOpen(false);
-                                }}
-                                className="overflow-hidden rounded-xl border border-tb-outline-variant text-left transition-colors hover:border-tb-primary focus-visible:ring-2 focus-visible:ring-tb-primary focus-visible:outline-none"
-                            >
-                                <img
-                                    src={frame.image_url}
-                                    alt={frame.name}
-                                    className="aspect-video w-full bg-tb-surface-container object-contain"
-                                />
-                                <p className="truncate px-3 py-2 text-sm font-medium text-tb-on-surface">
-                                    {frame.name}
-                                </p>
-                            </button>
-                        ))}
-                        {activeFrames.length === 0 && (
-                            <p className="col-span-full py-6 text-center text-sm text-tb-on-surface-variant">
-                                Belum ada frame aktif. Hubungi admin untuk
-                                menambah template.
-                            </p>
-                        )}
-                    </div>
-                </DialogContent>
-            </Dialog>
-
-            <Dialog
-                open={collageStep !== 'closed'}
-                onOpenChange={(open) => !open && closeCollage()}
-            >
-                <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
-                    <DialogHeader>
-                        <DialogTitle>
-                            {collageStep === 'format' && 'Pilih Format Frame'}
-                            {collageStep === 'boxes' &&
-                                'Isi Kotak dengan Gambar'}
-                            {collageStep === 'preview' && 'Pratinjau Kolase'}
-                        </DialogTitle>
-                        <DialogDescription>
-                            {collageStep === 'format' &&
-                                'Pilih salah satu format untuk membuat kolase gambar.'}
-                            {collageStep === 'boxes' &&
-                                'Klik tiap kotak untuk memasukkan gambar, lalu lihat pratinjaunya.'}
-                            {collageStep === 'preview' &&
-                                'Kolase siap. Unduh sebagai satu file gambar.'}
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    {collageStep === 'format' && (
-                        <div className="grid max-w-xl grid-cols-2 gap-6">
-                            {COLLAGE_FORMATS.map((format) => (
-                                <button
-                                    key={format.id}
-                                    type="button"
-                                    onClick={() => pickCollageFormat(format)}
-                                    className="group flex flex-col items-center gap-2 text-tb-primary"
-                                >
-                                    <FormatThumbnail
-                                        boxes={format.boxes}
-                                        className="aspect-video w-full transition-transform group-hover:scale-[1.02]"
-                                    />
-                                    <span className="text-sm font-bold">
-                                        {format.label}
-                                    </span>
-                                </button>
-                            ))}
-                        </div>
-                    )}
-
-                    {collageStep === 'boxes' && collageFormat && (
-                        <div className="grid gap-3">
-                            <CollageBoxEditor
-                                format={collageFormat}
-                                boxFiles={collageBoxFiles}
-                                canvasRef={collageCanvasRef}
-                                onSetBoxFile={setCollageBoxFile}
-                            />
-                            {collageError && (
-                                <p className="text-xs text-red-600">
-                                    {collageError}
-                                </p>
-                            )}
-                            <DialogFooter>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => setCollageStep('format')}
-                                >
-                                    Ganti Format
-                                </Button>
-                                <Button
-                                    type="button"
-                                    onClick={previewCollage}
-                                    className="bg-tb-primary hover:bg-tb-primary-light"
-                                >
-                                    Lihat Pratinjau
-                                </Button>
-                            </DialogFooter>
-                        </div>
-                    )}
-
-                    {collageStep === 'preview' && collagePreviewUrl && (
-                        <div className="grid gap-4">
-                            <img
-                                src={collagePreviewUrl}
-                                alt="Pratinjau kolase"
-                                className="w-full rounded-lg border border-tb-outline-variant"
-                            />
-                            <DialogFooter>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => setCollageStep('boxes')}
-                                >
-                                    Ubah Lagi
-                                </Button>
-                                <Button asChild className="bg-tb-primary hover:bg-tb-primary-light">
-                                    <a
-                                        href={collagePreviewUrl}
-                                        download="kolase-tarombo.jpg"
-                                        onClick={() =>
-                                            setTimeout(closeCollage, 100)
-                                        }
-                                    >
-                                        <Download className="size-4" /> Unduh
-                                        Gambar
-                                    </a>
-                                </Button>
-                            </DialogFooter>
-                        </div>
-                    )}
-                </DialogContent>
-            </Dialog>
-
-            {canManageAiPrompt && (
-                <Dialog
-                    open={promptEditorOpen}
-                    onOpenChange={setPromptEditorOpen}
-                >
-                    <DialogContent className="sm:max-w-2xl">
-                        <DialogHeader>
-                            <DialogTitle>Prompt Gen AI</DialogTitle>
-                            <DialogDescription>
-                                Prompt ini digunakan saat AI menggabungkan
-                                gambar Tarombo dengan template frame untuk semua
-                                pengguna.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <label
-                            htmlFor="tarombo-ai-prompt"
-                            className="text-sm font-medium text-tb-on-surface"
-                        >
-                            Instruksi untuk AI
-                        </label>
-                        <textarea
-                            id="tarombo-ai-prompt"
-                            value={promptDraft}
-                            onChange={(event) =>
-                                setPromptDraft(event.target.value)
-                            }
-                            maxLength={12000}
-                            rows={9}
-                            className="w-full resize-y rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 py-2 text-sm text-tb-on-surface shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-tb-primary"
-                        />
-                        <div className="flex items-center justify-between gap-3">
-                            <p className="text-xs text-tb-on-surface-variant">
-                                Maksimal 12.000 karakter. Prompt berlaku untuk
-                                generate berikutnya.
-                            </p>
-                            <Button
-                                type="button"
-                                disabled={savingPrompt || !promptDraft.trim()}
-                                onClick={savePrompt}
-                                className="bg-tb-primary hover:bg-tb-primary-light"
-                            >
-                                {savingPrompt
-                                    ? 'Menyimpan...'
-                                    : 'Simpan Prompt'}
-                            </Button>
-                        </div>
-                    </DialogContent>
-                </Dialog>
-            )}
+            <CollageDialog
+                open={collageOpen}
+                onClose={() => setCollageOpen(false)}
+            />
         </>
     );
 }

@@ -4,19 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\GenerateTaromboFrameRequest;
 use App\Http\Requests\StoreTaromboSnapshotRequest;
-use App\Http\Requests\UpdateTaromboAiPromptRequest;
-use App\Models\TaromboAiPrompt;
 use App\Models\TaromboFrame;
 use App\Models\TaromboSnapshot;
 use App\Services\FamilyTreeActivityLogger;
-use App\Services\TaromboFrameComposer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -28,7 +24,6 @@ class TaromboSnapshotController extends Controller
         Gate::authorize('viewAny', TaromboSnapshot::class);
 
         $user = $request->user();
-        $canManageAiPrompt = $user->isAdmin();
         $canDownload = $user->isStaff();
         $ownerScope = fn ($query) => $query->when(
             ! $user->isStaff(),
@@ -65,44 +60,43 @@ class TaromboSnapshotController extends Controller
             ->get()
             ->map(fn (TaromboSnapshot $snapshot) => $this->snapshotData($snapshot));
 
-        $activeFrames = TaromboFrame::query()
-            ->active()
-            ->latest()
-            ->get()
-            ->map(fn (TaromboFrame $frame) => [
-                'id' => $frame->id,
-                'name' => $frame->name,
-                'image_url' => route('tarombo-frames.image', $frame),
-            ]);
-
         return Inertia::render('tarombo/snapshots', [
             'snapshots' => $snapshots,
             'snapshotOptions' => $snapshotOptions,
-            'activeFrames' => $activeFrames,
             'accountName' => $user->name,
             'canDownload' => $canDownload,
-            'canManageAiPrompt' => $canManageAiPrompt,
-            'aiPrompt' => $canManageAiPrompt
-                ? TaromboAiPrompt::query()
-                    ->where('key', TaromboAiPrompt::FRAME_COMPOSITION_KEY)
-                    ->value('prompt') ?? TaromboAiPrompt::DEFAULT_FRAME_COMPOSITION
-                : null,
         ]);
     }
 
-    public function updatePrompt(UpdateTaromboAiPromptRequest $request): RedirectResponse
+    public function compile(Request $request, TaromboSnapshot $taromboSnapshot): Response
     {
-        TaromboAiPrompt::query()->updateOrCreate(
-            ['key' => TaromboAiPrompt::FRAME_COMPOSITION_KEY],
-            ['prompt' => $request->validated('prompt')],
-        );
+        Gate::authorize('view', $taromboSnapshot);
 
-        Inertia::flash('toast', [
-            'type' => 'success',
-            'message' => 'Prompt Gen AI berhasil disimpan.',
+        return Inertia::render('tarombo/snapshot-compile', [
+            'snapshot' => [
+                'id' => $taromboSnapshot->id,
+                'view' => $taromboSnapshot->view,
+                'title' => $taromboSnapshot->title,
+                'center_person_name' => $taromboSnapshot->centerPerson?->name,
+                'image_url' => route('tarombo.snapshots.image', $taromboSnapshot),
+            ],
+            'frames' => TaromboFrame::query()
+                ->active()
+                ->latest()
+                ->get()
+                ->map(fn (TaromboFrame $frame) => [
+                    'id' => $frame->id,
+                    'name' => $frame->name,
+                    'image_url' => route('tarombo-frames.image', $frame),
+                    'canvas_width' => $frame->canvas_width,
+                    'canvas_height' => $frame->canvas_height,
+                    'area_x' => $frame->area_x,
+                    'area_y' => $frame->area_y,
+                    'area_width' => $frame->area_width,
+                    'area_height' => $frame->area_height,
+                ]),
+            'accountName' => $request->user()->name,
         ]);
-
-        return back();
     }
 
     public function store(StoreTaromboSnapshotRequest $request): RedirectResponse
@@ -135,10 +129,11 @@ class TaromboSnapshotController extends Controller
         return back();
     }
 
-    public function generate(
-        GenerateTaromboFrameRequest $request,
-        TaromboFrameComposer $composer,
-    ): RedirectResponse {
+    /**
+     * Stores the tree-in-frame image compiled in the browser on the compile page.
+     */
+    public function generate(GenerateTaromboFrameRequest $request): RedirectResponse
+    {
         $snapshot = TaromboSnapshot::query()
             ->when(
                 ! $request->user()->isStaff(),
@@ -149,16 +144,13 @@ class TaromboSnapshotController extends Controller
             ->active()
             ->findOrFail($request->integer('frame_id'));
 
-        abort_unless(Storage::disk('local')->exists($snapshot->path), 422, 'Gambar Tarombo sumber tidak tersedia.');
-        abort_unless(Storage::disk('local')->exists($frame->path), 422, 'Template frame tidak tersedia.');
+        $image = $request->file('image');
 
-        try {
-            $path = $composer->compose($snapshot, $frame);
-        } catch (\RuntimeException $exception) {
-            throw ValidationException::withMessages([
-                'frame_id' => $exception->getMessage(),
-            ]);
-        }
+        abort_unless($image instanceof UploadedFile, 422);
+
+        $path = $image->store('tarombo-snapshots/'.$request->user()->id, 'local');
+
+        abort_if($path === false, 500, 'Gambar gabungan gagal disimpan.');
 
         $request->user()->taromboSnapshots()->create([
             'center_person_id' => $snapshot->center_person_id,
@@ -169,10 +161,10 @@ class TaromboSnapshotController extends Controller
 
         Inertia::flash('toast', [
             'type' => 'success',
-            'message' => 'Gambar Tarombo dengan frame berhasil dibuat oleh AI.',
+            'message' => 'Gambar Tarombo berhasil digabungkan dengan frame.',
         ]);
 
-        return back();
+        return to_route('tarombo.snapshots.index');
     }
 
     public function image(TaromboSnapshot $taromboSnapshot): StreamedResponse

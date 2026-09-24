@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\TaromboFrameRequest;
+use App\Http\Requests\UpdateTaromboFrameAreaRequest;
 use App\Models\TaromboFrame;
 use App\Services\TaromboFrameUpscaler;
 use Illuminate\Http\RedirectResponse;
@@ -57,7 +58,8 @@ class TaromboFrameController extends Controller
         if ($image instanceof UploadedFile) {
             $path = $image->store('tarombo-frames', 'local');
             abort_if($path === false, 500, 'Frame gagal disimpan.');
-            [$data['canvas_width'], $data['canvas_height']] = getimagesize(Storage::disk('local')->path($path));
+            [$width, $height] = getimagesize(Storage::disk('local')->path($path));
+            $data = [...$data, ...$this->scaledArea($taromboFrame, $width, $height)];
             $data['path'] = $path;
             $oldPath = $taromboFrame->path;
         }
@@ -100,17 +102,19 @@ class TaromboFrameController extends Controller
 
         $taromboFrame->update([
             'path' => $result['path'],
-            'canvas_width' => $result['width'],
-            'canvas_height' => $result['height'],
-            'area_x' => 0,
-            'area_y' => 0,
-            'area_width' => $result['width'],
-            'area_height' => $result['height'],
+            ...$this->scaledArea($taromboFrame, $result['width'], $result['height']),
         ]);
 
         Storage::disk('local')->delete($oldPath);
 
         return back()->with('toast', ['type' => 'success', 'message' => 'Resolusi frame berhasil ditingkatkan.']);
+    }
+
+    public function updateArea(UpdateTaromboFrameAreaRequest $request, TaromboFrame $taromboFrame): RedirectResponse
+    {
+        $taromboFrame->update($request->validated());
+
+        return back()->with('toast', ['type' => 'success', 'message' => 'Area konten frame berhasil disimpan.']);
     }
 
     public function destroy(TaromboFrame $taromboFrame): RedirectResponse
@@ -119,6 +123,28 @@ class TaromboFrameController extends Controller
         $taromboFrame->delete();
 
         return back()->with('toast', ['type' => 'success', 'message' => 'Template frame berhasil dihapus.']);
+    }
+
+    /**
+     * Keep the admin-defined content area in place when the frame image changes size.
+     *
+     * @return array{canvas_width: int, canvas_height: int, area_x: int, area_y: int, area_width: int, area_height: int}
+     */
+    private function scaledArea(TaromboFrame $frame, int $width, int $height): array
+    {
+        $ratioX = $width / max(1, $frame->canvas_width);
+        $ratioY = $height / max(1, $frame->canvas_height);
+        $areaX = min($width - 1, (int) round($frame->area_x * $ratioX));
+        $areaY = min($height - 1, (int) round($frame->area_y * $ratioY));
+
+        return [
+            'canvas_width' => $width,
+            'canvas_height' => $height,
+            'area_x' => $areaX,
+            'area_y' => $areaY,
+            'area_width' => max(1, min($width - $areaX, (int) round($frame->area_width * $ratioX))),
+            'area_height' => max(1, min($height - $areaY, (int) round($frame->area_height * $ratioY))),
+        ];
     }
 
     /** @return array<string, mixed> */
