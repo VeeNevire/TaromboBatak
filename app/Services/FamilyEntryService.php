@@ -25,11 +25,11 @@ class FamilyEntryService
      * @param  array<string, mixed>  $data
      * @return array<int, Person|null>
      */
-    public function syncWives(Person $father, array $data, ?int $createdBy = null): array
+    public function syncWives(Person $father, array $data, ?int $createdBy = null, string $key = 'mothers'): array
     {
         $mothers = [];
 
-        foreach ($this->motherEntries($data) as $index => $entry) {
+        foreach ($this->motherEntries($data, $key) as $index => $entry) {
             $sharedMother = ! empty($entry['share_code'])
                 ? app(PersonShareCode::class)->resolve((string) $entry['share_code'])
                 : null;
@@ -40,7 +40,7 @@ class FamilyEntryService
                 || ! in_array($sharedMother->gender, ['P', null], true)
             )) {
                 throw ValidationException::withMessages([
-                    "mothers.{$index}.share_code" => 'Kode istri tidak valid. Tempel ulang kode dari kontributor.',
+                    "{$key}.{$index}.share_code" => 'Kode istri tidak valid. Tempel ulang kode dari kontributor.',
                 ]);
             }
 
@@ -49,7 +49,7 @@ class FamilyEntryService
                 $entry['new_marga'] ?? null,
             );
             $mother = $sharedMother ?? $this->resolveParent(
-                $entry['id'] ?? ($index === 0 ? ($data['mother_id'] ?? null) : null),
+                $entry['id'] ?? ($key === 'mothers' && $index === 0 ? ($data['mother_id'] ?? null) : null),
                 $entry,
                 $motherMargaId,
                 null,
@@ -251,6 +251,11 @@ class FamilyEntryService
 
             // Upsert own children of the focus person
             $focus = $this->resolveFocus($children, $data);
+
+            if ($focus !== null && array_key_exists('wives', $data)) {
+                $this->syncWives($focus, $data, $createdBy, 'wives');
+            }
+
             $ownChildren = $this->upsertChildren(
                 $data['ownChildren'] ?? [],
                 $focus->marga_id,
@@ -437,17 +442,17 @@ class FamilyEntryService
      * @param  array<string, mixed>  $data
      * @return array<int, array<string, mixed>>
      */
-    protected function motherEntries(array $data): array
+    protected function motherEntries(array $data, string $key = 'mothers'): array
     {
         $entries = [];
 
-        foreach (is_array($data['mothers'] ?? null) ? $data['mothers'] : [] as $entry) {
+        foreach (is_array($data[$key] ?? null) ? $data[$key] : [] as $entry) {
             if (is_array($entry)) {
                 $entries[] = $entry;
             }
         }
 
-        if ($entries === [] && is_array($data['mother'] ?? null)) {
+        if ($key === 'mothers' && $entries === [] && is_array($data['mother'] ?? null)) {
             $entries = [$data['mother']];
         }
 

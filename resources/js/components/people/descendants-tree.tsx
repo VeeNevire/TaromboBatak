@@ -174,14 +174,15 @@ function TreeBranch({
     );
     const useCompactCard =
         compact || (compactTerminalBranches && isTerminalBranch);
-    // Childless siblings — and, in the "Rapat" view, siblings whose branch is
-    // still folded — sit beside this card instead of each taking their own
-    // column past the whole subtree. Unfolding one turns it back into a branch.
+    // Childless siblings sit beside this card instead of each taking their
+    // own column past the whole subtree.
+    // A branch (has descendants) always keeps its own column and width,
+    // collapsed or not — packing it beside the parent while collapsed made
+    // its card jump from the narrow leaf width to the full branch width the
+    // instant it was expanded, which read as the whole row widening even
+    // though only one child row was added underneath.
     const isPackable = (child: TaromboPerson) =>
-        !hasDescendants(child, childrenOf, alternativeTrees) ||
-        (packCollapsed &&
-            collapsed.has(child.id) &&
-            !lineageIds.has(child.id));
+        !hasDescendants(child, childrenOf, alternativeTrees);
     const branchChildren = children.filter((child) => !isPackable(child));
     const hasPackedChildren =
         branchChildren.length > 0 && branchChildren.length < children.length;
@@ -278,7 +279,7 @@ function TreeBranch({
         <NodeCard
             node={toNode(person, numberById.get(person.id))}
             compact={useCompactCard}
-            narrow={isTerminalBranch || (packCollapsed && isCollapsed)}
+            narrow={isTerminalBranch}
             highlighted={isCenter || isHighlighted}
             onAvatarClick={
                 showProfileOnName ? () => onSelect?.(person.id) : undefined

@@ -1487,18 +1487,12 @@ class PersonController extends Controller
                 ]
                 : null,
             'mothers' => $mothers
-                ->map(fn (Person $wife) => [
-                    'id' => $wife->id,
-                    'name' => $wife->name,
-                    'alias' => $wife->alias,
-                    'marga_id' => $wife->marga_id,
-                    'marga' => $wife->marga?->name,
-                    'birth_year' => $wife->birth_year,
-                    'death_year' => $wife->death_year,
-                    'father_name' => $wife->father?->name,
-                    'father_marga_id' => $wife->father?->marga_id,
-                    'father_marga' => $wife->father?->marga?->name,
-                ])
+                ->map(fn (Person $wife) => $this->parentRow($wife))
+                ->all(),
+            'wives' => $person->wives()
+                ->with(['marga', 'father.marga'])
+                ->get()
+                ->map(fn (Person $wife) => $this->parentRow($wife))
                 ->all(),
             'lineage' => $lineage
                 ->map(fn (Person $row) => [
@@ -1561,6 +1555,27 @@ class PersonController extends Controller
                 ])
                 ->values()
                 ->all(),
+        ];
+    }
+
+    /**
+     * Shape a wife entry (mother or focus wife) for the family form.
+     *
+     * @return array<string, mixed>
+     */
+    protected function parentRow(Person $wife): array
+    {
+        return [
+            'id' => $wife->id,
+            'name' => $wife->name,
+            'alias' => $wife->alias,
+            'marga_id' => $wife->marga_id,
+            'marga' => $wife->marga?->name,
+            'birth_year' => $wife->birth_year,
+            'death_year' => $wife->death_year,
+            'father_name' => $wife->father?->name,
+            'father_marga_id' => $wife->father?->marga_id,
+            'father_marga' => $wife->father?->marga?->name,
         ];
     }
 
