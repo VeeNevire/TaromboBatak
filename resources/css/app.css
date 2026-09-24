@@ -349,47 +349,45 @@
     /* Packed siblings sit right beside their brother's card, in the empty band
        above his children, instead of each taking a column past his whole
        subtree — older ones on the left, younger ones on the right, so birth
-       order still reads left to right. Both side groups share one width, which
-       keeps the card centred on the li so every existing connector lines up.
+       order still reads left to right. The two side columns are equal 1fr
+       tracks, so the card stays centred on the li whatever the cards' widths,
+       and every existing connector keeps lining up.
        Child combinators throughout: the leaves inside a group are full nodes
        with their own .tb-node-row / .tb-node-main, which must not inherit the
        group's layout or bars. */
     .tb-tree li[data-leaf-cluster='true'] > .tb-node-row {
-        display: flex;
-        align-items: flex-start;
-        gap: 6px;
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        column-gap: 6px;
+        align-items: start;
     }
 
     .tb-tree li[data-leaf-cluster='true'] > .tb-node-row > ul.tb-leaf-cluster {
-        flex: none;
-        box-sizing: border-box;
-        width: var(--tb-leaf-width);
-        justify-content: flex-start;
+        justify-self: start;
     }
 
     .tb-tree li[data-leaf-cluster='true'] > .tb-node-row > ul.tb-leaf-cluster--before {
-        justify-content: flex-end;
+        justify-self: end;
     }
 
-    /* Sibling bars: start where the parent's line lands on this card and run to
-       the farthest packed sibling on each side, so the group reads as siblings
-       of this node, not as its descendants. */
-    .tb-tree li[data-leaf-after='true'] > .tb-node-row > .tb-node-main::after {
-        content: '';
-        position: absolute;
-        top: calc(-1 * var(--tb-link));
-        left: 50%;
-        width: calc(50% + var(--tb-leaf-bar));
-        border-top: 1px solid #a79e8c;
-    }
-
+    /* Sibling bar, built from pieces so no card width has to be known: the
+       brother's card draws from its centre to its edge, and every packed card
+       draws from its own centre across the 6px gap towards the brother. */
+    .tb-tree li[data-leaf-after='true'] > .tb-node-row > .tb-node-main::after,
     .tb-tree li[data-leaf-before='true'] > .tb-node-row > .tb-node-main::before {
         content: '';
         position: absolute;
         top: calc(-1 * var(--tb-link));
-        right: 50%;
-        width: calc(50% + var(--tb-leaf-bar-before));
+        width: 50%;
         border-top: 1px solid #a79e8c;
+    }
+
+    .tb-tree li[data-leaf-after='true'] > .tb-node-row > .tb-node-main::after {
+        left: 50%;
+    }
+
+    .tb-tree li[data-leaf-before='true'] > .tb-node-row > .tb-node-main::before {
+        right: 50%;
     }
 
     .tb-tree ul.tb-leaf-cluster {
@@ -402,6 +400,13 @@
     }
 
     /* Each leaf drops straight from the sibling bar down to its own card. */
+    /* display: a lone packed sibling is an :only-child, whose connectors the
+       generic tree rules hide. */
+    .tb-tree ul.tb-leaf-cluster > li::before,
+    .tb-tree ul.tb-leaf-cluster > li::after {
+        display: block;
+    }
+
     .tb-tree ul.tb-leaf-cluster > li::before {
         top: calc(-1 * var(--tb-link));
         right: auto;
@@ -414,8 +419,30 @@
         border-radius: 0;
     }
 
+    /* Each packed card spans its whole width plus the 6px gap on the brother's
+       side; the farthest one stops at its own centre, where the bar ends. */
     .tb-tree ul.tb-leaf-cluster > li::after {
-        display: none;
+        top: calc(-1 * var(--tb-link));
+        width: calc(100% + 6px);
+        height: 0;
+        border: 0 none;
+        border-top: 1px solid #a79e8c;
+        border-radius: 0;
+    }
+
+    .tb-tree ul.tb-leaf-cluster:not(.tb-leaf-cluster--before) > li::after {
+        right: auto;
+        left: -6px;
+    }
+
+    .tb-tree ul.tb-leaf-cluster--before > li::after {
+        right: -6px;
+        left: auto;
+    }
+
+    .tb-tree ul.tb-leaf-cluster:not(.tb-leaf-cluster--before) > li:last-child::after,
+    .tb-tree ul.tb-leaf-cluster--before > li:first-child::after {
+        width: calc(50% + 6px);
     }
 
     .tb-tree li:first-child::before,
