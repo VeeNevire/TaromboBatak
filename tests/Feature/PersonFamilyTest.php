@@ -105,7 +105,7 @@ test('a family entry update changes only its family branch name', function () {
             'gender' => 'L',
             'marga_id' => $marga->id,
         ]],
-    ])->assertRedirect(route('people.show', $person));
+    ])->assertRedirect(route('people.edit', $person));
 
     expect($familyTree->fresh()->name)->toBe('Keluarga Lama')
         ->and(FamilyTreeNode::query()
