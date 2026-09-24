@@ -43,14 +43,6 @@ type LineageLine = {
 const EMPTY_LINEAGE_PATH: readonly string[] = [];
 const EMPTY_LEAF_SIBLINGS: TaromboPerson[] = [];
 
-// Childless siblings sit beside the card rather than past the whole subtree.
-// Their cards are fixed width, so the group's footprint and the length of the
-// connector bar reaching them are exact constants — a phantom spacer of the
-// same footprint balances the group on the other side, keeping the card centred
-// on the li so every existing connector still lines up.
-const CLUSTER_CARD_WIDTH = { compact: 64, normal: 80 } as const;
-const CLUSTER_GAP = 6;
-
 /**
  * Whether a person has descendants at all — not merely whether any are drawn.
  * Nodes at the render depth limit have no rendered children but do carry
@@ -175,14 +167,15 @@ function TreeBranch({
     const useCompactCard =
         compact || (compactTerminalBranches && isTerminalBranch);
     // Childless siblings sit beside this card instead of each taking their
-    // own column past the whole subtree.
-    // A branch (has descendants) always keeps its own column and width,
-    // collapsed or not — packing it beside the parent while collapsed made
-    // its card jump from the narrow leaf width to the full branch width the
-    // instant it was expanded, which read as the whole row widening even
-    // though only one child row was added underneath.
+    // own column past the whole subtree. In the "Rapat" view a sibling whose
+    // branch is still folded is packed the same way; unfolding it gives it its
+    // own column again. Its card keeps its regular width while packed, so
+    // unfolding never makes the card itself jump wider.
     const isPackable = (child: TaromboPerson) =>
-        !hasDescendants(child, childrenOf, alternativeTrees);
+        !hasDescendants(child, childrenOf, alternativeTrees) ||
+        (packCollapsed &&
+            collapsed.has(child.id) &&
+            !lineageIds.has(child.id));
     const branchChildren = children.filter((child) => !isPackable(child));
     const hasPackedChildren =
         branchChildren.length > 0 && branchChildren.length < children.length;
@@ -215,35 +208,8 @@ function TreeBranch({
         }
     }
 
-    // Each leaf's card width, mirroring the mode its own TreeBranch renders:
-    // terminal leaves go compact when this tree compacts terminal branches,
-    // folded ones keep the regular narrow card.
-    const leafCardWidth = (leaf: TaromboPerson) =>
-        compact ||
-        (compactTerminalBranches &&
-            !hasDescendants(leaf, childrenOf, alternativeTrees))
-            ? CLUSTER_CARD_WIDTH.compact
-            : CLUSTER_CARD_WIDTH.normal;
-    const groupWidth = (leaves: TaromboPerson[]) =>
-        leaves.length === 0
-            ? 0
-            : leaves.reduce((sum, leaf) => sum + leafCardWidth(leaf), 0) +
-              (leaves.length - 1) * CLUSTER_GAP;
-    // Card centre → centre of the farthest leaf on one side: the span that
-    // side's sibling bar has to cover.
-    const barLength = (leaves: TaromboPerson[], farthest: TaromboPerson) =>
-        CLUSTER_GAP +
-        groupWidth(leaves) -
-        leafCardWidth(farthest) +
-        leafCardWidth(farthest) / 2;
     const hasLeafCluster =
         leafSiblings.length > 0 || leafSiblingsBefore.length > 0;
-    // Both sides are the same width, so the card stays centred on the li and
-    // every existing connector still lines up.
-    const leafSideWidth = Math.max(
-        groupWidth(leafSiblings),
-        groupWidth(leafSiblingsBefore),
-    );
     const renderLeaf = (leaf: TaromboPerson) => (
         <TreeBranch
             key={leaf.id}
@@ -300,23 +266,6 @@ function TreeBranch({
             data-leaf-cluster={hasLeafCluster}
             data-leaf-after={leafSiblings.length > 0}
             data-leaf-before={leafSiblingsBefore.length > 0}
-            style={
-                hasLeafCluster
-                    ? ({
-                          '--tb-leaf-width': `${leafSideWidth}px`,
-                          '--tb-leaf-bar': `${
-                              leafSiblings.length > 0
-                                  ? barLength(leafSiblings, leafSiblings[leafSiblings.length - 1])
-                                  : 0
-                          }px`,
-                          '--tb-leaf-bar-before': `${
-                              leafSiblingsBefore.length > 0
-                                  ? barLength(leafSiblingsBefore, leafSiblingsBefore[0])
-                                  : 0
-                          }px`,
-                      } as React.CSSProperties)
-                    : undefined
-            }
         >
             <div className="tb-node-row">
             {hasLeafCluster && (
