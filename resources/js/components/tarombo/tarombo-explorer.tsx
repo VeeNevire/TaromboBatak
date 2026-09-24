@@ -1,5 +1,5 @@
 import { Link, router } from '@inertiajs/react';
-import { toJpeg } from 'html-to-image';
+import { toJpeg, toPng } from 'html-to-image';
 import {
     ArrowLeft,
     Check,
@@ -277,14 +277,18 @@ function snapshotResolutionLabel(resolution: number): string {
     return `${resolution}p`;
 }
 
-function snapshotFileName(view: FullscreenView): string {
-    return `pohon-tarombo-${view}-${Date.now()}.jpg`;
+function snapshotFileName(
+    view: FullscreenView,
+    extension: 'jpg' | 'png' = 'jpg',
+): string {
+    return `pohon-tarombo-${view}-${Date.now()}.${extension}`;
 }
 
 async function composeOnPaper(
     dataUrl: string,
     paper: string,
     resolution: number,
+    transparent = false,
 ): Promise<Blob> {
     const base = PAPER_SIZES[paper] ?? PAPER_SIZES.A4;
     const height = resolution;
@@ -304,8 +308,11 @@ async function composeOnPaper(
         throw new Error('canvas tidak tersedia');
     }
 
-    context.fillStyle = '#ffffff';
-    context.fillRect(0, 0, width, height);
+    if (!transparent) {
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, width, height);
+    }
+
     const margin = Math.round(Math.min(width, height) * 0.04);
     const scale = Math.min(
         (width - margin * 2) / image.width,
@@ -327,7 +334,7 @@ async function composeOnPaper(
                 blob
                     ? resolve(blob)
                     : reject(new Error('gagal membuat gambar')),
-            'image/jpeg',
+            transparent ? 'image/png' : 'image/jpeg',
             0.92,
         );
     });
@@ -520,6 +527,7 @@ export function TaromboExplorer({
     const [treeFamilyName, setTreeFamilyName] = useState(familyName ?? '');
     const [snapshotResolution, setSnapshotResolution] = useState(1080);
     const [snapshotPaper, setSnapshotPaper] = useState('A4');
+    const [snapshotTransparent, setSnapshotTransparent] = useState(false);
     const [excludedBranchIds, setExcludedBranchIds] = useState<string[]>([]);
 
     const clampZoom = (value: number) =>
@@ -762,7 +770,7 @@ export function TaromboExplorer({
         : treeCenterId;
     const renderedHighlightId = margaTree ? margaIdentity?.id : selectedId;
     const snapshotBranches =
-        margaTree && renderedTreeCenterId !== ''
+        renderedTreeCenterId !== ''
             ? renderedTreePeople.filter(
                   (person) => person.parentId === renderedTreeCenterId,
               )
@@ -932,62 +940,6 @@ export function TaromboExplorer({
     const handleDiagramSelect = (person: TaromboPerson) =>
         handlePersonSelect(person.id);
 
-    const handleSaveSnapshot = async () => {
-        const snapshotNode = snapshotRef.current;
-
-        if (!snapshotNode || savingSnapshot) {
-            return;
-        }
-
-        setSavingSnapshot(true);
-        setSnapshotMode(true);
-
-        try {
-            await new Promise<void>((resolve) =>
-                requestAnimationFrame(() =>
-                    requestAnimationFrame(() => resolve()),
-                ),
-            );
-            await document.fonts.ready;
-
-            const dataUrl = await toJpeg(snapshotNode, {
-                quality: 0.92,
-                pixelRatio: Math.min(2, window.devicePixelRatio || 1),
-                backgroundColor:
-                    window.getComputedStyle(snapshotNode).backgroundColor,
-                cacheBust: true,
-            });
-            const image = await fetch(dataUrl).then((response) =>
-                response.blob(),
-            );
-            const file = new File([image], snapshotFileName(fullscreenView), {
-                type: 'image/jpeg',
-            });
-
-            router.post(
-                tarombo.snapshots.store(),
-                {
-                    image: file,
-                    view: fullscreenView,
-                    center_person_id: Number(centerPersonId),
-                },
-                {
-                    forceFormData: true,
-                    preserveScroll: true,
-                    onError: () => toast.error('Gambar pohon gagal disimpan.'),
-                    onFinish: () => setSavingSnapshot(false),
-                },
-            );
-        } catch {
-            setSavingSnapshot(false);
-            toast.error(
-                'Tampilan pohon gagal dibuat menjadi gambar. Coba kembali.',
-            );
-        } finally {
-            setSnapshotMode(false);
-        }
-    };
-
     const toggleBranch = (branchId: string, checked: boolean) => {
         setExcludedBranchIds((current) =>
             checked
@@ -1022,21 +974,33 @@ export function TaromboExplorer({
                 Math.max(1, snapshotResolution / domHeight),
             );
 
-            const dataUrl = await toJpeg(snapshotNode, {
-                quality: 0.92,
-                pixelRatio,
-                backgroundColor:
-                    window.getComputedStyle(snapshotNode).backgroundColor,
-                cacheBust: true,
-            });
+            const dataUrl = snapshotTransparent
+                ? await toPng(snapshotNode, {
+                      pixelRatio,
+                      cacheBust: true,
+                  })
+                : await toJpeg(snapshotNode, {
+                      quality: 0.92,
+                      pixelRatio,
+                      backgroundColor:
+                          window.getComputedStyle(snapshotNode)
+                              .backgroundColor,
+                      cacheBust: true,
+                  });
             const blob = await composeOnPaper(
                 dataUrl,
                 snapshotPaper,
                 snapshotResolution,
+                snapshotTransparent,
             );
-            const file = new File([blob], snapshotFileName(fullscreenView), {
-                type: 'image/jpeg',
-            });
+            const file = new File(
+                [blob],
+                snapshotFileName(
+                    fullscreenView,
+                    snapshotTransparent ? 'png' : 'jpg',
+                ),
+                { type: snapshotTransparent ? 'image/png' : 'image/jpeg' },
+            );
             const includedIds = [...snapshotBranches, ...snapshotDetachedTrees]
                 .filter((branch) => !excludedBranchIds.includes(branch.id))
                 .map((branch) => Number(branch.id));
@@ -1071,13 +1035,7 @@ export function TaromboExplorer({
     };
 
     const handleSaveClick = () => {
-        if (margaTree) {
-            setSaveModalOpen(true);
-
-            return;
-        }
-
-        void handleSaveSnapshot();
+        setSaveModalOpen(true);
     };
 
     const backButton = (
@@ -1312,7 +1270,10 @@ export function TaromboExplorer({
         <div
             ref={fullscreen ? snapshotRef : undefined}
             className={cn(
-                'relative overflow-hidden rounded-2xl border border-tb-outline-variant bg-tb-surface-bright',
+                'relative overflow-hidden rounded-2xl border border-tb-outline-variant',
+                snapshotMode && snapshotTransparent
+                    ? 'bg-transparent'
+                    : 'bg-tb-surface-bright',
                 fullscreen && 'flex min-h-0 flex-col',
             )}
         >
@@ -1371,7 +1332,10 @@ export function TaromboExplorer({
         <div
             ref={fullscreen ? snapshotRef : undefined}
             className={cn(
-                'relative overflow-hidden rounded-2xl border border-tb-outline-variant bg-tb-surface-bright',
+                'relative overflow-hidden rounded-2xl border border-tb-outline-variant',
+                snapshotMode && snapshotTransparent
+                    ? 'bg-transparent'
+                    : 'bg-tb-surface-bright',
                 fullscreen && 'flex min-h-0 flex-col',
             )}
         >
@@ -1961,6 +1925,22 @@ export function TaromboExplorer({
                                 </Select>
                             </div>
                         </div>
+                        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-tb-outline-variant p-3 hover:bg-tb-surface-container">
+                            <Checkbox
+                                checked={snapshotTransparent}
+                                onCheckedChange={(value) =>
+                                    setSnapshotTransparent(value === true)
+                                }
+                            />
+                            <span>
+                                <span className="block text-sm font-medium text-tb-on-surface">
+                                    Transparan
+                                </span>
+                                <span className="block text-xs text-tb-on-surface-variant">
+                                    Simpan gambar tanpa latar belakang (PNG).
+                                </span>
+                            </span>
+                        </label>
                         <div className="grid gap-2">
                             <Label>Pilih Pohon yang Ditampilkan</Label>
                             {snapshotBranches.length === 0 &&

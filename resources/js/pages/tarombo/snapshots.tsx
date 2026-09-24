@@ -3,13 +3,16 @@ import {
     ArrowLeft,
     Download,
     Images,
+    LayoutGrid,
     PanelsTopLeft,
     ShieldCheck,
     SlidersHorizontal,
     Sparkles,
     Trash2,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { CollageBoxEditor } from '@/components/collage-box-editor';
+import { FormatThumbnail } from '@/components/format-thumbnail';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -17,9 +20,15 @@ import {
     Dialog,
     DialogContent,
     DialogDescription,
+    DialogFooter,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import {
+    COLLAGE_FORMATS,
+    type CollageFormat,
+    composeCanvasToFile,
+} from '@/lib/collage';
 import { dashboard } from '@/routes';
 import tarombo from '@/routes/tarombo';
 
@@ -32,6 +41,7 @@ type Snapshot = {
     image_url: string;
     download_url?: string | null;
     can_delete?: boolean;
+    size_bytes?: number | null;
     created_at: string | null;
 };
 
@@ -78,13 +88,94 @@ export default function TaromboSnapshots({
     const [promptDraft, setPromptDraft] = useState(aiPrompt ?? '');
     const [savingPrompt, setSavingPrompt] = useState(false);
     const [generating, setGenerating] = useState(false);
+    const [collageStep, setCollageStep] = useState<
+        'closed' | 'format' | 'boxes' | 'preview'
+    >('closed');
+    const [collageFormat, setCollageFormat] = useState<CollageFormat | null>(
+        null,
+    );
+    const [collageBoxFiles, setCollageBoxFiles] = useState<(File | null)[]>(
+        [],
+    );
+    const [collageError, setCollageError] = useState<string | null>(null);
+    const [collagePreviewUrl, setCollagePreviewUrl] = useState<string | null>(
+        null,
+    );
+    const collageCanvasRef = useRef<HTMLCanvasElement>(null);
     const dateFormatter = new Intl.DateTimeFormat('id-ID', {
         dateStyle: 'long',
         timeStyle: 'short',
     });
 
+    useEffect(() => {
+        return () => {
+            if (collagePreviewUrl) {
+                URL.revokeObjectURL(collagePreviewUrl);
+            }
+        };
+    }, [collagePreviewUrl]);
+
+    const closeCollage = () => {
+        setCollageStep('closed');
+        setCollageFormat(null);
+        setCollageBoxFiles([]);
+        setCollageError(null);
+        if (collagePreviewUrl) {
+            URL.revokeObjectURL(collagePreviewUrl);
+        }
+        setCollagePreviewUrl(null);
+    };
+
+    const pickCollageFormat = (format: CollageFormat) => {
+        setCollageFormat(format);
+        setCollageBoxFiles(new Array(format.boxes.length).fill(null));
+        setCollageError(null);
+        setCollageStep('boxes');
+    };
+
+    const setCollageBoxFile = (index: number, file: File | null) => {
+        setCollageBoxFiles((current) => {
+            const next = [...current];
+            next[index] = file;
+            return next;
+        });
+        setCollageError(null);
+    };
+
+    const previewCollage = async () => {
+        if (!collageFormat) {
+            return;
+        }
+
+        if (collageBoxFiles.some((file) => !file)) {
+            setCollageError('Isi semua kotak dengan gambar terlebih dahulu.');
+            return;
+        }
+
+        const file = collageCanvasRef.current
+            ? await composeCanvasToFile(
+                  collageCanvasRef.current,
+                  'kolase-tarombo.jpg',
+              )
+            : null;
+
+        if (!file) {
+            setCollageError('Gagal membuat gambar kolase, coba lagi.');
+            return;
+        }
+
+        if (collagePreviewUrl) {
+            URL.revokeObjectURL(collagePreviewUrl);
+        }
+        setCollagePreviewUrl(URL.createObjectURL(file));
+        setCollageStep('preview');
+    };
+
     const snapshotLabel = (snapshot: Snapshot) =>
         snapshot.title ?? snapshot.center_person_name ?? 'Pohon Tarombo';
+
+    const formatSize = (bytes?: number | null) =>
+        bytes ? `${(bytes / (1024 * 1024)).toFixed(2)} MB` : null;
 
     const removeSnapshot = (snapshot: Snapshot) => {
         if (!window.confirm('Hapus gambar Tarombo tersimpan ini?')) {
@@ -203,6 +294,14 @@ export default function TaromboSnapshots({
                         </Button>
                         <Button
                             type="button"
+                            variant="outline"
+                            onClick={() => setCollageStep('format')}
+                        >
+                            <LayoutGrid className="size-4" />
+                            Pilih Format Frame
+                        </Button>
+                        <Button
+                            type="button"
                             disabled={
                                 !sourceSnapshot || !selectedFrame || generating
                             }
@@ -304,6 +403,8 @@ export default function TaromboSnapshots({
                                             {snapshot.owner_name
                                                 ? `Milik ${snapshot.owner_name} · `
                                                 : ''}
+                                            {formatSize(snapshot.size_bytes) &&
+                                                `${formatSize(snapshot.size_bytes)} · `}
                                             {snapshot.created_at
                                                 ? dateFormatter.format(
                                                       new Date(
@@ -516,6 +617,114 @@ export default function TaromboSnapshots({
                             </p>
                         )}
                     </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={collageStep !== 'closed'}
+                onOpenChange={(open) => !open && closeCollage()}
+            >
+                <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>
+                            {collageStep === 'format' && 'Pilih Format Frame'}
+                            {collageStep === 'boxes' &&
+                                'Isi Kotak dengan Gambar'}
+                            {collageStep === 'preview' && 'Pratinjau Kolase'}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {collageStep === 'format' &&
+                                'Pilih salah satu format untuk membuat kolase gambar.'}
+                            {collageStep === 'boxes' &&
+                                'Klik tiap kotak untuk memasukkan gambar, lalu lihat pratinjaunya.'}
+                            {collageStep === 'preview' &&
+                                'Kolase siap. Unduh sebagai satu file gambar.'}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {collageStep === 'format' && (
+                        <div className="grid max-w-xl grid-cols-2 gap-6">
+                            {COLLAGE_FORMATS.map((format) => (
+                                <button
+                                    key={format.id}
+                                    type="button"
+                                    onClick={() => pickCollageFormat(format)}
+                                    className="group flex flex-col items-center gap-2 text-tb-primary"
+                                >
+                                    <FormatThumbnail
+                                        boxes={format.boxes}
+                                        className="aspect-video w-full transition-transform group-hover:scale-[1.02]"
+                                    />
+                                    <span className="text-sm font-bold">
+                                        {format.label}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    {collageStep === 'boxes' && collageFormat && (
+                        <div className="grid gap-3">
+                            <CollageBoxEditor
+                                format={collageFormat}
+                                boxFiles={collageBoxFiles}
+                                canvasRef={collageCanvasRef}
+                                onSetBoxFile={setCollageBoxFile}
+                            />
+                            {collageError && (
+                                <p className="text-xs text-red-600">
+                                    {collageError}
+                                </p>
+                            )}
+                            <DialogFooter>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setCollageStep('format')}
+                                >
+                                    Ganti Format
+                                </Button>
+                                <Button
+                                    type="button"
+                                    onClick={previewCollage}
+                                    className="bg-tb-primary hover:bg-tb-primary-light"
+                                >
+                                    Lihat Pratinjau
+                                </Button>
+                            </DialogFooter>
+                        </div>
+                    )}
+
+                    {collageStep === 'preview' && collagePreviewUrl && (
+                        <div className="grid gap-4">
+                            <img
+                                src={collagePreviewUrl}
+                                alt="Pratinjau kolase"
+                                className="w-full rounded-lg border border-tb-outline-variant"
+                            />
+                            <DialogFooter>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setCollageStep('boxes')}
+                                >
+                                    Ubah Lagi
+                                </Button>
+                                <Button asChild className="bg-tb-primary hover:bg-tb-primary-light">
+                                    <a
+                                        href={collagePreviewUrl}
+                                        download="kolase-tarombo.jpg"
+                                        onClick={() =>
+                                            setTimeout(closeCollage, 100)
+                                        }
+                                    >
+                                        <Download className="size-4" /> Unduh
+                                        Gambar
+                                    </a>
+                                </Button>
+                            </DialogFooter>
+                        </div>
+                    )}
                 </DialogContent>
             </Dialog>
 

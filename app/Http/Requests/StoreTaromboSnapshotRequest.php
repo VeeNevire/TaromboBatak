@@ -24,7 +24,7 @@ class StoreTaromboSnapshotRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'image' => ['required', 'image', 'mimes:jpg,jpeg', 'mimetypes:image/jpeg', 'max:10240'],
+            'image' => ['required', 'image', 'mimes:jpg,jpeg,png', 'mimetypes:image/jpeg,image/png', 'max:10240'],
             'view' => ['required', 'string', Rule::in(['diagram', 'tree'])],
             'center_person_id' => ['nullable', 'integer', 'exists:people,id'],
             'title' => ['nullable', 'string', 'max:120'],

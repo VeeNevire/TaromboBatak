@@ -285,6 +285,9 @@ Route::middleware(['auth', 'role.admin'])->group(function () {
         ->except(['create', 'show', 'edit'])
         ->parameters(['frames' => 'taromboFrame'])
         ->names('tarombo-frames');
+    Route::post('dashboard/tarombo/frames/{taromboFrame}/upscale', [TaromboFrameController::class, 'upscale'])
+        ->middleware('throttle:10,1')
+        ->name('tarombo-frames.upscale');
     Route::get('dashboard/silsilah-akun', [PersonController::class, 'familyTreeIndex'])
         ->name('family-trees.index');
     Route::resource('accounts', AccountController::class)->except(['show', 'destroy']);

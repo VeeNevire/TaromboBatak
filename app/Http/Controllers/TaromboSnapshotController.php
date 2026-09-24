@@ -51,6 +51,9 @@ class TaromboSnapshotController extends Controller
                     ? route('tarombo.snapshots.download', $snapshot)
                     : null,
                 'can_delete' => $snapshot->user_id === $user->id,
+                'size_bytes' => Storage::disk('local')->exists($snapshot->path)
+                    ? Storage::disk('local')->size($snapshot->path)
+                    : null,
                 'created_at' => $snapshot->created_at?->toISOString(),
             ]);
 
@@ -177,9 +180,11 @@ class TaromboSnapshotController extends Controller
         Gate::authorize('view', $taromboSnapshot);
         abort_unless(Storage::disk('local')->exists($taromboSnapshot->path), 404);
 
+        $extension = pathinfo($taromboSnapshot->path, PATHINFO_EXTENSION) ?: 'jpg';
+
         return Storage::disk('local')->response(
             $taromboSnapshot->path,
-            'pohon-tarombo.jpg',
+            "pohon-tarombo.{$extension}",
             [
                 'Cache-Control' => 'private, no-store, max-age=0',
                 'X-Content-Type-Options' => 'nosniff',
@@ -200,10 +205,11 @@ class TaromboSnapshotController extends Controller
         $name = $taromboSnapshot->title
             ?: $taromboSnapshot->centerPerson?->name
             ?: 'pohon-tarombo';
+        $extension = pathinfo($taromboSnapshot->path, PATHINFO_EXTENSION) ?: 'jpg';
 
         return Storage::disk('local')->download(
             $taromboSnapshot->path,
-            Str::slug($name).'-'.now()->format('Ymd-His').'.jpg',
+            Str::slug($name).'-'.now()->format('Ymd-His').".{$extension}",
             [
                 'Cache-Control' => 'private, no-store, max-age=0',
                 'X-Content-Type-Options' => 'nosniff',
@@ -236,6 +242,9 @@ class TaromboSnapshotController extends Controller
             'center_person_name' => $snapshot->centerPerson?->name,
             'owner_name' => $snapshot->user?->name,
             'image_url' => route('tarombo.snapshots.image', $snapshot),
+            'size_bytes' => Storage::disk('local')->exists($snapshot->path)
+                ? Storage::disk('local')->size($snapshot->path)
+                : null,
             'created_at' => $snapshot->created_at?->toISOString(),
         ];
     }

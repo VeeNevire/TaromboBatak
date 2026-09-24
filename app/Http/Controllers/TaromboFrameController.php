@@ -4,12 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\TaromboFrameRequest;
 use App\Models\TaromboFrame;
+use App\Services\TaromboFrameUpscaler;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TaromboFrameController extends Controller
@@ -77,6 +80,37 @@ class TaromboFrameController extends Controller
             'Cache-Control' => 'private, no-store, max-age=0',
             'X-Content-Type-Options' => 'nosniff',
         ], 'inline');
+    }
+
+    public function upscale(TaromboFrame $taromboFrame, TaromboFrameUpscaler $upscaler): RedirectResponse
+    {
+        if (! Storage::disk('local')->exists($taromboFrame->path)) {
+            throw ValidationException::withMessages([
+                'frame' => 'Gambar frame tidak ditemukan di server. Ganti gambarnya lewat tombol Ubah terlebih dahulu.',
+            ]);
+        }
+
+        try {
+            $result = $upscaler->upscale($taromboFrame);
+        } catch (RuntimeException $exception) {
+            throw ValidationException::withMessages(['frame' => $exception->getMessage()]);
+        }
+
+        $oldPath = $taromboFrame->path;
+
+        $taromboFrame->update([
+            'path' => $result['path'],
+            'canvas_width' => $result['width'],
+            'canvas_height' => $result['height'],
+            'area_x' => 0,
+            'area_y' => 0,
+            'area_width' => $result['width'],
+            'area_height' => $result['height'],
+        ]);
+
+        Storage::disk('local')->delete($oldPath);
+
+        return back()->with('toast', ['type' => 'success', 'message' => 'Resolusi frame berhasil ditingkatkan.']);
     }
 
     public function destroy(TaromboFrame $taromboFrame): RedirectResponse
