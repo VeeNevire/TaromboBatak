@@ -201,6 +201,46 @@ export function fitInArea(
     };
 }
 
+function outputScale(
+    frameImage: HTMLImageElement,
+    frame: ComposeFrame,
+    source: Box,
+    spot: Box,
+    maxSide: number,
+): number {
+    const frameWidth = frameImage.naturalWidth;
+    const frameHeight = frameImage.naturalHeight;
+    const spotWidth = Math.max(
+        1,
+        (spot.width * frameWidth) / Math.max(1, frame.canvas_width),
+    );
+    const limit = Math.min(
+        maxSide / Math.max(frameWidth, frameHeight),
+        Math.sqrt(MAX_OUTPUT_PIXELS / (frameWidth * frameHeight)),
+    );
+
+    return Math.min(Math.max(1, source.width / spotWidth), limit);
+}
+
+/**
+ * How many times the tree is enlarged beyond its own pixels in the produced image.
+ * Above ~1.5 the node text starts to look blurry.
+ */
+export function treeUpscale(
+    frameImage: HTMLImageElement,
+    frame: ComposeFrame,
+    source: Box,
+    spot: Box,
+): number {
+    const scale = outputScale(frameImage, frame, source, spot, MAX_OUTPUT_SIDE);
+    const drawnWidth =
+        ((spot.width * frameImage.naturalWidth) /
+            Math.max(1, frame.canvas_width)) *
+        scale;
+
+    return drawnWidth / Math.max(1, source.width);
+}
+
 /**
  * Draws the frame, then the (cropped) tree at its position in frame canvas units.
  * The output grows (up to maxSide) when the tree is larger than its spot, so it keeps its detail.
@@ -227,13 +267,7 @@ export function composeOnFrame(
     const frameHeight = frameImage.naturalHeight;
     const ratioX = frameWidth / Math.max(1, frame.canvas_width);
     const ratioY = frameHeight / Math.max(1, frame.canvas_height);
-    const spotWidth = Math.max(1, spot.width * ratioX);
-
-    const limit = Math.min(
-        maxSide / Math.max(frameWidth, frameHeight),
-        Math.sqrt(MAX_OUTPUT_PIXELS / (frameWidth * frameHeight)),
-    );
-    const scale = Math.min(Math.max(1, source.width / spotWidth), limit);
+    const scale = outputScale(frameImage, frame, source, spot, maxSide);
 
     target.width = Math.round(frameWidth * scale);
     target.height = Math.round(frameHeight * scale);

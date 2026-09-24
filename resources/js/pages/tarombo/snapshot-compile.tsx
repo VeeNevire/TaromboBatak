@@ -26,6 +26,7 @@ import {
     composeOnFrame,
     fitInArea,
     snapshotCanvas,
+    treeUpscale,
 } from '@/lib/tarombo-compose';
 import { dashboard } from '@/routes';
 import tarombo from '@/routes/tarombo';
@@ -97,11 +98,22 @@ export default function TaromboSnapshotCompile({
               height: assets.tree.height,
           })
         : null;
-    const treeSpot =
+    const fittedSpot =
         selectedFrame && treeSource
-            ? (placement ??
-              fitInArea(selectedFrame, treeSource.width, treeSource.height))
+            ? fitInArea(selectedFrame, treeSource.width, treeSource.height)
             : null;
+    const treeSpot = placement ?? fittedSpot;
+    // Size relative to the default "fit in the content area" size.
+    const zoom = treeSpot && fittedSpot ? treeSpot.width / fittedSpot.width : 1;
+    const upscale =
+        ready && selectedFrame && treeSource && treeSpot
+            ? treeUpscale(
+                  assets.frameImage,
+                  selectedFrame,
+                  treeSource,
+                  treeSpot,
+              )
+            : 1;
 
     useEffect(() => {
         if (!selectedFrame || !loadKey) {
@@ -165,6 +177,23 @@ export default function TaromboSnapshotCompile({
         setRemoveBackground(checked);
         setCrop(null);
         setPlacement(null);
+    };
+
+    const setZoom = (value: number) => {
+        if (!treeSpot || !fittedSpot) {
+            return;
+        }
+
+        // Grow or shrink around the current centre of the tree.
+        const width = fittedSpot.width * value;
+        const height = fittedSpot.height * value;
+
+        setPlacement({
+            x: Math.round(treeSpot.x + treeSpot.width / 2 - width / 2),
+            y: Math.round(treeSpot.y + treeSpot.height / 2 - height / 2),
+            width: Math.round(width),
+            height: Math.round(height),
+        });
     };
 
     const resetLayout = () => {
@@ -311,17 +340,47 @@ export default function TaromboSnapshotCompile({
                     </div>
                 </div>
 
-                {previewError ? (
-                    <p className="text-sm text-red-600">{previewError}</p>
-                ) : (
-                    <p className="text-xs text-tb-on-surface-variant">
-                        Geser kotak untuk memindahkan pohon dan tarik sudutnya
-                        untuk mengubah ukuran. Gunakan Potong untuk membuang
-                        bagian pohon yang tidak ingin ditampilkan.
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    {previewError ? (
+                        <p className="text-sm text-red-600">{previewError}</p>
+                    ) : (
+                        <p className="text-xs text-tb-on-surface-variant">
+                            Geser kotak untuk memindahkan pohon, tarik sudutnya
+                            atau pakai slider untuk mengubah ukuran. Pohon boleh
+                            melewati tepi frame, lalu gunakan Potong untuk
+                            membuang bagian yang tidak ingin ditampilkan.
+                        </p>
+                    )}
+                    <label className="flex shrink-0 items-center gap-3 text-sm text-tb-on-surface">
+                        Ukuran pohon
+                        <input
+                            type="range"
+                            min={0.25}
+                            max={4}
+                            step={0.05}
+                            value={zoom}
+                            disabled={!ready}
+                            onChange={(event) =>
+                                setZoom(Number(event.target.value))
+                            }
+                            className="w-40 accent-tb-primary"
+                        />
+                        <span className="w-12 text-right tabular-nums">
+                            {Math.round(zoom * 100)}%
+                        </span>
+                    </label>
+                </div>
+
+                {upscale > 1.5 && (
+                    <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                        Pohon diperbesar {upscale.toFixed(1)}× dari resolusi
+                        gambar aslinya, jadi tulisan node bisa terlihat buram.
+                        Agar tetap tajam, simpan ulang pohon dengan resolusi
+                        lebih tinggi (2160p atau 4320p) di Pohon Tarombo.
                     </p>
                 )}
 
-                <div className="flex min-h-0 flex-1 items-center justify-center rounded-xl bg-tb-surface-container p-3 select-none">
+                <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-xl bg-tb-surface-container p-6 select-none">
                     {selectedFrame ? (
                         <div
                             className={`relative ${ready ? '' : 'min-h-40 min-w-60'}`}
@@ -343,6 +402,7 @@ export default function TaromboSnapshotCompile({
                                     box={treeSpot}
                                     onChange={setPlacement}
                                     lockAspect
+                                    bounded={false}
                                     minSize={20}
                                 />
                             )}
