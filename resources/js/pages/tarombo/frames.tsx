@@ -1,9 +1,21 @@
 import { Head, router, useForm } from '@inertiajs/react';
-import { LoaderCircle, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
+import {
+    Crop,
+    LoaderCircle,
+    Pencil,
+    Plus,
+    Sparkles,
+    Trash2,
+} from 'lucide-react';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { CollageBoxEditor } from '@/components/collage-box-editor';
 import { FormatThumbnail } from '@/components/format-thumbnail';
+import {
+    
+    FrameAreaEditor
+} from '@/components/frame-area-editor';
+import type {FrameArea} from '@/components/frame-area-editor';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,6 +40,10 @@ type Frame = {
     image_url: string;
     canvas_width: number;
     canvas_height: number;
+    area_x: number;
+    area_y: number;
+    area_width: number;
+    area_height: number;
     is_active: boolean;
 };
 
@@ -42,6 +58,9 @@ export default function TaromboFrames({ frames }: { frames: Frame[] }) {
         null,
     );
     const [upscaleDialogOpen, setUpscaleDialogOpen] = useState(false);
+    const [areaFrame, setAreaFrame] = useState<Frame | null>(null);
+    const [areaDraft, setAreaDraft] = useState<FrameArea | null>(null);
+    const [savingArea, setSavingArea] = useState(false);
     const [upscalingId, setUpscalingId] = useState<number | null>(null);
     const [brokenImageIds, setBrokenImageIds] = useState<Set<number>>(
         new Set(),
@@ -99,6 +118,7 @@ export default function TaromboFrames({ frames }: { frames: Frame[] }) {
         setBoxFiles((current) => {
             const next = [...current];
             next[index] = file;
+
             return next;
         });
         setCollageError(null);
@@ -111,15 +131,20 @@ export default function TaromboFrames({ frames }: { frames: Frame[] }) {
 
         if (useCollage) {
             if (boxFiles.some((file) => !file)) {
-                setCollageError('Isi semua kotak dengan gambar terlebih dahulu.');
+                setCollageError(
+                    'Isi semua kotak dengan gambar terlebih dahulu.',
+                );
+
                 return;
             }
 
             imageFile = canvasRef.current
                 ? await composeCanvasToFile(canvasRef.current)
                 : null;
+
             if (!imageFile) {
                 setCollageError('Gagal membuat gambar kolase, coba lagi.');
+
                 return;
             }
         }
@@ -159,6 +184,36 @@ export default function TaromboFrames({ frames }: { frames: Frame[] }) {
         });
     };
 
+    const openArea = (frame: Frame) => {
+        setAreaFrame(frame);
+        setAreaDraft({
+            area_x: frame.area_x,
+            area_y: frame.area_y,
+            area_width: frame.area_width,
+            area_height: frame.area_height,
+        });
+    };
+
+    const saveArea = () => {
+        if (!areaFrame || !areaDraft || savingArea) {
+            return;
+        }
+
+        setSavingArea(true);
+        router.put(taromboFrames.area.update(areaFrame.id).url, areaDraft, {
+            preserveScroll: true,
+            onSuccess: () => setAreaFrame(null),
+            onError: (errors) => {
+                toast.error(
+                    errors.area_width ??
+                        errors.area_height ??
+                        'Area konten gagal disimpan.',
+                );
+            },
+            onFinish: () => setSavingArea(false),
+        });
+    };
+
     const upscaleFrame = (frame: Frame) => {
         if (upscalingId !== null) {
             return;
@@ -190,8 +245,8 @@ export default function TaromboFrames({ frames }: { frames: Frame[] }) {
                             Template Frame Tarombo
                         </h1>
                         <p className="mt-1 text-sm text-tb-on-surface-variant">
-                            Kelola frame JPG. AI akan menganalisis area konten
-                            pada setiap frame saat gambar dibuat.
+                            Kelola frame JPG. Tentukan area konten tiap frame
+                            sebagai tempat gambar Tarombo diletakkan.
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -217,12 +272,44 @@ export default function TaromboFrames({ frames }: { frames: Frame[] }) {
                             key={frame.id}
                             className="overflow-hidden border-tb-outline-variant bg-tb-surface-bright"
                         >
-                            <img
-                                src={frame.image_url}
-                                alt={frame.name}
-                                onError={() => markImageBroken(frame.id)}
-                                className="aspect-video w-full bg-tb-surface-container object-contain"
-                            />
+                            <div className="flex aspect-video w-full items-center justify-center bg-tb-surface-container">
+                                <div
+                                    className="relative max-h-full max-w-full"
+                                    style={{
+                                        aspectRatio: `${frame.canvas_width} / ${frame.canvas_height}`,
+                                        height:
+                                            frame.canvas_width /
+                                                frame.canvas_height >
+                                            16 / 9
+                                                ? 'auto'
+                                                : '100%',
+                                        width:
+                                            frame.canvas_width /
+                                                frame.canvas_height >
+                                            16 / 9
+                                                ? '100%'
+                                                : 'auto',
+                                    }}
+                                >
+                                    <img
+                                        src={frame.image_url}
+                                        alt={frame.name}
+                                        onError={() =>
+                                            markImageBroken(frame.id)
+                                        }
+                                        className="size-full object-fill"
+                                    />
+                                    <div
+                                        className="pointer-events-none absolute border-2 border-dashed border-tb-primary/80"
+                                        style={{
+                                            left: `${(frame.area_x / frame.canvas_width) * 100}%`,
+                                            top: `${(frame.area_y / frame.canvas_height) * 100}%`,
+                                            width: `${(frame.area_width / frame.canvas_width) * 100}%`,
+                                            height: `${(frame.area_height / frame.canvas_height) * 100}%`,
+                                        }}
+                                    />
+                                </div>
+                            </div>
                             <CardContent className="p-4">
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0">
@@ -231,8 +318,9 @@ export default function TaromboFrames({ frames }: { frames: Frame[] }) {
                                         </p>
                                         <p className="mt-1 text-xs text-tb-on-surface-variant">
                                             Kanvas {frame.canvas_width} ×{' '}
-                                            {frame.canvas_height} · dianalisis
-                                            otomatis oleh AI
+                                            {frame.canvas_height} · area{' '}
+                                            {frame.area_width} ×{' '}
+                                            {frame.area_height}
                                         </p>
                                         {brokenImageIds.has(frame.id) && (
                                             <p className="mt-1 text-xs font-medium text-red-600">
@@ -254,6 +342,15 @@ export default function TaromboFrames({ frames }: { frames: Frame[] }) {
                                     </Badge>
                                 </div>
                                 <div className="mt-4 flex justify-end gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={brokenImageIds.has(frame.id)}
+                                        onClick={() => openArea(frame)}
+                                    >
+                                        <Crop className="size-3.5" /> Atur Area
+                                    </Button>
                                     <Button
                                         type="button"
                                         variant="outline"
@@ -326,10 +423,9 @@ export default function TaromboFrames({ frames }: { frames: Frame[] }) {
                                     : 'Ubah Frame Tarombo'}
                             </DialogTitle>
                             <DialogDescription>
-                                Pilih Format Frame (kolase), lalu isi tiap
-                                kotak dengan gambar. AI akan mengenali area
-                                yang tepat untuk gambar Tarombo pada template
-                                hasil kolase.
+                                Pilih Format Frame (kolase), lalu isi tiap kotak
+                                dengan gambar. Setelah disimpan, atur area
+                                konten lewat tombol Atur Area.
                             </DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4">
@@ -409,7 +505,9 @@ export default function TaromboFrames({ frames }: { frames: Frame[] }) {
                                                 {collageError}
                                             </p>
                                         )}
-                                        <InputError message={form.errors.image} />
+                                        <InputError
+                                            message={form.errors.image}
+                                        />
                                     </div>
                                 </div>
                             )}
@@ -527,6 +625,68 @@ export default function TaromboFrames({ frames }: { frames: Frame[] }) {
                             </p>
                         )}
                     </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={areaFrame !== null}
+                onOpenChange={(open) => {
+                    if (!open && !savingArea) {
+                        setAreaFrame(null);
+                    }
+                }}
+            >
+                <DialogContent className="max-h-[95dvh] overflow-y-auto sm:max-w-4xl">
+                    <DialogHeader>
+                        <DialogTitle>Atur Area Konten</DialogTitle>
+                        <DialogDescription>
+                            Geser kotak dan tarik sudutnya ke bagian frame yang
+                            kosong. Gambar Tarombo akan ditempatkan utuh di
+                            tengah area ini.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {areaFrame && areaDraft && (
+                        <>
+                            <FrameAreaEditor
+                                imageUrl={areaFrame.image_url}
+                                canvasWidth={areaFrame.canvas_width}
+                                canvasHeight={areaFrame.canvas_height}
+                                area={areaDraft}
+                                onChange={setAreaDraft}
+                            />
+                            <p className="text-xs text-tb-on-surface-variant">
+                                Posisi {areaDraft.area_x}, {areaDraft.area_y} ·
+                                Ukuran {areaDraft.area_width} ×{' '}
+                                {areaDraft.area_height} px
+                            </p>
+                        </>
+                    )}
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            disabled={savingArea}
+                            onClick={() =>
+                                areaFrame &&
+                                setAreaDraft({
+                                    area_x: 0,
+                                    area_y: 0,
+                                    area_width: areaFrame.canvas_width,
+                                    area_height: areaFrame.canvas_height,
+                                })
+                            }
+                        >
+                            Seluruh Frame
+                        </Button>
+                        <Button
+                            type="button"
+                            disabled={savingArea}
+                            onClick={saveArea}
+                            className="bg-tb-primary hover:bg-tb-primary-light"
+                        >
+                            {savingArea ? 'Menyimpan...' : 'Simpan Area'}
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </>

@@ -1,13 +1,12 @@
 <?php
 
-use App\Models\TaromboAiPrompt;
 use App\Models\TaromboFrame;
 use App\Models\TaromboSnapshot;
 use App\Models\User;
-use Illuminate\Http\Client\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Inertia\Testing\AssertableInertia as Assert;
 
 test('only an admin can manage tarombo frame templates', function () {
     $user = User::factory()->create();
@@ -23,7 +22,7 @@ test('only an admin can manage tarombo frame templates', function () {
         ->assertOk();
 });
 
-test('an admin can save a jpg frame for AI analysis', function () {
+test('an admin can save a jpg frame with the whole image as its content area', function () {
     Storage::fake('local');
     $admin = User::factory()->create(['role' => 'admin']);
 
@@ -47,72 +46,58 @@ test('an admin can save a jpg frame for AI analysis', function () {
     Storage::disk('local')->assertExists($frame->path);
 });
 
-test('an account can generate a private framed tarombo only from its own snapshot and an active frame', function () {
+function storeSolidJpeg(string $path, int $width, int $height, array $rgb): string
+{
+    $image = imagecreatetruecolor($width, $height);
+    imagefill($image, 0, 0, imagecolorallocate($image, ...$rgb));
+    ob_start();
+    imagejpeg($image, null, 95);
+    Storage::disk('local')->put($path, (string) ob_get_clean());
+    imagedestroy($image);
+
+    return $path;
+}
+
+test('an account can save a compiled tarombo frame image for its own snapshot and an active frame', function () {
     Storage::fake('local');
-    config()->set('services.openai.api_key', 'test-api-key');
+    Http::fake();
     $owner = User::factory()->create();
     $otherUser = User::factory()->create();
-    $sourcePath = UploadedFile::fake()
-        ->image('source.jpg', 1200, 800)
-        ->store('tarombo-snapshots/'.$owner->id, 'local');
-    $framePath = UploadedFile::fake()
-        ->image('frame.jpg', 1600, 1000)
-        ->store('tarombo-frames', 'local');
-    $snapshot = TaromboSnapshot::factory()->for($owner)->create([
-        'path' => $sourcePath,
-        'view' => 'tree',
-    ]);
-    TaromboAiPrompt::query()->create([
-        'key' => TaromboAiPrompt::FRAME_COMPOSITION_KEY,
-        'prompt' => 'Pertahankan detail Tarombo dan frame.',
-    ]);
-    $frame = TaromboFrame::factory()->create([
-        'path' => $framePath,
-        'canvas_width' => 1600,
-        'canvas_height' => 1000,
-        'area_x' => 200,
-        'area_y' => 100,
-        'area_width' => 1200,
-        'area_height' => 800,
-        'is_active' => true,
-    ]);
-    $sentPrompt = false;
-    Http::fake([
-        'api.openai.com/v1/images/edits' => function (Request $request) use (&$sentPrompt, $sourcePath) {
-            $sentPrompt = str_contains($request->body(), 'Pertahankan detail Tarombo dan frame.');
-
-            return Http::response([
-                'data' => [['b64_json' => base64_encode(Storage::disk('local')->get($sourcePath))]],
-            ]);
-        },
-    ]);
+    $snapshot = TaromboSnapshot::factory()->for($owner)->create(['view' => 'tree']);
+    $frame = TaromboFrame::factory()->create(['is_active' => true]);
+    $compiled = fn () => UploadedFile::fake()->image('tarombo-frame.jpg', 1600, 1000);
 
     $this->actingAs($owner)
         ->post(route('tarombo.snapshots.generate'), [
             'snapshot_id' => $snapshot->id,
             'frame_id' => $frame->id,
+            'image' => $compiled(),
         ])
-        ->assertRedirect();
+        ->assertRedirect(route('tarombo.snapshots.index'))
+        ->assertSessionHasNoErrors();
 
     $generated = TaromboSnapshot::query()->latest('id')->firstOrFail();
 
     expect($generated->id)->not->toBe($snapshot->id)
         ->and($generated->user_id)->toBe($owner->id)
         ->and($generated->tarombo_frame_id)->toBe($frame->id)
-        ->and($generated->view)->toBe('tree');
+        ->and($generated->view)->toBe('tree')
+        ->and($generated->path)->toStartWith("tarombo-snapshots/{$owner->id}/");
     Storage::disk('local')->assertExists($generated->path);
-    expect(getimagesize(Storage::disk('local')->path($generated->path)))->toMatchArray([0 => 1200, 1 => 800]);
+    Http::assertNothingSent();
 
-    Http::assertSent(function (Request $request): bool {
-        return $request->url() === 'https://api.openai.com/v1/images/edits'
-            && $request->method() === 'POST';
-    });
-    expect($sentPrompt)->toBeTrue();
+    $this->actingAs($owner)
+        ->post(route('tarombo.snapshots.generate'), [
+            'snapshot_id' => $snapshot->id,
+            'frame_id' => $frame->id,
+        ])
+        ->assertSessionHasErrors('image');
 
     $this->actingAs($otherUser)
         ->post(route('tarombo.snapshots.generate'), [
             'snapshot_id' => $snapshot->id,
             'frame_id' => $frame->id,
+            'image' => $compiled(),
         ])
         ->assertNotFound();
 
@@ -122,8 +107,59 @@ test('an account can generate a private framed tarombo only from its own snapsho
         ->post(route('tarombo.snapshots.generate'), [
             'snapshot_id' => $snapshot->id,
             'frame_id' => $frame->id,
+            'image' => $compiled(),
         ])
         ->assertNotFound();
+});
+
+test('only an admin can set the content area of a frame, inside the frame bounds', function () {
+    $frame = TaromboFrame::factory()->create([
+        'canvas_width' => 1600,
+        'canvas_height' => 1000,
+    ]);
+    $area = ['area_x' => 200, 'area_y' => 100, 'area_width' => 1200, 'area_height' => 800];
+
+    $this->actingAs(User::factory()->create())
+        ->put(route('tarombo-frames.area.update', $frame), $area)
+        ->assertForbidden();
+
+    $admin = User::factory()->create(['role' => 'admin']);
+
+    $this->actingAs($admin)
+        ->put(route('tarombo-frames.area.update', $frame), [...$area, 'area_width' => 1500])
+        ->assertSessionHasErrors('area_width');
+
+    $this->actingAs($admin)
+        ->put(route('tarombo-frames.area.update', $frame), $area)
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect($frame->fresh()->only(array_keys($area)))->toBe($area);
+});
+
+test('replacing a frame image keeps the content area proportional', function () {
+    Storage::fake('local');
+    $admin = User::factory()->create(['role' => 'admin']);
+    $frame = TaromboFrame::factory()->create([
+        'path' => storeSolidJpeg('tarombo-frames/old.jpg', 1600, 1000, [0, 0, 255]),
+        'canvas_width' => 1600,
+        'canvas_height' => 1000,
+        'area_x' => 200,
+        'area_y' => 100,
+        'area_width' => 1200,
+        'area_height' => 800,
+    ]);
+
+    $this->actingAs($admin)
+        ->put(route('tarombo-frames.update', $frame), [
+            'name' => 'Bingkai Baru',
+            'image' => UploadedFile::fake()->image('frame.jpg', 800, 500),
+            'is_active' => true,
+        ])
+        ->assertRedirect();
+
+    expect($frame->fresh()->only(['canvas_width', 'canvas_height', 'area_x', 'area_y', 'area_width', 'area_height']))
+        ->toBe(['canvas_width' => 800, 'canvas_height' => 500, 'area_x' => 100, 'area_y' => 50, 'area_width' => 600, 'area_height' => 400]);
 });
 
 test('a frame image is available to signed-in users only while the frame is active', function () {
@@ -142,4 +178,26 @@ test('a frame image is available to signed-in users only while the frame is acti
     $this->actingAs($user)
         ->get(route('tarombo-frames.image', $frame))
         ->assertNotFound();
+});
+
+test('the compile page previews an own snapshot with the active frames only', function () {
+    $owner = User::factory()->create(['name' => 'Pemilik']);
+    $snapshot = TaromboSnapshot::factory()->for($owner)->create();
+    $activeFrame = TaromboFrame::factory()->create(['is_active' => true]);
+    TaromboFrame::factory()->create(['is_active' => false]);
+
+    $this->actingAs($owner)
+        ->get(route('tarombo.snapshots.compile', $snapshot))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('tarombo/snapshot-compile')
+            ->where('snapshot.id', $snapshot->id)
+            ->where('accountName', 'Pemilik')
+            ->has('frames', 1)
+            ->where('frames.0.id', $activeFrame->id)
+            ->has('frames.0.area_width'));
+
+    $this->actingAs(User::factory()->create())
+        ->getJson(route('tarombo.snapshots.compile', $snapshot))
+        ->assertForbidden();
 });

@@ -32,6 +32,7 @@ export function insetBox(box: CollageBox) {
     const y = box.y * CANVAS_HEIGHT + BOX_GAP / 2;
     const w = box.w * CANVAS_WIDTH - BOX_GAP;
     const h = box.h * CANVAS_HEIGHT - BOX_GAP;
+
     return { x, y, w, h };
 }
 
@@ -61,6 +62,29 @@ export function drawImageCover(
     ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
 }
 
+export function drawImageContain(
+    ctx: CanvasRenderingContext2D,
+    img: HTMLImageElement | HTMLCanvasElement,
+    dx: number,
+    dy: number,
+    dw: number,
+    dh: number,
+) {
+    const scale = Math.min(dw / img.width, dh / img.height);
+    const w = img.width * scale;
+    const h = img.height * scale;
+    ctx.drawImage(img, dx + (dw - w) / 2, dy + (dh - h) / 2, w, h);
+}
+
+export function loadImageUrl(url: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = url;
+    });
+}
+
 export async function renderCollage(
     ctx: CanvasRenderingContext2D,
     format: CollageFormat,
@@ -76,9 +100,11 @@ export async function renderCollage(
 
         if (file) {
             const img = await loadImage(file);
+
             if (cancelledRef?.current) {
                 return;
             }
+
             drawImageCover(ctx, img, x, y, w, h);
         } else {
             ctx.fillStyle = '#fdfcf7';
@@ -100,8 +126,10 @@ export function composeCanvasToFile(
             (blob) => {
                 if (!blob) {
                     resolve(null);
+
                     return;
                 }
+
                 resolve(new File([blob], filename, { type: 'image/jpeg' }));
             },
             'image/jpeg',
