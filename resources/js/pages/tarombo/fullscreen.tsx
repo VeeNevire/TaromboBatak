@@ -4,6 +4,7 @@ import { Breadcrumbs } from '@/components/breadcrumbs';
 import { ThemeToggle } from '@/components/landing/theme-toggle';
 import { TaromboExplorer } from '@/components/tarombo/tarombo-explorer';
 import type { TaromboIdentity } from '@/components/tarombo/tarombo-explorer';
+import type { TreeSettings } from '@/components/tarombo/tree-style-settings';
 import type {
     MargaInfo,
     TaromboAlternativeTreeRow,
@@ -26,6 +27,7 @@ type Props = {
     selectedTreePeople: TaromboPersonRow[] | null;
     accountTreePersonIds: string[];
     familyName: string | null;
+    treeSettings: TreeSettings | null;
     margaTree: {
         margaName: string;
         identityPersonId: string | null;
@@ -46,6 +48,7 @@ export default function TaromboFullscreen({
     selectedTreePeople,
     accountTreePersonIds,
     familyName,
+    treeSettings,
     margaTree,
 }: Props) {
     const selectedTreeKey =
@@ -86,6 +89,7 @@ export default function TaromboFullscreen({
                     selectedTreePeople={selectedTreePeople}
                     accountTreePersonIds={accountTreePersonIds}
                     familyName={familyName}
+                    treeSettings={treeSettings}
                     margaTree={margaTree}
                 />
             </div>

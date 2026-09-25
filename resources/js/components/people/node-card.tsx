@@ -101,7 +101,9 @@ export function NodeCard({
                     )}
                     style={{
                         background: node.margaColor ?? pastelFor(node.id),
-                        borderColor: highlighted ? GOLD : '#E3DFD2',
+                        borderColor: highlighted
+                            ? GOLD
+                            : 'var(--tb-ring, #E3DFD2)',
                         boxShadow: highlighted
                             ? '0 3px 10px rgba(184,147,74,0.3)'
                             : '0 2px 6px rgba(36,50,43,0.06)',
@@ -136,31 +138,35 @@ export function NodeCard({
                  compact
     ? cn(
           narrow && 'w-full',
-          'mt-0.5 rounded-md border px-1 py-0.5 text-center text-[8px] leading-tight font-semibold',
+          'mt-0.5 rounded-md border px-1 py-0.5 text-center text-[length:var(--tb-name-size,8px)] leading-tight font-semibold',
       )
     : cn(
           showAvatar ? 'mt-2' : 'mt-0',
           narrow ? 'w-full px-1' : 'px-2',
-          'rounded-md border py-1 text-center text-[11px] leading-snug font-semibold',
+          'rounded-md border py-1 text-center text-[length:var(--tb-name-size,11px)] leading-snug font-semibold',
       ),
-node.claimed
-    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-    : 'bg-white',
+node.claimed &&
+    'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300',
                     dashed && 'border-dashed',
                     onNameClick &&
                         'cursor-pointer hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#B8934A] focus-visible:outline-none',
                 )}
                 style={{
+                    backgroundColor: node.claimed
+                        ? undefined
+                        : 'var(--tb-name-bg, #ffffff)',
                     borderColor: highlighted
                         ? GOLD
                         : node.claimed
                           ? '#6ee7b7'
-                          : '#E3DFD2',
+                          : 'var(--tb-name-border, #E3DFD2)',
                     color: node.claimed
                         ? '#166534'
                         : highlighted
                           ? FOREST
-                          : INK,
+                          : `var(--tb-name-color, ${INK})`,
+                    fontFamily: 'var(--tb-name-font, inherit)',
+                    fontWeight: 'var(--tb-name-weight, 600)',
                 }}
             >
                 {node.pending ? (

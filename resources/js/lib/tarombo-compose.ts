@@ -201,6 +201,124 @@ export function fitInArea(
     };
 }
 
+export type LayerKind = 'ranting' | 'background';
+
+export type ComposeItem = {
+    source: HTMLCanvasElement;
+    crop?: Box | null;
+    placement: Box;
+};
+
+/** Decodes an uploaded/pasted image into a canvas, shrunk so its longest side is at most maxSide. */
+export function imageFileToCanvas(
+    file: File,
+    maxSide = MAX_OUTPUT_SIDE,
+): Promise<HTMLCanvasElement> {
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const image = new Image();
+
+        image.onload = () => {
+            const scale = Math.min(
+                1,
+                maxSide / Math.max(1, image.naturalWidth, image.naturalHeight),
+            );
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+            canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+            canvas
+                .getContext('2d')
+                ?.drawImage(image, 0, 0, canvas.width, canvas.height);
+            URL.revokeObjectURL(url);
+            resolve(canvas);
+        };
+        image.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error('gagal memuat gambar'));
+        };
+        image.src = url;
+    });
+}
+
+export function canvasThumbnail(source: HTMLCanvasElement, max = 64): string {
+    const scale = Math.min(1, max / Math.max(1, source.width, source.height));
+    const thumb = document.createElement('canvas');
+    thumb.width = Math.max(1, Math.round(source.width * scale));
+    thumb.height = Math.max(1, Math.round(source.height * scale));
+    thumb.getContext('2d')?.drawImage(source, 0, 0, thumb.width, thumb.height);
+
+    return thumb.toDataURL('image/png');
+}
+
+/** Covers the whole frame canvas, cropping the overflow (frame canvas units). */
+export function coverFrame(
+    frame: ComposeFrame,
+    width: number,
+    height: number,
+): Box {
+    const fit = Math.max(
+        frame.canvas_width / Math.max(1, width),
+        frame.canvas_height / Math.max(1, height),
+    );
+    const w = width * fit;
+    const h = height * fit;
+
+    return {
+        x: Math.round((frame.canvas_width - w) / 2),
+        y: Math.round((frame.canvas_height - h) / 2),
+        width: Math.round(w),
+        height: Math.round(h),
+    };
+}
+
+/** Where a new layer starts: a background covers the frame, other images sit at half the content area. */
+export function defaultLayerPlacement(
+    kind: LayerKind,
+    frame: ComposeFrame,
+    width: number,
+    height: number,
+): Box {
+    if (kind === 'background') {
+        return coverFrame(frame, width, height);
+    }
+
+    const fit = fitInArea(frame, width, height);
+    const w = Math.max(1, Math.round(fit.width * 0.5));
+    const h = Math.max(1, Math.round(fit.height * 0.5));
+
+    return {
+        x: Math.round(fit.x + (fit.width - w) / 2),
+        y: Math.round(fit.y + (fit.height - h) / 2),
+        width: w,
+        height: h,
+    };
+}
+
+function outputLimit(frameImage: HTMLImageElement, maxSide: number): number {
+    const frameWidth = frameImage.naturalWidth;
+    const frameHeight = frameImage.naturalHeight;
+
+    return Math.min(
+        maxSide / Math.max(frameWidth, frameHeight),
+        Math.sqrt(MAX_OUTPUT_PIXELS / (frameWidth * frameHeight)),
+    );
+}
+
+function requiredScale(
+    frameImage: HTMLImageElement,
+    frame: ComposeFrame,
+    source: Box,
+    spot: Box,
+): number {
+    const spotWidth = Math.max(
+        1,
+        (spot.width * frameImage.naturalWidth) /
+            Math.max(1, frame.canvas_width),
+    );
+
+    return Math.max(1, source.width / spotWidth);
+}
+
 function outputScale(
     frameImage: HTMLImageElement,
     frame: ComposeFrame,
@@ -208,18 +326,10 @@ function outputScale(
     spot: Box,
     maxSide: number,
 ): number {
-    const frameWidth = frameImage.naturalWidth;
-    const frameHeight = frameImage.naturalHeight;
-    const spotWidth = Math.max(
-        1,
-        (spot.width * frameWidth) / Math.max(1, frame.canvas_width),
+    return Math.min(
+        requiredScale(frameImage, frame, source, spot),
+        outputLimit(frameImage, maxSide),
     );
-    const limit = Math.min(
-        maxSide / Math.max(frameWidth, frameHeight),
-        Math.sqrt(MAX_OUTPUT_PIXELS / (frameWidth * frameHeight)),
-    );
-
-    return Math.min(Math.max(1, source.width / spotWidth), limit);
 }
 
 /**
@@ -241,33 +351,46 @@ export function treeUpscale(
     return drawnWidth / Math.max(1, source.width);
 }
 
+function itemSource(item: ComposeItem): Box {
+    return (
+        item.crop ?? {
+            x: 0,
+            y: 0,
+            width: item.source.width,
+            height: item.source.height,
+        }
+    );
+}
+
 /**
- * Draws the frame, then the (cropped) tree at its position in frame canvas units.
- * The output grows (up to maxSide) when the tree is larger than its spot, so it keeps its detail.
+ * Draws the frame, then every item bottom to top at its position in frame canvas units.
+ * The output grows (up to maxSide) when an item is larger than its spot, so it keeps its detail.
  */
-export function composeOnFrame(
+export function composeLayers(
     target: HTMLCanvasElement,
     frameImage: HTMLImageElement,
-    tree: HTMLCanvasElement,
     frame: ComposeFrame,
-    {
-        crop,
-        placement,
-        maxSide = MAX_OUTPUT_SIDE,
-    }: { crop?: Box | null; placement?: Box | null; maxSide?: number } = {},
+    items: ComposeItem[],
+    { maxSide = MAX_OUTPUT_SIDE }: { maxSide?: number } = {},
 ) {
-    const source = crop ?? {
-        x: 0,
-        y: 0,
-        width: tree.width,
-        height: tree.height,
-    };
-    const spot = placement ?? fitInArea(frame, source.width, source.height);
     const frameWidth = frameImage.naturalWidth;
     const frameHeight = frameImage.naturalHeight;
     const ratioX = frameWidth / Math.max(1, frame.canvas_width);
     const ratioY = frameHeight / Math.max(1, frame.canvas_height);
-    const scale = outputScale(frameImage, frame, source, spot, maxSide);
+    const wanted = items.reduce(
+        (max, item) =>
+            Math.max(
+                max,
+                requiredScale(
+                    frameImage,
+                    frame,
+                    itemSource(item),
+                    item.placement,
+                ),
+            ),
+        1,
+    );
+    const scale = Math.min(wanted, outputLimit(frameImage, maxSide));
 
     target.width = Math.round(frameWidth * scale);
     target.height = Math.round(frameHeight * scale);
@@ -280,15 +403,52 @@ export function composeOnFrame(
 
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(frameImage, 0, 0, target.width, target.height);
-    ctx.drawImage(
-        tree,
-        source.x,
-        source.y,
-        source.width,
-        source.height,
-        spot.x * ratioX * scale,
-        spot.y * ratioY * scale,
-        spot.width * ratioX * scale,
-        spot.height * ratioY * scale,
+
+    for (const item of items) {
+        const source = itemSource(item);
+        const spot = item.placement;
+
+        ctx.drawImage(
+            item.source,
+            source.x,
+            source.y,
+            source.width,
+            source.height,
+            spot.x * ratioX * scale,
+            spot.y * ratioY * scale,
+            spot.width * ratioX * scale,
+            spot.height * ratioY * scale,
+        );
+    }
+}
+
+/** Draws the frame, then the (cropped) tree. */
+export function composeOnFrame(
+    target: HTMLCanvasElement,
+    frameImage: HTMLImageElement,
+    tree: HTMLCanvasElement,
+    frame: ComposeFrame,
+    {
+        crop,
+        placement,
+        maxSide = MAX_OUTPUT_SIDE,
+    }: { crop?: Box | null; placement?: Box | null; maxSide?: number } = {},
+) {
+    const source = crop ?? { x: 0, y: 0, width: tree.width, height: tree.height };
+
+    composeLayers(
+        target,
+        frameImage,
+        frame,
+        [
+            {
+                source: tree,
+                crop,
+                placement:
+                    placement ??
+                    fitInArea(frame, source.width, source.height),
+            },
+        ],
+        { maxSide },
     );
 }

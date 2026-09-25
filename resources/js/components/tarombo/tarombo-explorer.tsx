@@ -13,6 +13,7 @@ import {
     Plus,
     Save,
     Search,
+    Settings,
     UserSearch,
     X,
 } from 'lucide-react';
@@ -22,6 +23,12 @@ import { TaromboDiagram } from '@/components/landing/tarombo-diagram';
 import { DescendantsTree } from '@/components/people/descendants-tree';
 import type { DescendantsAlternativeTree } from '@/components/people/descendants-tree';
 import { PersonTreePickerDialog } from '@/components/tarombo/person-tree-picker-dialog';
+import {
+    DEFAULT_TREE_SETTINGS,
+    TreeSettingsDialog,
+    treeSettingsStyle,
+} from '@/components/tarombo/tree-style-settings';
+import type { TreeSettings } from '@/components/tarombo/tree-style-settings';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -86,6 +93,7 @@ type Props = {
     selectedTreePeople: TaromboPersonRow[] | null;
     accountTreePersonIds?: string[];
     familyName?: string | null;
+    treeSettings?: TreeSettings | null;
     margaTree?: {
         margaName: string;
         identityPersonId: string | null;
@@ -354,6 +362,7 @@ export function TaromboExplorer({
     selectedTreePeople,
     accountTreePersonIds = [],
     familyName = null,
+    treeSettings = null,
     margaTree = null,
 }: Props) {
     const people = buildTaromboPeople(rows);
@@ -528,6 +537,14 @@ export function TaromboExplorer({
     const [snapshotResolution, setSnapshotResolution] = useState(1080);
     const [snapshotPaper, setSnapshotPaper] = useState('A4');
     const [snapshotTransparent, setSnapshotTransparent] = useState(false);
+    // `null` keeps the built-in look; otherwise the account's saved style.
+    const [styleSettings, setStyleSettings] = useState<TreeSettings | null>(
+        treeSettings,
+    );
+    const [savedStyleSettings, setSavedStyleSettings] =
+        useState<TreeSettings | null>(treeSettings);
+    const [styleDialogOpen, setStyleDialogOpen] = useState(false);
+    const [savingStyle, setSavingStyle] = useState(false);
     const [excludedBranchIds, setExcludedBranchIds] = useState<string[]>([]);
 
     const clampZoom = (value: number) =>
@@ -1038,6 +1055,51 @@ export function TaromboExplorer({
         setSaveModalOpen(true);
     };
 
+    const saveStyleSettings = () => {
+        const payload = styleSettings ?? DEFAULT_TREE_SETTINGS;
+
+        setSavingStyle(true);
+        router.put(tarombo.settings.update(), payload, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                setStyleSettings(payload);
+                setSavedStyleSettings(payload);
+                setStyleDialogOpen(false);
+            },
+            onError: () => toast.error('Pengaturan gagal disimpan.'),
+            onFinish: () => setSavingStyle(false),
+        });
+    };
+
+    const resetStyleSettings = () => {
+        setSavingStyle(true);
+        router.delete(tarombo.settings.reset(), {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                setStyleSettings(null);
+                setSavedStyleSettings(null);
+                setStyleDialogOpen(false);
+            },
+            onError: () => toast.error('Pengaturan gagal dikembalikan.'),
+            onFinish: () => setSavingStyle(false),
+        });
+    };
+
+    const changeStyleDialog = (open: boolean) => {
+        if (!open && savingStyle) {
+            return;
+        }
+
+        // Closing without saving drops the live preview.
+        if (!open) {
+            setStyleSettings(savedStyleSettings);
+        }
+
+        setStyleDialogOpen(open);
+    };
+
     const backButton = (
         <Link
             href={tarombo.index()}
@@ -1380,7 +1442,14 @@ export function TaromboExplorer({
                         {!fullscreen && nodeCircleToggle}
                     </div>
                 </div>
-                <div style={{ zoom: treeZoom }}>
+                <div
+                    style={{
+                        zoom: treeZoom,
+                        ...(fullscreen && styleSettings
+                            ? treeSettingsStyle(styleSettings)
+                            : {}),
+                    }}
+                >
                     <DescendantsTree
                         key={`${renderedTreeCenterId}-${margaTree?.direction ?? ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
                         people={displayPeople}
@@ -1478,6 +1547,16 @@ export function TaromboExplorer({
                 {fullscreen && (
                     <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                         {nodeCircleToggle}
+                        {fullscreenView === 'tree' && (
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setStyleDialogOpen(true)}
+                            >
+                                <Settings className="size-4" /> Setting
+                            </Button>
+                        )}
                         <Button asChild size="sm" variant="outline">
                             <Link href={tarombo.snapshots.index()}>
                                 <Images className="size-4" /> Galeri
@@ -2023,6 +2102,18 @@ export function TaromboExplorer({
                     </div>
                 </DialogContent>
             </Dialog>
+
+            {fullscreen && (
+                <TreeSettingsDialog
+                    open={styleDialogOpen}
+                    onOpenChange={changeStyleDialog}
+                    settings={styleSettings ?? DEFAULT_TREE_SETTINGS}
+                    onChange={setStyleSettings}
+                    onSave={saveStyleSettings}
+                    onReset={resetStyleSettings}
+                    saving={savingStyle}
+                />
+            )}
         </div>
     );
 }
