@@ -928,6 +928,21 @@ export function TaromboExplorer({
         </button>
     );
 
+    // A double-clicked top person stays on top while the one being focused is
+    // still in its branch; anyone outside it brings back the whole tree.
+    const resetTreeTopUnlessInBranch = (personId: string) => {
+        if (
+            topPerson &&
+            // The whole branch, women included: searching a woman switches
+            // the female lineage on, so she will be drawn.
+            !descendantSubtree(selectedFamilyTreePeople, topPerson.id).some(
+                (person) => person.id === personId,
+            )
+        ) {
+            setTreeTopId(null);
+        }
+    };
+
     const searchSelect = (person: TaromboPerson) => {
         if (person.id !== centerPersonId) {
             setHistory((prev) => [...prev, centerPersonId]);
@@ -937,7 +952,7 @@ export function TaromboExplorer({
             setShowFemaleLineage(true);
         }
 
-        setTreeTopId(null);
+        resetTreeTopUnlessInBranch(person.id);
         setSelectedId(person.id);
         setCenterPersonId(person.id);
         setAncestorFocusId(person.id);
@@ -975,7 +990,7 @@ export function TaromboExplorer({
                         setHistory((prev) => [...prev, centerPersonId]);
                     }
 
-                    setTreeTopId(null);
+                    resetTreeTopUnlessInBranch(person.id);
                     setSelectedId(person.id);
                     setCenterPersonId(person.id);
                     setAncestorFocusId(person.id);
