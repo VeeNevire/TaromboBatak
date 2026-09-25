@@ -520,6 +520,9 @@ export function TaromboExplorer({
     const [showSpouseNames, setShowSpouseNames] = useState(false);
     const [compactTree, setCompactTree] = useState(false);
     const [showNodeCircles, setShowNodeCircles] = useState(true);
+    const [showBranchToggles, setShowBranchToggles] = useState(true);
+    // Person double-clicked to sit at the top of the vertical tree.
+    const [treeTopId, setTreeTopId] = useState<string | null>(null);
     const [familyTreeSearch, setFamilyTreeSearch] = useState('');
     const [familyTreeSelectorOpen, setFamilyTreeSelectorOpen] = useState(false);
     const familyTreeBlurTimer = useRef<number | null>(null);
@@ -667,6 +670,41 @@ export function TaromboExplorer({
         </div>
     );
 
+    const branchArrowToggle = (
+        <div
+            role="group"
+            aria-label="Tampilan panah ranting"
+            className="inline-flex overflow-hidden rounded-lg border border-tb-outline-variant bg-tb-surface-bright shadow-sm"
+        >
+            <button
+                type="button"
+                onClick={() => setShowBranchToggles(true)}
+                aria-pressed={showBranchToggles}
+                className={cn(
+                    'px-3 py-2 text-xs font-semibold transition-colors',
+                    showBranchToggles
+                        ? 'text-tb-on-primary bg-tb-primary'
+                        : 'text-tb-on-surface hover:bg-tb-surface-container',
+                )}
+            >
+                Dengan Panah Ranting
+            </button>
+            <button
+                type="button"
+                onClick={() => setShowBranchToggles(false)}
+                aria-pressed={!showBranchToggles}
+                className={cn(
+                    'border-l border-tb-outline-variant px-3 py-2 text-xs font-semibold transition-colors',
+                    !showBranchToggles
+                        ? 'text-tb-on-primary bg-tb-primary'
+                        : 'text-tb-on-surface hover:bg-tb-surface-container',
+                )}
+            >
+                Tanpa Panah Ranting
+            </button>
+        </div>
+    );
+
     const descendantAlternativeTrees: DescendantsAlternativeTree[] =
         alternativeTrees.map((tree) => ({
             id: tree.id,
@@ -724,10 +762,14 @@ export function TaromboExplorer({
     const ancestorPeople = verticalFocusId
         ? ancestorPath(verticalPeople, verticalFocusId)
         : [];
-    const treePeople =
-        ancestorPeople.length > 0
-            ? descendantSubtree(verticalPeople, ancestorPeople[0].id)
-            : verticalPeople;
+    const topPerson = treeTopId
+        ? verticalPeople.find((person) => person.id === treeTopId)
+        : undefined;
+    const treePeople = topPerson
+        ? descendantSubtree(verticalPeople, topPerson.id)
+        : ancestorPeople.length > 0
+          ? descendantSubtree(verticalPeople, ancestorPeople[0].id)
+          : verticalPeople;
     // In an account tree the tree's root person is fixed (its ancestors reach
     // up to the top of the tree), but a searched/selected person elsewhere in
     // the same tree still needs its own path drawn (and opened) from the top.
@@ -735,12 +777,18 @@ export function TaromboExplorer({
         accountRootId && ancestorFocusId
             ? ancestorPath(verticalPeople, ancestorFocusId)
             : [];
-    const lineagePath = (
+    const fullLineagePath = (
         accountFocusPath.length > 0 &&
         accountFocusPath[0].id === ancestorPeople[0]?.id
             ? accountFocusPath
             : ancestorPeople
     ).map((person) => person.id);
+    // With a chosen top person the path only runs from that person down.
+    const lineagePath = topPerson
+        ? fullLineagePath.includes(topPerson.id)
+            ? fullLineagePath.slice(fullLineagePath.indexOf(topPerson.id))
+            : [topPerson.id]
+        : fullLineagePath;
     const margaLowerLineagePath = useMemo(() => {
         if (!margaTree || margaTree.direction !== 'lower' || !margaIdentity) {
             return [] as string[];
@@ -773,6 +821,7 @@ export function TaromboExplorer({
         selectedFamilyTreePeople,
     ]);
     const treeCenterPerson =
+        topPerson ??
         verticalPeople.find(
             (person) => person.id === (ancestorPeople[0]?.id ?? centerPersonId),
         ) ??
@@ -837,12 +886,12 @@ export function TaromboExplorer({
     const verticalTreeDescription = familyNameHeading
         ? ''
         : margaTree
-        ? `${margaTree.direction === 'upper' ? 'Si Raja Batak sampai' : 'Keturunan dari'} ${margaIdentity?.name ?? margaTree.margaName}`
-        : selectedAccountTree
-          ? `Silsilah dari ${ancestorPeople[0]?.name ?? selectedAccountTree.rootName}`
-          : ancestorFocusPerson
-            ? `Jalur leluhur dari ${ancestorFocusPerson.name} sampai leluhur tertinggi`
-            : `Pohon vertikal dari ${treeCenterPerson?.name ?? 'Leluhur Utama'}`;
+          ? `${margaTree.direction === 'upper' ? 'Si Raja Batak sampai' : 'Keturunan dari'} ${margaIdentity?.name ?? margaTree.margaName}`
+          : selectedAccountTree
+            ? `Silsilah dari ${topPerson?.name ?? ancestorPeople[0]?.name ?? selectedAccountTree.rootName}`
+            : ancestorFocusPerson
+              ? `Jalur leluhur dari ${ancestorFocusPerson.name} sampai leluhur tertinggi`
+              : `Pohon vertikal dari ${treeCenterPerson?.name ?? 'Leluhur Utama'}`;
     const verticalTreeCollapseDepth =
         margaTree?.direction === 'lower' || selectedAccountTree
             ? MARGA_LOWER_DEPTH
@@ -866,6 +915,19 @@ export function TaromboExplorer({
               }
             : storedSelectedPerson);
 
+    const treeTopResetButton = topPerson && !margaTree && (
+        <button
+            type="button"
+            onClick={() => setTreeTopId(null)}
+            className={cn(
+                'rounded-full border border-tb-outline-variant bg-tb-surface-bright px-3 py-1 text-xs font-semibold text-tb-on-surface transition-colors hover:border-tb-primary hover:text-tb-primary',
+                snapshotMode && 'invisible',
+            )}
+        >
+            Tampilkan dari Puncak
+        </button>
+    );
+
     const searchSelect = (person: TaromboPerson) => {
         if (person.id !== centerPersonId) {
             setHistory((prev) => [...prev, centerPersonId]);
@@ -875,6 +937,7 @@ export function TaromboExplorer({
             setShowFemaleLineage(true);
         }
 
+        setTreeTopId(null);
         setSelectedId(person.id);
         setCenterPersonId(person.id);
         setAncestorFocusId(person.id);
@@ -912,6 +975,7 @@ export function TaromboExplorer({
                         setHistory((prev) => [...prev, centerPersonId]);
                     }
 
+                    setTreeTopId(null);
                     setSelectedId(person.id);
                     setCenterPersonId(person.id);
                     setAncestorFocusId(person.id);
@@ -952,6 +1016,21 @@ export function TaromboExplorer({
         setHistory((prev) => [...prev, centerPersonId]);
         setSelectedId(id);
         setCenterPersonId(id);
+    };
+
+    // Double-clicking a circle puts that person at the top of the tree;
+    // double-clicking the current top person shows the whole tree again.
+    const handleMakeTop = (id: string) => {
+        if (id === treeTopId) {
+            setTreeTopId(null);
+
+            return;
+        }
+
+        setTreeTopId(id);
+        setSelectedId(id);
+        setAncestorFocusId(id);
+        setSearchedId(null);
     };
 
     const handleDiagramSelect = (person: TaromboPerson) =>
@@ -1000,8 +1079,7 @@ export function TaromboExplorer({
                       quality: 0.92,
                       pixelRatio,
                       backgroundColor:
-                          window.getComputedStyle(snapshotNode)
-                              .backgroundColor,
+                          window.getComputedStyle(snapshotNode).backgroundColor,
                       cacheBust: true,
                   });
             const blob = await composeOnPaper(
@@ -1439,7 +1517,9 @@ export function TaromboExplorer({
                         {!margaTree && femaleLineageToggle}
                         {spouseNamesToggle}
                         {compactTreeToggle}
+                        {treeTopResetButton}
                         {!fullscreen && nodeCircleToggle}
+                        {!fullscreen && branchArrowToggle}
                     </div>
                 </div>
                 <div
@@ -1455,6 +1535,7 @@ export function TaromboExplorer({
                         people={displayPeople}
                         centerId={renderedTreeCenterId}
                         onSelect={margaTree ? undefined : handlePersonSelect}
+                        onMakeTop={margaTree ? undefined : handleMakeTop}
                         highlightId={renderedHighlightId}
                         editNodes={!margaTree}
                         selectOnClick={!margaTree}
@@ -1475,6 +1556,7 @@ export function TaromboExplorer({
                         scrollToLineageEnd={searchedId !== null}
                         detachedPeople={displayedDetachedRoots}
                         showNodeAvatar={showNodeCircles}
+                        showBranchToggles={showBranchToggles}
                         showSpouseNames={showSpouseNames}
                         allowBranchEntry={margaTree?.direction === 'lower'}
                         compactTerminalBranches={
@@ -1546,7 +1628,10 @@ export function TaromboExplorer({
                 </div>
                 {fullscreen && (
                     <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                        {nodeCircleToggle}
+                        <div className="flex flex-col items-end gap-2">
+                            {nodeCircleToggle}
+                            {branchArrowToggle}
+                        </div>
                         {fullscreenView === 'tree' && (
                             <Button
                                 type="button"
@@ -1809,7 +1894,9 @@ export function TaromboExplorer({
                                                     femaleLineageToggle}
                                                 {spouseNamesToggle}
                                                 {compactTreeToggle}
+                                                {treeTopResetButton}
                                                 {nodeCircleToggle}
+                                                {branchArrowToggle}
                                             </div>
                                         </div>
                                         <div style={{ zoom: treeZoom }}>
@@ -1821,6 +1908,11 @@ export function TaromboExplorer({
                                                     margaTree
                                                         ? undefined
                                                         : handlePersonSelect
+                                                }
+                                                onMakeTop={
+                                                    margaTree
+                                                        ? undefined
+                                                        : handleMakeTop
                                                 }
                                                 highlightId={
                                                     renderedHighlightId
@@ -1854,6 +1946,9 @@ export function TaromboExplorer({
                                                     displayedDetachedRoots
                                                 }
                                                 showNodeAvatar={showNodeCircles}
+                                                showBranchToggles={
+                                                    showBranchToggles
+                                                }
                                                 showSpouseNames={
                                                     showSpouseNames
                                                 }

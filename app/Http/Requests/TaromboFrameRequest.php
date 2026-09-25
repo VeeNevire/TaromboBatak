@@ -20,6 +20,7 @@ class TaromboFrameRequest extends FormRequest
             'name' => ['required', 'string', 'max:120'],
             'image' => [$this->route('taromboFrame') instanceof TaromboFrame ? 'nullable' : 'required', 'image', 'mimes:jpg,jpeg', 'mimetypes:image/jpeg', 'max:10240'],
             'is_active' => ['sometimes', 'boolean'],
+            'is_collage' => ['sometimes', 'boolean'],
         ];
     }
 }

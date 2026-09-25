@@ -20,6 +20,7 @@ class TaromboFrameFactory extends Factory
             'area_width' => 1000,
             'area_height' => 600,
             'is_active' => true,
+            'is_collage' => false,
         ];
     }
 }

@@ -161,6 +161,7 @@ class TaromboFrameController extends Controller
             'area_width' => $frame->area_width,
             'area_height' => $frame->area_height,
             'is_active' => $frame->is_active,
+            'is_collage' => $frame->is_collage,
         ];
     }
 }

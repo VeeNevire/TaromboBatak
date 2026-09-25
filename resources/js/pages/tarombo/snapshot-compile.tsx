@@ -190,7 +190,9 @@ export default function TaromboSnapshotCompile({
         ? `${selectedFrame.id}-${removeBackground}`
         : null;
     const ready = assets !== null && assets.key === loadKey;
-    const treeSource: Box | null = ready ? (crop ?? fullBox(assets.tree)) : null;
+    const treeSource: Box | null = ready
+        ? (crop ?? fullBox(assets.tree))
+        : null;
     const fittedSpot =
         selectedFrame && treeSource
             ? fitInArea(selectedFrame, treeSource.width, treeSource.height)
@@ -646,13 +648,15 @@ export default function TaromboSnapshotCompile({
         const y =
             ((event.clientY - rect.top) / rect.height) *
             selectedFrame.canvas_height;
-        const hit = [...stack].reverse().find(
-            (item) =>
-                x >= item.placement.x &&
-                x <= item.placement.x + item.placement.width &&
-                y >= item.placement.y &&
-                y <= item.placement.y + item.placement.height,
-        );
+        const hit = [...stack]
+            .reverse()
+            .find(
+                (item) =>
+                    x >= item.placement.x &&
+                    x <= item.placement.x + item.placement.width &&
+                    y >= item.placement.y &&
+                    y <= item.placement.y + item.placement.height,
+            );
 
         if (hit) {
             setSelectedId(hit.id);
@@ -860,7 +864,9 @@ export default function TaromboSnapshotCompile({
                                     <DraggableBox
                                         key={selectedItem.id}
                                         spaceWidth={selectedFrame.canvas_width}
-                                        spaceHeight={selectedFrame.canvas_height}
+                                        spaceHeight={
+                                            selectedFrame.canvas_height
+                                        }
                                         box={selectedItem.placement}
                                         onChange={(box) =>
                                             setItemPlacement(
@@ -1168,6 +1174,7 @@ export default function TaromboSnapshotCompile({
             <CollageDialog
                 open={collageOpen}
                 onClose={() => setCollageOpen(false)}
+                frames={frames}
             />
         </>
     );

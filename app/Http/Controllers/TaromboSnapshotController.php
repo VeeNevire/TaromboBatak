@@ -63,6 +63,16 @@ class TaromboSnapshotController extends Controller
         return Inertia::render('tarombo/snapshots', [
             'snapshots' => $snapshots,
             'snapshotOptions' => $snapshotOptions,
+            'frames' => TaromboFrame::query()
+                ->active()
+                ->nonCollage()
+                ->latest()
+                ->get()
+                ->map(fn (TaromboFrame $frame) => [
+                    'id' => $frame->id,
+                    'name' => $frame->name,
+                    'image_url' => route('tarombo-frames.image', $frame),
+                ]),
             'accountName' => $user->name,
             'canDownload' => $canDownload,
         ]);
@@ -82,6 +92,7 @@ class TaromboSnapshotController extends Controller
             ],
             'frames' => TaromboFrame::query()
                 ->active()
+                ->nonCollage()
                 ->latest()
                 ->get()
                 ->map(fn (TaromboFrame $frame) => [

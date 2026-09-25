@@ -12,6 +12,7 @@ type Props = {
     centerId: string;
     rootId?: string;
     onSelect?: (id: string) => void;
+    onMakeTop?: (id: string) => void;
     highlightId?: string | null;
     editNodes?: boolean;
     selectOnClick?: boolean;
@@ -28,6 +29,7 @@ type Props = {
     currentUserId?: number;
     versionTreeId?: number | null;
     showNodeAvatar?: boolean;
+    showBranchToggles?: boolean;
     showSpouseNames?: boolean;
     allowBranchEntry?: boolean;
     compactTerminalBranches?: boolean;
@@ -92,6 +94,7 @@ function TreeBranch({
     collapsed,
     onToggle,
     onSelect,
+    onMakeTop,
     editNodes,
     selectOnClick,
     showProfileOnName,
@@ -103,6 +106,7 @@ function TreeBranch({
     collapseDepth,
     compact,
     showNodeAvatar,
+    showBranchToggles = true,
     showSpouseNames,
     compactTerminalBranches,
     alternativeTrees,
@@ -120,6 +124,7 @@ function TreeBranch({
     collapsed: Set<string>;
     onToggle: (id: string) => void;
     onSelect?: (id: string) => void;
+    onMakeTop?: (id: string) => void;
     editNodes?: boolean;
     selectOnClick?: boolean;
     showProfileOnName?: boolean;
@@ -133,6 +138,7 @@ function TreeBranch({
     collapseDepth?: number;
     compact?: boolean;
     showNodeAvatar?: boolean;
+    showBranchToggles?: boolean;
     showSpouseNames?: boolean;
     compactTerminalBranches?: boolean;
     /** Packed siblings born after this one, drawn to the right of its card. */
@@ -173,9 +179,7 @@ function TreeBranch({
     // unfolding never makes the card itself jump wider.
     const isPackable = (child: TaromboPerson) =>
         !hasDescendants(child, childrenOf, alternativeTrees) ||
-        (packCollapsed &&
-            collapsed.has(child.id) &&
-            !lineageIds.has(child.id));
+        (packCollapsed && collapsed.has(child.id) && !lineageIds.has(child.id));
     const branchChildren = children.filter((child) => !isPackable(child));
     const hasPackedChildren =
         branchChildren.length > 0 && branchChildren.length < children.length;
@@ -221,6 +225,7 @@ function TreeBranch({
             collapsed={collapsed}
             onToggle={onToggle}
             onSelect={onSelect}
+            onMakeTop={onMakeTop}
             editNodes={editNodes}
             selectOnClick={selectOnClick}
             showProfileOnName={showProfileOnName}
@@ -236,6 +241,7 @@ function TreeBranch({
             collapseDepth={collapseDepth}
             compact={compact}
             showNodeAvatar={showNodeAvatar}
+            showBranchToggles={showBranchToggles}
             showSpouseNames={showSpouseNames}
             compactTerminalBranches={compactTerminalBranches}
             packCollapsed={packCollapsed}
@@ -249,6 +255,11 @@ function TreeBranch({
             highlighted={isCenter || isHighlighted}
             onAvatarClick={
                 showProfileOnName ? () => onSelect?.(person.id) : undefined
+            }
+            onAvatarDoubleClick={
+                showProfileOnName && onMakeTop
+                    ? () => onMakeTop(person.id)
+                    : undefined
             }
             onNameClick={
                 showProfileOnName ? () => onOpenProfile(person) : undefined
@@ -268,161 +279,174 @@ function TreeBranch({
             data-leaf-before={leafSiblingsBefore.length > 0}
         >
             <div className="tb-node-row">
-            {hasLeafCluster && (
-                <ul className="tb-leaf-cluster tb-leaf-cluster--before">
-                    {leafSiblingsBefore.map(renderLeaf)}
-                </ul>
-            )}
-            <div className="tb-node-main">
-            {readOnly ? (
-                <div
-                    id={`${nodeIdPrefix}-${person.id}`}
-                    className="relative z-20 inline-block rounded-lg"
-                >
-                    {card}
-                </div>
-            ) : showProfileOnName ? (
-                <div
-                    id={`${nodeIdPrefix}-${person.id}`}
-                    className="relative z-20 inline-block rounded-lg"
-                >
-                    {card}
-                </div>
-            ) : editNodes && !selectOnClick ? (
-                <Link
-                    id={`${nodeIdPrefix}-${person.id}`}
-                    href={people.edit(Number(person.id))}
-                    aria-label={`Ubah ${person.name}`}
-                    className="relative z-20 inline-block cursor-pointer rounded-lg transition-transform duration-200 hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B8934A]"
-                >
-                    {card}
-                </Link>
-            ) : (
-                <button
-                    id={`${nodeIdPrefix}-${person.id}`}
-                    type="button"
-                    onClick={() => onSelect?.(person.id)}
-                    className="relative z-20 cursor-pointer rounded-lg transition-transform duration-200 hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B8934A]"
-                >
-                    {card}
-                </button>
-            )}
-            {(renderedChildren.length > 0 || personAlternatives.length > 0) && (
-                <div
-                    className={
-                        compact
-                            ? 'mt-0.5 flex items-center gap-1'
-                            : 'mt-1 flex items-center gap-1.5'
-                    }
-                >
-                    {renderedChildren.length > 0 && !activeAlternative && (
-                        <button
-                            type="button"
-                            onClick={() => onToggle(person.id)}
-                            aria-label={
-                                isCollapsed
-                                    ? 'Bentangkan cabang'
-                                    : 'Ciutkan cabang'
-                            }
-                            className={
-                                compact
-                                    ? 'flex size-4 items-center justify-center rounded-full border border-[#a79e8c]/60 bg-white text-[#5B6A61] transition-colors hover:bg-[#EFE2C9]'
-                                    : 'flex size-5 items-center justify-center rounded-full border border-[#a79e8c]/60 bg-white text-[#5B6A61] transition-colors hover:bg-[#EFE2C9]'
-                            }
+                {hasLeafCluster && (
+                    <ul className="tb-leaf-cluster tb-leaf-cluster--before">
+                        {leafSiblingsBefore.map(renderLeaf)}
+                    </ul>
+                )}
+                <div className="tb-node-main">
+                    {readOnly ? (
+                        <div
+                            id={`${nodeIdPrefix}-${person.id}`}
+                            className="relative z-20 inline-block rounded-lg"
                         >
-                            {isCollapsed ? (
-                                <ChevronRight className="size-3.5" />
-                            ) : (
-                                <ChevronDown className="size-3.5" />
-                            )}
+                            {card}
+                        </div>
+                    ) : showProfileOnName ? (
+                        <div
+                            id={`${nodeIdPrefix}-${person.id}`}
+                            className="relative z-20 inline-block rounded-lg"
+                        >
+                            {card}
+                        </div>
+                    ) : editNodes && !selectOnClick ? (
+                        <Link
+                            id={`${nodeIdPrefix}-${person.id}`}
+                            href={people.edit(Number(person.id))}
+                            aria-label={`Ubah ${person.name}`}
+                            className="relative z-20 inline-block cursor-pointer rounded-lg transition-transform duration-200 hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B8934A]"
+                        >
+                            {card}
+                        </Link>
+                    ) : (
+                        <button
+                            id={`${nodeIdPrefix}-${person.id}`}
+                            type="button"
+                            onClick={() => onSelect?.(person.id)}
+                            className="relative z-20 cursor-pointer rounded-lg transition-transform duration-200 hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B8934A]"
+                        >
+                            {card}
                         </button>
                     )}
-                    {personAlternatives.length > 0 && (
-                        <button
-                            type="button"
-                            onClick={() =>
-                                setActiveAlternativeId((current) =>
-                                    current === null
-                                        ? personAlternatives[0].id
-                                        : null,
-                                )
-                            }
-                            aria-expanded={activeAlternative !== undefined}
-                            aria-controls={alternativePanelId}
-                            aria-label={
-                                activeAlternative
-                                    ? 'Kembali ke keturunan utama'
-                                    : 'Buka keturunan alternatif'
-                            }
-                            title={
-                                activeAlternative
-                                    ? 'Kembali ke versi utama'
-                                    : 'Buka versi alternatif'
-                            }
+                    {((showBranchToggles && renderedChildren.length > 0) ||
+                        personAlternatives.length > 0) && (
+                        <div
                             className={
                                 compact
-                                    ? 'hover:text-tb-on-primary inline-flex h-5 min-w-5 items-center justify-center gap-0.5 rounded-full border border-dashed border-tb-primary bg-tb-primary/10 px-1 text-[9px] font-bold text-tb-primary transition-colors hover:bg-tb-primary focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none'
-                                    : 'hover:text-tb-on-primary inline-flex h-6 min-w-6 items-center justify-center gap-0.5 rounded-full border border-dashed border-tb-primary bg-tb-primary/10 px-1.5 text-[10px] font-bold text-tb-primary transition-colors hover:bg-tb-primary focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none'
+                                    ? 'mt-0.5 flex items-center gap-1'
+                                    : 'mt-1 flex items-center gap-1.5'
                             }
                         >
-                            <ChevronDown className="size-3.5" />
-                            {personAlternatives.length > 1 && (
-                                <span>{personAlternatives.length}</span>
+                            {showBranchToggles &&
+                                renderedChildren.length > 0 &&
+                                !activeAlternative && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onToggle(person.id)}
+                                        aria-label={
+                                            isCollapsed
+                                                ? 'Bentangkan cabang'
+                                                : 'Ciutkan cabang'
+                                        }
+                                        className={
+                                            compact
+                                                ? 'flex size-4 items-center justify-center rounded-full border border-[#a79e8c]/60 bg-white text-[#5B6A61] transition-colors hover:bg-[#EFE2C9]'
+                                                : 'flex size-5 items-center justify-center rounded-full border border-[#a79e8c]/60 bg-white text-[#5B6A61] transition-colors hover:bg-[#EFE2C9]'
+                                        }
+                                    >
+                                        {isCollapsed ? (
+                                            <ChevronRight className="size-3.5" />
+                                        ) : (
+                                            <ChevronDown className="size-3.5" />
+                                        )}
+                                    </button>
+                                )}
+                            {personAlternatives.length > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setActiveAlternativeId((current) =>
+                                            current === null
+                                                ? personAlternatives[0].id
+                                                : null,
+                                        )
+                                    }
+                                    aria-expanded={
+                                        activeAlternative !== undefined
+                                    }
+                                    aria-controls={alternativePanelId}
+                                    aria-label={
+                                        activeAlternative
+                                            ? 'Kembali ke keturunan utama'
+                                            : 'Buka keturunan alternatif'
+                                    }
+                                    title={
+                                        activeAlternative
+                                            ? 'Kembali ke versi utama'
+                                            : 'Buka versi alternatif'
+                                    }
+                                    className={
+                                        compact
+                                            ? 'hover:text-tb-on-primary inline-flex h-5 min-w-5 items-center justify-center gap-0.5 rounded-full border border-dashed border-tb-primary bg-tb-primary/10 px-1 text-[9px] font-bold text-tb-primary transition-colors hover:bg-tb-primary focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none'
+                                            : 'hover:text-tb-on-primary inline-flex h-6 min-w-6 items-center justify-center gap-0.5 rounded-full border border-dashed border-tb-primary bg-tb-primary/10 px-1.5 text-[10px] font-bold text-tb-primary transition-colors hover:bg-tb-primary focus-visible:ring-2 focus-visible:ring-tb-primary/40 focus-visible:outline-none'
+                                    }
+                                >
+                                    <ChevronDown className="size-3.5" />
+                                    {personAlternatives.length > 1 && (
+                                        <span>{personAlternatives.length}</span>
+                                    )}
+                                </button>
                             )}
-                        </button>
+                        </div>
                     )}
                 </div>
-            )}
+                {hasLeafCluster && (
+                    <ul className="tb-leaf-cluster">
+                        {leafSiblings.map(renderLeaf)}
+                    </ul>
+                )}
             </div>
-            {hasLeafCluster && (
-                <ul className="tb-leaf-cluster">
-                    {leafSiblings.map(renderLeaf)}
-                </ul>
-            )}
-            </div>
-            {!activeAlternative && !isCollapsed && renderedChildren.length > 0 && (
-                <ul>
-                    {renderedChildren.map((child) => (
-                        <TreeBranch
-                            key={child.id}
-                            person={child}
-                            leafSiblings={
-                                leavesAfter.get(child.id) ?? EMPTY_LEAF_SIBLINGS
-                            }
-                            leafSiblingsBefore={
-                                leavesBefore.get(child.id) ?? EMPTY_LEAF_SIBLINGS
-                            }
-                            leafSiblingsFemaleLineage={femaleLineage}
-                            childrenOf={childrenOf}
-                            centerId={centerId}
-                            highlightId={highlightId}
-                            numberById={numberById}
-                            collapsed={collapsed}
-                            onToggle={onToggle}
-                            onSelect={onSelect}
-                            editNodes={editNodes}
-                            selectOnClick={selectOnClick}
-                            showProfileOnName={showProfileOnName}
-                            readOnly={readOnly}
-                            onOpenProfile={onOpenProfile}
-                            alternativeTrees={alternativeTrees}
-                            nodeIdPrefix={nodeIdPrefix}
-                            lineageIds={lineageIds}
-                            femaleLineage={
-                                femaleLineage ||
-                                child.gender?.toUpperCase() === 'P'
-                            }
-                            markFemaleLineage={markFemaleLineage}
-                            collapseDepth={collapseDepth}
-                            compact={compact}
-                            showNodeAvatar={showNodeAvatar}
-                            showSpouseNames={showSpouseNames}
-                            compactTerminalBranches={compactTerminalBranches}
-                            packCollapsed={packCollapsed}
-                        />
-                    ))}
-                </ul>
-            )}
+            {!activeAlternative &&
+                !isCollapsed &&
+                renderedChildren.length > 0 && (
+                    <ul>
+                        {renderedChildren.map((child) => (
+                            <TreeBranch
+                                key={child.id}
+                                person={child}
+                                leafSiblings={
+                                    leavesAfter.get(child.id) ??
+                                    EMPTY_LEAF_SIBLINGS
+                                }
+                                leafSiblingsBefore={
+                                    leavesBefore.get(child.id) ??
+                                    EMPTY_LEAF_SIBLINGS
+                                }
+                                leafSiblingsFemaleLineage={femaleLineage}
+                                childrenOf={childrenOf}
+                                centerId={centerId}
+                                highlightId={highlightId}
+                                numberById={numberById}
+                                collapsed={collapsed}
+                                onToggle={onToggle}
+                                onSelect={onSelect}
+                                onMakeTop={onMakeTop}
+                                editNodes={editNodes}
+                                selectOnClick={selectOnClick}
+                                showProfileOnName={showProfileOnName}
+                                readOnly={readOnly}
+                                onOpenProfile={onOpenProfile}
+                                alternativeTrees={alternativeTrees}
+                                nodeIdPrefix={nodeIdPrefix}
+                                lineageIds={lineageIds}
+                                femaleLineage={
+                                    femaleLineage ||
+                                    child.gender?.toUpperCase() === 'P'
+                                }
+                                markFemaleLineage={markFemaleLineage}
+                                collapseDepth={collapseDepth}
+                                compact={compact}
+                                showNodeAvatar={showNodeAvatar}
+                                showBranchToggles={showBranchToggles}
+                                showSpouseNames={showSpouseNames}
+                                compactTerminalBranches={
+                                    compactTerminalBranches
+                                }
+                                packCollapsed={packCollapsed}
+                            />
+                        ))}
+                    </ul>
+                )}
             {activeAlternative && (
                 <div className="relative mt-3 min-w-max pt-5 before:absolute before:top-0 before:left-1/2 before:h-5 before:border-l before:border-dashed before:border-tb-primary">
                     <div
@@ -477,6 +501,7 @@ function TreeBranch({
                             lineagePath={[]}
                             markFemaleLineage={markFemaleLineage}
                             showNodeAvatar={showNodeAvatar}
+                            showBranchToggles={showBranchToggles}
                             showSpouseNames={showSpouseNames}
                         />
                     </div>
@@ -491,6 +516,7 @@ export function DescendantsTree({
     centerId,
     rootId,
     onSelect,
+    onMakeTop,
     highlightId,
     editNodes = false,
     selectOnClick = false,
@@ -507,6 +533,7 @@ export function DescendantsTree({
     currentUserId,
     versionTreeId,
     showNodeAvatar = true,
+    showBranchToggles = true,
     showSpouseNames = false,
     allowBranchEntry = false,
     compactTerminalBranches = false,
@@ -742,7 +769,9 @@ export function DescendantsTree({
                             key={line.id}
                             d={line.path}
                             fill="none"
-                            style={{ stroke: 'var(--tb-lineage-color, #dc2626)' }}
+                            style={{
+                                stroke: 'var(--tb-lineage-color, #dc2626)',
+                            }}
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeWidth="2"
@@ -765,6 +794,7 @@ export function DescendantsTree({
                             collapsed={collapsed}
                             onToggle={handleToggle}
                             onSelect={onSelect}
+                            onMakeTop={onMakeTop}
                             editNodes={editNodes}
                             selectOnClick={selectOnClick}
                             showProfileOnName={showProfileOnName}
@@ -778,6 +808,7 @@ export function DescendantsTree({
                             collapseDepth={collapseDepth}
                             compact={compact}
                             showNodeAvatar={showNodeAvatar}
+                            showBranchToggles={showBranchToggles}
                             showSpouseNames={showSpouseNames}
                             compactTerminalBranches={compactTerminalBranches}
                             packCollapsed={packCollapsed}
@@ -820,6 +851,7 @@ export function DescendantsTree({
                                             collapsed={collapsed}
                                             onToggle={handleToggle}
                                             onSelect={onSelect}
+                                            onMakeTop={onMakeTop}
                                             editNodes={editNodes}
                                             selectOnClick={selectOnClick}
                                             showProfileOnName={
@@ -840,6 +872,9 @@ export function DescendantsTree({
                                             collapseDepth={collapseDepth}
                                             compact={compact}
                                             showNodeAvatar={showNodeAvatar}
+                                            showBranchToggles={
+                                                showBranchToggles
+                                            }
                                             showSpouseNames={showSpouseNames}
                                             compactTerminalBranches={
                                                 compactTerminalBranches
@@ -877,6 +912,7 @@ export function DescendantsTree({
                                             collapsed={collapsed}
                                             onToggle={handleToggle}
                                             onSelect={onSelect}
+                                            onMakeTop={onMakeTop}
                                             editNodes={editNodes}
                                             selectOnClick={selectOnClick}
                                             showProfileOnName={
@@ -897,6 +933,9 @@ export function DescendantsTree({
                                             collapseDepth={collapseDepth}
                                             compact={compact}
                                             showNodeAvatar={showNodeAvatar}
+                                            showBranchToggles={
+                                                showBranchToggles
+                                            }
                                             showSpouseNames={showSpouseNames}
                                             packCollapsed={packCollapsed}
                                         />

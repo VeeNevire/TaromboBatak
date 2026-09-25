@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { PersonImage } from '@/components/people/person-image';
 import { cn } from '@/lib/utils';
 
@@ -40,6 +41,7 @@ export function NodeCard({
     narrow = false,
     badge,
     onAvatarClick,
+    onAvatarDoubleClick,
     onNameClick,
     dashed = false,
     showAvatar = true,
@@ -51,11 +53,48 @@ export function NodeCard({
     narrow?: boolean;
     badge?: string;
     onAvatarClick?: () => void;
+    onAvatarDoubleClick?: () => void;
     onNameClick?: () => void;
     dashed?: boolean;
     showAvatar?: boolean;
     showSpouseNames?: boolean;
 }) {
+    const clickTimer = useRef<number | null>(null);
+
+    useEffect(
+        () => () => {
+            if (clickTimer.current !== null) {
+                window.clearTimeout(clickTimer.current);
+            }
+        },
+        [],
+    );
+
+    // With a double-click action the single click waits a moment, so the
+    // two clicks of a double-click do not also fire the single-click action.
+    const handleAvatarClick = onAvatarDoubleClick
+        ? () => {
+              if (clickTimer.current !== null) {
+                  window.clearTimeout(clickTimer.current);
+              }
+
+              clickTimer.current = window.setTimeout(() => {
+                  clickTimer.current = null;
+                  onAvatarClick?.();
+              }, 250);
+          }
+        : onAvatarClick;
+    const handleAvatarDoubleClick = onAvatarDoubleClick
+        ? () => {
+              if (clickTimer.current !== null) {
+                  window.clearTimeout(clickTimer.current);
+                  clickTimer.current = null;
+              }
+
+              onAvatarDoubleClick();
+          }
+        : undefined;
+
     return (
         <div
             className={cn(
@@ -79,9 +118,14 @@ export function NodeCard({
                             : undefined
                     }
                     title={
-                        onAvatarClick ? 'Tampilkan jalur silsilah' : undefined
+                        onAvatarClick
+                            ? onAvatarDoubleClick
+                                ? 'Klik: tampilkan jalur silsilah · Klik 2x: jadikan paling atas'
+                                : 'Tampilkan jalur silsilah'
+                            : undefined
                     }
-                    onClick={onAvatarClick}
+                    onClick={handleAvatarClick}
+                    onDoubleClick={handleAvatarDoubleClick}
                     onKeyDown={(event) => {
                         if (
                             onAvatarClick &&
