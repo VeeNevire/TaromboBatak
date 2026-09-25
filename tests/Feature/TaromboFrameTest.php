@@ -180,11 +180,12 @@ test('a frame image is available to signed-in users only while the frame is acti
         ->assertNotFound();
 });
 
-test('the compile page previews an own snapshot with the active frames only', function () {
+test('the compile page previews an own snapshot with active non-collage frames only', function () {
     $owner = User::factory()->create(['name' => 'Pemilik']);
     $snapshot = TaromboSnapshot::factory()->for($owner)->create();
     $activeFrame = TaromboFrame::factory()->create(['is_active' => true]);
     TaromboFrame::factory()->create(['is_active' => false]);
+    TaromboFrame::factory()->create(['is_active' => true, 'is_collage' => true]);
 
     $this->actingAs($owner)
         ->get(route('tarombo.snapshots.compile', $snapshot))

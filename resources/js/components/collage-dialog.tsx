@@ -14,12 +14,20 @@ import {
 import { COLLAGE_FORMATS, composeCanvasToFile } from '@/lib/collage';
 import type { CollageFormat } from '@/lib/collage';
 
+type FrameOption = {
+    id: number;
+    name: string;
+    image_url: string;
+};
+
 export function CollageDialog({
     open,
     onClose,
+    frames,
 }: {
     open: boolean;
     onClose: () => void;
+    frames: FrameOption[];
 }) {
     const [collageFormat, setCollageFormat] = useState<CollageFormat | null>(
         null,
@@ -124,7 +132,7 @@ export function CollageDialog({
                         {step === 'format' &&
                             'Pilih salah satu format untuk membuat kolase gambar.'}
                         {step === 'boxes' &&
-                            'Klik tiap kotak untuk memasukkan gambar, lalu lihat pratinjaunya.'}
+                            'Klik tiap kotak untuk memilih gambar dari Template Frame Tarombo, lalu lihat pratinjaunya.'}
                         {step === 'preview' &&
                             'Kolase siap. Unduh sebagai satu file gambar.'}
                     </DialogDescription>
@@ -158,6 +166,7 @@ export function CollageDialog({
                             boxFiles={collageBoxFiles}
                             canvasRef={collageCanvasRef}
                             onSetBoxFile={setCollageBoxFile}
+                            frameOptions={frames}
                         />
                         {collageError && (
                             <p className="text-xs text-red-600">

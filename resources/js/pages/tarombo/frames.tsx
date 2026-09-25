@@ -11,11 +11,8 @@ import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { CollageBoxEditor } from '@/components/collage-box-editor';
 import { FormatThumbnail } from '@/components/format-thumbnail';
-import {
-    
-    FrameAreaEditor
-} from '@/components/frame-area-editor';
-import type {FrameArea} from '@/components/frame-area-editor';
+import { FrameAreaEditor } from '@/components/frame-area-editor';
+import type { FrameArea } from '@/components/frame-area-editor';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -45,12 +42,14 @@ type Frame = {
     area_width: number;
     area_height: number;
     is_active: boolean;
+    is_collage: boolean;
 };
 
 const emptyForm = {
     name: '',
     image: null as File | null,
     is_active: true,
+    is_collage: false,
 };
 
 export default function TaromboFrames({ frames }: { frames: Frame[] }) {
@@ -67,7 +66,7 @@ export default function TaromboFrames({ frames }: { frames: Frame[] }) {
     );
     const markImageBroken = (id: number) =>
         setBrokenImageIds((current) => new Set(current).add(id));
-    const [useCollage, setUseCollage] = useState(true);
+    const [useCollage, setUseCollage] = useState(false);
     const [formatId, setFormatId] = useState(COLLAGE_FORMATS[0].id);
     const [boxFiles, setBoxFiles] = useState<(File | null)[]>([null]);
     const [collageError, setCollageError] = useState<string | null>(null);
@@ -85,19 +84,30 @@ export default function TaromboFrames({ frames }: { frames: Frame[] }) {
         form.reset();
         form.clearErrors();
         setUseCollage(true);
+        form.setData('is_collage', true);
         setFormatId(format.id);
         setBoxFiles(new Array(format.boxes.length).fill(null));
         setCollageError(null);
         setEditingFrame('create');
     };
 
-    const openCreate = () => startFormat(COLLAGE_FORMATS[0].id);
+    const openCreate = () => {
+        form.reset();
+        form.clearErrors();
+        setUseCollage(false);
+        form.setData('is_collage', false);
+        setFormatId(COLLAGE_FORMATS[0].id);
+        setBoxFiles(new Array(COLLAGE_FORMATS[0].boxes.length).fill(null));
+        setCollageError(null);
+        setEditingFrame('create');
+    };
 
     const openEdit = (frame: Frame) => {
         form.setData({
             name: frame.name,
             image: null,
             is_active: frame.is_active,
+            is_collage: frame.is_collage,
         });
         form.clearErrors();
         setUseCollage(false);
@@ -127,7 +137,7 @@ export default function TaromboFrames({ frames }: { frames: Frame[] }) {
     const save = async (event: React.FormEvent) => {
         event.preventDefault();
 
-        let imageFile: File | null = null;
+        let imageFile: File | null = form.data.image;
 
         if (useCollage) {
             if (boxFiles.some((file) => !file)) {
@@ -423,9 +433,9 @@ export default function TaromboFrames({ frames }: { frames: Frame[] }) {
                                     : 'Ubah Frame Tarombo'}
                             </DialogTitle>
                             <DialogDescription>
-                                Pilih Format Frame (kolase), lalu isi tiap kotak
-                                dengan gambar. Setelah disimpan, atur area
-                                konten lewat tombol Atur Area.
+                                Unggah gambar frame biasa atau buat kolase.
+                                Setelah disimpan, atur area konten lewat tombol
+                                Atur Area.
                             </DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4">
@@ -456,11 +466,54 @@ export default function TaromboFrames({ frames }: { frames: Frame[] }) {
                                         <Button
                                             type="button"
                                             variant="outline"
-                                            onClick={() => setUseCollage(true)}
+                                            onClick={() => {
+                                                setUseCollage(true);
+                                                form.setData(
+                                                    'is_collage',
+                                                    true,
+                                                );
+                                            }}
                                         >
                                             Buat kolase baru
                                         </Button>
                                     </div>
+                                </div>
+                            )}
+
+                            {!useCollage && (
+                                <div className="grid gap-2">
+                                    <Label htmlFor="frame-image">
+                                        Gambar frame
+                                    </Label>
+                                    <Input
+                                        id="frame-image"
+                                        type="file"
+                                        accept="image/jpeg,.jpg,.jpeg"
+                                        onChange={(event) => {
+                                            form.setData(
+                                                'image',
+                                                event.target.files?.[0] ?? null,
+                                            );
+                                            form.setData('is_collage', false);
+                                        }}
+                                    />
+                                    <p className="text-xs text-tb-on-surface-variant">
+                                        Gunakan file JPG atau JPEG, maksimal 10
+                                        MB.
+                                    </p>
+                                    <InputError message={form.errors.image} />
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="w-fit"
+                                        onClick={() => {
+                                            setUseCollage(true);
+                                            form.setData('is_collage', true);
+                                            changeFormat(COLLAGE_FORMATS[0].id);
+                                        }}
+                                    >
+                                        Buat dengan format kolase
+                                    </Button>
                                 </div>
                             )}
 

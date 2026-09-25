@@ -45,14 +45,22 @@ type SnapshotPage = {
     next_page_url: string | null;
 };
 
+type FrameOption = {
+    id: number;
+    name: string;
+    image_url: string;
+};
+
 export default function TaromboSnapshots({
     snapshots,
     snapshotOptions,
+    frames,
     accountName,
     canDownload,
 }: {
     snapshots: SnapshotPage;
     snapshotOptions: Snapshot[];
+    frames: FrameOption[];
     accountName: string;
     canDownload: boolean;
 }) {
@@ -417,6 +425,7 @@ export default function TaromboSnapshots({
             <CollageDialog
                 open={collageOpen}
                 onClose={() => setCollageOpen(false)}
+                frames={frames}
             />
         </>
     );
