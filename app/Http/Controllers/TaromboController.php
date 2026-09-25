@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\UpdateTaromboTreeSettingsRequest;
 use App\Models\ContactRequest;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeShare;
@@ -15,6 +16,7 @@ use App\Services\TaromboStatisticsService;
 use App\Services\TaromboTreeService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -83,7 +85,32 @@ class TaromboController extends Controller
             'margaTree' => $margaTree,
             'accountTreePersonIds' => $accountTreePersonIds,
             'familyName' => $this->familyName($selectedFamilyTreeId, $margaTree),
+            'treeSettings' => $request->user()?->tarombo_tree_settings,
         ]);
+    }
+
+    public function updateTreeSettings(UpdateTaromboTreeSettingsRequest $request): RedirectResponse
+    {
+        $request->user()->update(['tarombo_tree_settings' => $request->validated()]);
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => 'Pengaturan tampilan pohon disimpan.',
+        ]);
+
+        return back();
+    }
+
+    public function resetTreeSettings(Request $request): RedirectResponse
+    {
+        $request->user()->update(['tarombo_tree_settings' => null]);
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => 'Tampilan pohon dikembalikan ke bawaan.',
+        ]);
+
+        return back();
     }
 
     /**

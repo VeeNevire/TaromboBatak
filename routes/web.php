@@ -232,6 +232,10 @@ Route::middleware(['auth'])->group(function () {
         ->name('tarombo.snapshots.generate');
     Route::get('dashboard/tarombo/frames/{taromboFrame}/image', [TaromboFrameController::class, 'image'])
         ->name('tarombo-frames.image');
+    Route::put('dashboard/tarombo/settings', [TaromboController::class, 'updateTreeSettings'])
+        ->name('tarombo.settings.update');
+    Route::delete('dashboard/tarombo/settings', [TaromboController::class, 'resetTreeSettings'])
+        ->name('tarombo.settings.reset');
 
     Route::get('people/create', [PersonController::class, 'create'])->name('people.create');
 

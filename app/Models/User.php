@@ -31,6 +31,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $district_code
  * @property string|null $village_code
  * @property Carbon|null $news_feed_read_at
+ * @property array<string, mixed>|null $tarombo_tree_settings
  * @property string|null $two_factor_secret
  * @property string|null $two_factor_recovery_codes
  * @property Carbon|null $two_factor_confirmed_at
@@ -57,7 +58,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, ChatGroup> $ownedChatGroups
  * @property-read Collection<int, ChatGroupMember> $chatGroupMemberships
  */
-#[Fillable(['name', 'email', 'password', 'is_active', 'role', 'marga_id', 'current_person_id', 'province_code', 'regency_code', 'district_code', 'village_code'])]
+#[Fillable(['name', 'email', 'password', 'is_active', 'role', 'marga_id', 'current_person_id', 'province_code', 'regency_code', 'district_code', 'village_code', 'tarombo_tree_settings'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -343,6 +344,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'is_active' => 'boolean',
             'news_feed_read_at' => 'datetime',
+            'tarombo_tree_settings' => 'array',
             'password' => 'hashed',
         ];
     }

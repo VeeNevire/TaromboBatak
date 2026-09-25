@@ -742,7 +742,7 @@ export function DescendantsTree({
                             key={line.id}
                             d={line.path}
                             fill="none"
-                            stroke="#dc2626"
+                            style={{ stroke: 'var(--tb-lineage-color, #dc2626)' }}
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeWidth="2"
