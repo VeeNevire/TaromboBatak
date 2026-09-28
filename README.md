@@ -62,6 +62,20 @@ otomatis jika proses berhenti.
 
 Jangan deploy file `public/hot`. Deployment production harus menjalankan `npm run build` dan menggunakan asset dari `public/build`.
 
+### Kompresi respons
+
+Data pohon tarombo dikirim sebagai JSON Inertia yang bisa berukuran lebih dari
+1 MB untuk silsilah besar; dengan kompresi ukurannya tinggal sebagian kecil.
+Apache memakai blok `mod_deflate` di `public/.htaccess` (aktifkan modul
+`deflate_module` dan `filter_module`). Untuk Nginx, tambahkan di blok `server`:
+
+```nginx
+gzip on;
+gzip_comp_level 5;
+gzip_min_length 1024;
+gzip_types application/json application/javascript text/css text/plain image/svg+xml;
+```
+
 ## Audit
 
 Status audit engineering dan keputusan prioritas tersedia di `AUDIT_PROJECT_TAROMBOBATAK.md`.

@@ -1,10 +1,12 @@
-import { Link } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { alternativeTree } from '@/actions/App/Http/Controllers/TaromboController';
 import { NodeCard } from '@/components/people/node-card';
 import type { TreeNode } from '@/components/people/node-card';
 import { PersonSummaryDialog } from '@/components/people/person-summary-dialog';
-import type { TaromboPerson } from '@/data/tarombo-tree';
+import { buildTaromboPeople } from '@/data/tarombo-tree';
+import type { TaromboPerson, TaromboPersonRow } from '@/data/tarombo-tree';
 import people from '@/routes/people';
 
 type Props = {
@@ -35,6 +37,16 @@ type Props = {
     compactTerminalBranches?: boolean;
     packCollapsed?: boolean;
     scrollToLineageEnd?: boolean;
+    /**
+     * A searched person drawn as the lowest one of the lineage: their own
+     * children start folded, to be opened with the branch toggle.
+     */
+    foldedId?: string | null;
+    /**
+     * Paths joining two people through their nearest common ancestor, each
+     * ordered from that ancestor down. Drawn as a separate "Koneksi" line.
+     */
+    connectionPaths?: readonly (readonly string[])[];
 };
 
 type LineageLine = {
@@ -43,6 +55,8 @@ type LineageLine = {
 };
 
 const EMPTY_LINEAGE_PATH: readonly string[] = [];
+const EMPTY_CONNECTION_PATHS: readonly (readonly string[])[] = [];
+const EMPTY_MARKED_IDS: ReadonlySet<string> = new Set();
 const EMPTY_LEAF_SIBLINGS: TaromboPerson[] = [];
 
 /**
@@ -66,8 +80,49 @@ export type DescendantsAlternativeTree = {
     id: number;
     name: string;
     rootId: string;
-    people: TaromboPerson[];
+    /** Loaded from the server when the version is opened, unless given. */
+    people?: TaromboPerson[];
+    /** Leave out female branches, as the male-only lineage view does. */
+    maleLineageOnly?: boolean;
 };
+
+// Opened versions stay loaded until the next Inertia visit, which may have
+// changed them.
+const alternativeTreePeople = new Map<number, TaromboPerson[]>();
+let clearsOnNavigate = false;
+
+async function loadAlternativeTreePeople(
+    id: number,
+    signal: AbortSignal,
+): Promise<TaromboPerson[]> {
+    const cached = alternativeTreePeople.get(id);
+
+    if (cached) {
+        return cached;
+    }
+
+    const response = await fetch(alternativeTree(id).url, {
+        headers: { Accept: 'application/json' },
+        signal,
+        credentials: 'same-origin',
+    });
+
+    if (!response.ok) {
+        throw new Error('Versi alternatif tidak dapat dimuat');
+    }
+
+    const data = (await response.json()) as { people: TaromboPersonRow[] };
+    const loaded = buildTaromboPeople(data.people);
+
+    alternativeTreePeople.set(id, loaded);
+
+    if (!clearsOnNavigate) {
+        router.on('navigate', () => alternativeTreePeople.clear());
+        clearsOnNavigate = true;
+    }
+
+    return loaded;
+}
 
 function toNode(person: TaromboPerson, displayNumber?: number): TreeNode {
     return {
@@ -83,6 +138,100 @@ function toNode(person: TaromboPerson, displayNumber?: number): TreeNode {
         claimed: (person.claimedAccounts?.length ?? 0) > 0,
         spouses: person.spouses?.map((spouse) => spouse.name),
     };
+}
+
+function AlternativeTreeView({
+    tree,
+    nodeIdPrefix,
+    ...treeProps
+}: Pick<
+    Props,
+    | 'onSelect'
+    | 'highlightId'
+    | 'editNodes'
+    | 'selectOnClick'
+    | 'showProfileOnName'
+    | 'markFemaleLineage'
+    | 'showNodeAvatar'
+    | 'showBranchToggles'
+    | 'showSpouseNames'
+> & {
+    tree: DescendantsAlternativeTree;
+    nodeIdPrefix: string;
+}) {
+    const [loaded, setLoaded] = useState<TaromboPerson[] | null>(
+        () => tree.people ?? alternativeTreePeople.get(tree.id) ?? null,
+    );
+    const [failed, setFailed] = useState(false);
+    const [attempt, setAttempt] = useState(0);
+
+    useEffect(() => {
+        if (loaded) {
+            return;
+        }
+
+        const controller = new AbortController();
+
+        loadAlternativeTreePeople(tree.id, controller.signal)
+            .then((people) => {
+                if (!controller.signal.aborted) {
+                    setLoaded(people);
+                }
+            })
+            .catch(() => {
+                if (!controller.signal.aborted) {
+                    setFailed(true);
+                }
+            });
+
+        return () => controller.abort();
+    }, [attempt, loaded, tree.id]);
+
+    if (failed) {
+        return (
+            <div
+                role="alert"
+                className="flex flex-col items-center gap-2 px-3 pb-3 text-xs text-tb-on-surface-variant"
+            >
+                <p>Versi alternatif belum dapat dimuat.</p>
+                <button
+                    type="button"
+                    onClick={() => {
+                        setFailed(false);
+                        setAttempt((current) => current + 1);
+                    }}
+                    className="rounded-full border border-tb-outline-variant bg-tb-surface-bright px-2.5 py-1 text-[10px] font-semibold text-tb-on-surface-variant transition-colors hover:border-tb-primary hover:text-tb-primary"
+                >
+                    Coba lagi
+                </button>
+            </div>
+        );
+    }
+
+    if (!loaded) {
+        return (
+            <p className="px-3 pb-3 text-xs text-tb-on-surface-variant italic">
+                Memuat versi alternatif...
+            </p>
+        );
+    }
+
+    return (
+        <DescendantsTree
+            people={
+                tree.maleLineageOnly
+                    ? loaded.filter(
+                          (person) => person.gender === 'L' || !person.gender,
+                      )
+                    : loaded
+            }
+            centerId={tree.rootId}
+            hideRoot
+            nodeIdPrefix={nodeIdPrefix}
+            lineagePath={EMPTY_LINEAGE_PATH}
+            {...treeProps}
+        />
+    );
 }
 
 function TreeBranch({
@@ -101,6 +250,7 @@ function TreeBranch({
     readOnly,
     onOpenProfile,
     lineageIds,
+    markedIds = EMPTY_MARKED_IDS,
     femaleLineage,
     markFemaleLineage,
     collapseDepth,
@@ -133,6 +283,8 @@ function TreeBranch({
     alternativeTrees: DescendantsAlternativeTree[];
     nodeIdPrefix: string;
     lineageIds: ReadonlySet<string>;
+    /** People highlighted by the "Koneksi" feature. */
+    markedIds?: ReadonlySet<string>;
     femaleLineage: boolean;
     markFemaleLineage: boolean;
     collapseDepth?: number;
@@ -160,7 +312,7 @@ function TreeBranch({
     );
     const alternativePanelId = `${nodeIdPrefix}-${person.id}-alternatives`;
     const isCenter = person.id === centerId;
-    const isHighlighted = person.id === highlightId;
+    const isHighlighted = person.id === highlightId || markedIds.has(person.id);
     // A searched lineage must remain visible even when this branch was
     // previously collapsed. The target itself is included so every ancestor
     // required to reach it is rendered for the red path overlay.
@@ -234,6 +386,7 @@ function TreeBranch({
             alternativeTrees={alternativeTrees}
             nodeIdPrefix={nodeIdPrefix}
             lineageIds={lineageIds}
+            markedIds={markedIds}
             femaleLineage={
                 leafSiblingsFemaleLineage || leaf.gender?.toUpperCase() === 'P'
             }
@@ -429,6 +582,7 @@ function TreeBranch({
                                 alternativeTrees={alternativeTrees}
                                 nodeIdPrefix={nodeIdPrefix}
                                 lineageIds={lineageIds}
+                                markedIds={markedIds}
                                 femaleLineage={
                                     femaleLineage ||
                                     child.gender?.toUpperCase() === 'P'
@@ -487,18 +641,15 @@ function TreeBranch({
                                 </button>
                             ))}
                         </div>
-                        <DescendantsTree
+                        <AlternativeTreeView
                             key={activeAlternative.id}
-                            people={activeAlternative.people}
-                            centerId={activeAlternative.rootId}
+                            tree={activeAlternative}
                             onSelect={onSelect}
                             highlightId={highlightId}
                             editNodes={editNodes}
                             selectOnClick={selectOnClick}
                             showProfileOnName={showProfileOnName}
-                            hideRoot
                             nodeIdPrefix={`${nodeIdPrefix}-alternative-${activeAlternative.id}`}
-                            lineagePath={[]}
                             markFemaleLineage={markFemaleLineage}
                             showNodeAvatar={showNodeAvatar}
                             showBranchToggles={showBranchToggles}
@@ -539,14 +690,51 @@ export function DescendantsTree({
     compactTerminalBranches = false,
     packCollapsed = false,
     scrollToLineageEnd = false,
+    foldedId = null,
+    connectionPaths = EMPTY_CONNECTION_PATHS,
 }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [profilePerson, setProfilePerson] = useState<TaromboPerson | null>(
         null,
     );
     const [lineageLines, setLineageLines] = useState<LineageLine[]>([]);
+    const [connectionLines, setConnectionLines] = useState<LineageLine[]>([]);
     const [overlaySize, setOverlaySize] = useState({ width: 0, height: 0 });
-    const lineageIds = useMemo(() => new Set(lineagePath), [lineagePath]);
+    // Everyone on the red lineage or a "Koneksi" path stays unfolded so the
+    // lines can reach them.
+    const connectionIds = useMemo(
+        () => new Set(connectionPaths.flat()),
+        [connectionPaths],
+    );
+    // The searched person ends the lineage folded unless a "Koneksi" path
+    // still has to pass through them.
+    const lineageEndId = lineagePath[lineagePath.length - 1];
+    const foldedEndId =
+        foldedId && foldedId === lineageEndId && !connectionIds.has(foldedId)
+            ? foldedId
+            : null;
+    const lineageIds = useMemo(() => {
+        const ids = new Set([...lineagePath, ...connectionIds]);
+
+        if (foldedEndId) {
+            ids.delete(foldedEndId);
+        }
+
+        return ids;
+    }, [lineagePath, connectionIds, foldedEndId]);
+    // The common ancestor and both connected people.
+    const markedIds = useMemo(
+        () =>
+            connectionPaths.length > 0
+                ? new Set(
+                      connectionPaths.flatMap((path) => [
+                          path[0],
+                          path[path.length - 1],
+                      ]),
+                  )
+                : EMPTY_MARKED_IDS,
+        [connectionPaths],
+    );
     const childrenOf = useMemo(() => {
         const map = new Map<string, TaromboPerson[]>();
 
@@ -607,9 +795,9 @@ export function DescendantsTree({
             const children = childrenOf.get(id) ?? [];
 
             if (
-                depth >= (collapseDepth ?? 3) &&
                 children.length > 0 &&
-                !lineageIds.has(id)
+                (id === foldedEndId ||
+                    (depth >= (collapseDepth ?? 3) && !lineageIds.has(id)))
             ) {
                 initial.add(id);
             }
@@ -655,54 +843,61 @@ export function DescendantsTree({
             const scaleY = container.offsetHeight
                 ? containerRect.height / container.offsetHeight
                 : 1;
-            const lines: LineageLine[] = [];
+            // One elbow segment per parent → child step of a top-down path.
+            const segmentsFor = (path: readonly string[]) => {
+                const lines: LineageLine[] = [];
 
-            for (let index = 0; index < lineagePath.length - 1; index += 1) {
-                const parentId = lineagePath[index];
-                const childId = lineagePath[index + 1];
-                const parent = document.getElementById(
-                    `${nodeIdPrefix}-${parentId}`,
-                );
-                const child = document.getElementById(
-                    `${nodeIdPrefix}-${childId}`,
-                );
+                for (let index = 0; index < path.length - 1; index += 1) {
+                    const parentId = path[index];
+                    const childId = path[index + 1];
+                    const parent = document.getElementById(
+                        `${nodeIdPrefix}-${parentId}`,
+                    );
+                    const child = document.getElementById(
+                        `${nodeIdPrefix}-${childId}`,
+                    );
 
-                if (
-                    !parent ||
-                    !child ||
-                    !container.contains(parent) ||
-                    !container.contains(child)
-                ) {
-                    continue;
+                    if (
+                        !parent ||
+                        !child ||
+                        !container.contains(parent) ||
+                        !container.contains(child)
+                    ) {
+                        continue;
+                    }
+
+                    const parentRect = parent.getBoundingClientRect();
+                    const childRect = child.getBoundingClientRect();
+                    const startX =
+                        (parentRect.left +
+                            parentRect.width / 2 -
+                            containerRect.left) /
+                        scaleX;
+                    const startY =
+                        (parentRect.bottom - containerRect.top) / scaleY;
+                    const endX =
+                        (childRect.left +
+                            childRect.width / 2 -
+                            containerRect.left) /
+                        scaleX;
+                    const endY = (childRect.top - containerRect.top) / scaleY;
+                    const middleY = startY + (endY - startY) / 2;
+
+                    lines.push({
+                        id: `${parentId}-${childId}`,
+                        path: `M ${startX} ${startY} V ${middleY} H ${endX} V ${endY}`,
+                    });
                 }
 
-                const parentRect = parent.getBoundingClientRect();
-                const childRect = child.getBoundingClientRect();
-                const startX =
-                    (parentRect.left +
-                        parentRect.width / 2 -
-                        containerRect.left) /
-                    scaleX;
-                const startY = (parentRect.bottom - containerRect.top) / scaleY;
-                const endX =
-                    (childRect.left +
-                        childRect.width / 2 -
-                        containerRect.left) /
-                    scaleX;
-                const endY = (childRect.top - containerRect.top) / scaleY;
-                const middleY = startY + (endY - startY) / 2;
-
-                lines.push({
-                    id: `${parentId}-${childId}`,
-                    path: `M ${startX} ${startY} V ${middleY} H ${endX} V ${endY}`,
-                });
-            }
+                return lines;
+            };
 
             setOverlaySize({
                 width: container.scrollWidth,
                 height: container.scrollHeight,
             });
-            setLineageLines(lines);
+            setLineageLines(segmentsFor(lineagePath));
+            setConnectionLines(connectionPaths.flatMap(segmentsFor));
         };
 
         const frame = window.requestAnimationFrame(updateLines);
@@ -715,12 +910,22 @@ export function DescendantsTree({
             observer.disconnect();
             window.removeEventListener('resize', updateLines);
         };
-    }, [collapsed, lineagePath, nodeIdPrefix, packCollapsed, people]);
+    }, [
+        collapsed,
+        connectionPaths,
+        lineagePath,
+        nodeIdPrefix,
+        packCollapsed,
+        people,
+    ]);
 
+    // A connection is centred on the common ancestor where its paths meet.
     const focusTargetId =
-        scrollToLineageEnd && lineagePath.length > 1
-            ? lineagePath[lineagePath.length - 1]
-            : null;
+        connectionPaths.length > 0
+            ? connectionPaths[0][0]
+            : scrollToLineageEnd && lineagePath.length > 1
+              ? lineagePath[lineagePath.length - 1]
+              : null;
 
     useEffect(() => {
         if (!focusTargetId) {
@@ -757,7 +962,7 @@ export function DescendantsTree({
 
     return (
         <div ref={containerRef} className="relative w-max min-w-full pb-4">
-            {lineageLines.length > 0 && (
+            {(lineageLines.length > 0 || connectionLines.length > 0) && (
                 <svg
                     aria-hidden="true"
                     className="pointer-events-none absolute top-0 left-0 z-10 overflow-visible"
@@ -775,6 +980,19 @@ export function DescendantsTree({
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeWidth="2"
+                        />
+                    ))}
+                    {connectionLines.map((line) => (
+                        <path
+                            key={`connection-${line.id}`}
+                            d={line.path}
+                            fill="none"
+                            style={{
+                                stroke: 'var(--tb-connection-color, #2563eb)',
+                            }}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="3"
                         />
                     ))}
                 </svg>
@@ -803,6 +1021,7 @@ export function DescendantsTree({
                             alternativeTrees={alternativeTrees}
                             nodeIdPrefix={nodeIdPrefix}
                             lineageIds={lineageIds}
+                            markedIds={markedIds}
                             femaleLineage={root.gender?.toUpperCase() === 'P'}
                             markFemaleLineage={markFemaleLineage}
                             collapseDepth={collapseDepth}
@@ -862,6 +1081,7 @@ export function DescendantsTree({
                                             alternativeTrees={alternativeTrees}
                                             nodeIdPrefix={nodeIdPrefix}
                                             lineageIds={lineageIds}
+                                            markedIds={markedIds}
                                             femaleLineage={
                                                 root.gender?.toUpperCase() ===
                                                 'P'
@@ -923,6 +1143,7 @@ export function DescendantsTree({
                                             alternativeTrees={alternativeTrees}
                                             nodeIdPrefix={nodeIdPrefix}
                                             lineageIds={lineageIds}
+                                            markedIds={markedIds}
                                             femaleLineage={
                                                 root.gender?.toUpperCase() ===
                                                 'P'

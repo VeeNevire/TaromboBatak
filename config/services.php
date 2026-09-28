@@ -7,6 +7,24 @@ return [
         'image_model' => env('OPENAI_IMAGE_MODEL', 'gpt-image-1.5'),
     ],
 
+    // Shared secret of the news agent for api/berita-marga/* (pull-based agent).
+    'marga_news' => [
+        'agent_token' => env('MARGA_NEWS_AGENT_TOKEN'),
+    ],
+
+    // Hermes-style run/poll agent server (push-based: Laravel calls Hermes),
+    // kept alive by Supervisor on the agent's VPS.
+    // "Must match API_SERVER_KEY" on Hermes's own .env — that key is
+    // MARGA_NEWS_AGENT_TOKEN above, since Hermes calls api/berita-marga/masuk.
+    'hermes' => [
+        'base_url' => env('HERMES_BASE_URL'),
+        'token' => env('HERMES_TOKEN'),
+        'runs_endpoint' => env('HERMES_RUNS_ENDPOINT', '/runs'),
+        'timeout' => env('HERMES_TIMEOUT', 90),
+        'run_timeout' => env('HERMES_RUN_TIMEOUT', 300),
+        'poll_seconds' => env('HERMES_POLL_SECONDS', 2),
+    ],
+
     'google' => [
         'client_id' => env('GOOGLE_CLIENT_ID'),
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),

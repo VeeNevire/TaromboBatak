@@ -34,7 +34,7 @@ test('staff can open an upper or lower marga tree for its identity person', func
                 ->where('margaTree.identityPersonId', (string) $identity->id)
                 ->where('margaTree.direction', $direction)
                 ->where(
-                    'selectedTreePeople.0.shareCode',
+                    'people.0.shareCode',
                     app(PersonShareCode::class)->for($direction === 'upper' ? $root : $identity),
                 )
                 ->where('people.0.id', (string) ($direction === 'upper' ? $root->id : $identity->id)));
@@ -327,5 +327,77 @@ test('marga tree exposes an empty account silsilah list when the account owns no
         ]))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
+            ->where('accountTreePersonIds', []));
+});
+
+test('marga tree account silsilah members include people inherited from the based-on tree', function () {
+    $marga = Marga::factory()->create();
+    $viewer = User::factory()->withMarga($marga->id)->create();
+    $otherOwner = User::factory()->withMarga($marga->id)->create();
+    $identity = Person::factory()->create([
+        'marga_id' => $marga->id,
+        'gender' => 'L',
+    ]);
+    $inheritedMember = Person::factory()->create([
+        'name' => 'Anggota Pohon Dasar',
+        'marga_id' => $marga->id,
+        'gender' => 'L',
+    ]);
+    $versionMember = Person::factory()->create([
+        'name' => 'Anggota Versi Akun',
+        'marga_id' => $marga->id,
+        'gender' => 'L',
+    ]);
+    $marga->update(['identity_person_id' => $identity->id]);
+
+    $source = FamilyTree::create([
+        'user_id' => $otherOwner->id,
+        'root_person_id' => $inheritedMember->id,
+        'name' => 'Pohon Dasar Akun Lain',
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $source->id,
+        'person_id' => $inheritedMember->id,
+        'chain' => '1',
+    ]);
+    $version = FamilyTree::create([
+        'user_id' => $viewer->id,
+        'root_person_id' => $inheritedMember->id,
+        'based_on_id' => $source->id,
+        'name' => 'Versi Milik Akun',
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $version->id,
+        'person_id' => $versionMember->id,
+    ]);
+
+    MargaAccessRequest::create([
+        'requester_id' => $viewer->id,
+        'marga_id' => $marga->id,
+        'status' => MargaAccessRequest::STATUS_APPROVED,
+    ]);
+
+    $this->actingAs($viewer)
+        ->get(route('tarombo.fullscreen', [
+            'view' => 'tree',
+            'marga_id' => $marga->id,
+            'marga_direction' => 'lower',
+        ]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('accountTreePersonIds', [
+                (string) $inheritedMember->id,
+                (string) $versionMember->id,
+            ]));
+
+    // Only the lower marga tree uses the list, so an account tree skips it.
+    $this->actingAs($viewer)
+        ->get(route('tarombo.fullscreen', [
+            'view' => 'tree',
+            'family_tree' => $version->id,
+        ]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('selectedFamilyTreeId', $version->id)
             ->where('accountTreePersonIds', []));
 });

@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Models\ChatGroupMember;
 use App\Models\ContactRequest;
 use App\Models\GroupMessage;
+use App\Models\MargaNews;
 use App\Models\Message;
 use App\Notifications\EventSubmitted;
 use App\Notifications\FamilyTreeDeletionSubmitted;
@@ -106,6 +107,10 @@ class HandleInertiaRequests extends Middleware
                                 ->whereColumn("{$messages}.created_at", '>', "{$memberships}.created_at"))))
                     ->count();
             },
+            // News found by the agent that still waits for staff review.
+            'pendingMargaNewsCount' => fn (): int => $request->user()?->isStaff()
+                ? MargaNews::query()->where('status', MargaNews::STATUS_PENDING)->count()
+                : 0,
             'unreadNewsFeedCount' => fn () => $request->user() === null
                 ? 0
                 : app(NewsFeedService::class)->unreadCount($request->user()),

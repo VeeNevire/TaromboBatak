@@ -92,7 +92,6 @@ class MargaController extends Controller
             'familyTreeOptions' => [],
             'selectedFamilyTreeId' => null,
             'selectedMargaId' => $marga->id,
-            'selectedTreePeople' => $rows,
             'margaTree' => [
                 'margaName' => $marga->name,
                 'identityPersonId' => $marga->identity_person_id !== null

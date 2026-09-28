@@ -1414,6 +1414,65 @@ test('the create form uses the marga identity tree for its lower lineage list', 
             ->where('margaLineage.0.children.0.chain', '2'));
 });
 
+test('the create form lineage lists only the sons of each marga identity in birth order', function () {
+    $marga = Marga::factory()->create(['name' => 'Silalahi']);
+    $identity = Person::factory()->create([
+        'name' => 'Raja Silahisabungan',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+    ]);
+    $secondSon = Person::factory()->create([
+        'name' => 'Anak Kedua',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'father_id' => $identity->id,
+        'birth_order' => 2,
+    ]);
+    Person::factory()->create([
+        'name' => 'Boru Silalahi',
+        'gender' => 'P',
+        'marga_id' => $marga->id,
+        'father_id' => $identity->id,
+        'birth_order' => 1,
+    ]);
+    $unnumberedSon = Person::factory()->create([
+        'name' => 'Anak Tanpa Urutan',
+        'gender' => null,
+        'marga_id' => null,
+        'father_id' => $identity->id,
+        'birth_order' => null,
+    ]);
+    $firstSon = Person::factory()->create([
+        'name' => 'Anak Pertama',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'father_id' => $identity->id,
+        'birth_order' => 1,
+    ]);
+    $marga->update(['identity_person_id' => $identity->id]);
+
+    $femaleIdentityMarga = Marga::factory()->create(['name' => 'Boru Identitas']);
+    $femaleIdentity = Person::factory()->create([
+        'gender' => 'P',
+        'marga_id' => $femaleIdentityMarga->id,
+    ]);
+    $femaleIdentityMarga->update(['identity_person_id' => $femaleIdentity->id]);
+
+    $this->actingAs($this->admin)
+        ->get(route('people.create'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('margaLineage', 1)
+            ->where('margaLineage.0.id', $identity->id)
+            ->where('margaLineage.0.marga', 'Silalahi')
+            ->where('margaLineage.0.children', fn ($children) => collect($children)->pluck('id')->all() === [
+                $firstSon->id,
+                $secondSon->id,
+                $unnumberedSon->id,
+            ])
+            ->where('margaLineage.0.children.2.marga', 'Batak'));
+});
+
 test('connected families reuse the existing tree while disconnected families create a new tree', function () {
     $marga = Marga::factory()->create(['name' => 'Batak']);
     $root = Person::factory()->create([

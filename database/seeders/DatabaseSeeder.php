@@ -25,6 +25,7 @@ class DatabaseSeeder extends Seeder
 
         $this->call(TaromboSeeder::class);
         $this->call(LandingSeeder::class);
+        $this->call(MargaNewsTopicSeeder::class);
 
         $marga = Marga::where('name', 'Limbong')->first();
 

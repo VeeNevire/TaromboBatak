@@ -20,6 +20,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { ZoomableImage } from '@/components/zoomable-image';
 import { dashboard } from '@/routes';
 import tarombo from '@/routes/tarombo';
 
@@ -362,20 +363,16 @@ export default function TaromboSnapshots({
                         </div>
                     </DialogHeader>
                     {selectedSnapshot && (
-                        <div
-                            className="relative flex max-h-[78dvh] min-h-0 items-center justify-center overflow-auto rounded-xl bg-tb-surface-container select-none"
-                            onDragStart={(event) => event.preventDefault()}
+                        <ZoomableImage
+                            key={selectedSnapshot.id}
+                            src={selectedSnapshot.image_url}
+                            alt={`Tarombo ${selectedSnapshot.center_person_name ?? 'tersimpan'}`}
+                            className="h-[78dvh]"
                         >
-                            <img
-                                src={selectedSnapshot.image_url}
-                                alt={`Tarombo ${selectedSnapshot.center_person_name ?? 'tersimpan'}`}
-                                draggable={false}
-                                className="pointer-events-none max-h-[78dvh] max-w-full object-contain select-none"
-                            />
                             <span className="pointer-events-none absolute right-3 bottom-3 rounded bg-black/45 px-2 py-1 text-[10px] font-medium text-white/80 shadow-sm">
                                 Tarombo Batak · {accountName}
                             </span>
-                        </div>
+                        </ZoomableImage>
                     )}
                 </DialogContent>
             </Dialog>

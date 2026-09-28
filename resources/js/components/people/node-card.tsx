@@ -124,6 +124,7 @@ export function NodeCard({
                                 : 'Tampilkan jalur silsilah'
                             : undefined
                     }
+                    data-node-fill
                     onClick={handleAvatarClick}
                     onDoubleClick={handleAvatarDoubleClick}
                     onKeyDown={(event) => {
@@ -168,6 +169,7 @@ export function NodeCard({
                     onNameClick ? `Lihat ringkasan ${node.name}` : undefined
                 }
                 title={onNameClick ? 'Lihat ringkasan anggota' : undefined}
+                data-node-fill
                 onClick={onNameClick}
                 onKeyDown={(event) => {
                     if (
@@ -179,18 +181,18 @@ export function NodeCard({
                     }
                 }}
                 className={cn(
-                 compact
-    ? cn(
-          narrow && 'w-full',
-          'mt-0.5 rounded-md border px-1 py-0.5 text-center text-[length:var(--tb-name-size,8px)] leading-tight font-semibold',
-      )
-    : cn(
-          showAvatar ? 'mt-2' : 'mt-0',
-          narrow ? 'w-full px-1' : 'px-2',
-          'rounded-md border py-1 text-center text-[length:var(--tb-name-size,11px)] leading-snug font-semibold',
-      ),
-node.claimed &&
-    'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300',
+                    compact
+                        ? cn(
+                              narrow && 'w-full',
+                              'mt-0.5 rounded-md border px-1 py-0.5 text-center text-[length:var(--tb-name-size,8px)] leading-tight font-semibold',
+                          )
+                        : cn(
+                              showAvatar ? 'mt-2' : 'mt-0',
+                              narrow ? 'w-full px-1' : 'px-2',
+                              'rounded-md border py-1 text-center text-[length:var(--tb-name-size,11px)] leading-snug font-semibold',
+                          ),
+                    node.claimed &&
+                        'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300',
                     dashed && 'border-dashed',
                     onNameClick &&
                         'cursor-pointer hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#B8934A] focus-visible:outline-none',

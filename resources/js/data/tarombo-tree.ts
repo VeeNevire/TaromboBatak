@@ -90,11 +90,11 @@ export type RegionLocation = {
     village: string | null;
 };
 
+/** An alternative version's people are loaded when the version is opened. */
 export type TaromboAlternativeTreeRow = {
     id: number;
     name: string;
     rootPersonId: string;
-    people: TaromboPersonRow[];
 };
 
 export type MargaInfo = {

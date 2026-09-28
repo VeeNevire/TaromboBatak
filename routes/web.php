@@ -25,6 +25,8 @@ use App\Http\Controllers\KomunitasController;
 use App\Http\Controllers\MargaBranchEntryController;
 use App\Http\Controllers\MargaChatController;
 use App\Http\Controllers\MargaController;
+use App\Http\Controllers\MargaNewsController;
+use App\Http\Controllers\MargaNewsTopicController;
 use App\Http\Controllers\MessageAttachmentController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\MessageLogController;
@@ -58,6 +60,9 @@ Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard'
 
 Route::get('dashboard/news-feed', [NewsFeedController::class, 'index'])
     ->name('news-feed.index');
+
+Route::get('berita-marga', [MargaNewsController::class, 'index'])
+    ->name('marga-news.index');
 
 Route::get('status/{feedPost}', [StatusController::class, 'show'])
     ->name('news-feed.statuses.show');
@@ -213,6 +218,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('dashboard/tarombo/full/{view}', [TaromboController::class, 'fullscreen'])
         ->where('view', 'diagram|tree')
         ->name('tarombo.fullscreen');
+    Route::get('dashboard/tarombo/alternative-trees/{familyTree}', [TaromboController::class, 'alternativeTree'])
+        ->name('tarombo.alternative-trees.show');
     Route::get('dashboard/tarombo/snapshots', [TaromboSnapshotController::class, 'index'])
         ->name('tarombo.snapshots.index');
     Route::post('dashboard/tarombo/snapshots', [TaromboSnapshotController::class, 'store'])
@@ -269,6 +276,12 @@ Route::middleware(['auth'])->group(function () {
 });
 
 Route::middleware(['auth', 'role.staff'])->group(function () {
+    Route::get('dashboard/berita-marga/review', [MargaNewsController::class, 'review'])
+        ->name('marga-news.review');
+    Route::post('dashboard/berita-marga/review', [MargaNewsController::class, 'decide'])
+        ->name('marga-news.decide');
+    Route::put('dashboard/berita-marga/{margaNews}/margas', [MargaNewsController::class, 'updateMargas'])
+        ->name('marga-news.margas.update');
     Route::delete('people/{person}', [PersonController::class, 'destroy'])->name('people.destroy');
 
     Route::get('people/{person}/preview', [PersonController::class, 'preview'])->name('people.preview');
@@ -285,6 +298,10 @@ Route::get('monitor-traffic', [TrafficMonitorController::class, 'publicReport'])
 Route::middleware(['auth', 'role.admin'])->group(function () {
     Route::get('dashboard/monitor-traffic', [TrafficMonitorController::class, 'index'])
         ->name('traffic-monitor.index');
+    Route::resource('dashboard/berita-marga/topik', MargaNewsTopicController::class)
+        ->only(['index', 'store', 'update', 'destroy'])
+        ->parameters(['topik' => 'topic'])
+        ->names('marga-news-topics');
     Route::resource('dashboard/tarombo/frames', TaromboFrameController::class)
         ->except(['create', 'show', 'edit'])
         ->parameters(['frames' => 'taromboFrame'])
