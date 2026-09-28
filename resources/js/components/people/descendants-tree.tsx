@@ -161,6 +161,7 @@ function AlternativeTreeView({
     | 'showNodeAvatar'
     | 'showBranchToggles'
     | 'showSpouseNames'
+    | 'showSpouseMargas'
 > & {
     tree: DescendantsAlternativeTree;
     nodeIdPrefix: string;
