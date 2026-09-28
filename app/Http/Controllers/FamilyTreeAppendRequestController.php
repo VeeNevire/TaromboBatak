@@ -6,6 +6,7 @@ use App\Http\Requests\ReviewContributionRequest;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeAppendRequest;
 use App\Services\FamilyTreeActivityLogger;
+use App\Services\FamilyTreeDescendantSyncService;
 use App\Services\SharedFamilyTreeAppendService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,11 +20,12 @@ class FamilyTreeAppendRequestController extends Controller
         Request $request,
         FamilyTreeAppendRequest $appendRequest,
         SharedFamilyTreeAppendService $appendService,
+        FamilyTreeDescendantSyncService $descendantSync,
     ): RedirectResponse {
         $tree = $appendRequest->familyTree;
         Gate::authorize('manage', $tree);
 
-        $memberName = DB::transaction(function () use ($request, $appendRequest, $appendService): string {
+        $person = DB::transaction(function () use ($request, $appendRequest, $appendService) {
             $appendRequest = FamilyTreeAppendRequest::query()
                 ->lockForUpdate()
                 ->findOrFail($appendRequest->id);
@@ -45,8 +47,11 @@ class FamilyTreeAppendRequestController extends Controller
                 'rejection_reason' => null,
             ]);
 
-            return $person->name;
+            return $person;
         });
+
+        $descendantSync->syncTreesForNewDescendant($tree, $person);
+        $memberName = $person->name;
 
         Inertia::flash('toast', ['type' => 'success', 'message' => "$memberName berhasil ditambahkan ke silsilah."]);
         app(FamilyTreeActivityLogger::class)->log(

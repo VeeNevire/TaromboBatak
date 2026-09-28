@@ -5,6 +5,7 @@ import {
     Copy,
     ExternalLink,
     GitBranch,
+    ListOrdered,
     MapPin,
     LoaderCircle,
     Pencil,
@@ -14,6 +15,7 @@ import {
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { FamilyBranchDialog } from '@/components/people/family-branch-dialog';
+import { MargaSiblingOrderDialog } from '@/components/people/marga-sibling-order-dialog';
 import { PersonImage } from '@/components/people/person-image';
 import { Button } from '@/components/ui/button';
 import {
@@ -46,6 +48,8 @@ export function PersonSummaryDialog({
     currentUserId,
     versionTreeId,
     allowBranchEntry = false,
+    margaId,
+    canReorderSiblings = false,
 }: {
     person: TaromboPerson | null;
     people: TaromboPerson[];
@@ -53,14 +57,27 @@ export function PersonSummaryDialog({
     currentUserId?: number;
     versionTreeId?: number | null;
     allowBranchEntry?: boolean;
+    margaId?: number;
+    canReorderSiblings?: boolean;
 }) {
     const [connectingAccountId, setConnectingAccountId] = useState<
         number | null
     >(null);
     const [branchDialogOpen, setBranchDialogOpen] = useState(false);
+    const [siblingOrderDialogOpen, setSiblingOrderDialogOpen] = useState(false);
     const father = person?.parentId
         ? people.find((candidate) => candidate.id === person.parentId)
         : undefined;
+    const siblings = person?.parentId
+        ? people
+              .filter(
+                  (candidate) =>
+                      candidate.parentId === person.parentId &&
+                      (!candidate.gender ||
+                          candidate.gender.toUpperCase() === 'L'),
+              )
+              .sort((a, b) => (a.birthOrder ?? 0) - (b.birthOrder ?? 0))
+        : [];
     const fatherName = father?.name ?? person?.fatherName ?? null;
     const fatherMarga = father?.marga ?? person?.fatherMarga ?? null;
     const childCandidates = person
@@ -517,6 +534,22 @@ export function PersonSummaryDialog({
                                     Anggota Ranting
                                 </Button>
                             )}
+                            {canReorderSiblings &&
+                                margaId !== undefined &&
+                                person.parentId &&
+                                father &&
+                                siblings.length > 1 && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() =>
+                                            setSiblingOrderDialogOpen(true)
+                                        }
+                                    >
+                                        <ListOrdered className="size-4" />
+                                        Atur Urutan Abang–Adik
+                                    </Button>
+                                )}
                             <Button asChild variant="outline">
                                 <Link
                                     href={peopleRoutes.show(
@@ -601,6 +634,19 @@ export function PersonSummaryDialog({
                     }}
                 />
             )}
+            {person &&
+                margaId !== undefined &&
+                father &&
+                canReorderSiblings && (
+                    <MargaSiblingOrderDialog
+                        key={`${person.id}-${siblingOrderDialogOpen ? 'open' : 'closed'}`}
+                        open={siblingOrderDialogOpen}
+                        onOpenChange={setSiblingOrderDialogOpen}
+                        margaId={margaId}
+                        father={{ id: Number(father.id), name: father.name }}
+                        siblings={siblings}
+                    />
+                )}
         </Dialog>
     );
 }

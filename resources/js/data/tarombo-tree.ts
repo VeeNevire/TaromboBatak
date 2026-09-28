@@ -42,6 +42,7 @@ export type ClaimedAccount = {
 export type TaromboSpouse = {
     id: string;
     name: string;
+    marga?: string | null;
     fatherName?: string | null;
     fatherMarga?: string | null;
 };

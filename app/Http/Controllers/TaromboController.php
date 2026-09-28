@@ -274,11 +274,14 @@ class TaromboController extends Controller
             ->all();
 
         $margaTree = $selectedMarga instanceof Marga ? [
+            'margaId' => $selectedMarga->id,
             'margaName' => $selectedMarga->name,
             'identityPersonId' => $selectedMarga->identity_person_id !== null
                 ? (string) $selectedMarga->identity_person_id
                 : null,
             'direction' => $direction,
+            'canReorderSiblings' => $user->isStaff()
+                || ($user->isContributor() && $user->accessibleMargaIds()->contains($selectedMarga->id)),
         ] : null;
 
         $identityRequest = IdentityRequest::query()

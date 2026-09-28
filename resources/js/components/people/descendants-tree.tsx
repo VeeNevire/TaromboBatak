@@ -31,6 +31,9 @@ type Props = {
     showNodeAvatar?: boolean;
     showBranchToggles?: boolean;
     showSpouseNames?: boolean;
+    showSpouseMargas?: boolean;
+    siblingOrderMargaId?: number;
+    canReorderSiblings?: boolean;
     allowBranchEntry?: boolean;
     compactTerminalBranches?: boolean;
     packCollapsed?: boolean;
@@ -82,6 +85,9 @@ function toNode(person: TaromboPerson, displayNumber?: number): TreeNode {
         pending: person.pending,
         claimed: (person.claimedAccounts?.length ?? 0) > 0,
         spouses: person.spouses?.map((spouse) => spouse.name),
+        spouseMargas: person.spouses
+            ?.map((spouse) => spouse.marga ?? spouse.fatherMarga)
+            .filter((marga): marga is string => Boolean(marga)),
     };
 }
 
@@ -108,6 +114,7 @@ function TreeBranch({
     showNodeAvatar,
     showBranchToggles = true,
     showSpouseNames,
+    showSpouseMargas = false,
     compactTerminalBranches,
     alternativeTrees,
     nodeIdPrefix,
@@ -140,6 +147,7 @@ function TreeBranch({
     showNodeAvatar?: boolean;
     showBranchToggles?: boolean;
     showSpouseNames?: boolean;
+    showSpouseMargas?: boolean;
     compactTerminalBranches?: boolean;
     /** Packed siblings born after this one, drawn to the right of its card. */
     leafSiblings?: TaromboPerson[];
@@ -243,6 +251,7 @@ function TreeBranch({
             showNodeAvatar={showNodeAvatar}
             showBranchToggles={showBranchToggles}
             showSpouseNames={showSpouseNames}
+            showSpouseMargas={showSpouseMargas}
             compactTerminalBranches={compactTerminalBranches}
             packCollapsed={packCollapsed}
         />
@@ -267,6 +276,7 @@ function TreeBranch({
             dashed={markFemaleLineage && femaleLineage}
             showAvatar={showNodeAvatar}
             showSpouseNames={showSpouseNames}
+            showSpouseMargas={showSpouseMargas}
         />
     );
 
@@ -439,6 +449,7 @@ function TreeBranch({
                                 showNodeAvatar={showNodeAvatar}
                                 showBranchToggles={showBranchToggles}
                                 showSpouseNames={showSpouseNames}
+                                showSpouseMargas={showSpouseMargas}
                                 compactTerminalBranches={
                                     compactTerminalBranches
                                 }
@@ -503,6 +514,7 @@ function TreeBranch({
                             showNodeAvatar={showNodeAvatar}
                             showBranchToggles={showBranchToggles}
                             showSpouseNames={showSpouseNames}
+                            showSpouseMargas={showSpouseMargas}
                         />
                     </div>
                 </div>
@@ -535,6 +547,9 @@ export function DescendantsTree({
     showNodeAvatar = true,
     showBranchToggles = true,
     showSpouseNames = false,
+    showSpouseMargas = false,
+    siblingOrderMargaId,
+    canReorderSiblings = false,
     allowBranchEntry = false,
     compactTerminalBranches = false,
     packCollapsed = false,
@@ -810,6 +825,7 @@ export function DescendantsTree({
                             showNodeAvatar={showNodeAvatar}
                             showBranchToggles={showBranchToggles}
                             showSpouseNames={showSpouseNames}
+                            showSpouseMargas={showSpouseMargas}
                             compactTerminalBranches={compactTerminalBranches}
                             packCollapsed={packCollapsed}
                         />
@@ -876,6 +892,7 @@ export function DescendantsTree({
                                                 showBranchToggles
                                             }
                                             showSpouseNames={showSpouseNames}
+                                            showSpouseMargas={showSpouseMargas}
                                             compactTerminalBranches={
                                                 compactTerminalBranches
                                             }
@@ -937,6 +954,7 @@ export function DescendantsTree({
                                                 showBranchToggles
                                             }
                                             showSpouseNames={showSpouseNames}
+                                            showSpouseMargas={showSpouseMargas}
                                             packCollapsed={packCollapsed}
                                         />
                                     </ul>
@@ -954,6 +972,8 @@ export function DescendantsTree({
                     currentUserId={currentUserId}
                     versionTreeId={versionTreeId}
                     allowBranchEntry={allowBranchEntry}
+                    margaId={siblingOrderMargaId}
+                    canReorderSiblings={canReorderSiblings}
                 />
             )}
         </div>

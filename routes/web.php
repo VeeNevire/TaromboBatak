@@ -25,6 +25,7 @@ use App\Http\Controllers\KomunitasController;
 use App\Http\Controllers\MargaBranchEntryController;
 use App\Http\Controllers\MargaChatController;
 use App\Http\Controllers\MargaController;
+use App\Http\Controllers\MargaSiblingOrderController;
 use App\Http\Controllers\MessageAttachmentController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\MessageLogController;
@@ -111,6 +112,8 @@ Route::get('regions/villages/{districtCode}', [IndonesiaRegionController::class,
 Route::middleware(['auth'])->group(function () {
     Route::post('marga-branch-entries/{person}', [MargaBranchEntryController::class, 'store'])
         ->name('marga-branch-entries.store');
+    Route::post('margas/{marga}/sibling-order', [MargaSiblingOrderController::class, 'update'])
+        ->name('margas.sibling-order.update');
     Route::get('dashboard/log-pesan', [MessageLogController::class, 'index'])
         ->name('message-logs.index');
     Route::get('dashboard/marga/{marga}/chat', [MargaChatController::class, 'show'])

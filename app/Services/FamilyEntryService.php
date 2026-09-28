@@ -866,6 +866,12 @@ class FamilyEntryService
                 $this->applyYears($parent, $data);
                 $this->applyAlias($parent, $data);
 
+                $targetMargaId = $forcedMargaId ?? $margaId;
+
+                if ($targetMargaId !== null && $parent->marga_id !== $targetMargaId) {
+                    $parent->update(['marga_id' => $targetMargaId]);
+                }
+
                 return $parent;
             }
         }

@@ -29,9 +29,11 @@ type Props = {
     familyName: string | null;
     treeSettings: TreeSettings | null;
     margaTree: {
+        margaId: number;
         margaName: string;
         identityPersonId: string | null;
         direction: 'upper' | 'lower';
+        canReorderSiblings: boolean;
     } | null;
 };
 
