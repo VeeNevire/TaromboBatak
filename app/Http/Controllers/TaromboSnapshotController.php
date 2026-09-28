@@ -122,13 +122,18 @@ class TaromboSnapshotController extends Controller
 
         abort_if($path === false, 500, 'Gambar pohon gagal disimpan.');
 
+        // The save dialog (title, resolution, paper, branches) is reserved for
+        // admin and sub-admin accounts; everyone else saves the tree as shown.
+        $isStaff = $request->user()->isStaff();
+
         $request->user()->taromboSnapshots()->create([
             'center_person_id' => $request->validated('center_person_id'),
             'view' => $request->validated('view'),
-            'title' => $request->validated('title'),
-            'resolution' => $request->validated('resolution'),
-            'paper_size' => $request->validated('paper_size'),
-            'included_person_ids' => $request->validated('included_person_ids'),
+            'title' => $isStaff ? $request->validated('title') : null,
+            'resolution' => $isStaff ? $request->validated('resolution') : null,
+            'paper_size' => $isStaff ? $request->validated('paper_size') : null,
+            'orientation' => $isStaff ? $request->validated('orientation') : null,
+            'included_person_ids' => $isStaff ? $request->validated('included_person_ids') : null,
             'path' => $path,
         ]);
 

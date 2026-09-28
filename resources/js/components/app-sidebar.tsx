@@ -5,6 +5,7 @@ import {
     BellRing,
     CalendarDays,
     History,
+    Globe,
     Images,
     LayoutGrid,
     MessageCircle,
@@ -13,6 +14,7 @@ import {
     Newspaper,
     Shapes,
     ShieldCheck,
+    Tags,
     ScrollText,
     TreePine,
     Users,
@@ -40,6 +42,8 @@ import familyTreeActivities from '@/routes/family-tree-activities';
 import familyTrees from '@/routes/family-trees';
 import groups from '@/routes/groups';
 import marga from '@/routes/marga';
+import margaNews from '@/routes/marga-news';
+import margaNewsTopics from '@/routes/marga-news-topics';
 import messageLogs from '@/routes/message-logs';
 import newsFeed from '@/routes/news-feed';
 import people from '@/routes/people';
@@ -61,6 +65,7 @@ export function AppSidebar() {
         unreadGroupMessageCount,
         unreadNewsFeedCount,
         unreadMargaMessageCount,
+        pendingMargaNewsCount,
     } = usePage().props;
     const isAdmin = auth.user?.role === 'admin';
     const isStaff = isAdmin || auth.user?.role === 'subadmin';
@@ -82,6 +87,11 @@ export function AppSidebar() {
                     href: newsFeed.index(),
                     icon: Newspaper,
                     badge: unreadNewsFeedCount,
+                },
+                {
+                    title: 'Berita Marga-Marga',
+                    href: margaNews.index(),
+                    icon: Globe,
                 },
                 {
                     title: 'Daftar Marga',
@@ -160,6 +170,12 @@ export function AppSidebar() {
                               icon: CalendarDays,
                               badge: unreadEventCount,
                           },
+                          {
+                              title: 'Review Berita Marga',
+                              href: margaNews.review(),
+                              icon: Newspaper,
+                              badge: pendingMargaNewsCount,
+                          },
                       ],
                   } satisfies NavGroup,
               ]
@@ -211,6 +227,11 @@ export function AppSidebar() {
                               title: 'Daftar Silsilah Milik Akun',
                               href: familyTrees.index(),
                               icon: TreePine,
+                          },
+                          {
+                              title: 'Topik Berita Marga',
+                              href: margaNewsTopics.index(),
+                              icon: Tags,
                           },
                           {
                               title: 'Template Frame Tarombo',

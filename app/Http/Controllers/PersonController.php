@@ -290,57 +290,56 @@ class PersonController extends Controller
         $margaIds = $isStaff
             ? null
             : ($user->isContributor() ? $user->accessibleMargaIds() : $this->visibleMargaIds($user));
-        $treeService = app(TaromboTreeService::class);
+        $isPatrilineal = fn (Person $person): bool => $person->gender === 'L' || $person->gender === null;
 
-        return Marga::query()
+        $margas = Marga::query()
             ->when($margaIds !== null, fn ($query) => $query->whereIn('id', $margaIds))
             ->whereNotNull('identity_person_id')
             ->with('identityPerson.marga')
             ->orderBy('name')
-            ->get()
-            ->map(function (Marga $marga) use ($treeService, $canBrowseMarga, $user, $margaIds) {
+            ->get();
+
+        // Only each identity and its direct sons are listed, so read them all
+        // at once instead of building a full tree per marga.
+        $sonsByFather = Person::query()
+            ->whereIn('father_id', $margas->pluck('identity_person_id'))
+            ->with('marga:id,name')
+            ->get(['id', 'name', 'gender', 'marga_id', 'father_id', 'chain', 'birth_order'])
+            ->filter($isPatrilineal)
+            ->groupBy('father_id');
+
+        $visibleIds = $canBrowseMarga ? null : Person::query()
+            ->whereKey($margas->pluck('identity_person_id')->merge($sonsByFather->flatten(1)->pluck('id')))
+            ->when($margaIds !== null, fn ($query) => $query->whereIn('marga_id', $margaIds))
+            ->tap(fn ($query) => $this->scopePeopleVisibleToUser($query, $user))
+            ->pluck('id')
+            ->flip();
+        $isVisible = fn (Person $person): bool => $visibleIds === null || $visibleIds->has($person->id);
+
+        return $margas
+            ->map(function (Marga $marga) use ($sonsByFather, $isPatrilineal, $isVisible) {
                 $identity = $marga->identityPerson;
 
-                if ($identity === null) {
-                    return null;
-                }
-
-                $rows = collect($treeService->rowsForPerson($identity))
-                    ->filter(fn (array $row) => ($row['gender'] ?? null) === 'L' || ($row['gender'] ?? null) === null);
-
-                if (! $canBrowseMarga) {
-                    $visibleIds = Person::query()
-                        ->whereKey($rows->pluck('id')->map(fn ($id) => (int) $id))
-                        ->when($margaIds !== null, fn ($query) => $query->whereIn('marga_id', $margaIds))
-                        ->tap(fn ($query) => $this->scopePeopleVisibleToUser($query, $user))
-                        ->pluck('id')
-                        ->map(fn ($id) => (string) $id)
-                        ->all();
-                    $rows = $rows->whereIn('id', $visibleIds);
-                }
-
-                $root = $rows->firstWhere('id', (string) $identity->id);
-
-                if ($root === null) {
+                if ($identity === null || ! $isPatrilineal($identity) || ! $isVisible($identity)) {
                     return null;
                 }
 
                 return [
-                    'id' => (int) $root['id'],
-                    'name' => $root['name'],
+                    'id' => $identity->id,
+                    'name' => $identity->name,
                     'marga_id' => $marga->id,
-                    'marga' => $root['marga'],
-                    'chain' => $root['chain'],
-                    'children' => $rows
-                        ->filter(fn (array $row) => $row['parentId'] === (string) $identity->id)
-                        ->sortBy(fn (array $row) => [$row['birthOrder'] ?? PHP_INT_MAX, (int) $row['id']])
-                        ->map(fn (array $child) => [
-                            'id' => (int) $child['id'],
-                            'name' => $child['name'],
-                            'gender' => $child['gender'],
-                            'marga' => $child['marga'],
-                            'chain' => $child['chain'],
-                            'birth_order' => $child['birthOrder'],
+                    'marga' => $identity->marga->name ?? 'Batak',
+                    'chain' => $identity->chain,
+                    'children' => $sonsByFather->get($identity->id, collect())
+                        ->filter($isVisible)
+                        ->sortBy(fn (Person $child) => [$child->birth_order ?? PHP_INT_MAX, $child->id])
+                        ->map(fn (Person $child) => [
+                            'id' => $child->id,
+                            'name' => $child->name,
+                            'gender' => $child->gender,
+                            'marga' => $child->marga->name ?? 'Batak',
+                            'chain' => $child->chain,
+                            'birth_order' => $child->birth_order,
                         ])
                         ->values()
                         ->all(),
@@ -620,24 +619,17 @@ class PersonController extends Controller
         $familyTrees = FamilyTree::query()
             ->whereHas('nodes', fn ($query) => $query->where('person_id', $person->id))
             ->when(! $request->user()->isStaff(), fn ($query) => $query->where('user_id', $request->user()->id))
-            ->with([
-                'user:id,name',
-                'rootPerson:id,name,marga_id',
-                'nodes.person:id,name',
-                'shares.recipient:id,name,email',
-                'contributionRequests:id,family_tree_id,status',
-                'appendRequests' => fn ($query) => $query
-                    ->where('status', FamilyTreeAppendRequest::STATUS_PENDING)
-                    ->with('requester:id,name'),
-            ])
+            ->with('rootPerson:id,name')
             ->latest('updated_at')
-            ->get();
+            ->get(['id', 'root_person_id', 'name', 'updated_at']);
 
         if ($familyTrees->count() === 1) {
             return to_route('family-trees.show', $familyTrees->first());
         }
 
         if ($familyTrees->isNotEmpty()) {
+            $summaries = $this->familyTreeSummaries($familyTrees);
+
             return Inertia::render('people/tree-selector', [
                 'person' => [
                     'id' => $person->id,
@@ -645,8 +637,8 @@ class PersonController extends Controller
                 ],
                 'familyTrees' => $familyTrees->map(fn (FamilyTree $tree) => [
                     'id' => $tree->id,
-                    'name' => $tree->name ?? $this->familyTreeRootName($tree) ?? 'Silsilah',
-                    'rootName' => $this->familyTreeRootName($tree),
+                    'name' => $tree->name ?? $summaries[$tree->id]['root_name'] ?? 'Silsilah',
+                    'rootName' => $summaries[$tree->id]['root_name'],
                     'updatedAt' => $tree->updated_at->toISOString(),
                 ])->all(),
             ]);
@@ -1841,7 +1833,7 @@ class PersonController extends Controller
      */
     protected function familyTrees(User $user, ?Person $focus = null): array
     {
-        return FamilyTree::query()
+        $trees = FamilyTree::query()
             ->when(! $user->isAdmin(), fn ($query) => $query->where(fn ($access) => $access
                 ->whereBelongsTo($user)
                 ->orWhereHas('shares', fn ($shares) => $shares
@@ -1855,7 +1847,6 @@ class PersonController extends Controller
             ->with([
                 'user:id,name',
                 'rootPerson:id,name,marga_id',
-                'nodes.person:id,name',
                 'shares.recipient:id,name,email',
                 'contributionRequests:id,family_tree_id,status',
                 'appendRequests' => fn ($query) => $query
@@ -1867,8 +1858,11 @@ class PersonController extends Controller
             ->latest('updated_at')
             ->get(['id', 'user_id', 'root_person_id', 'name', 'source_name', 'is_primary', 'updated_at'])
             ->filter(fn (FamilyTree $tree) => $tree->rootPerson !== null)
-            ->map(fn (FamilyTree $tree): array => $this->familyTreeHistoryEntry($tree, $user))
-            ->values()
+            ->values();
+        $summaries = $this->familyTreeSummaries($trees);
+
+        return $trees
+            ->map(fn (FamilyTree $tree): array => $this->familyTreeHistoryEntry($tree, $user, $summaries[$tree->id]))
             ->all();
     }
 
@@ -1919,22 +1913,19 @@ class PersonController extends Controller
             ->all();
     }
 
-    /** @return array<string, mixed> */
-    protected function familyTreeHistoryEntry(FamilyTree $tree, User $user): array
+    /**
+     * @param  array{member_person_ids: array<int, int>, root_name: string|null}  $summary
+     * @return array<string, mixed>
+     */
+    protected function familyTreeHistoryEntry(FamilyTree $tree, User $user, array $summary): array
     {
         $canManage = $user->isStaff() || $tree->user_id === $user->id;
 
         return [
             'id' => $tree->id,
             'root_person_id' => $tree->root_person_id,
-            'member_person_ids' => $tree->nodes
-                ->pluck('person_id')
-                ->push($tree->root_person_id)
-                ->map(fn ($personId) => (int) $personId)
-                ->unique()
-                ->values()
-                ->all(),
-            'root_name' => $this->familyTreeRootName($tree),
+            'member_person_ids' => $summary['member_person_ids'],
+            'root_name' => $summary['root_name'],
             'name' => $tree->name,
             'source_name' => $tree->source_name,
             'is_primary' => $tree->is_primary,
@@ -2045,30 +2036,66 @@ class PersonController extends Controller
         return compact('shareableAccounts', 'pendingTreeShares');
     }
 
-    protected function familyTreeRootName(FamilyTree $tree): ?string
+    /**
+     * Member person ids and the display root name of each tree. The root name
+     * is the person at the top of the father-node path above the configured
+     * root. Plain node rows are read once for all trees instead of hydrating
+     * every node and person of every tree.
+     *
+     * @param  Collection<int, FamilyTree>  $trees  with rootPerson loaded
+     * @return array<int, array{member_person_ids: array<int, int>, root_name: string|null}>
+     */
+    protected function familyTreeSummaries(Collection $trees): array
     {
-        if ($tree->root_person_id === null) {
-            return null;
-        }
+        $nodesByTree = FamilyTreeNode::query()
+            ->whereIn('family_tree_id', $trees->modelKeys())
+            ->toBase()
+            ->get(['id', 'family_tree_id', 'person_id', 'father_node_id'])
+            ->groupBy('family_tree_id');
+        $topPersonIds = [];
 
-        $tree->loadMissing(['rootPerson:id,name', 'nodes.person:id,name']);
+        foreach ($trees as $tree) {
+            $nodes = $nodesByTree->get($tree->id, collect());
+            $nodesById = $nodes->keyBy('id');
+            $node = $nodes->firstWhere('person_id', $tree->root_person_id);
+            $visited = [];
 
-        $nodesById = $tree->nodes->keyBy('id');
-        $node = $tree->nodes->firstWhere('person_id', $tree->root_person_id);
-        $visited = [];
+            while ($node !== null && $node->father_node_id !== null && ! isset($visited[$node->id])) {
+                $visited[$node->id] = true;
+                $father = $nodesById->get($node->father_node_id);
 
-        while ($node !== null && $node->father_node_id !== null && ! isset($visited[$node->id])) {
-            $visited[$node->id] = true;
-            $father = $nodesById->get($node->father_node_id);
+                if ($father === null) {
+                    break;
+                }
 
-            if ($father === null) {
-                break;
+                $node = $father;
             }
 
-            $node = $father;
+            $topPersonIds[$tree->id] = $node?->person_id;
         }
 
-        return $node?->person?->name ?? $tree->rootPerson->name;
+        $names = Person::query()->whereKey(array_filter($topPersonIds))->pluck('name', 'id');
+        $summaries = [];
+
+        foreach ($trees as $tree) {
+            $topPersonId = $topPersonIds[$tree->id];
+            $topName = $topPersonId !== null ? $names->get($topPersonId) : null;
+
+            $summaries[$tree->id] = [
+                'member_person_ids' => $nodesByTree->get($tree->id, collect())
+                    ->pluck('person_id')
+                    ->push($tree->root_person_id)
+                    ->map(fn ($personId) => (int) $personId)
+                    ->unique()
+                    ->values()
+                    ->all(),
+                'root_name' => $tree->root_person_id !== null
+                    ? ($topName ?? $tree->rootPerson?->name)
+                    : null,
+            ];
+        }
+
+        return $summaries;
     }
 
     /**

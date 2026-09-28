@@ -42,6 +42,7 @@ export type ClaimedAccount = {
 export type TaromboSpouse = {
     id: string;
     name: string;
+    marga?: string | null;
     fatherName?: string | null;
     fatherMarga?: string | null;
 };
@@ -90,11 +91,11 @@ export type RegionLocation = {
     village: string | null;
 };
 
+/** An alternative version's people are loaded when the version is opened. */
 export type TaromboAlternativeTreeRow = {
     id: number;
     name: string;
     rootPersonId: string;
-    people: TaromboPersonRow[];
 };
 
 export type MargaInfo = {

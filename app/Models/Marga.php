@@ -46,6 +46,12 @@ class Marga extends Model
         return $this->hasMany(Person::class);
     }
 
+    /** @return BelongsToMany<MargaNews, $this> */
+    public function news(): BelongsToMany
+    {
+        return $this->belongsToMany(MargaNews::class, 'marga_marga_news');
+    }
+
     /** @return BelongsTo<Person, $this> */
     public function identityPerson(): BelongsTo
     {

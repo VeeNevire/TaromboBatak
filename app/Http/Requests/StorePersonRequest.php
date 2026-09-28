@@ -9,6 +9,11 @@ use Illuminate\Validation\Rule;
 
 class StorePersonRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $this->normalizeFamilyGenders();
+    }
+
     /**
      * Get the validation rules that apply to the request.
      *
@@ -20,7 +25,7 @@ class StorePersonRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'family_tree_name' => ['nullable', 'string', 'max:120'],
             'alias' => ['nullable', 'string', 'max:255'],
-            'gender' => ['nullable', 'string', 'max:1'],
+            'gender' => ['nullable', Rule::in(['L', 'P'])],
             'marga_id' => ['nullable', 'exists:margas,id'],
             'province_code' => ['nullable', 'string', 'size:2'],
             'regency_code' => ['nullable', 'string', 'size:5'],
@@ -87,7 +92,7 @@ class StorePersonRequest extends FormRequest
             'children.*.id' => ['nullable', 'exists:people,id'],
             'children.*.name' => ['nullable', 'string', 'max:255'],
             'children.*.alias' => ['nullable', 'string', 'max:255'],
-            'children.*.gender' => ['nullable', 'string', 'max:1'],
+            'children.*.gender' => ['nullable', Rule::in(['L', 'P'])],
             'children.*.marga_id' => ['nullable', 'exists:margas,id'],
             'children.*.new_marga' => ['nullable', 'string', 'max:255'],
             'children.*.spouse' => ['nullable', 'string', 'max:255'],
@@ -96,7 +101,7 @@ class StorePersonRequest extends FormRequest
             'ownChildren.*.id' => ['nullable', 'exists:people,id'],
             'ownChildren.*.name' => ['nullable', 'string', 'max:255'],
             'ownChildren.*.alias' => ['nullable', 'string', 'max:255'],
-            'ownChildren.*.gender' => ['nullable', 'string', 'max:1'],
+            'ownChildren.*.gender' => ['nullable', Rule::in(['L', 'P'])],
             'ownChildren.*.marga_id' => ['nullable', 'exists:margas,id'],
             'ownChildren.*.new_marga' => ['nullable', 'string', 'max:255'],
             'ownChildren.*.spouse' => ['nullable', 'string', 'max:255'],
@@ -135,5 +140,37 @@ class StorePersonRequest extends FormRequest
         $rules['regency_code'][] = 'required_with:province_code,district_code,village_code';
         $rules['district_code'][] = 'required_with:province_code,regency_code,village_code';
         $rules['village_code'][] = 'required_with:province_code,regency_code,district_code';
+    }
+
+    private function normalizeFamilyGenders(): void
+    {
+        $normalize = static function (mixed $gender): mixed {
+            if (! is_string($gender)) {
+                return $gender;
+            }
+
+            return match (mb_strtolower(trim($gender))) {
+                'l', 'laki-laki', 'laki laki', 'pria' => 'L',
+                'p', 'perempuan', 'wanita' => 'P',
+                default => $gender,
+            };
+        };
+
+        $merge = ['gender' => $normalize($this->input('gender'))];
+
+        foreach (['children', 'ownChildren'] as $field) {
+            $rows = $this->input($field);
+
+            if (is_array($rows)) {
+                $merge[$field] = array_map(
+                    fn (mixed $row) => is_array($row) && array_key_exists('gender', $row)
+                        ? [...$row, 'gender' => $normalize($row['gender'])]
+                        : $row,
+                    $rows,
+                );
+            }
+        }
+
+        $this->merge($merge);
     }
 }

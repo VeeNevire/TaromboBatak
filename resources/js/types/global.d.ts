@@ -20,6 +20,7 @@ declare module '@inertiajs/core' {
             unreadGroupMessageCount: number;
             unreadNewsFeedCount: number;
             unreadMargaMessageCount: number;
+            pendingMargaNewsCount: number;
             [key: string]: unknown;
         };
     }

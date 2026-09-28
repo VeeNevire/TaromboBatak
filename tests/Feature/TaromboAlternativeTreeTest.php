@@ -36,15 +36,15 @@ test('tarombo defaults to the signed in accounts primary family tree', function 
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->where('selectedFamilyTreeId', $primary->id)
-            ->has('selectedTreePeople', 1)
-            ->where('selectedTreePeople.0.id', (string) $primaryRoot->id));
+            ->has('people', 1)
+            ->where('people.0.id', (string) $primaryRoot->id));
 
     $this->actingAs($owner)
         ->get(route('tarombo.fullscreen', ['view' => 'tree']))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->where('selectedFamilyTreeId', $primary->id)
-            ->has('selectedTreePeople', 1));
+            ->has('people', 1));
 });
 
 test('tarombo modal payload includes the father of a linked wife', function () {
@@ -75,8 +75,8 @@ test('tarombo modal payload includes the father of a linked wife', function () {
         ]))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('selectedTreePeople.0.spouses.0.name', $wife->name)
-            ->where('selectedTreePeople.0.spouses.0.fatherName', $wifeFather->name));
+            ->where('people.0.spouses.0.name', $wife->name)
+            ->where('people.0.spouses.0.fatherName', $wifeFather->name));
 });
 
 test('a linked wife opens a close family tree with her father, siblings, and children', function () {
@@ -139,7 +139,7 @@ test('tarombo defaults to the most recently updated account family tree when no 
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->where('selectedFamilyTreeId', $newer->id)
-            ->where('selectedTreePeople.0.id', (string) $newerRoot->id));
+            ->where('people.0.id', (string) $newerRoot->id));
 });
 
 test('tarombo is empty when the account has no account or approved marga tree', function () {
@@ -152,7 +152,7 @@ test('tarombo is empty when the account has no account or approved marga tree', 
             ->where('selectedFamilyTreeId', null)
             ->where('selectedMargaId', null)
             ->where('familyTreeOptions', [])
-            ->where('selectedTreePeople', [])
+            ->missing('selectedTreePeople')
             ->where('people', []));
 });
 
@@ -310,13 +310,55 @@ test('tarombo includes female branches from alternative tree versions for the ve
             ->where('alternativeTrees.0.id', $alternative->id)
             ->where('alternativeTrees.0.name', 'Versi Alternatif')
             ->where('alternativeTrees.0.rootPersonId', (string) $root->id)
-            ->has('alternativeTrees.0.people', 4)
-            ->where('alternativeTrees.0.people.1.id', (string) $son->id)
-            ->where('alternativeTrees.0.people.1.parentId', (string) $root->id)
-            ->where('alternativeTrees.0.people.2.id', (string) $daughter->id)
-            ->where('alternativeTrees.0.people.2.gender', 'P')
-            ->where('alternativeTrees.0.people.3.id', (string) $disconnectedSon->id)
-            ->where('alternativeTrees.0.people.3.parentId', (string) $daughter->id));
+            ->missing('alternativeTrees.0.people'));
+
+    $this->actingAs($admin)
+        ->getJson(route('tarombo.alternative-trees.show', $alternative))
+        ->assertOk()
+        ->assertJsonCount(4, 'people')
+        ->assertJsonPath('people.1.id', (string) $son->id)
+        ->assertJsonPath('people.1.parentId', (string) $root->id)
+        ->assertJsonPath('people.2.id', (string) $daughter->id)
+        ->assertJsonPath('people.2.gender', 'P')
+        ->assertJsonPath('people.3.id', (string) $disconnectedSon->id)
+        ->assertJsonPath('people.3.parentId', (string) $daughter->id);
+});
+
+test('an alternative tree version only loads for accounts that can open it', function () {
+    $marga = Marga::factory()->create();
+    $owner = User::factory()->withMarga($marga->id)->create();
+    $viewer = User::factory()->withMarga($marga->id)->create();
+    $root = Person::factory()->create(['gender' => 'L', 'marga_id' => $marga->id]);
+    $source = FamilyTree::create([
+        'user_id' => $owner->id,
+        'root_person_id' => $root->id,
+    ]);
+    $alternative = FamilyTree::create([
+        'user_id' => $owner->id,
+        'root_person_id' => $root->id,
+        'based_on_id' => $source->id,
+    ]);
+    FamilyTreeNode::create(['family_tree_id' => $source->id, 'person_id' => $root->id]);
+
+    $this->actingAs($viewer)
+        ->getJson(route('tarombo.alternative-trees.show', $alternative))
+        ->assertForbidden();
+
+    $this->actingAs($owner)
+        ->getJson(route('tarombo.alternative-trees.show', $source))
+        ->assertForbidden();
+
+    FamilyTreeShare::create([
+        'family_tree_id' => $alternative->id,
+        'sender_id' => $owner->id,
+        'recipient_id' => $viewer->id,
+        'status' => FamilyTreeShare::STATUS_ACCEPTED,
+    ]);
+
+    $this->actingAs($viewer)
+        ->getJson(route('tarombo.alternative-trees.show', $alternative))
+        ->assertOk()
+        ->assertJsonPath('people.0.id', (string) $root->id);
 });
 
 test('an account tree includes only people stored in that tree', function () {
@@ -555,8 +597,8 @@ test('vertical tarombo lists account and approved marga sources separately', fun
             ->where('familyTreeOptions.0.rootPersonId', $root->id)
             ->where('familyTreeOptions.1.value', 'marga:'.$marga->id)
             ->where('familyTreeOptions.1.group', 'marga')
-            ->has('selectedTreePeople', 2)
-            ->where('selectedTreePeople.1.parentId', (string) $root->id));
+            ->has('people', 2)
+            ->where('people.1.parentId', (string) $root->id));
 });
 
 test('vertical tarombo lists every tree shown in the admin account list', function () {

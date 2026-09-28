@@ -15,6 +15,14 @@ use Illuminate\Support\Facades\Auth;
 class TaromboTreeService
 {
     /**
+     * Marga ids a contributor manages, keyed by user id, so building many rows
+     * reads them once instead of once per person.
+     *
+     * @var array<int, Collection<int, int>>
+     */
+    private array $contributorMargaIds = [];
+
+    /**
      * Find the highest available ancestor for a focus person in a tree payload.
      *
      * The traversal only follows parent IDs that are present in the same tree,
@@ -65,7 +73,9 @@ class TaromboTreeService
                 'marga',
                 'father:id,name,marga_id',
                 'father.marga:id,name',
+                'wives.marga:id,name',
                 'wives.father.marga',
+                'husbands.marga:id,name',
                 'husbands.father.marga',
                 'creator:id,name,role',
                 'claimingUsers:id,name,role,current_person_id',
@@ -84,8 +94,9 @@ class TaromboTreeService
             ->with('marga:id,name')
             ->get(['id', 'name', 'marga_id'])
             ->keyBy('id');
+        $shareCodes = app(PersonShareCode::class);
 
-        return $nodes->map(function (array $node) use ($people, $includedPersonIds, $children, $fatherPersons): array {
+        return $nodes->map(function (array $node) use ($people, $includedPersonIds, $children, $fatherPersons, $shareCodes): array {
             $person = $people->get($node['person_id']);
             $nodeFatherId = $node['pending_father'] ? null : $node['father_person_id'];
             $hasFather = $nodeFatherId !== null || $person->father_id !== null;
@@ -106,7 +117,7 @@ class TaromboTreeService
             return [
                 'id' => (string) $person->id,
                 'treeNodeId' => (int) $node['node_id'],
-                'shareCode' => app(PersonShareCode::class)->for($person),
+                'shareCode' => $shareCodes->for($person),
                 'name' => $person->name,
                 'alias' => $person->alias,
                 'marga' => $person->marga->name ?? 'Batak',
@@ -154,12 +165,16 @@ class TaromboTreeService
      */
     public function rows(Builder $query, ?int $familyTreeId = null): array
     {
+        $shareCodes = app(PersonShareCode::class);
+
         return $query
             ->with([
                 'marga',
                 'father:id,name,marga_id',
                 'father.marga:id,name',
+                'wives.marga:id,name',
                 'wives.father.marga',
+                'husbands.marga:id,name',
                 'husbands.father.marga',
                 'creator:id,name,role',
                 'claimingUsers:id,name,role,current_person_id',
@@ -171,7 +186,7 @@ class TaromboTreeService
                         ->whereHas('familyTrees', fn ($query) => $query->whereKey($familyTreeId))),
             ])
             ->get()
-            ->map(function (Person $person): array {
+            ->map(function (Person $person) use ($shareCodes): array {
                 $hasFather = $person->father_id !== null;
                 $children = $person->children->isNotEmpty() ? $person->children : $person->childrenAsMother;
                 $sortedChildren = $children->sortBy('birth_year');
@@ -179,7 +194,7 @@ class TaromboTreeService
 
                 return [
                     'id' => (string) $person->id,
-                    'shareCode' => app(PersonShareCode::class)->for($person),
+                    'shareCode' => $shareCodes->for($person),
                     'name' => $person->name,
                     'alias' => $person->alias,
                     'marga' => $person->marga->name ?? 'Batak',
@@ -217,7 +232,7 @@ class TaromboTreeService
     }
 
     /**
-     * @return array<int, array{id: string, name: string, fatherName: string|null, fatherMarga: string|null}>
+     * @return array<int, array{id: string, name: string, marga: string|null, fatherName: string|null, fatherMarga: string|null}>
      */
     protected function spousesFor(Person $person): array
     {
@@ -227,6 +242,7 @@ class TaromboTreeService
             ->map(fn (Person $spouse): array => [
                 'id' => (string) $spouse->id,
                 'name' => $spouse->name,
+                'marga' => $spouse->marga?->name,
                 'fatherName' => $spouse->father?->name,
                 'fatherMarga' => $spouse->father?->marga?->name,
             ])
@@ -476,6 +492,11 @@ class TaromboTreeService
     /** @return array{province: string|null, regency: string|null, district: string|null, village: string|null} */
     private function locationFor(Person $person): array
     {
+        if ($person->province_code === null && $person->regency_code === null
+            && $person->district_code === null && $person->village_code === null) {
+            return ['province' => null, 'regency' => null, 'district' => null, 'village' => null];
+        }
+
         $province = collect(IndonesiaRegions::all())->firstWhere('code', $person->province_code);
         $regency = collect($province['regencies'] ?? [])->firstWhere('code', $person->regency_code);
         $district = collect(IndonesiaRegions::districtsFor($person->regency_code ?? ''))
@@ -545,7 +566,10 @@ class TaromboTreeService
             return true;
         }
 
-        return $person->marga_id !== null && $user->isContributorOf($person->marga_id);
+        // Same rule as User::isContributorOf(), with the managed margas cached.
+        return $person->marga_id !== null
+            && $user->isContributor()
+            && ($this->contributorMargaIds[$user->id] ??= $user->accessibleMargaIds())->contains($person->marga_id);
     }
 
     /**

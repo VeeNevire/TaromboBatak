@@ -434,6 +434,40 @@ test('a family store automatically assigns the sole wife to own children', funct
         ->toBe(Person::where('name', 'Borbor')->firstOrFail()->id);
 });
 
+test('a family store saves a daughter entered with the Perempuan label', function () {
+    $marga = Marga::factory()->create(['name' => 'Sitorus']);
+
+    $this->actingAs($this->admin)->post(route('people.store'), [
+        'name' => 'Anak Utama Sitorus',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'birth_order' => 1,
+        'sibling_count' => 1,
+        'father' => ['name' => 'Ayah Sitorus'],
+        'children' => [[
+            'name' => 'Anak Utama Sitorus',
+            'gender' => 'L',
+        ]],
+        'ownChildren' => [[
+            'name' => 'Boru Sitorus',
+            'gender' => 'Perempuan',
+        ]],
+    ])->assertRedirect(route('people.index'))
+        ->assertSessionHasNoErrors();
+
+    $father = Person::query()->where('name', 'Anak Utama Sitorus')->firstOrFail();
+    $daughter = Person::query()->where('name', 'Boru Sitorus')->firstOrFail();
+    $tree = $father->familyTrees()->firstOrFail();
+
+    expect($daughter->gender)->toBe('P')
+        ->and($daughter->father_id)->toBe($father->id)
+        ->and($daughter->marga_id)->toBe($marga->id)
+        ->and(FamilyTreeNode::query()
+            ->where('family_tree_id', $tree->id)
+            ->where('person_id', $daughter->id)
+            ->exists())->toBeTrue();
+});
+
 test('a family store requires a mother selection when there are multiple wives', function () {
     $marga = Marga::factory()->create(['name' => 'Sitorus']);
 
@@ -1412,6 +1446,65 @@ test('the create form uses the marga identity tree for its lower lineage list', 
             ->where('margaLineage.0.chain', '1')
             ->where('margaLineage.0.children.0.id', $child->id)
             ->where('margaLineage.0.children.0.chain', '2'));
+});
+
+test('the create form lineage lists only the sons of each marga identity in birth order', function () {
+    $marga = Marga::factory()->create(['name' => 'Silalahi']);
+    $identity = Person::factory()->create([
+        'name' => 'Raja Silahisabungan',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+    ]);
+    $secondSon = Person::factory()->create([
+        'name' => 'Anak Kedua',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'father_id' => $identity->id,
+        'birth_order' => 2,
+    ]);
+    Person::factory()->create([
+        'name' => 'Boru Silalahi',
+        'gender' => 'P',
+        'marga_id' => $marga->id,
+        'father_id' => $identity->id,
+        'birth_order' => 1,
+    ]);
+    $unnumberedSon = Person::factory()->create([
+        'name' => 'Anak Tanpa Urutan',
+        'gender' => null,
+        'marga_id' => null,
+        'father_id' => $identity->id,
+        'birth_order' => null,
+    ]);
+    $firstSon = Person::factory()->create([
+        'name' => 'Anak Pertama',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'father_id' => $identity->id,
+        'birth_order' => 1,
+    ]);
+    $marga->update(['identity_person_id' => $identity->id]);
+
+    $femaleIdentityMarga = Marga::factory()->create(['name' => 'Boru Identitas']);
+    $femaleIdentity = Person::factory()->create([
+        'gender' => 'P',
+        'marga_id' => $femaleIdentityMarga->id,
+    ]);
+    $femaleIdentityMarga->update(['identity_person_id' => $femaleIdentity->id]);
+
+    $this->actingAs($this->admin)
+        ->get(route('people.create'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('margaLineage', 1)
+            ->where('margaLineage.0.id', $identity->id)
+            ->where('margaLineage.0.marga', 'Silalahi')
+            ->where('margaLineage.0.children', fn ($children) => collect($children)->pluck('id')->all() === [
+                $firstSon->id,
+                $secondSon->id,
+                $unnumberedSon->id,
+            ])
+            ->where('margaLineage.0.children.2.marga', 'Batak'));
 });
 
 test('connected families reuse the existing tree while disconnected families create a new tree', function () {

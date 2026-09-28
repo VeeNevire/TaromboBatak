@@ -265,6 +265,18 @@
         animation: tb-sheen 3.6s ease-in-out infinite;
     }
 
+    /* Saved image option: initials and name boxes without their fill. */
+    [data-transparent-node-fill] [data-node-fill] {
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+
+    /* Over the tree's own background the text must follow the theme. */
+    [data-transparent-node-fill='contrast'] [data-node-fill],
+    [data-transparent-node-fill='contrast'] [data-node-fill] * {
+        color: var(--color-tb-on-surface) !important;
+    }
+
     .tb-tree {
         --tb-link: 14px;
         display: flex;

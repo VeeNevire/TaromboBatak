@@ -1,5 +1,5 @@
-import { Link, router } from '@inertiajs/react';
-import { toJpeg, toPng } from 'html-to-image';
+import { Link, router, usePage } from '@inertiajs/react';
+import { toCanvas } from 'html-to-image';
 import {
     ArrowLeft,
     Check,
@@ -55,6 +55,7 @@ import type {
     TaromboPerson,
     TaromboPersonRow,
 } from '@/data/tarombo-tree';
+import { useMediaQuery } from '@/hooks/use-media-query';
 import { cn } from '@/lib/utils';
 import type { TaromboFamilyTreeOption } from '@/pages/tarombo';
 import identityRequests from '@/routes/identity-requests';
@@ -90,19 +91,24 @@ type Props = {
     familyTreeOptions: TaromboFamilyTreeOption[];
     selectedFamilyTreeId: number | null;
     selectedMargaId: number | null;
-    selectedTreePeople: TaromboPersonRow[] | null;
     accountTreePersonIds?: string[];
     familyName?: string | null;
     treeSettings?: TreeSettings | null;
     margaTree?: {
+        margaId: number;
         margaName: string;
         identityPersonId: string | null;
         direction: 'upper' | 'lower';
+        canReorderSiblings: boolean;
     } | null;
 };
 
 // Generations shown before a branch collapses in the lower marga tree.
 const MARGA_LOWER_DEPTH = 5;
+
+// Generations below the center drawn by the radial diagram (center + 3 = 4
+// rings). Clicking a person centers the diagram on them to go deeper.
+const DIAGRAM_MAX_DEPTH = 3;
 
 const MY_PERSON_STORAGE_KEY = 'tarombo-my-person-id';
 
@@ -112,24 +118,50 @@ type StoredMyPerson = {
     marga: string;
 };
 
-function hasMargaAncestor(people: TaromboPerson[], personId: string): boolean {
+/**
+ * People who have a recorded marga themselves or through a father line.
+ * Each walk up the father line stores its answer for every person it passed,
+ * so the whole list is checked in one pass instead of one walk per person.
+ */
+function peopleWithMargaAncestor(people: TaromboPerson[]): TaromboPerson[] {
     const byId = new Map(people.map((person) => [person.id, person]));
-    const visited = new Set<string>();
-    let current = byId.get(personId);
+    const known = new Map<string, boolean>();
 
-    while (current && !visited.has(current.id)) {
-        if (
-            current.hasMarga ??
-            (current.marga !== '' && current.marga !== 'Batak')
-        ) {
-            return true;
+    const hasMargaAncestor = (personId: string): boolean => {
+        const path: string[] = [];
+        const onPath = new Set<string>();
+        let current = byId.get(personId);
+        let found = false;
+
+        while (current && !onPath.has(current.id)) {
+            const cached = known.get(current.id);
+
+            if (cached !== undefined) {
+                found = cached;
+                break;
+            }
+
+            if (
+                current.hasMarga ??
+                (current.marga !== '' && current.marga !== 'Batak')
+            ) {
+                found = true;
+                break;
+            }
+
+            path.push(current.id);
+            onPath.add(current.id);
+            current = current.parentId ? byId.get(current.parentId) : undefined;
         }
 
-        visited.add(current.id);
-        current = current.parentId ? byId.get(current.parentId) : undefined;
-    }
+        for (const id of path) {
+            known.set(id, found);
+        }
 
-    return false;
+        return found;
+    };
+
+    return people.filter((person) => hasMargaAncestor(person.id));
 }
 
 function readStoredMyPerson(): StoredMyPerson | null {
@@ -226,9 +258,14 @@ function descendantSubtree(
     people: TaromboPerson[],
     rootId: string,
 ): TaromboPerson[] {
+    const byId = new Map<string, TaromboPerson>();
     const childrenOf = new Map<string, TaromboPerson[]>();
 
     for (const person of people) {
+        if (!byId.has(person.id)) {
+            byId.set(person.id, person);
+        }
+
         if (!person.parentId) {
             continue;
         }
@@ -242,16 +279,11 @@ function descendantSubtree(
     const queue = [rootId];
     const visited = new Set<string>();
 
-    while (queue.length > 0) {
-        const id = queue.shift();
+    for (let index = 0; index < queue.length; index++) {
+        const id = queue[index];
+        const person = byId.get(id);
 
-        if (!id || visited.has(id)) {
-            continue;
-        }
-
-        const person = people.find((item) => item.id === id);
-
-        if (!person) {
+        if (!person || visited.has(id)) {
             continue;
         }
 
@@ -271,18 +303,207 @@ const PAPER_SIZES: Record<string, { width: number; height: number }> = {
     A0: { width: 2384, height: 3370 },
 };
 
-const SNAPSHOT_RESOLUTIONS = [360, 480, 720, 1080, 1440, 2160, 4320];
+const FULLSCREEN_TREE_NODE_PREFIX = 'tarombo-fullscreen-tree-node';
+
+const SNAPSHOT_RESOLUTIONS = [
+    360, 480, 720, 1080, 1440, 2160, 4320, 8640, 17280,
+];
+
+type PaperOrientation = 'portrait' | 'landscape';
+
+// Browsers refuse (or silently blank) canvases beyond these sizes.
+const MAX_CANVAS_SIDE = 32767;
+const MAX_CANVAS_AREA = 250_000_000;
+
+class SnapshotTooLargeError extends Error {}
 
 function snapshotResolutionLabel(resolution: number): string {
-    if (resolution === 2160) {
-        return '2160p (4K)';
+    const labels: Record<number, string> = {
+        2160: '2160p (4K)',
+        4320: '4320p (8K)',
+        8640: '8640p (16K)',
+        17280: '17280p (32K)',
+    };
+
+    return labels[resolution] ?? `${resolution}p`;
+}
+
+/** Pixel size of the paper; the resolution is its long edge. */
+function paperPixelSize(
+    paper: string,
+    resolution: number,
+    orientation: PaperOrientation,
+): { width: number; height: number } {
+    const base = PAPER_SIZES[paper] ?? PAPER_SIZES.A4;
+    const shortEdge = Math.round(resolution * (base.width / base.height));
+
+    return orientation === 'landscape'
+        ? { width: resolution, height: shortEdge }
+        : { width: shortEdge, height: resolution };
+}
+
+/**
+ * The part of the snapshot content that is actually drawn (every visible
+ * text plus the tree's node circles), relative to the content element, so
+ * empty space around a narrow tree is left out of the image.
+ */
+function snapshotContentBox(
+    content: HTMLElement,
+    nodeSelector: string | null,
+): { x: number; y: number; width: number; height: number } {
+    const fullWidth = content.scrollWidth;
+    const fullHeight = content.scrollHeight;
+
+    if (!nodeSelector) {
+        return { x: 0, y: 0, width: fullWidth, height: fullHeight };
     }
 
-    if (resolution === 4320) {
-        return '4320p (8K)';
+    const origin = content.getBoundingClientRect();
+    const rects: DOMRect[] = [];
+
+    for (const node of content.querySelectorAll<HTMLElement>(nodeSelector)) {
+        rects.push(node.getBoundingClientRect());
     }
 
-    return `${resolution}p`;
+    const texts = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+    const range = document.createRange();
+
+    for (let text = texts.nextNode(); text; text = texts.nextNode()) {
+        const parent = text.parentElement;
+
+        if (
+            !text.textContent?.trim() ||
+            !parent ||
+            window.getComputedStyle(parent).visibility === 'hidden'
+        ) {
+            continue;
+        }
+
+        range.selectNodeContents(text);
+        rects.push(...range.getClientRects());
+    }
+
+    let left = Infinity;
+    let top = Infinity;
+    let right = -Infinity;
+    let bottom = -Infinity;
+
+    for (const rect of rects) {
+        if (rect.width === 0 && rect.height === 0) {
+            continue;
+        }
+
+        left = Math.min(left, rect.left - origin.left);
+        top = Math.min(top, rect.top - origin.top);
+        right = Math.max(right, rect.right - origin.left);
+        bottom = Math.max(bottom, rect.bottom - origin.top);
+    }
+
+    if (!Number.isFinite(left)) {
+        return { x: 0, y: 0, width: fullWidth, height: fullHeight };
+    }
+
+    // Room for label borders, pills and branch lines around the text.
+    const padding = 32;
+    const x = Math.max(0, Math.floor(left - padding));
+    const y = Math.max(0, Math.floor(top - padding));
+
+    return {
+        x,
+        y,
+        width: Math.min(fullWidth, Math.ceil(right + padding)) - x,
+        height: Math.min(fullHeight, Math.ceil(bottom + padding)) - y,
+    };
+}
+
+/**
+ * Renders the content box straight at the output size (vector text and
+ * shapes are rasterised at full resolution, never upscaled). With a paper
+ * the box is centred on it inside a small margin; without one the image is
+ * just the box at `pixelRatio`.
+ */
+async function renderSnapshot(
+    content: HTMLElement,
+    box: { x: number; y: number; width: number; height: number },
+    options: {
+        paper: { width: number; height: number } | null;
+        pixelRatio?: number;
+        backgroundColor?: string;
+        transparent: boolean;
+    },
+): Promise<Blob> {
+    let pixelRatio: number;
+    let viewWidth: number;
+    let viewHeight: number;
+
+    if (options.paper) {
+        const { width, height } = options.paper;
+        const margin = Math.round(Math.min(width, height) * 0.04);
+
+        pixelRatio = Math.min(
+            (width - margin * 2) / box.width,
+            (height - margin * 2) / box.height,
+        );
+        viewWidth = width / pixelRatio;
+        viewHeight = height / pixelRatio;
+    } else {
+        pixelRatio = options.pixelRatio ?? 2;
+        viewWidth = box.width;
+        viewHeight = box.height;
+        // Without a chosen resolution, shrink rather than fail on huge trees.
+        pixelRatio = Math.min(
+            pixelRatio,
+            MAX_CANVAS_SIDE / viewWidth,
+            MAX_CANVAS_SIDE / viewHeight,
+            Math.sqrt(MAX_CANVAS_AREA / (viewWidth * viewHeight)),
+        );
+    }
+
+    const outputWidth = viewWidth * pixelRatio;
+    const outputHeight = viewHeight * pixelRatio;
+
+    if (
+        outputWidth > MAX_CANVAS_SIDE ||
+        outputHeight > MAX_CANVAS_SIDE ||
+        outputWidth * outputHeight > MAX_CANVAS_AREA
+    ) {
+        throw new SnapshotTooLargeError();
+    }
+
+    const offsetX = (viewWidth - box.width) / 2 - box.x;
+    const offsetY = (viewHeight - box.height) / 2 - box.y;
+    const canvas = await toCanvas(content, {
+        width: viewWidth,
+        height: viewHeight,
+        pixelRatio,
+        skipAutoScale: true,
+        cacheBust: true,
+        backgroundColor: options.transparent
+            ? undefined
+            : options.backgroundColor,
+        style: {
+            width: `${content.scrollWidth}px`,
+            height: `${content.scrollHeight}px`,
+            margin: '0',
+            transform: `translate(${offsetX}px, ${offsetY}px)`,
+            transformOrigin: 'top left',
+        },
+    });
+
+    try {
+        return await new Promise<Blob>((resolve, reject) => {
+            canvas.toBlob(
+                (blob) =>
+                    blob ? resolve(blob) : reject(new SnapshotTooLargeError()),
+                options.transparent ? 'image/png' : 'image/jpeg',
+                0.92,
+            );
+        });
+    } finally {
+        // Release the (possibly huge) bitmap right away.
+        canvas.width = 0;
+        canvas.height = 0;
+    }
 }
 
 function snapshotFileName(
@@ -290,62 +511,6 @@ function snapshotFileName(
     extension: 'jpg' | 'png' = 'jpg',
 ): string {
     return `pohon-tarombo-${view}-${Date.now()}.${extension}`;
-}
-
-async function composeOnPaper(
-    dataUrl: string,
-    paper: string,
-    resolution: number,
-    transparent = false,
-): Promise<Blob> {
-    const base = PAPER_SIZES[paper] ?? PAPER_SIZES.A4;
-    const height = resolution;
-    const width = Math.round(height * (base.width / base.height));
-    const image = new Image();
-    await new Promise<void>((resolve, reject) => {
-        image.onload = () => resolve();
-        image.onerror = () => reject(new Error('gagal memuat gambar'));
-        image.src = dataUrl;
-    });
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext('2d');
-
-    if (!context) {
-        throw new Error('canvas tidak tersedia');
-    }
-
-    if (!transparent) {
-        context.fillStyle = '#ffffff';
-        context.fillRect(0, 0, width, height);
-    }
-
-    const margin = Math.round(Math.min(width, height) * 0.04);
-    const scale = Math.min(
-        (width - margin * 2) / image.width,
-        (height - margin * 2) / image.height,
-    );
-    const drawWidth = image.width * scale;
-    const drawHeight = image.height * scale;
-    context.drawImage(
-        image,
-        (width - drawWidth) / 2,
-        (height - drawHeight) / 2,
-        drawWidth,
-        drawHeight,
-    );
-
-    return await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob(
-            (blob) =>
-                blob
-                    ? resolve(blob)
-                    : reject(new Error('gagal membuat gambar')),
-            transparent ? 'image/png' : 'image/jpeg',
-            0.92,
-        );
-    });
 }
 
 export function TaromboExplorer({
@@ -359,32 +524,30 @@ export function TaromboExplorer({
     familyTreeOptions,
     selectedFamilyTreeId,
     selectedMargaId,
-    selectedTreePeople,
     accountTreePersonIds = [],
     familyName = null,
     treeSettings = null,
     margaTree = null,
 }: Props) {
-    const people = buildTaromboPeople(rows);
-    const selectedFamilyTreePeople = buildTaromboPeople(
-        selectedTreePeople ?? rows,
-    );
+    const people = useMemo(() => buildTaromboPeople(rows), [rows]);
+    const { auth } = usePage().props;
+    // Tree display controls (circles, branch arrows, style settings) are
+    // reserved for admin and sub-admin accounts.
+    const canCustomizeTree =
+        auth.user?.role === 'admin' || auth.user?.role === 'subadmin';
+    const isDesktop = useMediaQuery('(min-width: 64rem)', true);
     const selectedAccountTree = familyTreeOptions.find(
         (tree) => tree.id === selectedFamilyTreeId && tree.group === 'account',
     );
     const margaIdentity = margaTree
-        ? selectedFamilyTreePeople.find(
-              (person) => person.id === margaTree.identityPersonId,
-          )
+        ? people.find((person) => person.id === margaTree.identityPersonId)
         : undefined;
     const margaLineagePath = useMemo(() => {
         if (!margaTree || !margaIdentity) {
             return [] as TaromboPerson[];
         }
 
-        const byId = new Map(
-            selectedFamilyTreePeople.map((person) => [person.id, person]),
-        );
+        const byId = new Map(people.map((person) => [person.id, person]));
         const path: TaromboPerson[] = [];
         const visited = new Set<string>();
         let current: TaromboPerson | undefined = margaIdentity;
@@ -396,17 +559,14 @@ export function TaromboExplorer({
         }
 
         return path;
-    }, [margaIdentity, margaTree, selectedFamilyTreePeople]);
+    }, [margaIdentity, margaTree, people]);
     const margaTreePeople = useMemo(() => {
         if (!margaTree || !margaIdentity) {
-            return selectedFamilyTreePeople;
+            return people;
         }
 
         if (margaTree.direction === 'lower') {
-            return descendantSubtree(
-                selectedFamilyTreePeople,
-                margaIdentity.id,
-            ).filter(
+            return descendantSubtree(people, margaIdentity.id).filter(
                 (person) =>
                     person.id === margaIdentity.id ||
                     person.gender === 'L' ||
@@ -418,7 +578,7 @@ export function TaromboExplorer({
         const siblingIds = new Set<string>();
 
         for (const person of margaLineagePath) {
-            for (const sibling of selectedFamilyTreePeople) {
+            for (const sibling of people) {
                 if (
                     sibling.parentId === person.parentId &&
                     !lineageIds.has(sibling.id)
@@ -430,11 +590,9 @@ export function TaromboExplorer({
 
         return [
             ...margaLineagePath,
-            ...selectedFamilyTreePeople.filter((person) =>
-                siblingIds.has(person.id),
-            ),
+            ...people.filter((person) => siblingIds.has(person.id)),
         ];
-    }, [margaIdentity, margaLineagePath, margaTree, selectedFamilyTreePeople]);
+    }, [margaIdentity, margaLineagePath, margaTree, people]);
     const accountTreePersonIdSet = useMemo(
         () => new Set(accountTreePersonIds),
         [accountTreePersonIds],
@@ -445,12 +603,12 @@ export function TaromboExplorer({
         }
 
         const connectedIds = new Set(
-            descendantSubtree(selectedFamilyTreePeople, margaIdentity.id).map(
+            descendantSubtree(people, margaIdentity.id).map(
                 (person) => person.id,
             ),
         );
 
-        return selectedFamilyTreePeople.filter(
+        return people.filter(
             (person) =>
                 person.marga === margaTree.margaName &&
                 !connectedIds.has(person.id) &&
@@ -458,22 +616,18 @@ export function TaromboExplorer({
                 (accountTreePersonIdSet.size === 0 ||
                     accountTreePersonIdSet.has(person.id)),
         );
-    }, [
-        accountTreePersonIdSet,
-        margaIdentity,
-        margaTree,
-        selectedFamilyTreePeople,
-    ]);
+    }, [accountTreePersonIdSet, margaIdentity, margaTree, people]);
     const margaDetachedPeople = useMemo(
         () =>
             margaDetachedRoots.flatMap((root) =>
-                descendantSubtree(selectedFamilyTreePeople, root.id),
+                descendantSubtree(people, root.id),
             ),
-        [margaDetachedRoots, selectedFamilyTreePeople],
+        [margaDetachedRoots, people],
     );
     const rootPerson = people.find((p) => !p.parentId) ?? people[0];
-    const connectedPeople = people.filter((person) =>
-        hasMargaAncestor(people, person.id),
+    const connectedPeople = useMemo(
+        () => peopleWithMargaAncestor(people),
+        [people],
     );
     const eligiblePeople = identity?.canSelectAnyPerson
         ? connectedPeople
@@ -513,6 +667,19 @@ export function TaromboExplorer({
     const [search, setSearch] = useState('');
     const [searchedId, setSearchedId] = useState<string | null>(null);
     const [searchOpen, setSearchOpen] = useState(false);
+    // "Koneksi": a second name joined to the searched one through their
+    // nearest common ancestor.
+    const [connectionSearch, setConnectionSearch] = useState('');
+    const [connectionSearchOpen, setConnectionSearchOpen] = useState(false);
+    const [connectionTargetId, setConnectionTargetId] = useState<string | null>(
+        null,
+    );
+    const [connection, setConnection] = useState<{
+        ancestorId: string;
+        /** From the top of the tree down to the common ancestor. */
+        topPath: string[];
+        paths: string[][];
+    } | null>(null);
     const [history, setHistory] = useState<string[]>([]);
     const [expanded, setExpanded] = useState<'diagram' | 'tree' | null>(null);
     const [treeZoom, setTreeZoom] = useState(1);
@@ -529,6 +696,8 @@ export function TaromboExplorer({
     const [savingSnapshot, setSavingSnapshot] = useState(false);
     const [snapshotMode, setSnapshotMode] = useState(false);
     const snapshotRef = useRef<HTMLDivElement>(null);
+    // Heading and tree only, captured without the card's scroll viewport.
+    const snapshotContentRef = useRef<HTMLDivElement>(null);
     const [ancestorFocusId, setAncestorFocusId] = useState<string | null>(
         initialFocusId,
     );
@@ -539,7 +708,12 @@ export function TaromboExplorer({
     const [treeFamilyName, setTreeFamilyName] = useState(familyName ?? '');
     const [snapshotResolution, setSnapshotResolution] = useState(1080);
     const [snapshotPaper, setSnapshotPaper] = useState('A4');
+    const [snapshotOrientation, setSnapshotOrientation] =
+        useState<PaperOrientation>('portrait');
     const [snapshotTransparent, setSnapshotTransparent] = useState(false);
+    // Leaves the initials and name boxes without their fill in saved images.
+    const [snapshotTransparentNodes, setSnapshotTransparentNodes] =
+        useState(false);
     // `null` keeps the built-in look; otherwise the account's saved style.
     const [styleSettings, setStyleSettings] = useState<TreeSettings | null>(
         treeSettings,
@@ -614,7 +788,9 @@ export function TaromboExplorer({
                 onChange={(event) => setShowSpouseNames(event.target.checked)}
                 className="size-4 rounded border-emerald-600 text-emerald-600 accent-emerald-600 focus:ring-2 focus:ring-emerald-500/30"
             />
-            Nama Pasangan Ditampilkan
+            {margaTree?.direction === 'lower'
+                ? 'Marga Pasangan Ditampilkan'
+                : 'Nama Pasangan Ditampilkan'}
         </label>
     );
 
@@ -710,12 +886,7 @@ export function TaromboExplorer({
             id: tree.id,
             name: tree.name,
             rootId: tree.rootPersonId,
-            people: buildTaromboPeople(tree.people).filter(
-                (person) =>
-                    showFemaleLineage ||
-                    person.gender === 'L' ||
-                    !person.gender,
-            ),
+            maleLineageOnly: !showFemaleLineage,
         }));
     const [centerPersonId, setCenterPersonId] = useState<string>(
         initialFocusId ?? rootPerson?.id ?? '',
@@ -723,33 +894,29 @@ export function TaromboExplorer({
     const searchPool = margaTree
         ? [...margaTreePeople, ...margaDetachedPeople]
         : people;
+    const matchPeople = (query: string) =>
+        query
+            ? searchPool
+                  .filter((person) => person.name.toLowerCase().includes(query))
+                  .sort((a, b) => {
+                      const aStarts = a.name.toLowerCase().startsWith(query);
+                      const bStarts = b.name.toLowerCase().startsWith(query);
+
+                      if (aStarts !== bStarts) {
+                          return aStarts ? -1 : 1;
+                      }
+
+                      return a.name.localeCompare(b.name, 'id');
+                  })
+                  .slice(0, 10)
+            : [];
     const normalizedSearch = search.trim().toLowerCase();
-    const searchResults = normalizedSearch
-        ? searchPool
-              .filter((person) =>
-                  person.name.toLowerCase().includes(normalizedSearch),
-              )
-              .sort((a, b) => {
-                  const aStarts = a.name
-                      .toLowerCase()
-                      .startsWith(normalizedSearch);
-                  const bStarts = b.name
-                      .toLowerCase()
-                      .startsWith(normalizedSearch);
-
-                  if (aStarts !== bStarts) {
-                      return aStarts ? -1 : 1;
-                  }
-
-                  return a.name.localeCompare(b.name, 'id');
-              })
-              .slice(0, 10)
-        : [];
+    const searchResults = matchPeople(normalizedSearch);
+    const normalizedConnectionSearch = connectionSearch.trim().toLowerCase();
+    const connectionResults = matchPeople(normalizedConnectionSearch);
     const verticalPeople = showFemaleLineage
-        ? selectedFamilyTreePeople
-        : selectedFamilyTreePeople.filter(
-              (person) => person.gender === 'L' || !person.gender,
-          );
+        ? people
+        : people.filter((person) => person.gender === 'L' || !person.gender);
     const selectedTreeRootId = selectedAccountTree?.rootPersonId
         ? String(selectedAccountTree.rootPersonId)
         : null;
@@ -794,9 +961,7 @@ export function TaromboExplorer({
             return [] as string[];
         }
 
-        const byId = new Map(
-            selectedFamilyTreePeople.map((person) => [person.id, person]),
-        );
+        const byId = new Map(people.map((person) => [person.id, person]));
         const focus = ancestorFocusId
             ? (byId.get(ancestorFocusId) ?? margaIdentity)
             : margaIdentity;
@@ -813,13 +978,16 @@ export function TaromboExplorer({
         return path.includes(margaIdentity.id)
             ? path
             : margaLineagePath.map((person) => person.id);
-    }, [
-        ancestorFocusId,
-        margaIdentity,
-        margaLineagePath,
-        margaTree,
-        selectedFamilyTreePeople,
-    ]);
+    }, [ancestorFocusId, margaIdentity, margaLineagePath, margaTree, people]);
+    // While a "Koneksi" is shown the red lineage only runs down to the
+    // common ancestor, which also keeps every fold above it open.
+    const treeLineagePath = connection
+        ? connection.topPath
+        : margaTree?.direction === 'upper'
+          ? margaLineagePath.map((person) => person.id)
+          : margaTree?.direction === 'lower'
+            ? margaLowerLineagePath
+            : lineagePath;
     const treeCenterPerson =
         topPerson ??
         verticalPeople.find(
@@ -935,7 +1103,7 @@ export function TaromboExplorer({
             topPerson &&
             // The whole branch, women included: searching a woman switches
             // the female lineage on, so she will be drawn.
-            !descendantSubtree(selectedFamilyTreePeople, topPerson.id).some(
+            !descendantSubtree(people, topPerson.id).some(
                 (person) => person.id === personId,
             )
         ) {
@@ -959,6 +1127,83 @@ export function TaromboExplorer({
         setSearchedId(person.id);
         setSearch(person.name);
         setSearchOpen(false);
+        setConnection(null);
+    };
+
+    const connectionSelect = (person: TaromboPerson) => {
+        setConnectionTargetId(person.id);
+        setConnectionSearch(person.name);
+        setConnectionSearchOpen(false);
+        setConnection(null);
+    };
+
+    const clearConnection = () => {
+        setConnection(null);
+        setConnectionTargetId(null);
+        setConnectionSearch('');
+    };
+
+    const canConnect =
+        searchedId !== null &&
+        connectionTargetId !== null &&
+        searchedId !== connectionTargetId;
+
+    // Joins the searched name and the "Koneksi" name through the nearest
+    // ancestor they share; when one descends from the other the connection
+    // is a single straight path.
+    const handleConnect = () => {
+        if (
+            searchedId === null ||
+            connectionTargetId === null ||
+            searchedId === connectionTargetId
+        ) {
+            return;
+        }
+
+        const pathA = ancestorPath(searchPool, searchedId).map((p) => p.id);
+        const pathB = ancestorPath(searchPool, connectionTargetId).map(
+            (p) => p.id,
+        );
+        let shared = 0;
+
+        while (
+            shared < pathA.length &&
+            shared < pathB.length &&
+            pathA[shared] === pathB[shared]
+        ) {
+            shared += 1;
+        }
+
+        if (shared === 0) {
+            setConnection(null);
+            toast.error(
+                'Kedua nama tidak memiliki leluhur bersama di pohon ini.',
+            );
+
+            return;
+        }
+
+        const paths = [pathA.slice(shared - 1), pathB.slice(shared - 1)].filter(
+            (path) => path.length > 1,
+        );
+        const ancestorId = pathA[shared - 1];
+        const pathIds = new Set(paths.flat());
+
+        if (
+            !margaTree &&
+            searchPool.some(
+                (person) => pathIds.has(person.id) && person.gender === 'P',
+            )
+        ) {
+            setShowFemaleLineage(true);
+        }
+
+        resetTreeTopUnlessInBranch(ancestorId);
+        setConnection({
+            ancestorId,
+            topPath: pathA.slice(0, shared),
+            paths,
+        });
     };
 
     // Picking a name only stages it; the request reaches the coordinator once
@@ -1017,6 +1262,7 @@ export function TaromboExplorer({
         setCenterPersonId(prev);
         setAncestorFocusId(null);
         setSearch('');
+        setConnection(null);
     };
 
     const handlePersonSelect = (id: string) => {
@@ -1059,12 +1305,16 @@ export function TaromboExplorer({
         );
     };
 
-    const handleCreateSnapshot = async () => {
-        const snapshotNode = snapshotRef.current;
+    // `quick` is the one-click save of accounts without the save dialog: the
+    // tree as shown, without title, paper or branch choices.
+    const handleCreateSnapshot = async ({ quick = false } = {}) => {
+        const cardNode = snapshotRef.current;
 
-        if (!snapshotNode || savingSnapshot) {
+        if (!cardNode || savingSnapshot) {
             return;
         }
+
+        const transparent = !quick && snapshotTransparent;
 
         setSavingSnapshot(true);
         setSnapshotMode(true);
@@ -1077,39 +1327,29 @@ export function TaromboExplorer({
             );
             await document.fonts.ready;
 
-            const domHeight =
-                snapshotNode.getBoundingClientRect().height ||
-                snapshotResolution;
-            const pixelRatio = Math.min(
-                4,
-                Math.max(1, snapshotResolution / domHeight),
+            const contentNode = snapshotContentRef.current ?? cardNode;
+            const box = snapshotContentBox(
+                contentNode,
+                snapshotContentRef.current
+                    ? `[id^="${FULLSCREEN_TREE_NODE_PREFIX}-"]`
+                    : null,
             );
-
-            const dataUrl = snapshotTransparent
-                ? await toPng(snapshotNode, {
-                      pixelRatio,
-                      cacheBust: true,
-                  })
-                : await toJpeg(snapshotNode, {
-                      quality: 0.92,
-                      pixelRatio,
-                      backgroundColor:
-                          window.getComputedStyle(snapshotNode).backgroundColor,
-                      cacheBust: true,
-                  });
-            const blob = await composeOnPaper(
-                dataUrl,
-                snapshotPaper,
-                snapshotResolution,
-                snapshotTransparent,
-            );
+            const blob = await renderSnapshot(contentNode, box, {
+                paper: quick
+                    ? null
+                    : paperPixelSize(
+                          snapshotPaper,
+                          snapshotResolution,
+                          snapshotOrientation,
+                      ),
+                backgroundColor:
+                    window.getComputedStyle(cardNode).backgroundColor,
+                transparent,
+            });
             const file = new File(
                 [blob],
-                snapshotFileName(
-                    fullscreenView,
-                    snapshotTransparent ? 'png' : 'jpg',
-                ),
-                { type: snapshotTransparent ? 'image/png' : 'image/jpeg' },
+                snapshotFileName(fullscreenView, transparent ? 'png' : 'jpg'),
+                { type: transparent ? 'image/png' : 'image/jpeg' },
             );
             const includedIds = [...snapshotBranches, ...snapshotDetachedTrees]
                 .filter((branch) => !excludedBranchIds.includes(branch.id))
@@ -1117,15 +1357,24 @@ export function TaromboExplorer({
 
             router.post(
                 tarombo.snapshots.store(),
-                {
-                    image: file,
-                    view: fullscreenView,
-                    center_person_id: Number(renderedTreeCenterId) || null,
-                    title: snapshotTitle.trim() || null,
-                    resolution: snapshotResolution,
-                    paper_size: snapshotPaper,
-                    included_person_ids: includedIds,
-                },
+                quick
+                    ? {
+                          image: file,
+                          view: fullscreenView,
+                          center_person_id:
+                              Number(renderedTreeCenterId) || null,
+                      }
+                    : {
+                          image: file,
+                          view: fullscreenView,
+                          center_person_id:
+                              Number(renderedTreeCenterId) || null,
+                          title: snapshotTitle.trim() || null,
+                          resolution: snapshotResolution,
+                          paper_size: snapshotPaper,
+                          orientation: snapshotOrientation,
+                          included_person_ids: includedIds,
+                      },
                 {
                     forceFormData: true,
                     preserveScroll: true,
@@ -1134,10 +1383,12 @@ export function TaromboExplorer({
                     onFinish: () => setSavingSnapshot(false),
                 },
             );
-        } catch {
+        } catch (error) {
             setSavingSnapshot(false);
             toast.error(
-                'Tampilan pohon gagal dibuat menjadi gambar. Coba kembali.',
+                error instanceof SnapshotTooLargeError
+                    ? 'Resolusi terlalu besar untuk perangkat ini. Pilih resolusi yang lebih kecil.'
+                    : 'Tampilan pohon gagal dibuat menjadi gambar. Coba kembali.',
             );
         } finally {
             setSnapshotMode(false);
@@ -1145,7 +1396,11 @@ export function TaromboExplorer({
     };
 
     const handleSaveClick = () => {
-        setSaveModalOpen(true);
+        if (canCustomizeTree) {
+            setSaveModalOpen(true);
+        } else {
+            void handleCreateSnapshot({ quick: true });
+        }
     };
 
     const saveStyleSettings = () => {
@@ -1451,6 +1706,7 @@ export function TaromboExplorer({
                     people={diagramPeople}
                     margas={margas}
                     context="descendants"
+                    maxDepth={DIAGRAM_MAX_DEPTH}
                     allowPan={fullscreen}
                     showScrollbars={fullscreen}
                     initialScrollable={fullscreen}
@@ -1503,89 +1759,112 @@ export function TaromboExplorer({
                     !fullscreen && isExpanded && 'max-h-[70vh]',
                 )}
             >
-                <div className="relative mb-4 border-b border-tb-outline-variant pb-3">
-                    {fullscreen ? (
-                        <Link
-                            href={tarombo.index()}
-                            className={cn(
-                                'absolute top-0 left-0 inline-flex w-fit items-center gap-1.5 rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:bg-tb-surface-container',
-                                snapshotMode && 'invisible',
-                            )}
-                        >
-                            <ArrowLeft className="size-4" /> Kembali
-                        </Link>
-                    ) : (
-                        <span />
-                    )}
-                    <div className="min-w-0 px-20 text-center">
-                        <h3 className="font-display text-lg font-bold text-tb-on-surface">
-                            {verticalTreeTitle}
-                        </h3>
-                        {verticalTreeDescription && (
-                            <p className="mt-1 max-w-64 truncate text-xs text-tb-on-surface-variant">
-                                {verticalTreeDescription}
-                            </p>
-                        )}
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
-                        {(!margaTree || !fullscreen) && familyTreeSelector}
-                        {!margaTree && femaleLineageToggle}
-                        {spouseNamesToggle}
-                        {compactTreeToggle}
-                        {treeTopResetButton}
-                        {!fullscreen && nodeCircleToggle}
-                        {!fullscreen && branchArrowToggle}
-                    </div>
-                </div>
                 <div
-                    style={{
-                        zoom: treeZoom,
-                        ...(fullscreen && styleSettings
-                            ? treeSettingsStyle(styleSettings)
-                            : {}),
-                    }}
+                    ref={fullscreen ? snapshotContentRef : undefined}
+                    className="w-max min-w-full"
                 >
-                    <DescendantsTree
-                        key={`${renderedTreeCenterId}-${margaTree?.direction ?? ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
-                        people={displayPeople}
-                        centerId={renderedTreeCenterId}
-                        onSelect={margaTree ? undefined : handlePersonSelect}
-                        onMakeTop={margaTree ? undefined : handleMakeTop}
-                        highlightId={renderedHighlightId}
-                        editNodes={!margaTree}
-                        selectOnClick={!margaTree}
-                        showProfileOnName
-                        readOnly={Boolean(margaTree)}
-                        alternativeTrees={descendantAlternativeTrees}
-                        lineagePath={
-                            margaTree?.direction === 'upper'
-                                ? margaLineagePath.map((person) => person.id)
-                                : margaTree?.direction === 'lower'
-                                  ? margaLowerLineagePath
-                                  : lineagePath
+                    <div className="relative mb-4 border-b border-tb-outline-variant pb-3">
+                        {fullscreen ? (
+                            <Link
+                                href={tarombo.index()}
+                                className={cn(
+                                    'absolute top-0 left-0 inline-flex w-fit items-center gap-1.5 rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:bg-tb-surface-container',
+                                    snapshotMode && 'invisible',
+                                )}
+                            >
+                                <ArrowLeft className="size-4" /> Kembali
+                            </Link>
+                        ) : (
+                            <span />
+                        )}
+                        <div className="min-w-0 px-20 text-center">
+                            <h3 className="font-display text-lg font-bold text-tb-on-surface">
+                                {verticalTreeTitle}
+                            </h3>
+                            {verticalTreeDescription && (
+                                <p className="mt-1 max-w-64 truncate text-xs text-tb-on-surface-variant">
+                                    {verticalTreeDescription}
+                                </p>
+                            )}
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
+                            {(!margaTree || !fullscreen) && familyTreeSelector}
+                            {!margaTree && femaleLineageToggle}
+                            {spouseNamesToggle}
+                            {compactTreeToggle}
+                            {treeTopResetButton}
+                            {!fullscreen &&
+                                canCustomizeTree &&
+                                nodeCircleToggle}
+                            {!fullscreen &&
+                                canCustomizeTree &&
+                                branchArrowToggle}
+                        </div>
+                    </div>
+                    <div
+                        data-transparent-node-fill={
+                            snapshotMode && snapshotTransparentNodes
+                                ? // A transparent image keeps the usual
+                                  // ink for placing on light paper.
+                                  snapshotTransparent
+                                    ? 'plain'
+                                    : 'contrast'
+                                : undefined
                         }
-                        markFemaleLineage={
-                            margaTree ? false : showFemaleLineage
-                        }
-                        collapseDepth={verticalTreeCollapseDepth}
-                        scrollToLineageEnd={searchedId !== null}
-                        detachedPeople={displayedDetachedRoots}
-                        showNodeAvatar={showNodeCircles}
-                        showBranchToggles={showBranchToggles}
-                        showSpouseNames={showSpouseNames}
-                        allowBranchEntry={margaTree?.direction === 'lower'}
-                        compactTerminalBranches={
-                            margaTree?.direction === 'lower'
-                        }
-                        packCollapsed={compactTree}
-                        versionTreeId={selectedFamilyTreeId}
-                        compact={fullscreen}
-                        nodeIdPrefix={
-                            fullscreen
-                                ? 'tarombo-fullscreen-tree-node'
-                                : 'tarombo-desktop-tree-node'
-                        }
-                    />
+                        style={{
+                            // Saved images are always drawn at 100%.
+                            zoom: snapshotMode ? 1 : treeZoom,
+                            ...(fullscreen && canCustomizeTree && styleSettings
+                                ? treeSettingsStyle(styleSettings)
+                                : {}),
+                        }}
+                    >
+                        <DescendantsTree
+                            key={`${renderedTreeCenterId}-${margaTree?.direction ?? ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
+                            people={displayPeople}
+                            centerId={renderedTreeCenterId}
+                            onSelect={
+                                margaTree ? undefined : handlePersonSelect
+                            }
+                            onMakeTop={margaTree ? undefined : handleMakeTop}
+                            highlightId={renderedHighlightId}
+                            editNodes={!margaTree}
+                            selectOnClick={!margaTree}
+                            showProfileOnName
+                            readOnly={Boolean(margaTree)}
+                            alternativeTrees={descendantAlternativeTrees}
+                            lineagePath={treeLineagePath}
+                            connectionPaths={connection?.paths}
+                            markFemaleLineage={
+                                margaTree ? false : showFemaleLineage
+                            }
+                            collapseDepth={verticalTreeCollapseDepth}
+                            scrollToLineageEnd={searchedId !== null}
+                            foldedId={searchedId}
+                            detachedPeople={displayedDetachedRoots}
+                            showNodeAvatar={showNodeCircles}
+                            showBranchToggles={showBranchToggles}
+                            showSpouseNames={showSpouseNames}
+                            showSpouseMargas={margaTree?.direction === 'lower'}
+                            siblingOrderMargaId={margaTree?.margaId}
+                            canReorderSiblings={
+                                margaTree?.direction === 'lower' &&
+                                margaTree.canReorderSiblings
+                            }
+                            allowBranchEntry={margaTree?.direction === 'lower'}
+                            compactTerminalBranches={
+                                margaTree?.direction === 'lower'
+                            }
+                            packCollapsed={compactTree}
+                            versionTreeId={selectedFamilyTreeId}
+                            compact={fullscreen}
+                            nodeIdPrefix={
+                                fullscreen
+                                    ? FULLSCREEN_TREE_NODE_PREFIX
+                                    : 'tarombo-desktop-tree-node'
+                            }
+                        />
+                    </div>
                 </div>
                 {!margaTree &&
                     !treeHasChildren &&
@@ -1643,11 +1922,13 @@ export function TaromboExplorer({
                 </div>
                 {fullscreen && (
                     <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                        <div className="flex flex-col items-end gap-2">
-                            {nodeCircleToggle}
-                            {branchArrowToggle}
-                        </div>
-                        {fullscreenView === 'tree' && (
+                        {canCustomizeTree && (
+                            <div className="flex flex-col items-end gap-2">
+                                {nodeCircleToggle}
+                                {branchArrowToggle}
+                            </div>
+                        )}
+                        {fullscreenView === 'tree' && canCustomizeTree && (
                             <Button
                                 type="button"
                                 size="sm"
@@ -1768,73 +2049,184 @@ export function TaromboExplorer({
                     )}
                 </div>
 
-                <div
-                    className="relative mx-auto mb-4 w-full max-w-md"
-                    onBlur={(event) => {
-                        if (
-                            !event.currentTarget.contains(event.relatedTarget)
-                        ) {
-                            setSearchOpen(false);
-                        }
-                    }}
-                >
-                    <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-tb-on-surface-variant" />
-                    <Input
-                        value={search}
-                        onChange={(event) => {
-                            setSearch(event.target.value);
-                            setSearchOpen(true);
-                        }}
-                        onFocus={() => setSearchOpen(true)}
-                        onKeyDown={(event) => {
-                            if (event.key === 'Escape') {
+                <div className="mx-auto mb-4 flex w-full max-w-4xl flex-wrap items-center justify-center gap-2">
+                    <div
+                        className="relative w-full sm:w-auto sm:max-w-md sm:flex-1"
+                        onBlur={(event) => {
+                            if (
+                                !event.currentTarget.contains(
+                                    event.relatedTarget,
+                                )
+                            ) {
                                 setSearchOpen(false);
                             }
                         }}
-                        placeholder="Cari nama anggota..."
-                        aria-label="Cari nama anggota"
-                        aria-expanded={searchOpen && normalizedSearch !== ''}
-                        aria-controls="tarombo-search-results"
-                        className="border-tb-outline-variant bg-tb-surface-bright pl-9 focus:border-tb-primary focus:ring-tb-primary/20"
-                    />
-                    {searchOpen && normalizedSearch !== '' && (
-                        <div
-                            id="tarombo-search-results"
-                            role="listbox"
-                            className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-tb-outline-variant bg-tb-surface-bright p-1 shadow-lg"
-                        >
-                            {searchResults.length > 0 ? (
-                                searchResults.map((person) => (
-                                    <button
-                                        key={person.id}
-                                        type="button"
-                                        role="option"
-                                        aria-selected={
-                                            person.id === ancestorFocusId
-                                        }
-                                        onClick={() => searchSelect(person)}
-                                        className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-tb-surface-container focus-visible:bg-tb-surface-container focus-visible:outline-none"
-                                    >
-                                        <span className="min-w-0">
-                                            <span className="block truncate text-sm font-medium text-tb-on-surface">
-                                                {person.name}
+                    >
+                        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-tb-on-surface-variant" />
+                        <Input
+                            value={search}
+                            onChange={(event) => {
+                                setSearch(event.target.value);
+                                setSearchOpen(true);
+                            }}
+                            onFocus={() => setSearchOpen(true)}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Escape') {
+                                    setSearchOpen(false);
+                                }
+                            }}
+                            placeholder="Cari nama anggota..."
+                            aria-label="Cari nama anggota"
+                            aria-expanded={
+                                searchOpen && normalizedSearch !== ''
+                            }
+                            aria-controls="tarombo-search-results"
+                            className="border-tb-outline-variant bg-tb-surface-bright pl-9 focus:border-tb-primary focus:ring-tb-primary/20"
+                        />
+                        {searchOpen && normalizedSearch !== '' && (
+                            <div
+                                id="tarombo-search-results"
+                                role="listbox"
+                                className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-tb-outline-variant bg-tb-surface-bright p-1 shadow-lg"
+                            >
+                                {searchResults.length > 0 ? (
+                                    searchResults.map((person) => (
+                                        <button
+                                            key={person.id}
+                                            type="button"
+                                            role="option"
+                                            aria-selected={
+                                                person.id === ancestorFocusId
+                                            }
+                                            onClick={() => searchSelect(person)}
+                                            className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-tb-surface-container focus-visible:bg-tb-surface-container focus-visible:outline-none"
+                                        >
+                                            <span className="min-w-0">
+                                                <span className="block truncate text-sm font-medium text-tb-on-surface">
+                                                    {person.name}
+                                                </span>
+                                                <span className="block truncate text-xs text-tb-on-surface-variant">
+                                                    {person.marga ||
+                                                        'Marga belum dicatat'}
+                                                </span>
                                             </span>
-                                            <span className="block truncate text-xs text-tb-on-surface-variant">
-                                                {person.marga ||
-                                                    'Marga belum dicatat'}
+                                            <span className="shrink-0 text-[10px] font-semibold tracking-wide text-tb-primary uppercase">
+                                                Lihat leluhur
                                             </span>
-                                        </span>
-                                        <span className="shrink-0 text-[10px] font-semibold tracking-wide text-tb-primary uppercase">
-                                            Lihat leluhur
-                                        </span>
-                                    </button>
-                                ))
-                            ) : (
-                                <p className="px-3 py-4 text-center text-sm text-tb-on-surface-variant">
-                                    Nama tidak ditemukan.
-                                </p>
+                                        </button>
+                                    ))
+                                ) : (
+                                    <p className="px-3 py-4 text-center text-sm text-tb-on-surface-variant">
+                                        Nama tidak ditemukan.
+                                    </p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                    <span
+                        aria-hidden
+                        className="hidden text-lg font-semibold text-tb-on-surface-variant sm:inline"
+                    >
+                        -
+                    </span>
+                    <div
+                        className="relative w-full sm:w-56"
+                        onBlur={(event) => {
+                            if (
+                                !event.currentTarget.contains(
+                                    event.relatedTarget,
+                                )
+                            ) {
+                                setConnectionSearchOpen(false);
+                            }
+                        }}
+                    >
+                        <Input
+                            value={connectionSearch}
+                            onChange={(event) => {
+                                setConnectionSearch(event.target.value);
+                                setConnectionTargetId(null);
+                                setConnectionSearchOpen(true);
+                            }}
+                            onFocus={() => setConnectionSearchOpen(true)}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Escape') {
+                                    setConnectionSearchOpen(false);
+                                }
+                            }}
+                            placeholder="Nama"
+                            aria-label="Nama yang dihubungkan"
+                            aria-expanded={
+                                connectionSearchOpen &&
+                                normalizedConnectionSearch !== ''
+                            }
+                            aria-controls="tarombo-connection-results"
+                            className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                        />
+                        {connectionSearchOpen &&
+                            normalizedConnectionSearch !== '' && (
+                                <div
+                                    id="tarombo-connection-results"
+                                    role="listbox"
+                                    className="absolute z-30 mt-1 max-h-72 w-full min-w-64 overflow-y-auto rounded-lg border border-tb-outline-variant bg-tb-surface-bright p-1 shadow-lg"
+                                >
+                                    {connectionResults.length > 0 ? (
+                                        connectionResults.map((person) => (
+                                            <button
+                                                key={person.id}
+                                                type="button"
+                                                role="option"
+                                                aria-selected={
+                                                    person.id ===
+                                                    connectionTargetId
+                                                }
+                                                onClick={() =>
+                                                    connectionSelect(person)
+                                                }
+                                                className="flex w-full flex-col rounded-md px-3 py-2 text-left transition-colors hover:bg-tb-surface-container focus-visible:bg-tb-surface-container focus-visible:outline-none"
+                                            >
+                                                <span className="block truncate text-sm font-medium text-tb-on-surface">
+                                                    {person.name}
+                                                </span>
+                                                <span className="block truncate text-xs text-tb-on-surface-variant">
+                                                    {person.marga ||
+                                                        'Marga belum dicatat'}
+                                                </span>
+                                            </button>
+                                        ))
+                                    ) : (
+                                        <p className="px-3 py-4 text-center text-sm text-tb-on-surface-variant">
+                                            Nama tidak ditemukan.
+                                        </p>
+                                    )}
+                                </div>
                             )}
-                        </div>
+                    </div>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleConnect}
+                        disabled={!canConnect}
+                        title={
+                            canConnect
+                                ? 'Hubungkan kedua nama sampai leluhur bersama'
+                                : 'Pilih nama di kotak cari dan kotak Nama terlebih dahulu'
+                        }
+                        className="border-emerald-600 font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950"
+                    >
+                        Koneksi
+                    </Button>
+                    {connection && (
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={clearConnection}
+                            aria-label="Hapus koneksi"
+                            title="Hapus koneksi"
+                        >
+                            <X className="size-4" />
+                        </Button>
                     )}
                 </div>
 
@@ -1844,163 +2236,159 @@ export function TaromboExplorer({
                             ? renderDiagramCard(false)
                             : renderTreeCard(false)}
                     </div>
+                ) : isDesktop ? (
+                    // Desktop: side by side. Only one layout is mounted so the
+                    // tree and diagram are not also rendered in hidden tabs.
+                    expanded === null ? (
+                        <div className="hidden gap-6 lg:grid lg:grid-cols-2">
+                            {renderDiagramCard(false)}
+                            {renderTreeCard(false)}
+                        </div>
+                    ) : (
+                        <div className="hidden lg:block">
+                            {expanded === 'diagram'
+                                ? renderDiagramCard(true)
+                                : renderTreeCard(true)}
+                        </div>
+                    )
                 ) : (
-                    <>
-                        {/* Desktop: Side by side */}
-                        {expanded === null ? (
-                            <div className="hidden gap-6 lg:grid lg:grid-cols-2">
-                                {renderDiagramCard(false)}
-                                {renderTreeCard(false)}
-                            </div>
-                        ) : (
-                            <div className="hidden lg:block">
-                                {expanded === 'diagram'
-                                    ? renderDiagramCard(true)
-                                    : renderTreeCard(true)}
-                            </div>
-                        )}
-
-                        {/* Mobile: Tabs */}
-                        <div className="lg:hidden">
-                            <Tabs defaultValue="tree" className="w-full">
-                                <TabsList className="grid w-full grid-cols-2">
-                                    <TabsTrigger value="diagram">
-                                        Diagram Radial
-                                    </TabsTrigger>
-                                    <TabsTrigger value="tree">
-                                        Silsilah Pohon
-                                    </TabsTrigger>
-                                </TabsList>
-                                <TabsContent value="diagram">
-                                    <div className="rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-4">
-                                        <TaromboDiagram
-                                            onSelect={handleDiagramSelect}
-                                            onPaneClick={() =>
-                                                setSelectedId(null)
+                    // Mobile: tabs.
+                    <div className="lg:hidden">
+                        <Tabs defaultValue="tree" className="w-full">
+                            <TabsList className="grid w-full grid-cols-2">
+                                <TabsTrigger value="diagram">
+                                    Diagram Radial
+                                </TabsTrigger>
+                                <TabsTrigger value="tree">
+                                    Silsilah Pohon
+                                </TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="diagram">
+                                <div className="rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-4">
+                                    <TaromboDiagram
+                                        onSelect={handleDiagramSelect}
+                                        onPaneClick={() => setSelectedId(null)}
+                                        onBack={handleBack}
+                                        canGoBack={history.length > 0}
+                                        selectedId={
+                                            diagramSelectedId ?? undefined
+                                        }
+                                        centerPersonId={diagramCenterPersonId}
+                                        people={diagramPeople}
+                                        margas={margas}
+                                        context="descendants"
+                                        maxDepth={DIAGRAM_MAX_DEPTH}
+                                    />
+                                </div>
+                            </TabsContent>
+                            <TabsContent value="tree">
+                                <div className="relative overflow-hidden rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-4">
+                                    <div className="mb-4 border-b border-tb-outline-variant pb-3 text-center">
+                                        <h3 className="font-display text-lg font-bold text-tb-on-surface">
+                                            {verticalTreeTitle}
+                                        </h3>
+                                        {verticalTreeDescription && (
+                                            <p className="mt-1 text-xs text-tb-on-surface-variant">
+                                                {verticalTreeDescription}
+                                            </p>
+                                        )}
+                                        <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
+                                            {familyTreeSelector}
+                                            {!margaTree && femaleLineageToggle}
+                                            {spouseNamesToggle}
+                                            {compactTreeToggle}
+                                            {treeTopResetButton}
+                                            {canCustomizeTree &&
+                                                nodeCircleToggle}
+                                            {canCustomizeTree &&
+                                                branchArrowToggle}
+                                        </div>
+                                    </div>
+                                    <div style={{ zoom: treeZoom }}>
+                                        <DescendantsTree
+                                            key={`${renderedTreeCenterId}-${margaTree?.direction ?? ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
+                                            people={displayPeople}
+                                            centerId={renderedTreeCenterId}
+                                            onSelect={
+                                                margaTree
+                                                    ? undefined
+                                                    : handlePersonSelect
                                             }
-                                            onBack={handleBack}
-                                            canGoBack={history.length > 0}
-                                            selectedId={
-                                                diagramSelectedId ?? undefined
+                                            onMakeTop={
+                                                margaTree
+                                                    ? undefined
+                                                    : handleMakeTop
                                             }
-                                            centerPersonId={
-                                                diagramCenterPersonId
+                                            highlightId={renderedHighlightId}
+                                            editNodes={!margaTree}
+                                            selectOnClick={!margaTree}
+                                            showProfileOnName={
+                                                !margaTree ||
+                                                (margaTree.direction ===
+                                                    'lower' &&
+                                                    margaTree.canReorderSiblings)
                                             }
-                                            people={diagramPeople}
-                                            margas={margas}
-                                            context="descendants"
+                                            readOnly={Boolean(margaTree)}
+                                            alternativeTrees={
+                                                descendantAlternativeTrees
+                                            }
+                                            lineagePath={treeLineagePath}
+                                            connectionPaths={connection?.paths}
+                                            markFemaleLineage={
+                                                showFemaleLineage
+                                            }
+                                            collapseDepth={
+                                                verticalTreeCollapseDepth
+                                            }
+                                            detachedPeople={
+                                                displayedDetachedRoots
+                                            }
+                                            showNodeAvatar={showNodeCircles}
+                                            showBranchToggles={
+                                                showBranchToggles
+                                            }
+                                            showSpouseNames={showSpouseNames}
+                                            showSpouseMargas={
+                                                margaTree?.direction === 'lower'
+                                            }
+                                            siblingOrderMargaId={
+                                                margaTree?.margaId
+                                            }
+                                            canReorderSiblings={
+                                                margaTree?.direction ===
+                                                    'lower' &&
+                                                margaTree.canReorderSiblings
+                                            }
+                                            allowBranchEntry={
+                                                margaTree?.direction === 'lower'
+                                            }
+                                            compactTerminalBranches={
+                                                margaTree?.direction === 'lower'
+                                            }
+                                            packCollapsed={compactTree}
+                                            scrollToLineageEnd={
+                                                searchedId !== null
+                                            }
+                                            foldedId={searchedId}
+                                            nodeIdPrefix="tarombo-mobile-tree-node"
+                                            currentUserId={
+                                                identity?.currentUserId
+                                            }
+                                            versionTreeId={selectedFamilyTreeId}
                                         />
                                     </div>
-                                </TabsContent>
-                                <TabsContent value="tree">
-                                    <div className="relative overflow-hidden rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-4">
-                                        <div className="mb-4 border-b border-tb-outline-variant pb-3 text-center">
-                                            <h3 className="font-display text-lg font-bold text-tb-on-surface">
-                                                {verticalTreeTitle}
-                                            </h3>
-                                            {verticalTreeDescription && (
-                                                <p className="mt-1 text-xs text-tb-on-surface-variant">
-                                                    {verticalTreeDescription}
-                                                </p>
-                                            )}
-                                            <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
-                                                {familyTreeSelector}
-                                                {!margaTree &&
-                                                    femaleLineageToggle}
-                                                {spouseNamesToggle}
-                                                {compactTreeToggle}
-                                                {treeTopResetButton}
-                                                {nodeCircleToggle}
-                                                {branchArrowToggle}
-                                            </div>
+                                    {!treeHasChildren &&
+                                        !ancestorFocusId &&
+                                        noChildrenNotice}
+                                    {treeHasChildren && (
+                                        <div className="absolute bottom-3 left-3 z-10">
+                                            {treeZoomControls}
                                         </div>
-                                        <div style={{ zoom: treeZoom }}>
-                                            <DescendantsTree
-                                                key={`${renderedTreeCenterId}-${margaTree?.direction ?? ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
-                                                people={displayPeople}
-                                                centerId={renderedTreeCenterId}
-                                                onSelect={
-                                                    margaTree
-                                                        ? undefined
-                                                        : handlePersonSelect
-                                                }
-                                                onMakeTop={
-                                                    margaTree
-                                                        ? undefined
-                                                        : handleMakeTop
-                                                }
-                                                highlightId={
-                                                    renderedHighlightId
-                                                }
-                                                editNodes={!margaTree}
-                                                selectOnClick={!margaTree}
-                                                showProfileOnName={!margaTree}
-                                                readOnly={Boolean(margaTree)}
-                                                alternativeTrees={
-                                                    descendantAlternativeTrees
-                                                }
-                                                lineagePath={
-                                                    margaTree?.direction ===
-                                                    'upper'
-                                                        ? margaLineagePath.map(
-                                                              (person) =>
-                                                                  person.id,
-                                                          )
-                                                        : margaTree?.direction ===
-                                                            'lower'
-                                                          ? margaLowerLineagePath
-                                                          : lineagePath
-                                                }
-                                                markFemaleLineage={
-                                                    showFemaleLineage
-                                                }
-                                                collapseDepth={
-                                                    verticalTreeCollapseDepth
-                                                }
-                                                detachedPeople={
-                                                    displayedDetachedRoots
-                                                }
-                                                showNodeAvatar={showNodeCircles}
-                                                showBranchToggles={
-                                                    showBranchToggles
-                                                }
-                                                showSpouseNames={
-                                                    showSpouseNames
-                                                }
-                                                allowBranchEntry={
-                                                    margaTree?.direction ===
-                                                    'lower'
-                                                }
-                                                compactTerminalBranches={
-                                                    margaTree?.direction ===
-                                                    'lower'
-                                                }
-                                                packCollapsed={compactTree}
-                                                scrollToLineageEnd={
-                                                    searchedId !== null
-                                                }
-                                                nodeIdPrefix="tarombo-mobile-tree-node"
-                                                currentUserId={
-                                                    identity?.currentUserId
-                                                }
-                                                versionTreeId={
-                                                    selectedFamilyTreeId
-                                                }
-                                            />
-                                        </div>
-                                        {!treeHasChildren &&
-                                            !ancestorFocusId &&
-                                            noChildrenNotice}
-                                        {treeHasChildren && (
-                                            <div className="absolute bottom-3 left-3 z-10">
-                                                {treeZoomControls}
-                                            </div>
-                                        )}
-                                    </div>
-                                </TabsContent>
-                            </Tabs>
-                        </div>
-                    </>
+                                    )}
+                                </div>
+                            </TabsContent>
+                        </Tabs>
+                    </div>
                 )}
             </div>
 
@@ -2013,207 +2401,278 @@ export function TaromboExplorer({
                 onSelect={handleIdentitySelect}
             />
 
-            <Dialog
-                open={saveModalOpen}
-                onOpenChange={(open) => {
-                    if (!open && savingSnapshot) {
-                        return;
-                    }
+            {canCustomizeTree && (
+                <Dialog
+                    open={saveModalOpen}
+                    onOpenChange={(open) => {
+                        if (!open && savingSnapshot) {
+                            return;
+                        }
 
-                    setSaveModalOpen(open);
+                        setSaveModalOpen(open);
 
-                    if (!open) {
-                        setExcludedBranchIds([]);
-                    }
-                }}
-            >
-                <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle>Simpan Pohon Tarombo</DialogTitle>
-                        <DialogDescription>
-                            Atur resolusi, ukuran kertas, dan cabang yang
-                            ditampilkan sebelum menyimpan gambar.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4">
-                        <div className="grid gap-1.5">
-                            <Label htmlFor="snapshot-title">Judul</Label>
-                            <Input
-                                id="snapshot-title"
-                                value={snapshotTitle}
-                                onChange={(event) =>
-                                    setSnapshotTitle(event.target.value)
-                                }
-                                placeholder={`Pohon ${margaIdentity?.name ?? 'Tarombo'}`}
-                                maxLength={120}
-                            />
-                        </div>
-                        <div className="grid gap-1.5">
-                            <Label htmlFor="snapshot-family-name">
-                                Nama Keluarga
-                            </Label>
-                            <Input
-                                id="snapshot-family-name"
-                                value={treeFamilyName}
-                                onChange={(event) =>
-                                    setTreeFamilyName(event.target.value)
-                                }
-                                placeholder={`Mis. Keluarga ${margaIdentity?.name ?? 'Silaban'}`}
-                                maxLength={120}
-                            />
-                            <p className="text-xs text-tb-on-surface-variant">
-                                Menjadi judul di atas pohon dan pada gambar yang
-                                disimpan.
-                            </p>
-                        </div>
-                        <div className="grid gap-4 sm:grid-cols-2">
+                        if (!open) {
+                            setExcludedBranchIds([]);
+                        }
+                    }}
+                >
+                    <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+                        <DialogHeader>
+                            <DialogTitle>Simpan Pohon Tarombo</DialogTitle>
+                            <DialogDescription>
+                                Atur resolusi, ukuran kertas, dan cabang yang
+                                ditampilkan sebelum menyimpan gambar.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4">
                             <div className="grid gap-1.5">
-                                <Label>Resolusi</Label>
-                                <Select
-                                    value={String(snapshotResolution)}
-                                    onValueChange={(value) =>
-                                        setSnapshotResolution(Number(value))
+                                <Label htmlFor="snapshot-title">Judul</Label>
+                                <Input
+                                    id="snapshot-title"
+                                    value={snapshotTitle}
+                                    onChange={(event) =>
+                                        setSnapshotTitle(event.target.value)
                                     }
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {SNAPSHOT_RESOLUTIONS.map((level) => (
-                                            <SelectItem
-                                                key={level}
-                                                value={String(level)}
-                                            >
-                                                {snapshotResolutionLabel(level)}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                    placeholder={`Pohon ${margaIdentity?.name ?? 'Tarombo'}`}
+                                    maxLength={120}
+                                />
                             </div>
                             <div className="grid gap-1.5">
-                                <Label>Ukuran Kertas</Label>
-                                <Select
-                                    value={snapshotPaper}
-                                    onValueChange={setSnapshotPaper}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {Object.keys(PAPER_SIZES).map(
-                                            (paper) => (
-                                                <SelectItem
-                                                    key={paper}
-                                                    value={paper}
-                                                >
-                                                    {paper}
-                                                </SelectItem>
-                                            ),
-                                        )}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-                        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-tb-outline-variant p-3 hover:bg-tb-surface-container">
-                            <Checkbox
-                                checked={snapshotTransparent}
-                                onCheckedChange={(value) =>
-                                    setSnapshotTransparent(value === true)
-                                }
-                            />
-                            <span>
-                                <span className="block text-sm font-medium text-tb-on-surface">
-                                    Transparan
-                                </span>
-                                <span className="block text-xs text-tb-on-surface-variant">
-                                    Simpan gambar tanpa latar belakang (PNG).
-                                </span>
-                            </span>
-                        </label>
-                        <div className="grid gap-2">
-                            <Label>Pilih Pohon yang Ditampilkan</Label>
-                            {snapshotBranches.length === 0 &&
-                            snapshotDetachedTrees.length === 0 ? (
-                                <p className="text-sm text-tb-on-surface-variant">
-                                    Tidak ada cabang keturunan langsung pada
-                                    tampilan ini.
+                                <Label htmlFor="snapshot-family-name">
+                                    Nama Keluarga
+                                </Label>
+                                <Input
+                                    id="snapshot-family-name"
+                                    value={treeFamilyName}
+                                    onChange={(event) =>
+                                        setTreeFamilyName(event.target.value)
+                                    }
+                                    placeholder={`Mis. Keluarga ${margaIdentity?.name ?? 'Silaban'}`}
+                                    maxLength={120}
+                                />
+                                <p className="text-xs text-tb-on-surface-variant">
+                                    Menjadi judul di atas pohon dan pada gambar
+                                    yang disimpan.
                                 </p>
-                            ) : (
-                                <div className="grid gap-3">
-                                    {[
-                                        {
-                                            key: 'main',
-                                            heading: 'Cabang pohon utama',
-                                            items: snapshotBranches,
-                                            label: (person: TaromboPerson) =>
-                                                person.name,
-                                        },
-                                        {
-                                            key: 'detached',
-                                            heading:
-                                                'Anggota marga tanpa jalur ayah tersambung',
-                                            items: snapshotDetachedTrees,
-                                            label: (person: TaromboPerson) =>
-                                                `Nama Keluarga: ${person.name}`,
-                                        },
-                                    ]
-                                        .filter(
-                                            (group) => group.items.length > 0,
-                                        )
-                                        .map((group) => (
-                                            <div
-                                                key={group.key}
-                                                className="grid gap-1.5"
-                                            >
-                                                <p className="text-xs font-semibold text-tb-on-surface-variant">
-                                                    {group.heading}
-                                                </p>
-                                                {group.items.map((branch) => (
-                                                    <label
-                                                        key={branch.id}
-                                                        className="flex cursor-pointer items-center gap-3 rounded-lg border border-tb-outline-variant p-2 hover:bg-tb-surface-container"
+                            </div>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <div className="grid gap-1.5">
+                                    <Label>Resolusi</Label>
+                                    <Select
+                                        value={String(snapshotResolution)}
+                                        onValueChange={(value) =>
+                                            setSnapshotResolution(Number(value))
+                                        }
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {SNAPSHOT_RESOLUTIONS.map(
+                                                (level) => (
+                                                    <SelectItem
+                                                        key={level}
+                                                        value={String(level)}
                                                     >
-                                                        <Checkbox
-                                                            checked={
-                                                                !excludedBranchIds.includes(
-                                                                    branch.id,
-                                                                )
-                                                            }
-                                                            onCheckedChange={(
-                                                                value,
-                                                            ) =>
-                                                                toggleBranch(
-                                                                    branch.id,
-                                                                    value ===
-                                                                        true,
-                                                                )
-                                                            }
-                                                        />
-                                                        <span className="text-sm text-tb-on-surface">
-                                                            {group.label(
-                                                                branch,
-                                                            )}
-                                                        </span>
-                                                    </label>
-                                                ))}
-                                            </div>
-                                        ))}
+                                                        {snapshotResolutionLabel(
+                                                            level,
+                                                        )}
+                                                    </SelectItem>
+                                                ),
+                                            )}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
-                            )}
+                                <div className="grid gap-1.5">
+                                    <Label>Ukuran Kertas</Label>
+                                    <div className="flex gap-2">
+                                        <Select
+                                            value={snapshotPaper}
+                                            onValueChange={setSnapshotPaper}
+                                        >
+                                            <SelectTrigger className="w-20 shrink-0">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {Object.keys(PAPER_SIZES).map(
+                                                    (paper) => (
+                                                        <SelectItem
+                                                            key={paper}
+                                                            value={paper}
+                                                        >
+                                                            {paper}
+                                                        </SelectItem>
+                                                    ),
+                                                )}
+                                            </SelectContent>
+                                        </Select>
+                                        <div
+                                            role="group"
+                                            aria-label="Posisi kertas"
+                                            className="inline-flex flex-1 overflow-hidden rounded-md border border-tb-outline-variant"
+                                        >
+                                            {(
+                                                [
+                                                    ['portrait', 'Portrait'],
+                                                    ['landscape', 'Landscape'],
+                                                ] as const
+                                            ).map(([value, label], index) => (
+                                                <button
+                                                    key={value}
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setSnapshotOrientation(
+                                                            value,
+                                                        )
+                                                    }
+                                                    aria-pressed={
+                                                        snapshotOrientation ===
+                                                        value
+                                                    }
+                                                    className={cn(
+                                                        'flex-1 px-2 text-xs font-semibold transition-colors',
+                                                        index > 0 &&
+                                                            'border-l border-tb-outline-variant',
+                                                        snapshotOrientation ===
+                                                            value
+                                                            ? 'text-tb-on-primary bg-tb-primary'
+                                                            : 'text-tb-on-surface hover:bg-tb-surface-container',
+                                                    )}
+                                                >
+                                                    {label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-tb-outline-variant p-3 hover:bg-tb-surface-container">
+                                <Checkbox
+                                    checked={snapshotTransparent}
+                                    onCheckedChange={(value) =>
+                                        setSnapshotTransparent(value === true)
+                                    }
+                                />
+                                <span>
+                                    <span className="block text-sm font-medium text-tb-on-surface">
+                                        Transparan
+                                    </span>
+                                    <span className="block text-xs text-tb-on-surface-variant">
+                                        Simpan gambar tanpa latar belakang
+                                        (PNG).
+                                    </span>
+                                </span>
+                            </label>
+                            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-tb-outline-variant p-3 hover:bg-tb-surface-container">
+                                <Checkbox
+                                    checked={snapshotTransparentNodes}
+                                    onCheckedChange={(value) =>
+                                        setSnapshotTransparentNodes(
+                                            value === true,
+                                        )
+                                    }
+                                />
+                                <span>
+                                    <span className="block text-sm font-medium text-tb-on-surface">
+                                        Transparan Nama &amp; Inisial
+                                    </span>
+                                    <span className="block text-xs text-tb-on-surface-variant">
+                                        Latar belakang kotak nama dan bulatan
+                                        inisial dibuat transparan.
+                                    </span>
+                                </span>
+                            </label>
+                            <div className="grid gap-2">
+                                <Label>Pilih Pohon yang Ditampilkan</Label>
+                                {snapshotBranches.length === 0 &&
+                                snapshotDetachedTrees.length === 0 ? (
+                                    <p className="text-sm text-tb-on-surface-variant">
+                                        Tidak ada cabang keturunan langsung pada
+                                        tampilan ini.
+                                    </p>
+                                ) : (
+                                    <div className="grid gap-3">
+                                        {[
+                                            {
+                                                key: 'main',
+                                                heading: 'Cabang pohon utama',
+                                                items: snapshotBranches,
+                                                label: (
+                                                    person: TaromboPerson,
+                                                ) => person.name,
+                                            },
+                                            {
+                                                key: 'detached',
+                                                heading:
+                                                    'Anggota marga tanpa jalur ayah tersambung',
+                                                items: snapshotDetachedTrees,
+                                                label: (
+                                                    person: TaromboPerson,
+                                                ) =>
+                                                    `Nama Keluarga: ${person.name}`,
+                                            },
+                                        ]
+                                            .filter(
+                                                (group) =>
+                                                    group.items.length > 0,
+                                            )
+                                            .map((group) => (
+                                                <div
+                                                    key={group.key}
+                                                    className="grid gap-1.5"
+                                                >
+                                                    <p className="text-xs font-semibold text-tb-on-surface-variant">
+                                                        {group.heading}
+                                                    </p>
+                                                    {group.items.map(
+                                                        (branch) => (
+                                                            <label
+                                                                key={branch.id}
+                                                                className="flex cursor-pointer items-center gap-3 rounded-lg border border-tb-outline-variant p-2 hover:bg-tb-surface-container"
+                                                            >
+                                                                <Checkbox
+                                                                    checked={
+                                                                        !excludedBranchIds.includes(
+                                                                            branch.id,
+                                                                        )
+                                                                    }
+                                                                    onCheckedChange={(
+                                                                        value,
+                                                                    ) =>
+                                                                        toggleBranch(
+                                                                            branch.id,
+                                                                            value ===
+                                                                                true,
+                                                                        )
+                                                                    }
+                                                                />
+                                                                <span className="text-sm text-tb-on-surface">
+                                                                    {group.label(
+                                                                        branch,
+                                                                    )}
+                                                                </span>
+                                                            </label>
+                                                        ),
+                                                    )}
+                                                </div>
+                                            ))}
+                                    </div>
+                                )}
+                            </div>
+                            <Button
+                                type="button"
+                                onClick={() => handleCreateSnapshot()}
+                                disabled={savingSnapshot}
+                                className="text-tb-on-primary bg-tb-primary hover:bg-tb-primary-light"
+                            >
+                                {savingSnapshot ? 'Membuat...' : 'Buat'}
+                            </Button>
                         </div>
-                        <Button
-                            type="button"
-                            onClick={handleCreateSnapshot}
-                            disabled={savingSnapshot}
-                            className="text-tb-on-primary bg-tb-primary hover:bg-tb-primary-light"
-                        >
-                            {savingSnapshot ? 'Membuat...' : 'Buat'}
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
+                    </DialogContent>
+                </Dialog>
+            )}
 
-            {fullscreen && (
+            {fullscreen && canCustomizeTree && (
                 <TreeSettingsDialog
                     open={styleDialogOpen}
                     onOpenChange={changeStyleDialog}

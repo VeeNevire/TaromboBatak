@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CollageDialog } from '@/components/collage-dialog';
+import { CropEditor } from '@/components/crop-editor';
 import { DraggableBox } from '@/components/draggable-box';
 import type { Box } from '@/components/draggable-box';
 import { Button } from '@/components/ui/button';
@@ -148,6 +149,13 @@ const isTyping = (target: EventTarget | null) =>
         target.tagName === 'TEXTAREA' ||
         target.isContentEditable);
 
+const ARROW_DIRECTIONS = {
+    ArrowLeft: [-1, 0],
+    ArrowRight: [1, 0],
+    ArrowUp: [0, -1],
+    ArrowDown: [0, 1],
+} as const;
+
 export default function TaromboSnapshotCompile({
     snapshot,
     frames,
@@ -172,6 +180,11 @@ export default function TaromboSnapshotCompile({
     const [order, setOrder] = useState<string[]>([TREE_ID]);
     const [selectedId, setSelectedId] = useState<string>(TREE_ID);
     const [cropDraft, setCropDraft] = useState<Box | null>(null);
+    // Where the crop editor starts; a new value restarts it.
+    const [cropStart, setCropStart] = useState<{
+        key: number;
+        box: Box;
+    } | null>(null);
     const [cropState, setCropState] = useState<{
         id: string;
         canvas: HTMLCanvasElement;
@@ -449,11 +462,37 @@ export default function TaromboSnapshotCompile({
         });
 
     // The window listeners below always call the latest handlers through this ref.
-    const actionsRef = useRef({ addFiles, duplicateItem, removeItem });
+    // Arrow keys move the selected layer a small step (Shift: ten steps).
+    const nudgeItem = (dx: number, dy: number) => {
+        if (!selectedItem || !selectedFrame) {
+            return;
+        }
+
+        const step = Math.max(1, Math.round(selectedFrame.canvas_width / 200));
+        const { placement: spot } = selectedItem;
+
+        setItemPlacement(selectedItem.id, {
+            ...spot,
+            x: spot.x + dx * step,
+            y: spot.y + dy * step,
+        });
+    };
+
+    const actionsRef = useRef({
+        addFiles,
+        duplicateItem,
+        removeItem,
+        nudgeItem,
+    });
     const selectedIdRef = useRef(selectedId);
 
     useEffect(() => {
-        actionsRef.current = { addFiles, duplicateItem, removeItem };
+        actionsRef.current = {
+            addFiles,
+            duplicateItem,
+            removeItem,
+            nudgeItem,
+        };
         selectedIdRef.current = selectedId;
     });
 
@@ -496,6 +535,15 @@ export default function TaromboSnapshotCompile({
                 copiedIdRef.current = selectedIdRef.current;
             } else if (event.key === 'Delete') {
                 actionsRef.current.removeItem(selectedIdRef.current);
+            } else if (event.key in ARROW_DIRECTIONS) {
+                const [dx, dy] =
+                    ARROW_DIRECTIONS[
+                        event.key as keyof typeof ARROW_DIRECTIONS
+                    ];
+                const times = event.shiftKey ? 10 : 1;
+
+                event.preventDefault();
+                actionsRef.current.nudgeItem(dx * times, dy * times);
             }
         };
 
@@ -593,7 +641,10 @@ export default function TaromboSnapshotCompile({
             canvas: selectedItem.source,
             url: selectedItem.source.toDataURL('image/png'),
         });
-        setCropDraft(selectedItem.crop ?? fullBox(selectedItem.source));
+        const box = selectedItem.crop ?? fullBox(selectedItem.source);
+
+        setCropDraft(box);
+        setCropStart((current) => ({ key: (current?.key ?? 0) + 1, box }));
     };
 
     const applyCrop = () => {
@@ -810,8 +861,10 @@ export default function TaromboSnapshotCompile({
                         <p className="text-xs text-tb-on-surface-variant">
                             Klik gambar di pratinjau atau di daftar lapisan
                             untuk memilihnya, lalu geser kotaknya atau tarik
-                            sudutnya. Tempel gambar dengan Ctrl+V, salin lapisan
-                            dengan Ctrl+C lalu Ctrl+V, hapus dengan Delete.
+                            sudutnya, atau geser dengan tombol panah (Shift +
+                            panah untuk lebih jauh). Tempel gambar dengan
+                            Ctrl+V, salin lapisan dengan Ctrl+C lalu Ctrl+V,
+                            hapus dengan Delete.
                         </p>
                     )}
                     <label className="flex shrink-0 items-center gap-3 text-sm text-tb-on-surface">
@@ -1126,28 +1179,15 @@ export default function TaromboSnapshotCompile({
                             ditempatkan di frame.
                         </DialogDescription>
                     </DialogHeader>
-                    {cropState && cropDraft && (
-                        <div
-                            className="relative mx-auto max-h-[65dvh] w-full overflow-hidden rounded-lg bg-[repeating-conic-gradient(#d4d4d4_0_25%,#f5f5f5_0_50%)] bg-[length:20px_20px] select-none"
-                            style={{
-                                aspectRatio: `${cropState.canvas.width} / ${cropState.canvas.height}`,
-                                maxWidth: `calc(65dvh * ${cropState.canvas.width / cropState.canvas.height})`,
-                            }}
-                        >
-                            <img
-                                src={cropState.url}
-                                alt="Gambar yang dipotong"
-                                draggable={false}
-                                className="pointer-events-none size-full object-fill"
-                            />
-                            <DraggableBox
-                                spaceWidth={cropState.canvas.width}
-                                spaceHeight={cropState.canvas.height}
-                                box={cropDraft}
-                                onChange={setCropDraft}
-                                dimOutside
-                            />
-                        </div>
+                    {cropState && cropStart && (
+                        <CropEditor
+                            key={cropStart.key}
+                            url={cropState.url}
+                            imageWidth={cropState.canvas.width}
+                            imageHeight={cropState.canvas.height}
+                            initialCrop={cropStart.box}
+                            onChange={setCropDraft}
+                        />
                     )}
                     <DialogFooter>
                         <Button
@@ -1155,7 +1195,10 @@ export default function TaromboSnapshotCompile({
                             variant="outline"
                             onClick={() =>
                                 cropState &&
-                                setCropDraft(fullBox(cropState.canvas))
+                                setCropStart((current) => ({
+                                    key: (current?.key ?? 0) + 1,
+                                    box: fullBox(cropState.canvas),
+                                }))
                             }
                         >
                             Seluruh Gambar

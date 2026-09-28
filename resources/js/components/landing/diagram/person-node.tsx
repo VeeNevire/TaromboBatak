@@ -133,10 +133,36 @@ function PersonBubble({
     );
 }
 
+/**
+ * Keeps the open bubble the same size at any zoom. Only this bubble follows
+ * the zoom level, so zooming does not re-render every node in the diagram.
+ */
+function ZoomedPersonBubble({
+    person,
+    ringColor,
+}: {
+    person: TaromboNodeData['person'];
+    ringColor: string;
+}) {
+    const zoom = useStore((state) => state.transform[2]);
+
+    return (
+        <div
+            className="absolute bottom-full left-1/2 z-30 mb-3"
+            style={{
+                transform: `translateX(-50%) scale(${1 / zoom})`,
+                transformOrigin: 'bottom center',
+            }}
+        >
+            <PersonBubble person={person} ringColor={ringColor} />
+            <div className="absolute -bottom-1 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 border-r border-b border-tb-outline-variant bg-tb-surface-bright" />
+        </div>
+    );
+}
+
 export function PersonNode({ data }: NodeProps) {
     const { person, ringColor, selected, related, bubble } =
         data as TaromboNodeData;
-    const zoom = useStore((state) => state.transform[2]);
 
     const avatarShadow = selected
         ? `0 0 0 3px #ffffff, 0 0 25px 5px ${ringColor}aa`
@@ -153,16 +179,7 @@ export function PersonNode({ data }: NodeProps) {
             style={{ animationDelay: `${(person.generation - 1) * 90}ms` }}
         >
             {bubble && (
-                <div
-                    className="absolute bottom-full left-1/2 z-30 mb-3"
-                    style={{
-                        transform: `translateX(-50%) scale(${1 / zoom})`,
-                        transformOrigin: 'bottom center',
-                    }}
-                >
-                    <PersonBubble person={person} ringColor={ringColor} />
-                    <div className="absolute -bottom-1 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 border-r border-b border-tb-outline-variant bg-tb-surface-bright" />
-                </div>
+                <ZoomedPersonBubble person={person} ringColor={ringColor} />
             )}
 
             <div className="relative">

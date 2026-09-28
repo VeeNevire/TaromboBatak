@@ -110,10 +110,10 @@ test('the owner can remove a snapshot and its private file', function () {
     Storage::disk('local')->assertMissing($path);
 });
 
-test('a snapshot stores its title, resolution, paper size and included people', function () {
+test('a staff snapshot stores its title, resolution, paper size, orientation and included people', function (string $state) {
     Storage::fake('local');
 
-    $user = User::factory()->create();
+    $user = User::factory()->{$state}()->create();
     $person = Person::factory()->create();
     $child = Person::factory()->create(['father_id' => $person->id]);
 
@@ -123,8 +123,9 @@ test('a snapshot stores its title, resolution, paper size and included people', 
             'view' => 'tree',
             'center_person_id' => $person->id,
             'title' => 'Pohon Raja',
-            'resolution' => 1080,
+            'resolution' => 17280,
             'paper_size' => 'A3',
+            'orientation' => 'landscape',
             'included_person_ids' => [$child->id],
         ])
         ->assertRedirect();
@@ -132,12 +133,43 @@ test('a snapshot stores its title, resolution, paper size and included people', 
     $snapshot = TaromboSnapshot::query()->sole();
 
     expect($snapshot->title)->toBe('Pohon Raja')
-        ->and($snapshot->resolution)->toBe(1080)
+        ->and($snapshot->resolution)->toBe(17280)
         ->and($snapshot->paper_size)->toBe('A3')
+        ->and($snapshot->orientation)->toBe('landscape')
         ->and($snapshot->included_person_ids)->toBe([$child->id]);
-});
+})->with(['asAdmin', 'asSubAdmin']);
 
-test('a snapshot rejects an unsupported resolution or paper size', function () {
+test('other accounts save the tree as shown without the save dialog settings', function (?string $state) {
+    Storage::fake('local');
+
+    $factory = User::factory();
+    $user = ($state ? $factory->{$state}() : $factory)->create();
+    $person = Person::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('tarombo.snapshots.store'), [
+            'image' => UploadedFile::fake()->image('pohon.jpg', 1200, 800),
+            'view' => 'tree',
+            'center_person_id' => $person->id,
+            'title' => 'Pohon Raja',
+            'resolution' => 8640,
+            'paper_size' => 'A3',
+            'orientation' => 'landscape',
+            'included_person_ids' => [$person->id],
+        ])
+        ->assertRedirect();
+
+    $snapshot = TaromboSnapshot::query()->sole();
+
+    expect($snapshot->center_person_id)->toBe($person->id)
+        ->and($snapshot->title)->toBeNull()
+        ->and($snapshot->resolution)->toBeNull()
+        ->and($snapshot->paper_size)->toBeNull()
+        ->and($snapshot->orientation)->toBeNull()
+        ->and($snapshot->included_person_ids)->toBeNull();
+})->with([null, 'asMainContributor', 'asContributorMember']);
+
+test('a snapshot rejects an unsupported resolution, paper size or orientation', function () {
     Storage::fake('local');
 
     $user = User::factory()->create();
@@ -148,8 +180,9 @@ test('a snapshot rejects an unsupported resolution or paper size', function () {
             'view' => 'tree',
             'resolution' => 9999,
             'paper_size' => 'B5',
+            'orientation' => 'diagonal',
         ])
-        ->assertSessionHasErrors(['resolution', 'paper_size']);
+        ->assertSessionHasErrors(['resolution', 'paper_size', 'orientation']);
 
     expect(TaromboSnapshot::query()->exists())->toBeFalse();
 });

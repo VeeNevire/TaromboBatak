@@ -5,19 +5,22 @@ namespace App\Http\Controllers;
 use App\Http\Requests\UpdateTaromboTreeSettingsRequest;
 use App\Models\ContactRequest;
 use App\Models\FamilyTree;
+use App\Models\FamilyTreeNode;
 use App\Models\FamilyTreeShare;
 use App\Models\IdentityRequest;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
 use App\Services\FamilyTreeFamilyNameService;
-use App\Services\FamilyTreeInheritanceService;
 use App\Services\TaromboStatisticsService;
 use App\Services\TaromboTreeService;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection as SupportCollection;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -47,7 +50,7 @@ class TaromboController extends Controller
             ]);
         }
 
-        [$people, $margas, $alternativeTrees, $identity, $familyTreeOptions, $selectedFamilyTreeId, $selectedMargaId, $selectedTreePeople, $margaTree, $accountTreePersonIds] = $this->treeData($request);
+        [$people, $margas, $alternativeTrees, $identity, $familyTreeOptions, $selectedFamilyTreeId, $selectedMargaId, $margaTree, $accountTreePersonIds] = $this->treeData($request);
 
         return Inertia::render('tarombo/index', [
             'people' => $people,
@@ -57,7 +60,6 @@ class TaromboController extends Controller
             'familyTreeOptions' => $familyTreeOptions,
             'selectedFamilyTreeId' => $selectedFamilyTreeId,
             'selectedMargaId' => $selectedMargaId,
-            'selectedTreePeople' => $selectedTreePeople,
             'margaTree' => $margaTree,
             'accountTreePersonIds' => $accountTreePersonIds,
             'familyName' => $this->familyName($selectedFamilyTreeId, $margaTree),
@@ -69,7 +71,7 @@ class TaromboController extends Controller
      */
     public function fullscreen(Request $request, string $view): Response
     {
-        [$people, $margas, $alternativeTrees, $identity, $familyTreeOptions, $selectedFamilyTreeId, $selectedMargaId, $selectedTreePeople, $margaTree, $accountTreePersonIds] = $this->treeData($request);
+        [$people, $margas, $alternativeTrees, $identity, $familyTreeOptions, $selectedFamilyTreeId, $selectedMargaId, $margaTree, $accountTreePersonIds] = $this->treeData($request);
 
         return Inertia::render('tarombo/fullscreen', [
             'people' => $people,
@@ -81,11 +83,13 @@ class TaromboController extends Controller
             'familyTreeOptions' => $familyTreeOptions,
             'selectedFamilyTreeId' => $selectedFamilyTreeId,
             'selectedMargaId' => $selectedMargaId,
-            'selectedTreePeople' => $selectedTreePeople,
             'margaTree' => $margaTree,
             'accountTreePersonIds' => $accountTreePersonIds,
             'familyName' => $this->familyName($selectedFamilyTreeId, $margaTree),
-            'treeSettings' => $request->user()?->tarombo_tree_settings,
+            // Tree display settings are reserved for admin and sub-admin accounts.
+            'treeSettings' => $request->user()->isStaff()
+                ? $request->user()->tarombo_tree_settings
+                : null,
         ]);
     }
 
@@ -103,6 +107,8 @@ class TaromboController extends Controller
 
     public function resetTreeSettings(Request $request): RedirectResponse
     {
+        throw_unless($request->user()->isStaff(), AuthorizationException::class);
+
         $request->user()->update(['tarombo_tree_settings' => null]);
 
         Inertia::flash('toast', [
@@ -111,6 +117,31 @@ class TaromboController extends Controller
         ]);
 
         return back();
+    }
+
+    /**
+     * The people of one alternative family-tree version. The tarombo page only
+     * lists versions by name; each one is loaded here when it is opened.
+     */
+    public function alternativeTree(Request $request, FamilyTree $familyTree): JsonResponse
+    {
+        $user = $request->user();
+
+        abort_unless(
+            $familyTree->based_on_id !== null
+                && $this->accountFamilyTreesQuery($user)->whereKey($familyTree->id)->exists(),
+            403,
+            'Versi silsilah ini tidak tersedia di Silsilah Milik Akun.',
+        );
+
+        $people = collect($this->withContactState(
+            app(TaromboTreeService::class)->rowsForFamilyTree($familyTree),
+            $user,
+        ));
+
+        return response()->json([
+            'people' => $this->connectedFromRoot($people, (string) $familyTree->root_person_id),
+        ]);
     }
 
     /**
@@ -149,7 +180,7 @@ class TaromboController extends Controller
     /**
      * Build the scoped tarombo rows and marga legend for the current user.
      *
-     * @return array{0: array<int, array<string, mixed>>, 1: array<int, array<string, mixed>>, 2: array<int, array<string, mixed>>, 3: array<string, mixed>, 4: array<int, array<string, mixed>>, 5: int|null, 6: int|null, 7: array<int, array<string, mixed>>, 8: array<string, mixed>|null, 9: array<int, string>}
+     * @return array{0: array<int, array<string, mixed>>, 1: array<int, array<string, mixed>>, 2: array<int, array{id: int, name: string, rootPersonId: string}>, 3: array<string, mixed>, 4: array<int, array<string, mixed>>, 5: int|null, 6: int|null, 7: array<string, mixed>|null, 8: array<int, string>}
      */
     private function treeData(Request $request): array
     {
@@ -157,7 +188,6 @@ class TaromboController extends Controller
         $user->loadMissing('currentPerson');
         $service = app(TaromboTreeService::class);
         $accountFamilyTrees = $this->accountFamilyTrees($user);
-        $accountTreePersonIds = $this->accountTreePersonIds($accountFamilyTrees);
         $approvedMargas = $this->approvedMargas($user);
         $requestedFamilyTreeId = $request->filled('family_tree')
             ? $request->integer('family_tree')
@@ -212,7 +242,7 @@ class TaromboController extends Controller
 
         $selectedFamilyTreeId = $selectedFamilyTree?->id;
         $selectedMargaId = $selectedMarga?->id;
-        $selectedTreePeople = match (true) {
+        $rows = $this->withContactState(match (true) {
             $selectedFamilyTree instanceof FamilyTree => $service->rowsForFamilyTree($selectedFamilyTree),
             $selectedMarga instanceof Marga => $service->rowsForMarga(
                 $selectedMarga,
@@ -221,64 +251,37 @@ class TaromboController extends Controller
                 maxNodes: (int) config('tarombo.dashboard_max_nodes'),
             ),
             default => [],
-        };
-        $selectedTreePeople = $this->withContactState($selectedTreePeople, $user);
-        $rows = $selectedTreePeople;
-        $visiblePersonIds = collect($rows)->pluck('id');
+        }, $user);
+        $visiblePersonIds = collect($rows)->pluck('id')->flip();
 
+        // Versions are listed by name only; their people are loaded by
+        // alternativeTree() when a version is opened in the tree.
         $alternativeTrees = $accountFamilyTrees
             ->filter(fn (FamilyTree $tree) => $tree->based_on_id !== null
-                && $visiblePersonIds->contains((string) $tree->root_person_id))
-            ->map(function (FamilyTree $tree) use ($service, $user): ?array {
-                $people = collect($this->withContactState(
-                    $service->rowsForFamilyTree($tree),
-                    $user,
-                ));
-                $rootId = (string) $tree->root_person_id;
-
-                if (! $people->contains('id', $rootId)) {
-                    return null;
-                }
-
-                $childrenByParent = $people
-                    ->filter(fn (array $person) => $person['parentId'] !== null)
-                    ->groupBy('parentId');
-                $connectedIds = collect();
-                $queue = [$rootId];
-
-                while ($queue !== []) {
-                    $personId = array_shift($queue);
-
-                    if ($connectedIds->contains($personId)) {
-                        continue;
-                    }
-
-                    $connectedIds->push($personId);
-                    array_push(
-                        $queue,
-                        ...$childrenByParent->get($personId, collect())->pluck('id'),
-                    );
-                }
-
-                $people = $people->whereIn('id', $connectedIds)->values();
-
-                return [
-                    'id' => $tree->id,
-                    'name' => $tree->name ?? 'Versi alternatif',
-                    'rootPersonId' => $rootId,
-                    'people' => $people->all(),
-                ];
-            })
-            ->filter()
+                && $visiblePersonIds->has((string) $tree->root_person_id))
+            ->map(fn (FamilyTree $tree): array => [
+                'id' => $tree->id,
+                'name' => $tree->name ?? 'Versi alternatif',
+                'rootPersonId' => (string) $tree->root_person_id,
+            ])
             ->values()
             ->all();
 
+        // Only a marga's lower tree uses these ids, to keep the detached
+        // branches limited to people in the account's own silsilah.
+        $accountTreePersonIds = $selectedMarga instanceof Marga && $direction === 'lower'
+            ? $this->accountTreePersonIds($accountFamilyTrees)
+            : [];
+
         $margaTree = $selectedMarga instanceof Marga ? [
+            'margaId' => $selectedMarga->id,
             'margaName' => $selectedMarga->name,
             'identityPersonId' => $selectedMarga->identity_person_id !== null
                 ? (string) $selectedMarga->identity_person_id
                 : null,
             'direction' => $direction,
+            'canReorderSiblings' => $user->isStaff()
+                || ($user->isContributor() && $user->accessibleMargaIds()->contains($selectedMarga->id)),
         ] : null;
 
         $identityRequest = IdentityRequest::query()
@@ -329,7 +332,6 @@ class TaromboController extends Controller
                 ->all(),
             $selectedFamilyTreeId,
             $selectedMargaId,
-            $selectedTreePeople,
             $margaTree,
             $accountTreePersonIds,
         ];
@@ -337,25 +339,74 @@ class TaromboController extends Controller
 
     /**
      * Person ids that appear in any of the account's Silsilah Milik Akun.
-     * Resolved through inheritance so versions based on another tree are included.
+     * A version inherits every person of the tree it is based on (see
+     * FamilyTreeInheritanceService), so the whole based-on chain is read in
+     * one node query instead of resolving every tree separately.
      *
      * @param  Collection<int, FamilyTree>  $accountFamilyTrees
      * @return array<int, string>
      */
     private function accountTreePersonIds(Collection $accountFamilyTrees): array
     {
-        $inheritance = app(FamilyTreeInheritanceService::class);
+        $treeIds = collect($accountFamilyTrees->modelKeys());
+        $baseTreeIds = $accountFamilyTrees->pluck('based_on_id')->filter();
 
-        return $accountFamilyTrees
-            ->flatMap(fn (FamilyTree $tree) => $inheritance->nodesFor($tree)->pluck('person_id'))
+        while (($baseTreeIds = $baseTreeIds->unique()->diff($treeIds))->isNotEmpty()) {
+            $treeIds = $treeIds->merge($baseTreeIds);
+            $baseTreeIds = FamilyTree::query()->whereKey($baseTreeIds)->pluck('based_on_id')->filter();
+        }
+
+        return FamilyTreeNode::query()
+            ->whereIn('family_tree_id', $treeIds)
+            ->distinct()
+            ->orderBy('person_id')
+            ->pluck('person_id')
             ->map(fn (int|string $id): string => (string) $id)
-            ->unique()
+            ->all();
+    }
+
+    /**
+     * Rows reachable from the root through parent links, in their original order.
+     *
+     * @param  SupportCollection<int, array<string, mixed>>  $people
+     * @return array<int, array<string, mixed>>
+     */
+    private function connectedFromRoot(SupportCollection $people, string $rootId): array
+    {
+        if (! $people->contains('id', $rootId)) {
+            return [];
+        }
+
+        $childrenByParent = $people
+            ->filter(fn (array $person) => $person['parentId'] !== null)
+            ->groupBy('parentId');
+        $connected = [];
+        $queue = [$rootId];
+
+        for ($index = 0; $index < count($queue); $index++) {
+            $personId = $queue[$index];
+
+            if (isset($connected[$personId])) {
+                continue;
+            }
+
+            $connected[$personId] = true;
+            array_push($queue, ...$childrenByParent->get($personId, collect())->pluck('id'));
+        }
+
+        return $people
+            ->filter(fn (array $person) => isset($connected[$person['id']]))
             ->values()
             ->all();
     }
 
-    /** @return Collection<int, FamilyTree> */
-    private function accountFamilyTrees(User $user): Collection
+    /**
+     * Family trees in the account's Silsilah Milik Akun: every tree for an
+     * admin, otherwise the account's own trees and accepted shares.
+     *
+     * @return Builder<FamilyTree>
+     */
+    private function accountFamilyTreesQuery(User $user): Builder
     {
         return FamilyTree::query()
             ->when(! $user->isAdmin(), fn (Builder $query) => $query->where(
@@ -365,7 +416,13 @@ class TaromboController extends Controller
                         ->whereBelongsTo($user, 'recipient')
                         ->where('status', FamilyTreeShare::STATUS_ACCEPTED)),
             ))
-            ->whereNotNull('root_person_id')
+            ->whereNotNull('root_person_id');
+    }
+
+    /** @return Collection<int, FamilyTree> */
+    private function accountFamilyTrees(User $user): Collection
+    {
+        return $this->accountFamilyTreesQuery($user)
             ->with(['rootPerson:id,name'])
             ->latest('updated_at')
             ->get(['id', 'user_id', 'root_person_id', 'based_on_id', 'name', 'is_primary', 'updated_at'])

@@ -17,13 +17,14 @@ type Props = {
     familyTreeOptions: TaromboFamilyTreeOption[];
     selectedFamilyTreeId: number | null;
     selectedMargaId: number | null;
-    selectedTreePeople: TaromboPersonRow[] | null;
     accountTreePersonIds: string[];
     familyName: string | null;
     margaTree: {
+        margaId: number;
         margaName: string;
         identityPersonId: string | null;
         direction: 'upper' | 'lower';
+        canReorderSiblings: boolean;
     } | null;
 };
 
@@ -44,7 +45,6 @@ export default function TaromboIndex({
     familyTreeOptions,
     selectedFamilyTreeId,
     selectedMargaId,
-    selectedTreePeople,
     accountTreePersonIds,
     familyName,
     margaTree,
@@ -68,7 +68,6 @@ export default function TaromboIndex({
                 familyTreeOptions={familyTreeOptions}
                 selectedFamilyTreeId={selectedFamilyTreeId}
                 selectedMargaId={selectedMargaId}
-                selectedTreePeople={selectedTreePeople}
                 accountTreePersonIds={accountTreePersonIds}
                 familyName={familyName}
                 margaTree={margaTree}
