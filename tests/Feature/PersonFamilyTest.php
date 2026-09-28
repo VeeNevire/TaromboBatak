@@ -434,6 +434,40 @@ test('a family store automatically assigns the sole wife to own children', funct
         ->toBe(Person::where('name', 'Borbor')->firstOrFail()->id);
 });
 
+test('a family store saves a daughter entered with the Perempuan label', function () {
+    $marga = Marga::factory()->create(['name' => 'Sitorus']);
+
+    $this->actingAs($this->admin)->post(route('people.store'), [
+        'name' => 'Anak Utama Sitorus',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'birth_order' => 1,
+        'sibling_count' => 1,
+        'father' => ['name' => 'Ayah Sitorus'],
+        'children' => [[
+            'name' => 'Anak Utama Sitorus',
+            'gender' => 'L',
+        ]],
+        'ownChildren' => [[
+            'name' => 'Boru Sitorus',
+            'gender' => 'Perempuan',
+        ]],
+    ])->assertRedirect(route('people.index'))
+        ->assertSessionHasNoErrors();
+
+    $father = Person::query()->where('name', 'Anak Utama Sitorus')->firstOrFail();
+    $daughter = Person::query()->where('name', 'Boru Sitorus')->firstOrFail();
+    $tree = $father->familyTrees()->firstOrFail();
+
+    expect($daughter->gender)->toBe('P')
+        ->and($daughter->father_id)->toBe($father->id)
+        ->and($daughter->marga_id)->toBe($marga->id)
+        ->and(FamilyTreeNode::query()
+            ->where('family_tree_id', $tree->id)
+            ->where('person_id', $daughter->id)
+            ->exists())->toBeTrue();
+});
+
 test('a family store requires a mother selection when there are multiple wives', function () {
     $marga = Marga::factory()->create(['name' => 'Sitorus']);
 
