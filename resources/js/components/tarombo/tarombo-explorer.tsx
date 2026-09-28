@@ -929,8 +929,12 @@ export function TaromboExplorer({
     const ancestorPeople = verticalFocusId
         ? ancestorPath(verticalPeople, verticalFocusId)
         : [];
+    // A marga tree has its own pool of people (lineage, descendants and the
+    // detached family trees), so its top person is looked up there.
     const topPerson = treeTopId
-        ? verticalPeople.find((person) => person.id === treeTopId)
+        ? (margaTree ? searchPool : verticalPeople).find(
+              (person) => person.id === treeTopId,
+          )
         : undefined;
     const treePeople = topPerson
         ? descendantSubtree(verticalPeople, topPerson.id)
@@ -981,13 +985,21 @@ export function TaromboExplorer({
     }, [ancestorFocusId, margaIdentity, margaLineagePath, margaTree, people]);
     // While a "Koneksi" is shown the red lineage only runs down to the
     // common ancestor, which also keeps every fold above it open.
+    const margaPath =
+        margaTree?.direction === 'upper'
+            ? margaLineagePath.map((person) => person.id)
+            : margaLowerLineagePath;
+    // With a chosen top person the marga path also runs from that person down.
+    const margaTopPath = topPerson
+        ? margaPath.includes(topPerson.id)
+            ? margaPath.slice(margaPath.indexOf(topPerson.id))
+            : [topPerson.id]
+        : margaPath;
     const treeLineagePath = connection
         ? connection.topPath
-        : margaTree?.direction === 'upper'
-          ? margaLineagePath.map((person) => person.id)
-          : margaTree?.direction === 'lower'
-            ? margaLowerLineagePath
-            : lineagePath;
+        : margaTree
+          ? margaTopPath
+          : lineagePath;
     const treeCenterPerson =
         topPerson ??
         verticalPeople.find(
@@ -997,10 +1009,12 @@ export function TaromboExplorer({
         verticalPeople[0];
     const treeCenterId = treeCenterPerson?.id ?? '';
     const renderedTreePeople = margaTree
-        ? [...margaTreePeople, ...margaDetachedPeople]
+        ? topPerson
+            ? descendantSubtree(searchPool, topPerson.id)
+            : searchPool
         : treePeople;
     const renderedTreeCenterId = margaTree
-        ? (margaTreePeople[0]?.id ?? '')
+        ? (topPerson?.id ?? margaTreePeople[0]?.id ?? '')
         : treeCenterId;
     const renderedHighlightId = margaTree ? margaIdentity?.id : selectedId;
     const snapshotBranches =
@@ -1012,7 +1026,11 @@ export function TaromboExplorer({
     // The separate "Nama Keluarga" trees below the main one can be left out of
     // a saved image just like a main-tree branch; unchecking one drops its
     // root and every descendant.
-    const snapshotDetachedTrees = margaTree ? margaDetachedRoots : [];
+    // Below a chosen top person only that person's branch is shown, so the
+    // separate family trees are left out.
+    const visibleDetachedRoots =
+        margaTree && !topPerson ? margaDetachedRoots : [];
+    const snapshotDetachedTrees = visibleDetachedRoots;
     const excludedPersonIds = new Set<string>();
 
     for (const branchId of excludedBranchIds) {
@@ -1023,8 +1041,8 @@ export function TaromboExplorer({
 
     const displayedDetachedRoots =
         excludedPersonIds.size === 0
-            ? margaDetachedRoots
-            : margaDetachedRoots.filter(
+            ? visibleDetachedRoots
+            : visibleDetachedRoots.filter(
                   (root) => !excludedPersonIds.has(root.id),
               );
 
@@ -1083,7 +1101,7 @@ export function TaromboExplorer({
               }
             : storedSelectedPerson);
 
-    const treeTopResetButton = topPerson && !margaTree && (
+    const treeTopResetButton = topPerson && (
         <button
             type="button"
             onClick={() => setTreeTopId(null)}
@@ -1826,7 +1844,7 @@ export function TaromboExplorer({
                             onSelect={
                                 margaTree ? undefined : handlePersonSelect
                             }
-                            onMakeTop={margaTree ? undefined : handleMakeTop}
+                            onMakeTop={handleMakeTop}
                             highlightId={renderedHighlightId}
                             editNodes={!margaTree}
                             selectOnClick={!margaTree}
@@ -2314,11 +2332,7 @@ export function TaromboExplorer({
                                                     ? undefined
                                                     : handlePersonSelect
                                             }
-                                            onMakeTop={
-                                                margaTree
-                                                    ? undefined
-                                                    : handleMakeTop
-                                            }
+                                            onMakeTop={handleMakeTop}
                                             highlightId={renderedHighlightId}
                                             editNodes={!margaTree}
                                             selectOnClick={!margaTree}

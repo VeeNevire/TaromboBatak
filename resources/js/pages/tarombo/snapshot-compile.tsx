@@ -13,6 +13,7 @@ import {
     LoaderCircle,
     PanelsTopLeft,
     RotateCcw,
+    Save,
     Trash2,
     Wand2,
 } from 'lucide-react';
@@ -43,6 +44,7 @@ import {
 import type { ComposeItem, LayerKind } from '@/lib/tarombo-compose';
 import { dashboard } from '@/routes';
 import tarombo from '@/routes/tarombo';
+import compileDraft from '@/routes/tarombo/snapshots/compile/draft';
 
 type Snapshot = {
     id: number;
@@ -75,6 +77,9 @@ type Layer = {
     name: string;
     kind: LayerKind;
     source: HTMLCanvasElement;
+    // Where the saved compile finds the image again: a copy of the tree,
+    // an image already stored on the server, or null for a new image.
+    sourceKey: string | null;
     thumb: string;
     crop: Box | null;
     placement: Box;
@@ -88,6 +93,29 @@ type StackItem = {
     crop: Box | null;
     placement: Box;
     kind: LayerKind | 'tree';
+};
+
+type DraftLayer = {
+    id: string;
+    name: string;
+    kind: LayerKind;
+    source: string;
+    crop: Box | null;
+    placement: Box;
+};
+
+type DraftState = {
+    frame_id: number | null;
+    remove_background: boolean;
+    tree: { crop: Box | null; placement: Box | null };
+    order: string[];
+    layers: DraftLayer[];
+};
+
+type CompileDraft = {
+    state: DraftState;
+    image_urls: Record<string, string>;
+    updated_at: string | null;
 };
 
 type MoveAction = 'up' | 'down' | 'front' | 'back';
@@ -143,6 +171,61 @@ function composeItems(
     return items;
 }
 
+function imageToCanvas(image: HTMLImageElement): HTMLCanvasElement {
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    canvas.getContext('2d')?.drawImage(image, 0, 0);
+
+    return canvas;
+}
+
+function canvasToPng(canvas: HTMLCanvasElement, name: string): Promise<File> {
+    return new Promise((resolve, reject) =>
+        canvas.toBlob(
+            (blob) =>
+                blob
+                    ? resolve(new File([blob], name, { type: 'image/png' }))
+                    : reject(new Error('gagal membuat gambar')),
+            'image/png',
+        ),
+    );
+}
+
+function buildDraftState(
+    frameId: number | null,
+    removeBackground: boolean,
+    treeCrop: Box | null,
+    treePlacement: Box | null,
+    order: string[],
+    layers: Layer[],
+    sourceFor: (layer: Layer) => string,
+): DraftState {
+    return {
+        frame_id: frameId,
+        remove_background: removeBackground,
+        tree: { crop: treeCrop, placement: treePlacement },
+        order,
+        layers: layers.map((layer) => ({
+            id: layer.id,
+            name: layer.name,
+            kind: layer.kind,
+            source: sourceFor(layer),
+            crop: layer.crop,
+            placement: layer.placement,
+        })),
+    };
+}
+
+// What the compile looks like, ignoring where each image is stored.
+const draftSignature = (...args: Parameters<typeof buildDraftState>) =>
+    JSON.stringify(buildDraftState(...args));
+
+const savedAtFormat = new Intl.DateTimeFormat('id-ID', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+});
+
 const isTyping = (target: EventTarget | null) =>
     target instanceof HTMLElement &&
     (target.tagName === 'INPUT' ||
@@ -160,22 +243,38 @@ export default function TaromboSnapshotCompile({
     snapshot,
     frames,
     accountName,
+    draft,
 }: {
     snapshot: Snapshot;
     frames: Frame[];
     accountName: string;
+    draft: CompileDraft | null;
 }) {
     const [selectedFrame, setSelectedFrame] = useState<Frame | null>(
-        frames[0] ?? null,
+        () =>
+            frames.find((frame) => frame.id === draft?.state.frame_id) ??
+            frames[0] ??
+            null,
     );
     const [framePickerOpen, setFramePickerOpen] = useState(false);
     const [collageOpen, setCollageOpen] = useState(false);
     const [previewError, setPreviewError] = useState<string | null>(null);
     const [producing, setProducing] = useState(false);
-    const [removeBackground, setRemoveBackground] = useState(true);
+    const [removeBackground, setRemoveBackground] = useState(
+        draft?.state.remove_background ?? true,
+    );
     const [assets, setAssets] = useState<Assets | null>(null);
-    const [crop, setCrop] = useState<Box | null>(null);
-    const [placement, setPlacement] = useState<Box | null>(null);
+    const [crop, setCrop] = useState<Box | null>(
+        draft?.state.tree.crop ?? null,
+    );
+    const [placement, setPlacement] = useState<Box | null>(
+        draft?.state.tree.placement ?? null,
+    );
+    // The saved compile's layers are rebuilt once the tree image is ready.
+    const [restoring, setRestoring] = useState(draft !== null);
+    const [savingDraft, setSavingDraft] = useState(false);
+    const [savedAt, setSavedAt] = useState(draft?.updated_at ?? null);
+    const [savedSignature, setSavedSignature] = useState<string | null>(null);
     const [layers, setLayers] = useState<Layer[]>([]);
     const [order, setOrder] = useState<string[]>([TREE_ID]);
     const [selectedId, setSelectedId] = useState<string>(TREE_ID);
@@ -325,6 +424,125 @@ export default function TaromboSnapshotCompile({
         );
     }, [ready, assets, selectedFrame, crop, placement, layers, order]);
 
+    // Rebuild the saved compile's layers once the tree image is loaded.
+    useEffect(() => {
+        if (!restoring || !ready || !draft) {
+            return;
+        }
+
+        let cancelled = false;
+        const tree = assets.tree;
+
+        Promise.all(
+            draft.state.layers.map(async (saved): Promise<Layer | null> => {
+                let source: HTMLCanvasElement | null = null;
+
+                if (saved.source === 'tree') {
+                    source = tree;
+                } else if (saved.source.startsWith('stored:')) {
+                    const url = draft.image_urls[saved.source.slice(7)];
+
+                    try {
+                        source = url
+                            ? imageToCanvas(await loadImageUrl(url))
+                            : null;
+                    } catch {
+                        source = null;
+                    }
+                }
+
+                return source
+                    ? {
+                          id: saved.id,
+                          name: saved.name,
+                          kind: saved.kind,
+                          source,
+                          sourceKey: saved.source,
+                          thumb: canvasThumbnail(source),
+                          crop: saved.crop,
+                          placement: saved.placement,
+                      }
+                    : null;
+            }),
+        ).then((loaded) => {
+            if (cancelled) {
+                return;
+            }
+
+            const restored = loaded.filter(
+                (layer): layer is Layer => layer !== null,
+            );
+            const known = new Set([
+                TREE_ID,
+                ...restored.map((layer) => layer.id),
+            ]);
+            const restoredOrder = draft.state.order.filter((id) =>
+                known.has(id),
+            );
+
+            for (const id of known) {
+                if (!restoredOrder.includes(id)) {
+                    restoredOrder.push(id);
+                }
+            }
+
+            // New layers keep numbering after the saved ones.
+            for (const layer of restored) {
+                const idNumber = Number(layer.id.replace(/^layer-/, ''));
+
+                if (Number.isFinite(idNumber)) {
+                    layerCounter.current = Math.max(
+                        layerCounter.current,
+                        idNumber,
+                    );
+                }
+
+                const nameNumber = /^(?:Ranting|Background) (\d+)$/.exec(
+                    layer.name,
+                );
+
+                if (nameNumber) {
+                    nameCounter.current[layer.kind] = Math.max(
+                        nameCounter.current[layer.kind],
+                        Number(nameNumber[1]),
+                    );
+                }
+            }
+
+            setLayers(restored);
+            setOrder(restoredOrder);
+            // The restored compile counts as saved; the frame is the saved
+            // one, or the first frame when that one is no longer available.
+            setSavedSignature(
+                draftSignature(
+                    (
+                        frames.find(
+                            (frame) => frame.id === draft.state.frame_id,
+                        ) ?? frames[0]
+                    )?.id ?? null,
+                    draft.state.remove_background,
+                    draft.state.tree.crop,
+                    draft.state.tree.placement,
+                    restoredOrder,
+                    restored,
+                    () => '',
+                ),
+            );
+
+            if (restored.length < draft.state.layers.length) {
+                setPreviewError(
+                    'Sebagian gambar lapisan yang tersimpan tidak bisa dimuat.',
+                );
+            }
+
+            setRestoring(false);
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [restoring, ready, assets, draft, frames]);
+
     const updateLayer = (id: string, patch: Partial<Layer>) =>
         setLayers((current) =>
             current.map((layer) =>
@@ -355,6 +573,7 @@ export default function TaromboSnapshotCompile({
                 name: `${kind === 'background' ? 'Background' : 'Ranting'} ${number}`,
                 kind,
                 source: canvas,
+                sourceKey: null,
                 thumb: canvasThumbnail(canvas),
                 crop: null,
                 placement: defaultLayerPlacement(
@@ -410,6 +629,11 @@ export default function TaromboSnapshotCompile({
                 name: `${item.name} (salinan)`,
                 kind: item.kind === 'tree' ? 'ranting' : item.kind,
                 source: item.source,
+                sourceKey:
+                    item.kind === 'tree'
+                        ? 'tree'
+                        : (layers.find((layer) => layer.id === id)?.sourceKey ??
+                          null),
                 thumb: item.thumb,
                 crop: item.crop,
                 placement: {
@@ -714,6 +938,132 @@ export default function TaromboSnapshotCompile({
         }
     };
 
+    const draftState = (sourceFor: (layer: Layer) => string) =>
+        buildDraftState(
+            selectedFrame?.id ?? null,
+            removeBackground,
+            crop,
+            placement,
+            order,
+            layers,
+            sourceFor,
+        );
+    const signature = draftSignature(
+        selectedFrame?.id ?? null,
+        removeBackground,
+        crop,
+        placement,
+        order,
+        layers,
+        () => '',
+    );
+    const hasWork = layers.length > 0 || crop !== null || placement !== null;
+    const unsaved =
+        !restoring &&
+        (savedSignature === null
+            ? savedAt === null && hasWork
+            : signature !== savedSignature);
+
+    // Warn before leaving with changes that are not saved yet.
+    useEffect(() => {
+        if (!unsaved) {
+            return;
+        }
+
+        const onBeforeUnload = (event: BeforeUnloadEvent) =>
+            event.preventDefault();
+        const removeVisitGuard = router.on(
+            'before',
+            (event) =>
+                event.detail.visit.method !== 'get' ||
+                window.confirm(
+                    'Ada perubahan Compile Gambar yang belum disimpan. Tetap tinggalkan halaman?',
+                ),
+        );
+
+        window.addEventListener('beforeunload', onBeforeUnload);
+
+        return () => {
+            window.removeEventListener('beforeunload', onBeforeUnload);
+            removeVisitGuard();
+        };
+    }, [unsaved]);
+
+    const saveDraft = async () => {
+        if (!ready || restoring || savingDraft) {
+            return;
+        }
+
+        setSavingDraft(true);
+        setPreviewError(null);
+
+        // Only images that are not on the server yet are uploaded.
+        const images: File[] = [];
+        const uploadIndex = new Map<string, number>();
+
+        try {
+            for (const layer of layers) {
+                if (layer.sourceKey === null) {
+                    uploadIndex.set(layer.id, images.length);
+                    images.push(
+                        await canvasToPng(layer.source, `${layer.id}.png`),
+                    );
+                }
+            }
+        } catch {
+            setSavingDraft(false);
+            setPreviewError('Gambar lapisan gagal disiapkan untuk disimpan.');
+
+            return;
+        }
+
+        const state = draftState(
+            (layer) => layer.sourceKey ?? `upload:${uploadIndex.get(layer.id)}`,
+        );
+        const signatureAtSave = signature;
+
+        // PHP only reads multipart bodies of POST requests, so the PUT is
+        // sent as a POST with Laravel's method spoofing.
+        router.post(
+            compileDraft.update.url(snapshot.id),
+            { _method: 'put', state: JSON.stringify(state), images },
+            {
+                forceFormData: true,
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: (page) => {
+                    const saved = page.props.draft as CompileDraft | null;
+
+                    if (saved) {
+                        const keys = new Map(
+                            saved.state.layers.map((layer) => [
+                                layer.id,
+                                layer.source,
+                            ]),
+                        );
+
+                        setLayers((current) =>
+                            current.map((layer) => ({
+                                ...layer,
+                                sourceKey:
+                                    keys.get(layer.id) ?? layer.sourceKey,
+                            })),
+                        );
+                        setSavedAt(saved.updated_at);
+                    }
+
+                    setSavedSignature(signatureAtSave);
+                },
+                onError: (errors) =>
+                    setPreviewError(
+                        Object.values(errors)[0] ??
+                            'Compile Gambar gagal disimpan.',
+                    ),
+                onFinish: () => setSavingDraft(false),
+            },
+        );
+    };
+
     const produce = async () => {
         if (!selectedFrame || producing || !ready) {
             return;
@@ -833,6 +1183,35 @@ export default function TaromboSnapshotCompile({
                         <Button
                             type="button"
                             variant="outline"
+                            disabled={!ready || restoring || savingDraft}
+                            onClick={saveDraft}
+                            title={
+                                savedAt
+                                    ? `Terakhir disimpan ${savedAtFormat.format(new Date(savedAt))}`
+                                    : 'Simpan supaya bisa dibuka dan diedit lagi'
+                            }
+                            className={
+                                unsaved
+                                    ? 'border-tb-primary text-tb-primary'
+                                    : undefined
+                            }
+                        >
+                            {savingDraft ? (
+                                <LoaderCircle className="size-4 animate-spin" />
+                            ) : (
+                                <Save className="size-4" />
+                            )}
+                            {savingDraft
+                                ? 'Menyimpan...'
+                                : restoring
+                                  ? 'Memuat...'
+                                  : unsaved
+                                    ? 'Simpan*'
+                                    : 'Simpan'}
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="outline"
                             onClick={() => setCollageOpen(true)}
                         >
                             <LayoutGrid className="size-4" />
@@ -840,7 +1219,7 @@ export default function TaromboSnapshotCompile({
                         </Button>
                         <Button
                             type="button"
-                            disabled={!ready || producing}
+                            disabled={!ready || restoring || producing}
                             onClick={produce}
                             className="bg-tb-primary hover:bg-tb-primary-light"
                         >
