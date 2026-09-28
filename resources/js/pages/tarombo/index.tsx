@@ -20,9 +20,11 @@ type Props = {
     accountTreePersonIds: string[];
     familyName: string | null;
     margaTree: {
+        margaId: number;
         margaName: string;
         identityPersonId: string | null;
         direction: 'upper' | 'lower';
+        canReorderSiblings: boolean;
     } | null;
 };
 

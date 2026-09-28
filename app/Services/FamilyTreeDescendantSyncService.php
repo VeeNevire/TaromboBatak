@@ -10,6 +10,37 @@ use Illuminate\Support\Facades\DB;
 class FamilyTreeDescendantSyncService
 {
     /**
+     * Propagate a newly appended person to this owner's trees that contain
+     * one of the person's paternal ancestors, plus the tree they edited.
+     */
+    public function syncTreesForNewDescendant(FamilyTree $sourceTree, Person $person): void
+    {
+        $ancestorIds = [];
+        $seen = [];
+        $current = $person;
+
+        while ($current !== null && ! isset($seen[$current->id])) {
+            $seen[$current->id] = true;
+            $ancestorIds[] = $current->id;
+            $current = $current->father_id === null
+                ? null
+                : Person::query()->find($current->father_id);
+        }
+
+        $trees = FamilyTree::query()
+            ->where('user_id', $sourceTree->user_id)
+            ->where(function ($query) use ($ancestorIds): void {
+                $query->whereIn('root_person_id', $ancestorIds)
+                    ->orWhereHas('people', fn ($people) => $people->whereIn('people.id', $ancestorIds))
+                    ->orWhereHas('nodes', fn ($nodes) => $nodes->whereIn('person_id', $ancestorIds));
+            })
+            ->get();
+
+        $trees->push($sourceTree);
+        $trees->unique('id')->each(fn (FamilyTree $tree) => $this->syncTreeAndDescendantVersions($tree));
+    }
+
+    /**
      * Add missing descendants to one tree and every alternative derived from it.
      * Existing nodes are deliberately left untouched because their placement may
      * be an override specific to that version.

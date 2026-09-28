@@ -9,6 +9,7 @@ use App\Models\FamilyTreeNode;
 use App\Models\Person;
 use App\Notifications\FamilyTreeAppendSubmitted;
 use App\Services\FamilyTreeActivityLogger;
+use App\Services\FamilyTreeDescendantSyncService;
 use App\Services\SharedFamilyTreeAppendService;
 use App\Services\TreeActivityLogger;
 use Illuminate\Http\RedirectResponse;
@@ -104,6 +105,7 @@ class SharedFamilyTreePersonController extends Controller
         StoreSharedFamilyTreePersonRequest $request,
         FamilyTree $familyTree,
         SharedFamilyTreeAppendService $appendService,
+        FamilyTreeDescendantSyncService $descendantSync,
     ): RedirectResponse {
         $validated = $request->validated();
         if (! $request->user()->can('manage', $familyTree)) {
@@ -125,7 +127,7 @@ class SharedFamilyTreePersonController extends Controller
                 'message' => 'Pengajuan tambah anggota telah dikirim ke pemilik silsilah untuk disetujui.',
             ]);
 
-            return to_route('family-trees.show', $familyTree);
+            return back();
         }
 
         $person = DB::transaction(function () use ($validated, $request, $familyTree, $appendService) {
@@ -138,6 +140,8 @@ class SharedFamilyTreePersonController extends Controller
                 createdBy: $request->user()->id,
             );
         });
+
+        $descendantSync->syncTreesForNewDescendant($familyTree, $person);
 
         app(TreeActivityLogger::class)->record(
             $person,
@@ -157,6 +161,6 @@ class SharedFamilyTreePersonController extends Controller
             $person->name,
         );
 
-        return to_route('family-trees.show', $familyTree);
+        return back();
     }
 }

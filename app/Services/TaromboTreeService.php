@@ -73,7 +73,9 @@ class TaromboTreeService
                 'marga',
                 'father:id,name,marga_id',
                 'father.marga:id,name',
+                'wives.marga:id,name',
                 'wives.father.marga',
+                'husbands.marga:id,name',
                 'husbands.father.marga',
                 'creator:id,name,role',
                 'claimingUsers:id,name,role,current_person_id',
@@ -170,7 +172,9 @@ class TaromboTreeService
                 'marga',
                 'father:id,name,marga_id',
                 'father.marga:id,name',
+                'wives.marga:id,name',
                 'wives.father.marga',
+                'husbands.marga:id,name',
                 'husbands.father.marga',
                 'creator:id,name,role',
                 'claimingUsers:id,name,role,current_person_id',
@@ -228,7 +232,7 @@ class TaromboTreeService
     }
 
     /**
-     * @return array<int, array{id: string, name: string, fatherName: string|null, fatherMarga: string|null}>
+     * @return array<int, array{id: string, name: string, marga: string|null, fatherName: string|null, fatherMarga: string|null}>
      */
     protected function spousesFor(Person $person): array
     {
@@ -238,6 +242,7 @@ class TaromboTreeService
             ->map(fn (Person $spouse): array => [
                 'id' => (string) $spouse->id,
                 'name' => $spouse->name,
+                'marga' => $spouse->marga?->name,
                 'fatherName' => $spouse->father?->name,
                 'fatherMarga' => $spouse->father?->marga?->name,
             ])

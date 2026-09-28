@@ -15,6 +15,7 @@ export type TreeNode = {
     pending?: boolean;
     claimed?: boolean;
     spouses?: string[];
+    spouseMargas?: string[];
 };
 
 const PASTELS = ['#DCE7DE', '#EFE2C9', '#E6D6E3', '#D6E1EC', '#F0DAD0'];
@@ -46,6 +47,7 @@ export function NodeCard({
     dashed = false,
     showAvatar = true,
     showSpouseNames = false,
+    showSpouseMargas = false,
 }: {
     node: TreeNode;
     highlighted?: boolean;
@@ -58,6 +60,7 @@ export function NodeCard({
     dashed?: boolean;
     showAvatar?: boolean;
     showSpouseNames?: boolean;
+    showSpouseMargas?: boolean;
 }) {
     const clickTimer = useRef<number | null>(null);
 
@@ -250,11 +253,17 @@ export function NodeCard({
                         Belum tersambung
                     </span>
                 ) : null}
-                {showSpouseNames && (node.spouses?.length ?? 0) > 0 && (
-                    <span className="mt-0.5 block border-t border-current/15 pt-0.5 text-[9px] leading-tight font-medium text-tb-primary">
-                        {node.spouses?.join(', ')}
-                    </span>
-                )}
+                {showSpouseNames &&
+                    ((showSpouseMargas
+                        ? node.spouseMargas?.length
+                        : node.spouses?.length) ?? 0) > 0 && (
+                        <span className="mt-0.5 block border-t border-current/15 pt-0.5 text-[9px] leading-tight font-medium text-tb-primary">
+                            {(showSpouseMargas
+                                ? node.spouseMargas
+                                : node.spouses
+                            )?.join(', ')}
+                        </span>
+                    )}
             </div>
         </div>
     );

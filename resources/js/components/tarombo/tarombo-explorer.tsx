@@ -95,9 +95,11 @@ type Props = {
     familyName?: string | null;
     treeSettings?: TreeSettings | null;
     margaTree?: {
+        margaId: number;
         margaName: string;
         identityPersonId: string | null;
         direction: 'upper' | 'lower';
+        canReorderSiblings: boolean;
     } | null;
 };
 
@@ -786,7 +788,9 @@ export function TaromboExplorer({
                 onChange={(event) => setShowSpouseNames(event.target.checked)}
                 className="size-4 rounded border-emerald-600 text-emerald-600 accent-emerald-600 focus:ring-2 focus:ring-emerald-500/30"
             />
-            Nama Pasangan Ditampilkan
+            {margaTree?.direction === 'lower'
+                ? 'Marga Pasangan Ditampilkan'
+                : 'Nama Pasangan Ditampilkan'}
         </label>
     );
 
@@ -1841,6 +1845,12 @@ export function TaromboExplorer({
                             showNodeAvatar={showNodeCircles}
                             showBranchToggles={showBranchToggles}
                             showSpouseNames={showSpouseNames}
+                            showSpouseMargas={margaTree?.direction === 'lower'}
+                            siblingOrderMargaId={margaTree?.margaId}
+                            canReorderSiblings={
+                                margaTree?.direction === 'lower' &&
+                                margaTree.canReorderSiblings
+                            }
                             allowBranchEntry={margaTree?.direction === 'lower'}
                             compactTerminalBranches={
                                 margaTree?.direction === 'lower'
@@ -2312,7 +2322,12 @@ export function TaromboExplorer({
                                             highlightId={renderedHighlightId}
                                             editNodes={!margaTree}
                                             selectOnClick={!margaTree}
-                                            showProfileOnName={!margaTree}
+                                            showProfileOnName={
+                                                !margaTree ||
+                                                (margaTree.direction ===
+                                                    'lower' &&
+                                                    margaTree.canReorderSiblings)
+                                            }
                                             readOnly={Boolean(margaTree)}
                                             alternativeTrees={
                                                 descendantAlternativeTrees
@@ -2333,6 +2348,17 @@ export function TaromboExplorer({
                                                 showBranchToggles
                                             }
                                             showSpouseNames={showSpouseNames}
+                                            showSpouseMargas={
+                                                margaTree?.direction === 'lower'
+                                            }
+                                            siblingOrderMargaId={
+                                                margaTree?.margaId
+                                            }
+                                            canReorderSiblings={
+                                                margaTree?.direction ===
+                                                    'lower' &&
+                                                margaTree.canReorderSiblings
+                                            }
                                             allowBranchEntry={
                                                 margaTree?.direction === 'lower'
                                             }
