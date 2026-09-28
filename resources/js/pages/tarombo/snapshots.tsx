@@ -35,6 +35,8 @@ type Snapshot = {
     can_delete?: boolean;
     size_bytes?: number | null;
     created_at: string | null;
+    // This account saved a Compile Gambar arrangement for this image.
+    has_compile_draft?: boolean;
 };
 
 type SnapshotPage = {
@@ -143,7 +145,9 @@ export default function TaromboSnapshots({
                                     )}
                                 >
                                     <Wand2 className="size-4" />
-                                    Compile Gambar
+                                    {sourceSnapshot.has_compile_draft
+                                        ? 'Lanjutkan Compile'
+                                        : 'Compile Gambar'}
                                 </Link>
                             </Button>
                         ) : (
@@ -230,6 +234,11 @@ export default function TaromboSnapshots({
                                             Tarombo Batak · {accountName}
                                         </span>
                                     </div>
+                                    {snapshot.has_compile_draft && (
+                                        <span className="text-tb-on-primary pointer-events-none absolute top-2 left-2 rounded-full bg-tb-primary px-2 py-0.5 text-[10px] font-semibold shadow-sm">
+                                            Compile tersimpan
+                                        </span>
+                                    )}
                                 </button>
                                 <CardContent className="flex items-start justify-between gap-3 p-4">
                                     <div className="min-w-0">
@@ -259,6 +268,23 @@ export default function TaromboSnapshots({
                                         </p>
                                     </div>
                                     <div className="flex shrink-0 items-center gap-1">
+                                        {snapshot.has_compile_draft && (
+                                            <Button
+                                                asChild
+                                                variant="outline"
+                                                size="sm"
+                                            >
+                                                <Link
+                                                    href={tarombo.snapshots.compile(
+                                                        snapshot.id,
+                                                    )}
+                                                    title="Buka Compile Gambar yang tersimpan"
+                                                >
+                                                    <Wand2 className="size-4" />
+                                                    Lanjutkan Compile
+                                                </Link>
+                                            </Button>
+                                        )}
                                         {snapshot.download_url && (
                                             <Button
                                                 asChild

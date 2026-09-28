@@ -420,9 +420,7 @@ function TreeBranch({
                 showProfileOnName ? () => onSelect?.(person.id) : undefined
             }
             onAvatarDoubleClick={
-                showProfileOnName && onMakeTop
-                    ? () => onMakeTop(person.id)
-                    : undefined
+                onMakeTop ? () => onMakeTop(person.id) : undefined
             }
             onNameClick={
                 showProfileOnName ? () => onOpenProfile(person) : undefined

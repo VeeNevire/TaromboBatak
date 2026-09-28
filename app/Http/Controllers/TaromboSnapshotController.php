@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\GenerateTaromboFrameRequest;
 use App\Http\Requests\StoreTaromboSnapshotRequest;
+use App\Models\TaromboCompileDraft;
 use App\Models\TaromboFrame;
 use App\Models\TaromboSnapshot;
 use App\Services\FamilyTreeActivityLogger;
@@ -30,6 +31,12 @@ class TaromboSnapshotController extends Controller
             fn ($scoped) => $scoped->whereBelongsTo($user),
         );
 
+        // Snapshots with a saved Compile Gambar arrangement of this account.
+        $draftSnapshotIds = TaromboCompileDraft::query()
+            ->where('user_id', $user->id)
+            ->pluck('tarombo_snapshot_id')
+            ->flip();
+
         $snapshots = TaromboSnapshot::query()
             ->tap($ownerScope)
             ->with(['centerPerson:id,name', 'user:id,name'])
@@ -50,6 +57,7 @@ class TaromboSnapshotController extends Controller
                     ? Storage::disk('local')->size($snapshot->path)
                     : null,
                 'created_at' => $snapshot->created_at?->toISOString(),
+                'has_compile_draft' => $draftSnapshotIds->has($snapshot->id),
             ]);
 
         $snapshotOptions = TaromboSnapshot::query()
@@ -58,7 +66,10 @@ class TaromboSnapshotController extends Controller
             ->latest()
             ->limit(60)
             ->get()
-            ->map(fn (TaromboSnapshot $snapshot) => $this->snapshotData($snapshot));
+            ->map(fn (TaromboSnapshot $snapshot) => [
+                ...$this->snapshotData($snapshot),
+                'has_compile_draft' => $draftSnapshotIds->has($snapshot->id),
+            ]);
 
         return Inertia::render('tarombo/snapshots', [
             'snapshots' => $snapshots,
@@ -107,7 +118,35 @@ class TaromboSnapshotController extends Controller
                     'area_height' => $frame->area_height,
                 ]),
             'accountName' => $request->user()->name,
+            'draft' => $this->draftData($request->user()->id, $taromboSnapshot),
         ]);
+    }
+
+    /**
+     * The signed-in account's saved Compile Gambar arrangement, with a URL for
+     * every layer image it uses.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function draftData(int $userId, TaromboSnapshot $snapshot): ?array
+    {
+        $draft = TaromboCompileDraft::query()
+            ->where('user_id', $userId)
+            ->where('tarombo_snapshot_id', $snapshot->id)
+            ->first();
+
+        if ($draft === null) {
+            return null;
+        }
+
+        return [
+            'state' => $draft->state,
+            'image_urls' => collect(TaromboCompileDraft::storedImages($draft->state))
+                ->mapWithKeys(fn (string $uuid) => [
+                    $uuid => route('tarombo.snapshots.compile.draft.image', [$snapshot, $uuid]),
+                ]),
+            'updated_at' => $draft->updated_at?->toIso8601String(),
+        ];
     }
 
     public function store(StoreTaromboSnapshotRequest $request): RedirectResponse
@@ -230,6 +269,12 @@ class TaromboSnapshotController extends Controller
         Gate::authorize('delete', $taromboSnapshot);
 
         Storage::disk('local')->delete($taromboSnapshot->path);
+
+        // Saved Compile Gambar arrangements go with their snapshot.
+        foreach (TaromboCompileDraft::query()->where('tarombo_snapshot_id', $taromboSnapshot->id)->pluck('user_id') as $userId) {
+            Storage::disk('local')->deleteDirectory(TaromboCompileDraft::directory($userId, $taromboSnapshot->id));
+        }
+
         $taromboSnapshot->delete();
 
         Inertia::flash('toast', [

@@ -37,6 +37,7 @@ use App\Http\Controllers\SharedFamilyTreePersonController;
 use App\Http\Controllers\StatusController;
 use App\Http\Controllers\StoryController;
 use App\Http\Controllers\SubAdminController;
+use App\Http\Controllers\TaromboCompileDraftController;
 use App\Http\Controllers\TaromboController;
 use App\Http\Controllers\TaromboFrameController;
 use App\Http\Controllers\TaromboSnapshotController;
@@ -230,6 +231,13 @@ Route::middleware(['auth'])->group(function () {
         ->name('tarombo.snapshots.store');
     Route::get('dashboard/tarombo/snapshots/{taromboSnapshot}/compile', [TaromboSnapshotController::class, 'compile'])
         ->name('tarombo.snapshots.compile');
+    Route::put('dashboard/tarombo/snapshots/{taromboSnapshot}/compile/draft', [TaromboCompileDraftController::class, 'update'])
+        ->middleware('throttle:20,1')
+        ->name('tarombo.snapshots.compile.draft.update');
+    Route::delete('dashboard/tarombo/snapshots/{taromboSnapshot}/compile/draft', [TaromboCompileDraftController::class, 'destroy'])
+        ->name('tarombo.snapshots.compile.draft.destroy');
+    Route::get('dashboard/tarombo/snapshots/{taromboSnapshot}/compile/draft/images/{uuid}', [TaromboCompileDraftController::class, 'image'])
+        ->name('tarombo.snapshots.compile.draft.image');
     Route::get('dashboard/tarombo/snapshots/{taromboSnapshot}/image', [TaromboSnapshotController::class, 'image'])
         ->name('tarombo.snapshots.image');
     Route::get('dashboard/tarombo/snapshots/{taromboSnapshot}/download', [TaromboSnapshotController::class, 'download'])
