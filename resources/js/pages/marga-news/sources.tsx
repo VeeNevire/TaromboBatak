@@ -145,7 +145,7 @@ export default function MargaNewsSources({
                                     </Label>
                                     <Input
                                         id="source-url"
-                                        type="url"
+                                        type="text"
                                         value={form.data.website_url}
                                         onChange={(event) =>
                                             form.setData(
@@ -153,9 +153,13 @@ export default function MargaNewsSources({
                                                 event.target.value,
                                             )
                                         }
-                                        placeholder="https://contoh.id"
+                                        placeholder="contoh.id atau https://contoh.id"
                                         maxLength={2048}
                                     />
+                                    <p className="text-xs text-tb-on-surface-variant">
+                                        Jika protokol tidak diisi, alamat akan
+                                        disimpan dengan https://.
+                                    </p>
                                     <InputError
                                         message={form.errors.website_url}
                                     />

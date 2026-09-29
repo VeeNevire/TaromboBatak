@@ -9,6 +9,23 @@ use Illuminate\Validation\Validator;
 
 class MargaNewsSourceRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $url = $this->input('website_url');
+
+        if (! is_string($url)) {
+            return;
+        }
+
+        $url = trim($url);
+
+        if ($url !== '' && preg_match('/^https?:\/\//i', $url) !== 1) {
+            $url = 'https://'.$url;
+        }
+
+        $this->merge(['website_url' => $url]);
+    }
+
     public function authorize(): bool
     {
         return $this->user()?->isAdmin() === true;

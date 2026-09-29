@@ -224,7 +224,7 @@ test('only admins manage website sources and sources can be limited to selected 
     $this->actingAs($admin)
         ->post(route('marga-news-sources.store'), [
             'name' => 'Berita Batak',
-            'website_url' => 'https://www.beritabatak.com/daerah',
+            'website_url' => 'www.beritabatak.com/daerah',
             'is_active' => true,
             'applies_to_all_topics' => false,
             'topic_ids' => [$topic->id],
@@ -234,7 +234,8 @@ test('only admins manage website sources and sources can be limited to selected 
 
     $source = MargaNewsSource::query()->where('domain', 'beritabatak.com')->sole();
 
-    expect($source->topics->modelKeys())->toBe([$topic->id]);
+    expect($source->website_url)->toBe('https://www.beritabatak.com/daerah')
+        ->and($source->topics->modelKeys())->toBe([$topic->id]);
 
     $this->actingAs(User::factory()->asSubAdmin()->create())
         ->get(route('marga-news-sources.index'))
