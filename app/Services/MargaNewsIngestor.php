@@ -11,8 +11,8 @@ use Illuminate\Support\Str;
 use Throwable;
 
 /**
- * Stores news items sent by the news agent as pending articles: duplicates are
- * skipped, text is cleaned and shortened, and the margas mentioned are tagged.
+ * Stores news items sent by the news agent as pending articles: duplicates and
+ * articles shorter than 200 words are skipped, and mentioned margas are tagged.
  */
 class MargaNewsIngestor
 {
@@ -21,7 +21,7 @@ class MargaNewsIngestor
 
     /**
      * @param  array<int, array<string, mixed>>  $items
-     * @return array{accepted: int, duplicates: int}
+     * @return array{accepted: int, duplicates: int, insufficient_content: int, without_image: int}
      */
     public function ingest(array $items, ?string $agent): array
     {
@@ -29,6 +29,8 @@ class MargaNewsIngestor
         $topics = MargaNewsTopic::query()->pluck('marga_id', 'id');
         $accepted = 0;
         $duplicates = 0;
+        $insufficientContent = 0;
+        $withoutImage = 0;
         $seenUrls = [];
         $seenTitles = [];
 
@@ -48,7 +50,16 @@ class MargaNewsIngestor
 
             $seenUrls[$urlHash] = true;
             $seenTitles[$titleHash] = true;
+            $content = $this->cleanArticleContent($item['content'] ?? null);
+
+            if ($this->wordCount($content) < 200) {
+                $insufficientContent++;
+
+                continue;
+            }
+
             $excerpt = $this->cleanText($item['excerpt'] ?? null, 300);
+            $imageUrl = $this->cleanImageUrl($item['image_url'] ?? null);
             $topicId = isset($item['topic_id']) && $topics->has($item['topic_id']) ? (int) $item['topic_id'] : null;
 
             $news = MargaNews::query()->create([
@@ -60,6 +71,8 @@ class MargaNewsIngestor
                 'publisher' => $this->cleanText($item['publisher'] ?? null, 120),
                 'excerpt' => $excerpt,
                 'summary' => $this->cleanText($item['summary'] ?? null, 500),
+                'content' => $content,
+                'image_url' => $imageUrl,
                 'published_at' => $this->parseDate($item['published_at'] ?? null),
                 'status' => MargaNews::STATUS_PENDING,
                 'submitted_by' => $agent !== null ? Str::limit($agent, 57) : null,
@@ -77,9 +90,52 @@ class MargaNewsIngestor
 
             $news->margas()->sync(array_values(array_unique($margaIds)));
             $accepted++;
+
+            if ($imageUrl === null) {
+                $withoutImage++;
+            }
         }
 
-        return ['accepted' => $accepted, 'duplicates' => $duplicates];
+        return [
+            'accepted' => $accepted,
+            'duplicates' => $duplicates,
+            'insufficient_content' => $insufficientContent,
+            'without_image' => $withoutImage,
+        ];
+    }
+
+    private function cleanArticleContent(mixed $content): ?string
+    {
+        if (! is_string($content)) {
+            return null;
+        }
+
+        $withBoundaries = preg_replace('/<[^>]*>/u', ' ', $content) ?? $content;
+        $plain = trim(preg_replace('/\s+/u', ' ', html_entity_decode($withBoundaries, ENT_QUOTES | ENT_HTML5)) ?? '');
+
+        return $plain === '' ? null : $plain;
+    }
+
+    private function wordCount(?string $content): int
+    {
+        if ($content === null) {
+            return 0;
+        }
+
+        preg_match_all('~[\p{L}\p{N}]+(?:[’\'-][\p{L}\p{N}]+)*~u', $content, $matches);
+
+        return count($matches[0]);
+    }
+
+    private function cleanImageUrl(mixed $imageUrl): ?string
+    {
+        if (! is_string($imageUrl) || filter_var($imageUrl, FILTER_VALIDATE_URL) === false) {
+            return null;
+        }
+
+        return in_array(strtolower((string) parse_url($imageUrl, PHP_URL_SCHEME)), ['http', 'https'], true)
+            ? $imageUrl
+            : null;
     }
 
     /** @return Collection<int, Marga> */

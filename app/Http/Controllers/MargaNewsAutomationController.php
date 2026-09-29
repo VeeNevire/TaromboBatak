@@ -1,0 +1,64 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Requests\UpdateMargaNewsAutomationRequest;
+use App\Models\MargaNewsAutomationSetting;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
+use Inertia\Response;
+
+class MargaNewsAutomationController extends Controller
+{
+    public function index(): Response
+    {
+        $setting = MargaNewsAutomationSetting::current();
+
+        return Inertia::render('marga-news/automation', [
+            'automation' => [
+                'enabled' => $setting->enabled,
+                'interval_minutes' => $setting->interval_minutes,
+                'prompt' => $setting->prompt ?? '',
+                'next_run_at' => $setting->next_run_at?->toIso8601String(),
+                'last_status' => $setting->last_status,
+                'last_started_at' => $setting->last_started_at?->toIso8601String(),
+                'last_finished_at' => $setting->last_finished_at?->toIso8601String(),
+                'last_accepted' => $setting->last_accepted,
+                'last_duplicates' => $setting->last_duplicates,
+                'last_error' => $setting->last_error,
+            ],
+            'hermes' => [
+                'configured' => filled(config('services.hermes.base_url'))
+                    && filled(config('services.hermes.token')),
+            ],
+        ]);
+    }
+
+    public function update(UpdateMargaNewsAutomationRequest $request): RedirectResponse
+    {
+        $values = $request->validated();
+        $enabled = (bool) $values['enabled'];
+        $interval = (int) $values['interval_minutes'];
+
+        if ($enabled && (! filled(config('services.hermes.base_url')) || ! filled(config('services.hermes.token')))) {
+            throw ValidationException::withMessages([
+                'enabled' => 'Isi HERMES_BASE_URL dan HERMES_TOKEN yang cocok dengan API_SERVER_KEY Hermes di .env sebelum mengaktifkan otomatisasi.',
+            ]);
+        }
+
+        MargaNewsAutomationSetting::current()->update([
+            'enabled' => $enabled,
+            'interval_minutes' => $interval,
+            'prompt' => $values['prompt'] ?? null,
+            'next_run_at' => $enabled ? now()->addMinutes($interval) : null,
+        ]);
+
+        return back()->with('toast', [
+            'type' => 'success',
+            'message' => $enabled
+                ? "Otomatisasi berita aktif. Run berikutnya sekitar {$interval} menit lagi."
+                : 'Otomatisasi berita dinonaktifkan.',
+        ]);
+    }
+}

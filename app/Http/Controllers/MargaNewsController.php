@@ -57,6 +57,10 @@ class MargaNewsController extends Controller
                 ->select('status', DB::raw('count(*) as total'))
                 ->groupBy('status')
                 ->pluck('total', 'status'),
+            'pendingHermesCount' => MargaNews::query()
+                ->where('status', MargaNews::STATUS_PENDING)
+                ->whereNotNull('marga_news_topic_id')
+                ->count(),
             'news' => MargaNews::query()
                 ->where('status', $status)
                 ->with(['margas:id,name,color', 'topic:id,keyword', 'reviewer:id,name'])
@@ -98,6 +102,24 @@ class MargaNewsController extends Controller
         ]);
     }
 
+    /** Approve every pending article collected by Hermes. */
+    public function approveAllHermes(Request $request): RedirectResponse
+    {
+        $count = MargaNews::query()
+            ->where('status', MargaNews::STATUS_PENDING)
+            ->whereNotNull('marga_news_topic_id')
+            ->update([
+                'status' => MargaNews::STATUS_APPROVED,
+                'reviewed_by' => $request->user()->id,
+                'reviewed_at' => now(),
+            ]);
+
+        return back()->with('toast', [
+            'type' => 'success',
+            'message' => "{$count} berita dari Hermes disetujui dan tampil di Berita Marga-Marga.",
+        ]);
+    }
+
     public function updateMargas(UpdateMargaNewsMargasRequest $request, MargaNews $margaNews): RedirectResponse
     {
         $margaNews->margas()->sync($request->validated('marga_ids') ?? []);
@@ -115,6 +137,8 @@ class MargaNewsController extends Controller
             'publisher' => $item->publisher,
             'excerpt' => $item->excerpt,
             'summary' => $item->summary,
+            'content' => $item->content,
+            'image_url' => $item->image_url,
             'published_at' => $item->published_at?->toIso8601String(),
             'margas' => $item->margas->map(fn (Marga $marga) => [
                 'id' => $marga->id,

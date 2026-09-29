@@ -26,6 +26,8 @@ class IngestMargaNewsRequest extends FormRequest
             'items.*.published_at' => ['nullable', 'string', 'max:60'],
             'items.*.excerpt' => ['nullable', 'string', 'max:5000'],
             'items.*.summary' => ['nullable', 'string', 'max:5000'],
+            'items.*.content' => ['required', 'string', 'min:1'],
+            'items.*.image_url' => ['nullable', 'url:http,https', 'max:2048'],
             'items.*.margas' => ['nullable', 'array', 'max:20'],
             'items.*.margas.*' => ['string', 'max:100'],
         ];
