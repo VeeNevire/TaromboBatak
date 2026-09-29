@@ -1,5 +1,12 @@
-import { Head, useForm } from '@inertiajs/react';
-import { AlertTriangle, Bot, Clock3, Save } from 'lucide-react';
+import { Head, useForm, usePoll } from '@inertiajs/react';
+import {
+    AlertTriangle,
+    Bot,
+    CheckCircle2,
+    Clock3,
+    LoaderCircle,
+    Save,
+} from 'lucide-react';
 import type { FormEvent, ReactNode } from 'react';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
@@ -25,6 +32,8 @@ type Automation = {
     last_status: 'idle' | 'running' | 'succeeded' | 'partial' | 'failed';
     last_started_at: string | null;
     last_finished_at: string | null;
+    run_lease_until: string | null;
+    run_is_stale: boolean;
     last_accepted: number;
     last_duplicates: number;
     last_error: string | null;
@@ -53,6 +62,8 @@ export default function MargaNewsAutomation({
     automation: Automation;
     hermes: { configured: boolean };
 }) {
+    usePoll(10000, { only: ['automation'] });
+
     const form = useForm({
         enabled: automation.enabled,
         interval_minutes: automation.interval_minutes,
@@ -202,11 +213,86 @@ export default function MargaNewsAutomation({
                             Status pengambilan berita
                         </CardTitle>
                         <CardDescription>
-                            Siklus terjadwal memanggil Hermes, lalu menyimpan
-                            berita baru untuk ditinjau admin.
+                            Status diperbarui otomatis setiap 10 detik selama
+                            halaman ini terbuka.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="grid gap-4 sm:grid-cols-2">
+                        {automation.last_status === 'running' && (
+                            <div
+                                role="status"
+                                className={`rounded-lg border p-4 sm:col-span-2 ${
+                                    automation.run_is_stale
+                                        ? 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300'
+                                        : 'border-tb-primary/30 bg-tb-primary/10 text-tb-on-surface'
+                                }`}
+                            >
+                                <p className="flex items-center gap-2 font-semibold">
+                                    {automation.run_is_stale ? (
+                                        <AlertTriangle className="size-4" />
+                                    ) : (
+                                        <LoaderCircle className="size-4 animate-spin" />
+                                    )}
+                                    {automation.run_is_stale
+                                        ? 'Proses sebelumnya belum selesai'
+                                        : 'Hermes sedang mencari berita'}
+                                </p>
+                                <p className="mt-1 text-sm">
+                                    {automation.run_is_stale
+                                        ? 'Proses melewati batas waktu tanpa hasil akhir. Sistem akan mencoba lagi pada siklus scheduler berikutnya.'
+                                        : 'Pencarian masih berlangsung. Hasil berhasil atau gagal akan tampil di sini setelah proses selesai.'}
+                                </p>
+                                <p className="mt-2 text-xs">
+                                    Dimulai:{' '}
+                                    {formatDate(automation.last_started_at)}
+                                    {automation.run_lease_until &&
+                                        ` · Batas pemulihan: ${formatDate(automation.run_lease_until)}`}
+                                </p>
+                            </div>
+                        )}
+                        {automation.last_status === 'succeeded' && (
+                            <div
+                                role="status"
+                                className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-800 sm:col-span-2 dark:text-emerald-300"
+                            >
+                                <p className="flex items-center gap-2 font-semibold">
+                                    <CheckCircle2 className="size-4" />
+                                    Pencarian selesai tanpa error
+                                </p>
+                                <p className="mt-1 text-sm">
+                                    {automation.last_accepted} berita baru
+                                    diterima, {automation.last_duplicates}{' '}
+                                    duplikat dilewati.
+                                </p>
+                            </div>
+                        )}
+                        {(automation.last_status === 'failed' ||
+                            automation.last_status === 'partial') && (
+                            <div
+                                role="alert"
+                                className={`rounded-lg border p-4 sm:col-span-2 ${
+                                    automation.last_status === 'failed'
+                                        ? 'border-destructive/30 bg-destructive/5 text-destructive'
+                                        : 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300'
+                                }`}
+                            >
+                                <p className="flex items-center gap-2 font-semibold">
+                                    <AlertTriangle className="size-4" />
+                                    {automation.last_status === 'failed'
+                                        ? 'Pencarian gagal'
+                                        : 'Pencarian selesai sebagian'}
+                                </p>
+                                <p className="mt-1 text-sm">
+                                    {automation.last_status === 'failed'
+                                        ? 'Siklus pencarian berhenti sebelum selesai.'
+                                        : `${automation.last_accepted} berita baru diterima. Beberapa topik mengalami masalah.`}
+                                </p>
+                                <pre className="mt-2 max-h-64 overflow-y-auto font-sans text-sm whitespace-pre-wrap">
+                                    {automation.last_error ||
+                                        'Detail kegagalan belum tersedia. Periksa log aplikasi.'}
+                                </pre>
+                            </div>
+                        )}
                         <StatusItem label="Status terakhir">
                             <Badge
                                 variant={
@@ -215,12 +301,18 @@ export default function MargaNewsAutomation({
                                         : 'outline'
                                 }
                             >
-                                {statusLabel[automation.last_status]}
+                                {automation.run_is_stale
+                                    ? 'Belum selesai'
+                                    : statusLabel[automation.last_status]}
                             </Badge>
                         </StatusItem>
                         <StatusItem label="Run berikutnya">
                             {automation.enabled
-                                ? formatDate(automation.next_run_at)
+                                ? automation.last_status === 'running'
+                                    ? automation.run_is_stale
+                                        ? 'Menunggu percobaan ulang'
+                                        : 'Setelah proses selesai'
+                                    : formatDate(automation.next_run_at)
                                 : 'Nonaktif'}
                         </StatusItem>
                         <StatusItem label="Mulai terakhir">
@@ -229,23 +321,12 @@ export default function MargaNewsAutomation({
                         <StatusItem label="Selesai terakhir">
                             {formatDate(automation.last_finished_at)}
                         </StatusItem>
-                        <StatusItem label="Berita baru diterima">
+                        <StatusItem label="Berita baru pada run terakhir">
                             {automation.last_accepted}
                         </StatusItem>
-                        <StatusItem label="Duplikat dilewati">
+                        <StatusItem label="Duplikat pada run terakhir">
                             {automation.last_duplicates}
                         </StatusItem>
-                        {automation.last_error && (
-                            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive sm:col-span-2">
-                                <p className="mb-1 flex items-center gap-2 font-semibold">
-                                    <AlertTriangle className="size-4" />
-                                    Pesan error terakhir
-                                </p>
-                                <pre className="font-sans whitespace-pre-wrap">
-                                    {automation.last_error}
-                                </pre>
-                            </div>
-                        )}
                     </CardContent>
                 </Card>
             </div>

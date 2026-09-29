@@ -346,6 +346,54 @@ test('news automation cannot be enabled without an active topic', function () {
     expect(MargaNewsAutomationSetting::current()->fresh()->enabled)->toBeFalse();
 });
 
+test('admin sees running, unfinished, and failed Hermes run details', function () {
+    $admin = User::factory()->asAdmin()->create();
+    $setting = MargaNewsAutomationSetting::current();
+    $setting->update([
+        'enabled' => true,
+        'last_status' => 'running',
+        'last_started_at' => now()->subMinutes(2),
+        'run_lease_until' => now()->addMinutes(8),
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('marga-news-automation.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('marga-news/automation')
+            ->where('automation.last_status', 'running')
+            ->where('automation.run_is_stale', false));
+
+    $setting->update([
+        'run_lease_until' => now()->subMinute(),
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('marga-news-automation.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('marga-news/automation')
+            ->where('automation.last_status', 'running')
+            ->where('automation.run_is_stale', true)
+            ->where('automation.run_lease_until', $setting->fresh()->run_lease_until->toIso8601String()));
+
+    $setting->update([
+        'last_status' => 'failed',
+        'last_finished_at' => now(),
+        'run_lease_until' => null,
+        'last_error' => 'Hermes HTTP 503: layanan tidak tersedia',
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('marga-news-automation.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('marga-news/automation')
+            ->where('automation.last_status', 'failed')
+            ->where('automation.run_is_stale', false)
+            ->where('automation.last_error', 'Hermes HTTP 503: layanan tidak tersedia'));
+});
+
 test('scheduled Hermes runs receive the configured topic source list', function () {
     $topic = MargaNewsTopic::query()->create([
         'keyword' => 'pesta bona taon',
