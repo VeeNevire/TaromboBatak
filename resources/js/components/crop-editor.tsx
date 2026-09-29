@@ -5,15 +5,18 @@ import { DraggableBox } from '@/components/draggable-box';
 import type { Box } from '@/components/draggable-box';
 
 const MAX_ZOOM = 8;
+// How much one + / − click grows or shrinks the crop box.
+const CROP_STEP = 1.15;
 
 // A point of the viewport (in displayed pixels) that must stay under the same
 // part of the image while the zoom changes.
 type ZoomAnchor = { x: number; y: number; ratio: number };
 
 /**
- * Crop with a zoomable canvas: zooming scales the whole image together with
- * the crop box, and the viewport scrolls horizontally and vertically once the
- * image is larger than it. Reports the crop in image pixels through `onChange`.
+ * Crop with a zoomable canvas: the + / − buttons resize the crop box, while
+ * zooming enlarges the image under a box that keeps its size on screen, and
+ * the viewport scrolls horizontally and vertically once the image is larger
+ * than it. Reports the crop in image pixels through `onChange`.
  */
 export function CropEditor({
     url,
@@ -30,11 +33,12 @@ export function CropEditor({
 }) {
     const viewportRef = useRef<HTMLDivElement>(null);
     const panRef = useRef<{ clientX: number; clientY: number } | null>(null);
-    const anchorRef = useRef<ZoomAnchor | null>(null);
+    const anchorRef = useRef<ZoomAnchor | 'crop' | null>(null);
     const [crop, setCrop] = useState<Box>(initialCrop);
     const [zoom, setZoom] = useState(1);
     // Width of the viewport, which is the image width at 100%.
     const [baseWidth, setBaseWidth] = useState(0);
+    const minSize = Math.max(1, Math.round(imageWidth * 0.02));
 
     useEffect(() => {
         onChange(crop);
@@ -47,8 +51,9 @@ export function CropEditor({
             return;
         }
 
-        const measure = () =>
-            setBaseWidth(viewport.getBoundingClientRect().width);
+        // offsetWidth ignores transforms, so the dialog's opening scale
+        // animation does not leave the image smaller than the viewport.
+        const measure = () => setBaseWidth(viewport.offsetWidth);
 
         measure();
         const observer = new ResizeObserver(measure);
@@ -57,7 +62,35 @@ export function CropEditor({
         return () => observer.disconnect();
     }, []);
 
-    // Zoom around a viewport point (its centre by default).
+    // The crop box scaled around its centre, kept on the image.
+    const scaleCrop = (factor: number): Box => {
+        const width = Math.round(
+            Math.min(imageWidth, Math.max(minSize, crop.width * factor)),
+        );
+        const height = Math.round(
+            Math.min(imageHeight, Math.max(minSize, crop.height * factor)),
+        );
+        const centerX = crop.x + crop.width / 2;
+        const centerY = crop.y + crop.height / 2;
+
+        return {
+            x: Math.round(
+                Math.min(imageWidth - width, Math.max(0, centerX - width / 2)),
+            ),
+            y: Math.round(
+                Math.min(
+                    imageHeight - height,
+                    Math.max(0, centerY - height / 2),
+                ),
+            ),
+            width,
+            height,
+        };
+    };
+
+    // Zoom the image around a viewport point, or around the crop box when
+    // none is given. The box keeps its size on screen, so zooming in crops a
+    // smaller part of the image and zooming out a larger one.
     const zoomTo = (next: number, pointX?: number, pointY?: number) => {
         const viewport = viewportRef.current;
         const nextZoom = Math.min(MAX_ZOOM, Math.max(1, next));
@@ -66,11 +99,11 @@ export function CropEditor({
             return;
         }
 
-        anchorRef.current = {
-            x: pointX ?? viewport.clientWidth / 2,
-            y: pointY ?? viewport.clientHeight / 2,
-            ratio: nextZoom / zoom,
-        };
+        anchorRef.current =
+            pointX !== undefined && pointY !== undefined
+                ? { x: pointX, y: pointY, ratio: nextZoom / zoom }
+                : 'crop';
+        setCrop(scaleCrop(zoom / nextZoom));
         setZoom(nextZoom);
     };
 
@@ -92,11 +125,23 @@ export function CropEditor({
         }
 
         anchorRef.current = null;
+
+        if (anchor === 'crop') {
+            const scale = viewport.scrollWidth / imageWidth;
+
+            viewport.scrollLeft =
+                (crop.x + crop.width / 2) * scale - viewport.clientWidth / 2;
+            viewport.scrollTop =
+                (crop.y + crop.height / 2) * scale - viewport.clientHeight / 2;
+
+            return;
+        }
+
         viewport.scrollLeft =
             (viewport.scrollLeft + anchor.x) * anchor.ratio - anchor.x;
         viewport.scrollTop =
             (viewport.scrollTop + anchor.y) * anchor.ratio - anchor.y;
-    }, [zoom]);
+    }, [zoom, crop, imageWidth]);
 
     // Ctrl/⌘ + wheel zooms; a plain wheel scrolls the viewport. React's wheel
     // listener is passive, so it cannot stop the browser zooming the page.
@@ -155,6 +200,14 @@ export function CropEditor({
         panRef.current = null;
     };
 
+    // Grow or shrink the crop box around its centre, keeping it on the image.
+    const resizeCrop = (factor: number) => {
+        anchorRef.current = zoom > 1 ? 'crop' : null;
+        setCrop(scaleCrop(factor));
+    };
+
+    const cropIsMin = crop.width <= minSize || crop.height <= minSize;
+    const cropIsMax = crop.width >= imageWidth && crop.height >= imageHeight;
     const canvasWidth = baseWidth * zoom;
     const canvasHeight = (canvasWidth * imageHeight) / imageWidth;
 
@@ -187,50 +240,62 @@ export function CropEditor({
                         spaceHeight={imageHeight}
                         box={crop}
                         onChange={setCrop}
-                        minSize={Math.max(1, Math.round(imageWidth * 0.02))}
+                        minSize={minSize}
                         dimOutside
                     />
                 </div>
             </div>
-            <div className="flex items-center justify-center gap-3">
-                <button
-                    type="button"
-                    onClick={() => zoomTo(zoom / 1.25)}
-                    disabled={zoom <= 1}
-                    aria-label="Perkecil gambar"
-                    title="Perkecil gambar"
-                    className="inline-flex size-9 items-center justify-center rounded-lg border border-tb-outline-variant text-tb-on-surface hover:bg-tb-surface-container disabled:opacity-40"
-                >
-                    <Minus className="size-4" />
-                </button>
-                <input
-                    type="range"
-                    min={1}
-                    max={MAX_ZOOM}
-                    step={0.05}
-                    value={zoom}
-                    onChange={(event) => zoomTo(Number(event.target.value))}
-                    aria-label="Ukuran gambar"
-                    className="w-48 accent-tb-primary"
-                />
-                <button
-                    type="button"
-                    onClick={() => zoomTo(zoom * 1.25)}
-                    disabled={zoom >= MAX_ZOOM}
-                    aria-label="Perbesar gambar"
-                    title="Perbesar gambar"
-                    className="inline-flex size-9 items-center justify-center rounded-lg border border-tb-outline-variant text-tb-on-surface hover:bg-tb-surface-container disabled:opacity-40"
-                >
-                    <Plus className="size-4" />
-                </button>
-                <span className="w-12 text-sm text-tb-on-surface-variant tabular-nums">
-                    {Math.round(zoom * 100)}%
-                </span>
+            <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3">
+                <div className="flex items-center gap-2">
+                    <span className="text-sm text-tb-on-surface-variant">
+                        Ukuran kotak
+                    </span>
+                    <button
+                        type="button"
+                        onClick={() => resizeCrop(1 / CROP_STEP)}
+                        disabled={cropIsMin}
+                        aria-label="Perkecil kotak potong"
+                        title="Perkecil kotak potong"
+                        className="inline-flex size-9 items-center justify-center rounded-lg border border-tb-outline-variant text-tb-on-surface hover:bg-tb-surface-container disabled:opacity-40"
+                    >
+                        <Minus className="size-4" />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => resizeCrop(CROP_STEP)}
+                        disabled={cropIsMax}
+                        aria-label="Perbesar kotak potong"
+                        title="Perbesar kotak potong"
+                        className="inline-flex size-9 items-center justify-center rounded-lg border border-tb-outline-variant text-tb-on-surface hover:bg-tb-surface-container disabled:opacity-40"
+                    >
+                        <Plus className="size-4" />
+                    </button>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="text-sm text-tb-on-surface-variant">
+                        Zoom gambar
+                    </span>
+                    <input
+                        type="range"
+                        min={1}
+                        max={MAX_ZOOM}
+                        step={0.05}
+                        value={zoom}
+                        onChange={(event) => zoomTo(Number(event.target.value))}
+                        aria-label="Zoom gambar"
+                        className="w-40 accent-tb-primary"
+                    />
+                    <span className="w-12 text-sm text-tb-on-surface-variant tabular-nums">
+                        {Math.round(zoom * 100)}%
+                    </span>
+                </div>
             </div>
             <p className="text-center text-xs text-tb-on-surface-variant">
-                Perbesar/perkecil gambar dengan slider, tombol, atau Ctrl +
-                scroll. Saat diperbesar, gunakan scroll bar atau geser gambar di
-                luar kotak. Bagian di dalam kotak menjadi hasil potongan.
+                Tombol + / − mengubah ukuran kotak potong. Slider atau Ctrl +
+                scroll memperbesar gambar dengan ukuran kotak tetap, jadi bagian
+                yang dipotong makin kecil; saat diperbesar gunakan scroll bar
+                atau geser gambar di luar kotak. Bagian di dalam kotak menjadi
+                hasil potongan.
             </p>
         </div>
     );

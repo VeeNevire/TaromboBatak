@@ -112,6 +112,83 @@ test('an account can save a compiled tarombo frame image for its own snapshot an
         ->assertNotFound();
 });
 
+test('a produced result can be reopened in compile and replaced in place', function () {
+    Storage::fake('local');
+    $owner = User::factory()->create();
+    $snapshot = TaromboSnapshot::factory()->for($owner)->create(['view' => 'tree']);
+    $otherSnapshot = TaromboSnapshot::factory()->for($owner)->create();
+    $frame = TaromboFrame::factory()->create(['is_active' => true]);
+    $compiled = fn () => UploadedFile::fake()->image('tarombo-frame.jpg', 1600, 1000);
+
+    $this->actingAs($owner)
+        ->post(route('tarombo.snapshots.generate'), [
+            'snapshot_id' => $snapshot->id,
+            'frame_id' => $frame->id,
+            'image' => $compiled(),
+        ])
+        ->assertSessionHasNoErrors();
+
+    $result = TaromboSnapshot::query()->latest('id')->firstOrFail();
+    $oldPath = $result->path;
+
+    expect($result->source_snapshot_id)->toBe($snapshot->id);
+
+    $this->actingAs($owner)
+        ->get(route('tarombo.snapshots.index', ['filter' => 'compiled']))
+        ->assertInertia(fn ($page) => $page
+            ->where('snapshots.data.0.id', $result->id)
+            ->where('snapshots.data.0.editable_result', true));
+
+    $this->actingAs($owner)
+        ->get(route('tarombo.snapshots.compile', $result))
+        ->assertInertia(fn ($page) => $page
+            ->component('tarombo/snapshot-compile')
+            ->where('snapshot.id', $snapshot->id)
+            ->where('targetSnapshotId', $result->id));
+
+    $this->actingAs($owner)
+        ->post(route('tarombo.snapshots.generate'), [
+            'snapshot_id' => $snapshot->id,
+            'target_snapshot_id' => $result->id,
+            'frame_id' => $frame->id,
+            'image' => $compiled(),
+        ])
+        ->assertRedirect(route('tarombo.snapshots.index'))
+        ->assertSessionHasNoErrors();
+
+    $result->refresh();
+
+    expect(TaromboSnapshot::query()->count())->toBe(3)
+        ->and($result->path)->not->toBe($oldPath);
+    Storage::disk('local')->assertMissing($oldPath);
+    Storage::disk('local')->assertExists($result->path);
+
+    // The result must come from the snapshot being compiled.
+    $this->actingAs($owner)
+        ->post(route('tarombo.snapshots.generate'), [
+            'snapshot_id' => $otherSnapshot->id,
+            'target_snapshot_id' => $result->id,
+            'frame_id' => $frame->id,
+            'image' => $compiled(),
+        ])
+        ->assertStatus(422);
+
+    // Only the owner of the result can replace it; access errors redirect with a toast.
+    $pathBefore = $result->path;
+
+    $this->actingAs(User::factory()->create(['role' => 'admin']))
+        ->post(route('tarombo.snapshots.generate'), [
+            'snapshot_id' => $snapshot->id,
+            'target_snapshot_id' => $result->id,
+            'frame_id' => $frame->id,
+            'image' => $compiled(),
+        ])
+        ->assertRedirect();
+
+    expect($result->refresh()->path)->toBe($pathBefore)
+        ->and(TaromboSnapshot::query()->count())->toBe(3);
+});
+
 test('only an admin can set the content area of a frame, inside the frame bounds', function () {
     $frame = TaromboFrame::factory()->create([
         'canvas_width' => 1600,

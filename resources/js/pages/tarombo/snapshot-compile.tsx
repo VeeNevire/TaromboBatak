@@ -246,11 +246,14 @@ export default function TaromboSnapshotCompile({
     frames,
     accountName,
     draft,
+    targetSnapshotId,
 }: {
     snapshot: Snapshot;
     frames: Frame[];
     accountName: string;
     draft: CompileDraft | null;
+    // A produced result being edited; Produce replaces it.
+    targetSnapshotId: number | null;
 }) {
     const [selectedFrame, setSelectedFrame] = useState<Frame | null>(
         () =>
@@ -853,10 +856,14 @@ export default function TaromboSnapshotCompile({
         Math.min(VIEW_ZOOM_MAX, Math.max(VIEW_ZOOM_MIN, value));
 
     const zoomInView = () =>
-        setViewZoom((current) => clampViewZoom((current ?? 1) + VIEW_ZOOM_STEP));
+        setViewZoom((current) =>
+            clampViewZoom((current ?? 1) + VIEW_ZOOM_STEP),
+        );
 
     const zoomOutView = () =>
-        setViewZoom((current) => clampViewZoom((current ?? 1) - VIEW_ZOOM_STEP));
+        setViewZoom((current) =>
+            clampViewZoom((current ?? 1) - VIEW_ZOOM_STEP),
+        );
 
     const resetView = () => setViewZoom(null);
 
@@ -1147,7 +1154,12 @@ export default function TaromboSnapshotCompile({
 
         router.post(
             tarombo.snapshots.generate().url,
-            { snapshot_id: snapshot.id, frame_id: selectedFrame.id, image },
+            {
+                snapshot_id: snapshot.id,
+                target_snapshot_id: targetSnapshotId,
+                frame_id: selectedFrame.id,
+                image,
+            },
             {
                 forceFormData: true,
                 onError: (errors) => {
@@ -1183,6 +1195,9 @@ export default function TaromboSnapshotCompile({
                             Compile Gambar
                         </h1>
                         <p className="truncate text-sm text-tb-on-surface-variant">
+                            {targetSnapshotId !== null
+                                ? 'Mengedit hasil compile · '
+                                : ''}
                             {label}
                             {selectedFrame ? ` · ${selectedFrame.name}` : ''}
                         </p>
@@ -1280,7 +1295,11 @@ export default function TaromboSnapshotCompile({
                             ) : (
                                 <Wand2 className="size-4" />
                             )}
-                            {producing ? 'Memproses...' : 'Produce'}
+                            {producing
+                                ? 'Memproses...'
+                                : targetSnapshotId !== null
+                                  ? 'Perbarui Hasil'
+                                  : 'Produce'}
                         </Button>
                     </div>
                 </div>
@@ -1345,7 +1364,7 @@ export default function TaromboSnapshotCompile({
                     >
                         <ZoomOut className="size-4" />
                     </Button>
-                    <span className="w-12 text-center text-sm tabular-nums text-tb-on-surface">
+                    <span className="w-12 text-center text-sm text-tb-on-surface tabular-nums">
                         {Math.round((viewZoom ?? 1) * 100)}%
                     </span>
                     <Button

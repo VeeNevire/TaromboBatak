@@ -17,6 +17,8 @@ class GenerateTaromboFrameRequest extends FormRequest
     {
         return [
             'snapshot_id' => ['required', 'integer', 'exists:tarombo_snapshots,id'],
+            // An earlier result of this snapshot to replace instead of adding a new one.
+            'target_snapshot_id' => ['nullable', 'integer', 'exists:tarombo_snapshots,id'],
             'frame_id' => ['required', 'integer', 'exists:tarombo_frames,id'],
             'image' => ['required', 'image', 'mimes:jpg,jpeg', 'mimetypes:image/jpeg', 'max:20480'],
         ];

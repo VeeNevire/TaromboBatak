@@ -14,6 +14,7 @@ use Illuminate\Support\Carbon;
  * @property int $user_id
  * @property int|null $center_person_id
  * @property int|null $tarombo_frame_id
+ * @property int|null $source_snapshot_id
  * @property string $view
  * @property string|null $title
  * @property int|null $resolution
@@ -26,7 +27,7 @@ use Illuminate\Support\Carbon;
  * @property-read User $user
  * @property-read Person|null $centerPerson
  */
-#[Fillable(['user_id', 'center_person_id', 'tarombo_frame_id', 'view', 'title', 'resolution', 'paper_size', 'orientation', 'included_person_ids', 'path'])]
+#[Fillable(['user_id', 'center_person_id', 'tarombo_frame_id', 'source_snapshot_id', 'view', 'title', 'resolution', 'paper_size', 'orientation', 'included_person_ids', 'path'])]
 class TaromboSnapshot extends Model
 {
     /** @use HasFactory<TaromboSnapshotFactory> */
@@ -48,6 +49,16 @@ class TaromboSnapshot extends Model
     public function taromboFrame(): BelongsTo
     {
         return $this->belongsTo(TaromboFrame::class);
+    }
+
+    /**
+     * The original tree this Compile Gambar result was produced from.
+     *
+     * @return BelongsTo<TaromboSnapshot, $this>
+     */
+    public function source(): BelongsTo
+    {
+        return $this->belongsTo(TaromboSnapshot::class, 'source_snapshot_id');
     }
 
     protected function casts(): array
