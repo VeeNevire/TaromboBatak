@@ -63,7 +63,9 @@ class TaromboSnapshotController extends Controller
                     ? Storage::disk('local')->size($snapshot->path)
                     : null,
                 'created_at' => $snapshot->created_at?->toISOString(),
-                'has_compile_draft' => $draftSnapshotIds->has($snapshot->id),
+                // A result shares the saved arrangement of the tree it came from.
+                'has_compile_draft' => $draftSnapshotIds->has($snapshot->source_snapshot_id ?? $snapshot->id),
+                'editable_result' => $snapshot->source_snapshot_id !== null && $snapshot->user_id === $user->id,
             ]);
 
         $snapshotOptions = TaromboSnapshot::query()
@@ -74,7 +76,7 @@ class TaromboSnapshotController extends Controller
             ->get()
             ->map(fn (TaromboSnapshot $snapshot) => [
                 ...$this->snapshotData($snapshot),
-                'has_compile_draft' => $draftSnapshotIds->has($snapshot->id),
+                'has_compile_draft' => $draftSnapshotIds->has($snapshot->source_snapshot_id ?? $snapshot->id),
             ]);
 
         return Inertia::render('tarombo/snapshots', [
@@ -100,6 +102,19 @@ class TaromboSnapshotController extends Controller
     {
         Gate::authorize('view', $taromboSnapshot);
 
+        // Opening a produced result edits the tree it came from, and Produce
+        // then replaces that result instead of adding another image.
+        // Results without a source (older ones) are compiled as plain images.
+        $target = null;
+        $source = $taromboSnapshot->source;
+
+        if ($source !== null) {
+            Gate::authorize('view', $source);
+            // Only the owner may replace the result; others produce a new image.
+            $target = $request->user()->can('delete', $taromboSnapshot) ? $taromboSnapshot : null;
+            $taromboSnapshot = $source;
+        }
+
         return Inertia::render('tarombo/snapshot-compile', [
             'snapshot' => [
                 'id' => $taromboSnapshot->id,
@@ -108,6 +123,7 @@ class TaromboSnapshotController extends Controller
                 'center_person_name' => $taromboSnapshot->centerPerson?->name,
                 'image_url' => route('tarombo.snapshots.image', $taromboSnapshot),
             ],
+            'targetSnapshotId' => $target?->id,
             'frames' => TaromboFrame::query()
                 ->active()
                 ->nonCollage()
@@ -206,6 +222,15 @@ class TaromboSnapshotController extends Controller
             ->active()
             ->findOrFail($request->integer('frame_id'));
 
+        $target = null;
+
+        if ($request->filled('target_snapshot_id')) {
+            $target = TaromboSnapshot::query()->findOrFail($request->integer('target_snapshot_id'));
+
+            Gate::authorize('delete', $target);
+            abort_unless($target->source_snapshot_id === $snapshot->id, 422, 'Gambar hasil tidak berasal dari gambar ini.');
+        }
+
         $image = $request->file('image');
 
         abort_unless($image instanceof UploadedFile, 422);
@@ -214,16 +239,30 @@ class TaromboSnapshotController extends Controller
 
         abort_if($path === false, 500, 'Gambar gabungan gagal disimpan.');
 
-        $request->user()->taromboSnapshots()->create([
-            'center_person_id' => $snapshot->center_person_id,
-            'tarombo_frame_id' => $frame->id,
-            'view' => $snapshot->view,
-            'path' => $path,
-        ]);
+        if ($target !== null) {
+            $oldPath = $target->path;
+
+            $target->update([
+                'tarombo_frame_id' => $frame->id,
+                'path' => $path,
+            ]);
+
+            Storage::disk('local')->delete($oldPath);
+        } else {
+            $request->user()->taromboSnapshots()->create([
+                'center_person_id' => $snapshot->center_person_id,
+                'tarombo_frame_id' => $frame->id,
+                'source_snapshot_id' => $snapshot->id,
+                'view' => $snapshot->view,
+                'path' => $path,
+            ]);
+        }
 
         Inertia::flash('toast', [
             'type' => 'success',
-            'message' => 'Gambar Tarombo berhasil digabungkan dengan frame.',
+            'message' => $target !== null
+                ? 'Gambar hasil compile berhasil diperbarui.'
+                : 'Gambar Tarombo berhasil digabungkan dengan frame.',
         ]);
 
         return to_route('tarombo.snapshots.index');

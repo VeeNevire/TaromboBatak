@@ -4,6 +4,7 @@ import {
     Download,
     Images,
     LayoutGrid,
+    Pencil,
     ShieldCheck,
     Trash2,
     Wand2,
@@ -38,6 +39,8 @@ type Snapshot = {
     created_at: string | null;
     // This account saved a Compile Gambar arrangement for this image.
     has_compile_draft?: boolean;
+    // A Produce result that can be reopened in Compile Gambar and replaced.
+    editable_result?: boolean;
 };
 
 type SnapshotPage = {
@@ -184,7 +187,11 @@ export default function TaromboSnapshots({
                     </div>
                 </div>
 
-                <Tabs value={filter} defaultValue="all" onValueChange={applyFilter}>
+                <Tabs
+                    value={filter}
+                    defaultValue="all"
+                    onValueChange={applyFilter}
+                >
                     <TabsList>
                         <TabsTrigger value="all">Semua</TabsTrigger>
                         <TabsTrigger value="compiled">
@@ -295,7 +302,7 @@ export default function TaromboSnapshots({
                                         </p>
                                     </div>
                                     <div className="flex shrink-0 items-center gap-1">
-                                        {snapshot.has_compile_draft && (
+                                        {snapshot.editable_result ? (
                                             <Button
                                                 asChild
                                                 variant="outline"
@@ -305,12 +312,30 @@ export default function TaromboSnapshots({
                                                     href={tarombo.snapshots.compile(
                                                         snapshot.id,
                                                     )}
-                                                    title="Buka Compile Gambar yang tersimpan"
+                                                    title="Edit hasil ini di Compile Gambar lalu perbarui gambarnya"
                                                 >
-                                                    <Wand2 className="size-4" />
-                                                    Lanjutkan Compile
+                                                    <Pencil className="size-4" />
+                                                    Edit Compile
                                                 </Link>
                                             </Button>
+                                        ) : (
+                                            snapshot.has_compile_draft && (
+                                                <Button
+                                                    asChild
+                                                    variant="outline"
+                                                    size="sm"
+                                                >
+                                                    <Link
+                                                        href={tarombo.snapshots.compile(
+                                                            snapshot.id,
+                                                        )}
+                                                        title="Buka Compile Gambar yang tersimpan"
+                                                    >
+                                                        <Wand2 className="size-4" />
+                                                        Lanjutkan Compile
+                                                    </Link>
+                                                </Button>
+                                            )
                                         )}
                                         {snapshot.download_url && (
                                             <Button
