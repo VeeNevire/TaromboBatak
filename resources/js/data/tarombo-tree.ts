@@ -264,9 +264,19 @@ export function buildTaromboPeople(rows: TaromboPersonRow[]): TaromboPerson[] {
         return [];
     }
 
-    const byId = new Map(rows.map((row) => [row.id, row]));
+    // The same person can arrive through more than one tree source. A person
+    // must have only one node in either the radial or descendant diagram.
+    const byId = new Map<string, TaromboPersonRow>();
+
+    for (const row of rows) {
+        if (!byId.has(row.id)) {
+            byId.set(row.id, row);
+        }
+    }
+
+    const uniqueRows = [...byId.values()];
     const parentById = new Map(
-        rows.map((row) => [
+        uniqueRows.map((row) => [
             row.id,
             row.parentId && row.parentId !== row.id && byId.has(row.parentId)
                 ? row.parentId
@@ -275,7 +285,7 @@ export function buildTaromboPeople(rows: TaromboPersonRow[]): TaromboPerson[] {
     );
     const childrenOf = new Map<string, string[]>();
 
-    for (const row of rows) {
+    for (const row of uniqueRows) {
         const parentId = parentById.get(row.id);
 
         if (parentId) {
@@ -285,7 +295,7 @@ export function buildTaromboPeople(rows: TaromboPersonRow[]): TaromboPerson[] {
         }
     }
 
-    const roots = rows.filter((row) => parentById.get(row.id) === null);
+    const roots = uniqueRows.filter((row) => parentById.get(row.id) === null);
     const generation = new Map<string, number>();
     const visited = new Set<string>(roots.map((root) => root.id));
     const queue: string[] = roots.map((root) => root.id);
@@ -311,14 +321,14 @@ export function buildTaromboPeople(rows: TaromboPersonRow[]): TaromboPerson[] {
 
     // Legacy cycles have no valid root. Keep those records disconnected rather
     // than inventing a genealogical relationship in the visualization.
-    for (const row of rows) {
+    for (const row of uniqueRows) {
         if (!visited.has(row.id)) {
             parentById.set(row.id, null);
             generation.set(row.id, 1);
         }
     }
 
-    return rows.map((row) => {
+    return uniqueRows.map((row) => {
         return {
             ...row,
             parentId: parentById.get(row.id) ?? null,

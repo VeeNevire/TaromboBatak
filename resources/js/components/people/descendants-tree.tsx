@@ -964,9 +964,32 @@ export function DescendantsTree({
     }
 
     const visibleRoots = hideRoot ? (childrenOf.get(root.id) ?? []) : [root];
-    const detachedRoots = detachedPeople.filter(
-        (person) => person.id !== center.id,
-    );
+    const visiblePersonIds = new Set<string>();
+    const pendingVisibleIds = visibleRoots.map((person) => person.id);
+
+    for (let index = 0; index < pendingVisibleIds.length; index++) {
+        const id = pendingVisibleIds[index];
+
+        if (visiblePersonIds.has(id)) {
+            continue;
+        }
+
+        visiblePersonIds.add(id);
+        pendingVisibleIds.push(
+            ...(childrenOf.get(id) ?? []).map((child) => child.id),
+        );
+    }
+
+    const detachedIds = new Set<string>();
+    const detachedRoots = detachedPeople.filter((person) => {
+        if (visiblePersonIds.has(person.id) || detachedIds.has(person.id)) {
+            return false;
+        }
+
+        detachedIds.add(person.id);
+
+        return true;
+    });
     const detachedLeafRoots = detachedRoots.filter(
         (person) => (childrenOf.get(person.id) ?? []).length === 0,
     );

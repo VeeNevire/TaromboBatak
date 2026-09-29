@@ -79,6 +79,54 @@ test('a family store creates the father, mother, and all sibling rows as people'
             ->family_name)->toBe('Keluarga Ompu Sitorus');
 });
 
+test('retrying a family creation with the same submission key saves it once', function () {
+    $marga = Marga::factory()->create();
+    $payload = [
+        'submission_key' => 'family-double-click-1',
+        'name' => 'Anak Tanpa Ayah',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'children' => [['name' => 'Anak Tanpa Ayah', 'gender' => 'L']],
+    ];
+
+    $this->actingAs($this->admin)->post(route('people.store'), $payload)
+        ->assertRedirect(route('people.index'));
+    $count = Person::query()->count();
+
+    $this->actingAs($this->admin)->post(route('people.store'), $payload)
+        ->assertRedirect(route('people.index'));
+
+    expect(Person::query()->count())->toBe($count)
+        ->and(Person::query()->where('name', 'Anak Tanpa Ayah')->count())->toBe(1);
+});
+
+test('retrying an edit with a new root sibling saves the sibling once', function () {
+    $marga = Marga::factory()->create();
+    $focus = Person::factory()->create([
+        'name' => 'Akar Awal',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'father_id' => null,
+    ]);
+    $payload = [
+        'submission_key' => 'edit-double-click-1',
+        'name' => $focus->name,
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'children' => [
+            ['id' => $focus->id, 'name' => $focus->name, 'gender' => 'L'],
+            ['name' => 'Saudara Baru', 'gender' => 'L'],
+        ],
+    ];
+
+    $this->actingAs($this->admin)->put(route('people.update', $focus), $payload)
+        ->assertRedirect(route('people.edit', $focus));
+    $this->actingAs($this->admin)->put(route('people.update', $focus), $payload)
+        ->assertRedirect(route('people.edit', $focus));
+
+    expect(Person::query()->where('name', 'Saudara Baru')->count())->toBe(1);
+});
+
 test('a family entry update changes only its family branch name', function () {
     $marga = Marga::factory()->create(['name' => 'Sitorus']);
     $person = Person::factory()->create([
@@ -2037,6 +2085,43 @@ test('an existing unlinked person can be selected as a child without creating a 
 
     expect(Person::query()->where('name', 'Ampunalampak')->count())->toBe(1)
         ->and($existing->fresh()->father_id)->toBe($focus->id);
+});
+
+test('saving a stale child row while changing marga does not create another person', function () {
+    $oldMarga = Marga::factory()->create();
+    $newMarga = Marga::factory()->create();
+    $father = Person::factory()->create(['name' => 'Ayah', 'gender' => 'L', 'marga_id' => $oldMarga->id]);
+    $child = Person::factory()->create([
+        'name' => 'Anak Tunggal',
+        'gender' => 'L',
+        'father_id' => $father->id,
+        'marga_id' => $oldMarga->id,
+    ]);
+
+    $payload = [
+        'name' => $father->name,
+        'gender' => 'L',
+        'marga_id' => $oldMarga->id,
+        'children' => [['id' => $father->id, 'name' => $father->name, 'gender' => 'L']],
+        'ownChildren' => [['name' => $child->name, 'gender' => 'L', 'marga_id' => $newMarga->id]],
+    ];
+
+    $this->actingAs($this->admin)
+        ->from(route('people.edit', $father))
+        ->put(route('people.update', $father), $payload)
+        ->assertRedirect(route('people.edit', $father))
+        ->assertSessionHasErrors('ownChildren.0.name');
+
+    expect(Person::query()->where('father_id', $father->id)->count())->toBe(1)
+        ->and($child->fresh()->marga_id)->toBe($oldMarga->id);
+
+    $payload['ownChildren'][0]['id'] = $child->id;
+    $this->actingAs($this->admin)
+        ->put(route('people.update', $father), $payload)
+        ->assertRedirect(route('people.edit', $father));
+
+    expect(Person::query()->where('father_id', $father->id)->count())->toBe(1)
+        ->and($child->fresh()->marga_id)->toBe($newMarga->id);
 });
 
 test('selecting an existing child from another father never moves its lineage automatically', function () {

@@ -1311,6 +1311,7 @@ export default function FamilyForm({
     const [resolvingMotherIndex, setResolvingMotherIndex] = useState<
         number | null
     >(null);
+    const submitLockRef = useRef(false);
     const initialMotherIndex = (motherId: number | null | undefined) => {
         const index = initialMothers.findIndex(
             (mother) => mother.id === motherId,
@@ -1336,6 +1337,7 @@ export default function FamilyForm({
         setError,
         clearErrors,
     } = useForm({
+        submission_key: createUid(),
         name: person?.name ?? '',
         family_tree_name: initialFamilyName,
         gender: person?.gender ?? '',
@@ -2322,6 +2324,10 @@ export default function FamilyForm({
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
 
+        if (submitLockRef.current || processing) {
+            return;
+        }
+
         if (
             data.image_mode === 'url' &&
             data.image.trim() &&
@@ -2357,6 +2363,10 @@ export default function FamilyForm({
                 toast.error(message);
             }
         };
+        submitLockRef.current = true;
+        const onFinish = () => {
+            submitLockRef.current = false;
+        };
 
         if (isEdit && person?.id) {
             const updateAction = people.update.form(person.id, {
@@ -2368,10 +2378,18 @@ export default function FamilyForm({
 
             post(updateAction, {
                 forceFormData: true,
+                // Reload saved child IDs after a successful edit. Keeping the
+                // draft would submit newly created rows with id: null again.
+                preserveState: 'errors',
                 onError,
+                onFinish,
             });
         } else {
-            post(people.store.form().action, { forceFormData: true, onError });
+            post(people.store.form().action, {
+                forceFormData: true,
+                onError,
+                onFinish,
+            });
         }
     };
 

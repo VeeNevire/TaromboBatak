@@ -22,6 +22,7 @@ class StorePersonRequest extends FormRequest
     public function rules(): array
     {
         $rules = [
+            'submission_key' => ['nullable', 'string', 'max:80'],
             'name' => ['required', 'string', 'max:255'],
             'family_tree_name' => ['nullable', 'string', 'max:120'],
             'alias' => ['nullable', 'string', 'max:255'],

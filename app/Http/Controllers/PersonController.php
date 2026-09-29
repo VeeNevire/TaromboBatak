@@ -24,6 +24,7 @@ use App\Services\FamilyTreeDescendantSyncService;
 use App\Services\FamilyTreeFamilyNameService;
 use App\Services\FamilyTreeStructureService;
 use App\Services\FamilyTreeVersionService;
+use App\Services\FormSubmissionGuard;
 use App\Services\TaromboTreeService;
 use App\Services\TreeActivityLogger;
 use App\Services\TreeProtectionService;
@@ -366,9 +367,19 @@ class PersonController extends Controller
         $validated['removed_child_ids'] = $request->input('removed_child_ids', []);
         $validated['removed_own_child_ids'] = $request->input('removed_own_child_ids', []);
 
-        if ($user->isStaff()) {
-            $result = app(FamilyEntryService::class)->save($validated, createdBy: $user->id);
-        } else {
+        $result = DB::transaction(function () use ($validated, $user) {
+            if (! app(FormSubmissionGuard::class)->claim(
+                $user->id,
+                'people.store',
+                $validated['submission_key'] ?? null,
+            )) {
+                return null;
+            }
+
+            if ($user->isStaff()) {
+                return app(FamilyEntryService::class)->save($validated, createdBy: $user->id);
+            }
+
             $forcedMargaId = $user->isContributor()
                 ? (int) ($validated['marga_id'] ?? 0)
                 : (int) ($user->marga_id ?? 0);
@@ -378,17 +389,19 @@ class PersonController extends Controller
                 'Marga ini tidak termasuk dalam marga yang dapat Anda kelola.',
             );
 
-            $result = DB::transaction(function () use ($validated, $user, $forcedMargaId) {
-                $result = app(FamilyEntryService::class)->save(
-                    $validated,
-                    forcedMargaId: $forcedMargaId,
-                    createdBy: $user->id,
-                    deferExistingFatherMatch: true,
-                );
-                $this->createFatherMatchRequest($result, $user);
+            $result = app(FamilyEntryService::class)->save(
+                $validated,
+                forcedMargaId: $forcedMargaId,
+                createdBy: $user->id,
+                deferExistingFatherMatch: true,
+            );
+            $this->createFatherMatchRequest($result, $user);
 
-                return $result;
-            });
+            return $result;
+        });
+
+        if ($result === null) {
+            return to_route('people.index');
         }
 
         $result['familyTrees']->each(
@@ -1087,7 +1100,15 @@ class PersonController extends Controller
             $familyTree = FamilyTree::query()->findOrFail($versionTreeId);
             $this->authorizeFamilyTree($request, $familyTree);
 
-            DB::transaction(function () use ($familyTree, $person, $validated, $user): void {
+            $saved = DB::transaction(function () use ($familyTree, $person, $validated, $user): bool {
+                if (! app(FormSubmissionGuard::class)->claim(
+                    $user->id,
+                    "people.update.{$person->id}.tree.{$familyTree->id}",
+                    $validated['submission_key'] ?? null,
+                )) {
+                    return false;
+                }
+
                 if (array_key_exists('family_tree_name', $validated)) {
                     app(FamilyTreeFamilyNameService::class)->setForPerson(
                         $familyTree,
@@ -1103,7 +1124,14 @@ class PersonController extends Controller
                     ->all());
 
                 app(FamilyTreeStructureService::class)->updateFromFamilyForm($familyTree, $person, $validated, $user->id);
+
+                return true;
             });
+
+            if (! $saved) {
+                return to_route('people.edit', ['person' => $person, 'version_tree' => $familyTree->id]);
+            }
+
             app(FamilyTreeActivityLogger::class)->log(
                 $familyTree,
                 $user,
@@ -1117,7 +1145,19 @@ class PersonController extends Controller
             return to_route('people.edit', ['person' => $person, 'version_tree' => $familyTree->id]);
         }
 
-        if (! $isStaff) {
+        $result = DB::transaction(function () use ($validated, $user, $isStaff, $person) {
+            if (! app(FormSubmissionGuard::class)->claim(
+                $user->id,
+                "people.update.{$person->id}",
+                $validated['submission_key'] ?? null,
+            )) {
+                return null;
+            }
+
+            if ($isStaff) {
+                return app(FamilyEntryService::class)->save($validated, createdBy: $user->id);
+            }
+
             $forcedMargaId = $user->isContributor()
                 ? (int) ($validated['marga_id'] ?? $person->marga_id ?? 0)
                 : (int) ($user->marga_id ?? 0);
@@ -1127,19 +1167,19 @@ class PersonController extends Controller
                 'Marga ini tidak termasuk dalam marga yang dapat Anda kelola.',
             );
 
-            $result = DB::transaction(function () use ($validated, $user, $forcedMargaId) {
-                $result = app(FamilyEntryService::class)->save(
-                    $validated,
-                    forcedMargaId: $forcedMargaId,
-                    createdBy: $user->id,
-                    deferExistingFatherMatch: true,
-                );
-                $this->createFatherMatchRequest($result, $user);
+            $result = app(FamilyEntryService::class)->save(
+                $validated,
+                forcedMargaId: $forcedMargaId,
+                createdBy: $user->id,
+                deferExistingFatherMatch: true,
+            );
+            $this->createFatherMatchRequest($result, $user);
 
-                return $result;
-            });
-        } else {
-            $result = app(FamilyEntryService::class)->save($validated, createdBy: $user->id);
+            return $result;
+        });
+
+        if ($result === null) {
+            return to_route('people.edit', $person);
         }
 
         $result['familyTrees']->each(

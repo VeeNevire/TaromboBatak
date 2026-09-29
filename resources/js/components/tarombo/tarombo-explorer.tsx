@@ -608,7 +608,7 @@ export function TaromboExplorer({
             ),
         );
 
-        return people.filter(
+        const detachedCandidates = people.filter(
             (person) =>
                 person.marga === margaTree.margaName &&
                 !connectedIds.has(person.id) &&
@@ -616,6 +616,48 @@ export function TaromboExplorer({
                 (accountTreePersonIdSet.size === 0 ||
                     accountTreePersonIdSet.has(person.id)),
         );
+        const childrenByParent = new Map<string, TaromboPerson[]>();
+
+        for (const person of people) {
+            if (person.parentId) {
+                const children = childrenByParent.get(person.parentId) ?? [];
+                children.push(person);
+                childrenByParent.set(person.parentId, children);
+            }
+        }
+
+        const detachedRoots: TaromboPerson[] = [];
+        const visited = new Set<string>();
+        const addSeparateBranches = (root: TaromboPerson) => {
+            if (visited.has(root.id)) {
+                return;
+            }
+
+            visited.add(root.id);
+
+            // A detached-looking root may be an ancestor of the marga
+            // identity. Keep its side branches, but stop before the branch
+            // that reaches the main tree so those people appear only once.
+            if (
+                !descendantSubtree(people, root.id).some((descendant) =>
+                    connectedIds.has(descendant.id),
+                )
+            ) {
+                detachedRoots.push(root);
+
+                return;
+            }
+
+            for (const child of childrenByParent.get(root.id) ?? []) {
+                addSeparateBranches(child);
+            }
+        };
+
+        for (const candidate of detachedCandidates) {
+            addSeparateBranches(candidate);
+        }
+
+        return detachedRoots;
     }, [accountTreePersonIdSet, margaIdentity, margaTree, people]);
     const margaDetachedPeople = useMemo(
         () =>

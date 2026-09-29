@@ -29,6 +29,73 @@ function sharingTree(User $owner, Marga $marga): array
     return compact('tree', 'root', 'node');
 }
 
+test('submitting the same child twice to a shared tree keeps one person and one node', function () {
+    $marga = Marga::factory()->create();
+    $owner = User::factory()->withMarga($marga->id)->create();
+    ['tree' => $tree, 'root' => $root, 'node' => $node] = sharingTree($owner, $marga);
+    $payload = ['name' => 'Anak Baru', 'gender' => 'L', 'father_node_id' => $node->id];
+
+    $this->actingAs($owner)
+        ->post(route('family-trees.people.store', $tree), $payload)
+        ->assertRedirect();
+
+    $this->actingAs($owner)
+        ->from(route('family-trees.people.create', $tree))
+        ->post(route('family-trees.people.store', $tree), $payload)
+        ->assertSessionHasErrors('name');
+
+    expect(Person::query()->where('father_id', $root->id)->where('name', 'Anak Baru')->count())->toBe(1)
+        ->and($tree->nodes()->count())->toBe(2);
+});
+
+test('retrying a shared tree append with the same submission key saves it once', function () {
+    $marga = Marga::factory()->create();
+    $owner = User::factory()->withMarga($marga->id)->create();
+    ['tree' => $tree, 'root' => $root, 'node' => $node] = sharingTree($owner, $marga);
+    $payload = [
+        'submission_key' => 'tree-double-click-1',
+        'name' => 'Anak Sekali',
+        'gender' => 'L',
+        'father_node_id' => $node->id,
+    ];
+
+    $this->actingAs($owner)->post(route('family-trees.people.store', $tree), $payload)
+        ->assertRedirect();
+    $this->actingAs($owner)->post(route('family-trees.people.store', $tree), $payload)
+        ->assertRedirect();
+
+    expect(Person::query()->where('father_id', $root->id)->count())->toBe(1)
+        ->and($tree->nodes()->count())->toBe(2);
+});
+
+test('retrying a shared tree append request creates one pending request', function () {
+    Notification::fake();
+    $marga = Marga::factory()->create();
+    $owner = User::factory()->withMarga($marga->id)->create();
+    $recipient = User::factory()->withMarga($marga->id)->create();
+    ['tree' => $tree, 'node' => $node] = sharingTree($owner, $marga);
+    FamilyTreeShare::create([
+        'family_tree_id' => $tree->id,
+        'sender_id' => $owner->id,
+        'recipient_id' => $recipient->id,
+        'status' => FamilyTreeShare::STATUS_ACCEPTED,
+    ]);
+    $payload = [
+        'submission_key' => 'append-request-double-click-1',
+        'name' => 'Anak Usulan',
+        'gender' => 'L',
+        'father_node_id' => $node->id,
+    ];
+
+    $this->actingAs($recipient)->post(route('family-trees.people.store', $tree), $payload)
+        ->assertRedirect();
+    $this->actingAs($recipient)->post(route('family-trees.people.store', $tree), $payload)
+        ->assertRedirect();
+
+    expect(FamilyTreeAppendRequest::query()->count())->toBe(1)
+        ->and(Person::query()->where('name', 'Anak Usulan')->exists())->toBeFalse();
+});
+
 test('an owner can invite another account from the same marga', function () {
     $marga = Marga::factory()->create();
     $owner = User::factory()->withMarga($marga->id)->create();
