@@ -45,6 +45,7 @@ import groups from '@/routes/groups';
 import marga from '@/routes/marga';
 import margaNews from '@/routes/marga-news';
 import margaNewsAutomation from '@/routes/marga-news-automation';
+import margaNewsSources from '@/routes/marga-news-sources';
 import margaNewsTopics from '@/routes/marga-news-topics';
 import messageLogs from '@/routes/message-logs';
 import newsFeed from '@/routes/news-feed';
@@ -239,6 +240,11 @@ export function AppSidebar() {
                               title: 'Topik Berita Marga',
                               href: margaNewsTopics.index(),
                               icon: Tags,
+                          },
+                          {
+                              title: 'Sumber Website Berita',
+                              href: margaNewsSources.index(),
+                              icon: Globe,
                           },
                           {
                               title: 'Template Frame Tarombo',

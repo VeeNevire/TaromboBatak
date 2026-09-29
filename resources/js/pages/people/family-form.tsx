@@ -5193,13 +5193,15 @@ export default function FamilyForm({
                     <DialogHeader>
                         <DialogTitle className="text-tb-on-surface">
                             Hapus {removalConfirm?.row.name || 'anggota ini'}{' '}
-                            secara permanen?
+                            {selectedVersionId !== null
+                                ? 'dari versi pohon ini?'
+                                : 'secara permanen?'}
                         </DialogTitle>
                         <DialogDescription className="space-y-3">
                             <p>
-                                Data ini akan dihapus permanen dari database dan
-                                tidak lagi muncul di keluarga ini. Tindakan ini
-                                tidak dapat dibatalkan.
+                                {selectedVersionId !== null
+                                    ? 'Anggota ini akan dihapus dari versi pohon yang sedang dibuka. Data orang dan versi pohon lain tetap tersimpan.'
+                                    : 'Data ini akan dihapus permanen dari database dan tidak lagi muncul di keluarga ini. Tindakan ini tidak dapat dibatalkan.'}
                             </p>
                             {(removalConfirm?.row.descendant_count ?? 0) >
                                 0 && (
@@ -5244,7 +5246,9 @@ export default function FamilyForm({
                             Batal
                         </Button>
                         <Button variant="destructive" onClick={confirmRemove}>
-                            Ya, hapus permanen
+                            {selectedVersionId !== null
+                                ? 'Hapus dari versi ini'
+                                : 'Ya, hapus permanen'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

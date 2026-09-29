@@ -79,6 +79,43 @@ test('a family store creates the father, mother, and all sibling rows as people'
             ->family_name)->toBe('Keluarga Ompu Sitorus');
 });
 
+test('saving a family ignores untouched child placeholders and saves every completed child', function () {
+    $marga = Marga::factory()->create(['name' => 'Sitorus']);
+
+    $response = $this->actingAs($this->admin)->post(route('people.store'), [
+        'name' => 'Anak Fokus',
+        'gender' => 'L',
+        'marga_id' => $marga->id,
+        'birth_order' => 3,
+        'sibling_count' => 3,
+        'father' => ['name' => 'Ayah Sitorus'],
+        'mother' => ['name' => 'Ibu Sitorus'],
+        'children' => [
+            ['name' => 'Anak Pertama', 'gender' => 'L'],
+            ['name' => '', 'gender' => '', 'marga_id' => $marga->id],
+            ['name' => 'Anak Fokus', 'gender' => 'L'],
+            ['name' => 'Anak Terakhir', 'gender' => 'P'],
+        ],
+        'ownChildren' => [
+            ['name' => 'Cucu Pertama', 'gender' => 'L'],
+            ['name' => '', 'gender' => '', 'marga_id' => $marga->id],
+            ['name' => 'Cucu Kedua', 'gender' => 'P'],
+        ],
+    ]);
+
+    $response->assertRedirect(route('people.index'));
+
+    $father = Person::query()->where('name', 'Ayah Sitorus')->sole();
+    $children = Person::query()->where('father_id', $father->id)->orderBy('birth_order')->get();
+    $focus = $children->firstWhere('name', 'Anak Fokus');
+
+    expect($children->pluck('name')->all())->toBe(['Anak Pertama', 'Anak Fokus', 'Anak Terakhir'])
+        ->and($focus)->not->toBeNull()
+        ->and($focus->birth_order)->toBe(2)
+        ->and(Person::query()->where('father_id', $focus->id)->orderBy('birth_order')->pluck('name')->all())
+        ->toBe(['Cucu Pertama', 'Cucu Kedua']);
+});
+
 test('retrying a family creation with the same submission key saves it once', function () {
     $marga = Marga::factory()->create();
     $payload = [

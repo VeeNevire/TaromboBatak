@@ -27,6 +27,7 @@ use App\Http\Controllers\MargaChatController;
 use App\Http\Controllers\MargaController;
 use App\Http\Controllers\MargaNewsAutomationController;
 use App\Http\Controllers\MargaNewsController;
+use App\Http\Controllers\MargaNewsSourceController;
 use App\Http\Controllers\MargaNewsTopicController;
 use App\Http\Controllers\MargaSiblingOrderController;
 use App\Http\Controllers\MessageAttachmentController;
@@ -316,6 +317,10 @@ Route::middleware(['auth', 'role.admin'])->group(function () {
         ->only(['index', 'store', 'update', 'destroy'])
         ->parameters(['topik' => 'topic'])
         ->names('marga-news-topics');
+    Route::resource('dashboard/berita-marga/sumber', MargaNewsSourceController::class)
+        ->only(['index', 'store', 'update', 'destroy'])
+        ->parameters(['sumber' => 'source'])
+        ->names('marga-news-sources');
     Route::get('dashboard/berita-marga/otomatisasi', [MargaNewsAutomationController::class, 'index'])
         ->name('marga-news-automation.index');
     Route::put('dashboard/berita-marga/otomatisasi', [MargaNewsAutomationController::class, 'update'])

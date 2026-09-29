@@ -813,7 +813,7 @@ class FamilyEntryService
 
         $order = max(1, (int) ($data['birth_order'] ?? 1)) - 1;
 
-        return $children->values()->get($order) ?? $children->first();
+        return $children->get($order) ?? $children->first();
     }
 
     /**
@@ -986,11 +986,30 @@ class FamilyEntryService
         array $mothers = [],
     ): Collection {
         $children = new Collection;
+        $rows = collect($rows)
+            ->map(fn ($row, $index) => ['index' => (int) $index, 'row' => $row])
+            ->filter(function (array $entry) use ($data, $focusOrder): bool {
+                $row = $entry['row'];
+
+                if (! is_array($row)) {
+                    return false;
+                }
+
+                $isFocusRow = isset($data['id'])
+                    ? isset($row['id']) && (int) $row['id'] === (int) $data['id']
+                    : $focusOrder !== null && (int) $focusOrder === $entry['index'] + 1;
+
+                return $isFocusRow || $this->hasChildInput($row);
+            })
+            ->values();
+        if ($focusOrder === null) {
+            $siblingCount = $rows->count();
+        }
         // A separate family entry contains only its new sibling rows. Append
         // them after the father's recorded children instead of starting again
         // at birth order 1; full edits with existing row IDs keep their order.
         $newFamilyEntry = $fatherId !== null
-            && ! collect($rows)->contains(fn ($row) => ! empty($row['id']));
+            && ! $rows->contains(fn (array $entry) => ! empty($entry['row']['id']));
         $existingChildCount = $newFamilyEntry
             ? Person::query()->where('father_id', $fatherId)->count()
             : 0;
@@ -998,7 +1017,9 @@ class FamilyEntryService
             ? (int) Person::query()->where('father_id', $fatherId)->max('birth_order')
             : 0;
 
-        foreach ($rows as $index => $row) {
+        foreach ($rows as $position => $entry) {
+            $index = $entry['index'];
+            $row = $entry['row'];
             $child = isset($row['id'])
                 ? Person::query()->find((int) $row['id'])
                 : null;
@@ -1082,8 +1103,23 @@ class FamilyEntryService
                 )
                 ?? $fatherMargaId;
 
+            $rawName = $isFocus
+                ? ($data['name'] ?? $row['name'] ?? $child?->name)
+                : ($row['name'] ?? $child?->name);
+            $normalizedName = $this->normalizeName($rawName);
+            $explicitNa = is_string($rawName)
+                && mb_strtoupper(trim($rawName)) === 'N/A';
+
+            if ($normalizedName === null && ! $explicitNa) {
+                $field = ($focusOrder === null ? 'ownChildren' : 'children').".$index.name";
+
+                throw ValidationException::withMessages([
+                    $field => 'Nama anak belum terkirim. Isi namanya atau pilih N/A jika memang belum diketahui.',
+                ]);
+            }
+
             $attributes = array_filter([
-                'name' => $this->normalizeName($row['name'] ?? null) ?? 'N/A',
+                'name' => $normalizedName ?? 'N/A',
                 'alias' => $row['alias'] ?? null,
                 'gender' => $row['gender'] ?? null,
                 'spouse' => $row['spouse'] ?? null,
@@ -1091,9 +1127,9 @@ class FamilyEntryService
                 'marga_id' => $childMargaId,
                 'father_id' => $fatherId,
                 'mother_id' => $childMotherId,
-                'birth_order' => $birthOrderOffset + $index + 1,
+                'birth_order' => $birthOrderOffset + $position + 1,
                 'sibling_count' => $newFamilyEntry
-                    ? $existingChildCount + count($rows)
+                    ? $existingChildCount + $rows->count()
                     : $siblingCount,
                 'pending_father' => $pending,
                 ...$focusedFields,
@@ -1130,16 +1166,44 @@ class FamilyEntryService
                 $child = Person::create([...$attributes, 'created_by' => $createdBy]);
             }
 
-            $children->push($child);
+            // Keep the submitted row index so a new family's focus remains
+            // correct when blank placeholder rows before it are ignored.
+            $children->put($index, $child);
         }
 
-        if ($newFamilyEntry && $rows !== []) {
+        if ($newFamilyEntry && $rows->isNotEmpty()) {
             Person::query()
                 ->where('father_id', $fatherId)
-                ->update(['sibling_count' => $existingChildCount + count($rows)]);
+                ->update(['sibling_count' => $existingChildCount + $rows->count()]);
         }
 
         return $children;
+    }
+
+    /**
+     * Ignore untouched form placeholders while preserving partially entered rows
+     * for normal name validation.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private function hasChildInput(array $row): bool
+    {
+        foreach ([
+            'id', 'name', 'alias', 'gender', 'spouse', 'spouse_marga',
+            'new_marga', 'birth_year', 'death_year', 'bio',
+        ] as $field) {
+            $value = $row[$field] ?? null;
+
+            if (is_string($value) && trim($value) !== '') {
+                return true;
+            }
+
+            if (! is_string($value) && $value !== null) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

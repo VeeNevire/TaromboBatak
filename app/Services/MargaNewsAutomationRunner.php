@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Marga;
 use App\Models\MargaNews;
 use App\Models\MargaNewsAutomationSetting;
+use App\Models\MargaNewsSource;
 use App\Models\MargaNewsTopic;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Client\RequestException;
@@ -94,6 +95,12 @@ class MargaNewsAutomationRunner
                 ->orderBy('id')
                 ->get();
 
+            $sources = MargaNewsSource::query()
+                ->where('is_active', true)
+                ->with('topics:id,keyword')
+                ->orderBy('name')
+                ->get();
+
             if ($topics->isEmpty()) {
                 Log::error('Hermes news automation has no active topics.');
                 $this->finish(
@@ -106,6 +113,17 @@ class MargaNewsAutomationRunner
                 return;
             }
 
+            if ($sources->isEmpty()) {
+                $this->finish(
+                    $accepted,
+                    $duplicates,
+                    'failed',
+                    'Tidak ada sumber website berita yang aktif. Tambahkan atau aktifkan sumber pada menu Sumber Website Berita.',
+                );
+
+                return;
+            }
+
             $knownUrls = MargaNews::query()
                 ->where('created_at', '>=', now()->subDays(30))
                 ->pluck('url');
@@ -113,6 +131,16 @@ class MargaNewsAutomationRunner
 
             foreach ($topics as $topic) {
                 try {
+                    $topicSources = $sources
+                        ->filter(fn (MargaNewsSource $source) => $source->appliesToTopic($topic))
+                        ->values();
+
+                    if ($topicSources->isEmpty()) {
+                        $errors[] = "{$topic->keyword}: tidak ada website aktif yang dipasangkan ke topik ini.";
+
+                        continue;
+                    }
+
                     Log::info('Hermes news topic started.', [
                         'topic_id' => $topic->id,
                         'keyword' => $topic->keyword,
@@ -123,11 +151,18 @@ class MargaNewsAutomationRunner
                             'keyword' => $topic->keyword,
                             'marga' => $topic->marga?->name,
                             'notes' => $topic->notes,
+                            'sources' => $topicSources->map(fn (MargaNewsSource $source) => [
+                                'id' => $source->id,
+                                'name' => $source->name,
+                                'url' => $source->website_url,
+                                'domain' => $source->domain,
+                            ])->all(),
                             'margas' => $allMargas->values()->all(),
                             'known_urls' => $knownUrls->values()->all(),
                             'output_contract' => [
                                 'format' => 'Return only a valid JSON object. Do not wrap it in Markdown.',
                                 'items' => [[
+                                    'source_id' => 'id website sumber dari daftar yang diberikan',
                                     'title' => 'original article title',
                                     'url' => 'original article URL',
                                     'publisher' => 'publisher name',
@@ -139,13 +174,16 @@ class MargaNewsAutomationRunner
                                     'margas' => ['marga names mentioned'],
                                 ]],
                                 'requirements' => [
+                                    'Gunakan website pada sources untuk topik ini saja; jangan gunakan hasil web search atau website lain sebagai sumber artikel.',
+                                    'Baca halaman website secara langsung, temukan artikel yang cocok dengan topik, lalu buka URL asli artikel.',
+                                    'Setiap item wajib memiliki source_id dari sources dan URL artikel harus berada pada domain sumber tersebut atau subdomainnya.',
                                     'Only include articles whose full article text has at least 200 words.',
                                     'Fetch the full article text from the original source URL, not just a search result snippet.',
                                     'Fetch the original lead/featured image URL from the article page and return it as image_url. Do not invent image URLs.',
                                 ],
                             ],
                         ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                        'instructions' => $claim['prompt']."\n\nKetentuan wajib aplikasi: buka URL artikel sumber asli dan ambil isi lengkap minimal 200 kata; batas 200 kata ini menggantikan jumlah kata lain yang mungkin disebut pada prompt. Item di bawah batas ini akan ditolak. Ambil juga URL absolut gambar utama dari halaman sumber, dan isi image_url dengan null hanya jika sumber tidak menyediakan gambar. Jangan mengarang isi maupun URL gambar.",
+                        'instructions' => $claim['prompt']."\n\nKetentuan wajib aplikasi: gunakan hanya website pada sources untuk topik ini. Buka website dan URL artikel asli secara langsung, tanpa RSS, lalu ambil isi lengkap minimal 200 kata; batas 200 kata ini menggantikan jumlah kata lain yang mungkin disebut pada prompt. Item wajib menyertakan source_id yang cocok dengan website penerbitnya dan URL artikel harus berada pada domain website itu atau subdomainnya. Item yang melanggar syarat ini akan ditolak. Ambil URL absolut gambar utama dari halaman artikel dan isi image_url dengan null hanya jika sumber tidak menyediakan gambar. Jangan mengarang isi maupun URL gambar.",
                     ]);
 
                     $output = $run['output'] ?? [];
@@ -192,6 +230,10 @@ class MargaNewsAutomationRunner
 
                         if ($result['insufficient_content'] > 0) {
                             $errors[] = "{$topic->keyword}: {$result['insufficient_content']} berita diabaikan karena isi kurang dari 200 kata.";
+                        }
+
+                        if ($result['invalid_source'] > 0) {
+                            $errors[] = "{$topic->keyword}: {$result['invalid_source']} berita ditolak karena source_id tidak cocok dengan domain website terdaftar.";
                         }
 
                         $knownUrls = $knownUrls->merge(collect($items)->pluck('url'))->unique()->values();

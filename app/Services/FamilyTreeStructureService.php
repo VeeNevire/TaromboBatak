@@ -241,6 +241,10 @@ class FamilyTreeStructureService
                     ]);
                 }
 
+                if ($node->is_removed) {
+                    $node->update(['is_removed' => false]);
+                }
+
                 if ($tree->based_on_id === null && $parentNode !== null) {
                     $childPerson = $node->person()->firstOrFail();
 
@@ -276,8 +280,7 @@ class FamilyTreeStructureService
             }
         }
 
-        // A removed row must also be detached from this version. Keeping the
-        // node untouched here makes it reappear after the form redirects.
+        // Keep a local tombstone so inherited nodes stay absent in this version.
         $removedPersonIds = collect([
             ...($data['removed_child_ids'] ?? []),
             ...($data['removed_own_child_ids'] ?? []),
@@ -286,17 +289,42 @@ class FamilyTreeStructureService
             ->map(fn ($id) => (int) $id)
             ->unique();
 
-        foreach ($removedPersonIds as $personId) {
+        $effectiveNodes = app(FamilyTreeInheritanceService::class)
+            ->nodesFor($tree)
+            ->keyBy('person_id');
+        $childrenByFather = $effectiveNodes->groupBy('father_person_id');
+        $removedBranchIds = $removedPersonIds;
+        $frontier = $removedPersonIds;
+
+        while ($frontier->isNotEmpty()) {
+            $frontier = $frontier
+                ->flatMap(fn ($personId) => $childrenByFather->get($personId, collect())->pluck('person_id'))
+                ->map(fn ($personId) => (int) $personId)
+                ->diff($removedBranchIds)
+                ->values();
+            $removedBranchIds = $removedBranchIds->merge($frontier)->unique()->values();
+        }
+
+        foreach ($removedBranchIds as $personId) {
+            if ((int) $personId === $focus->id) {
+                continue;
+            }
+
             $node = $nodeForPerson($personId);
 
-            if ($node !== null && $node->id !== $focusNode->id) {
-                $entries[$node->id] = [
-                    'id' => $node->id,
-                    'father_node_id' => null,
-                    'birth_order' => null,
-                ];
+            if ($node !== null) {
+                $node->update(['is_removed' => true]);
+
+                continue;
             }
+
+            FamilyTreeNode::query()->firstOrCreate(
+                ['family_tree_id' => $tree->id, 'person_id' => $personId],
+                ['is_removed' => true],
+            );
         }
+
+        $tree->people()->detach($removedBranchIds->all());
 
         $this->update($tree, array_values($entries));
     }

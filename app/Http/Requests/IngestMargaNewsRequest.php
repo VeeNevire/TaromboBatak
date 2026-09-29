@@ -19,7 +19,8 @@ class IngestMargaNewsRequest extends FormRequest
         return [
             'agent' => ['nullable', 'string', 'max:60'],
             'items' => ['required', 'array', 'min:1', 'max:100'],
-            'items.*.topic_id' => ['nullable', 'integer'],
+            'items.*.topic_id' => ['nullable', 'integer', 'exists:marga_news_topics,id'],
+            'items.*.source_id' => ['required', 'integer', 'exists:marga_news_sources,id'],
             'items.*.title' => ['required', 'string', 'max:500'],
             'items.*.url' => ['required', 'string', 'max:2048', 'url:http,https'],
             'items.*.publisher' => ['nullable', 'string', 'max:120'],

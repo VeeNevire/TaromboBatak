@@ -1671,9 +1671,9 @@ class PersonController extends Controller
             ];
         }
 
-        $siblingNodes = $fatherNode?->children()->with('person.marga')->orderBy('birth_order')->orderBy('id')->get()
+        $siblingNodes = $fatherNode?->children()->where('is_removed', false)->with('person.marga')->orderBy('birth_order')->orderBy('id')->get()
             ?? collect([$focusNode]);
-        $childNodes = $focusNode->children()->with('person.marga')->orderBy('birth_order')->orderBy('id')->get();
+        $childNodes = $focusNode->children()->where('is_removed', false)->with('person.marga')->orderBy('birth_order')->orderBy('id')->get();
 
         $payload['children'] = $siblingNodes
             ->map(fn (FamilyTreeNode $node) => $rowFor($node, $baseChildren->get($node->person_id, [])))
