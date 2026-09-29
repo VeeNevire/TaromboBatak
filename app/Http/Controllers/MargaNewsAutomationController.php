@@ -26,6 +26,9 @@ class MargaNewsAutomationController extends Controller
                 'last_status' => $setting->last_status,
                 'last_started_at' => $setting->last_started_at?->toIso8601String(),
                 'last_finished_at' => $setting->last_finished_at?->toIso8601String(),
+                'run_lease_until' => $setting->run_lease_until?->toIso8601String(),
+                'run_is_stale' => $setting->last_status === 'running'
+                    && ! $setting->run_lease_until?->isFuture(),
                 'last_accepted' => $setting->last_accepted,
                 'last_duplicates' => $setting->last_duplicates,
                 'last_error' => $setting->last_error,
