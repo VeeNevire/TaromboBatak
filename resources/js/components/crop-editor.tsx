@@ -1,20 +1,19 @@
 import { Minus, Plus } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { DraggableBox } from '@/components/draggable-box';
 import type { Box } from '@/components/draggable-box';
 
-// The crop box lives in a fixed "view" space this many units wide; the image
-// is zoomed and moved underneath it.
-const VIEW_WIDTH = 1000;
 const MAX_ZOOM = 8;
 
-type ImageView = { zoom: number; x: number; y: number };
+// A point of the viewport (in displayed pixels) that must stay under the same
+// part of the image while the zoom changes.
+type ZoomAnchor = { x: number; y: number; ratio: number };
 
 /**
- * Crop like a profile photo: the crop box stays where it is placed while the
- * image is zoomed (wheel, buttons, slider) and dragged underneath it. Reports
- * the crop in image pixels through `onChange`.
+ * Crop with a zoomable canvas: zooming scales the whole image together with
+ * the crop box, and the viewport scrolls horizontally and vertically once the
+ * image is larger than it. Reports the crop in image pixels through `onChange`.
  */
 export function CropEditor({
     url,
@@ -29,83 +28,78 @@ export function CropEditor({
     initialCrop: Box;
     onChange: (crop: Box) => void;
 }) {
-    const viewHeight = (VIEW_WIDTH * imageHeight) / imageWidth;
-    const toView = VIEW_WIDTH / imageWidth;
     const viewportRef = useRef<HTMLDivElement>(null);
     const panRef = useRef<{ clientX: number; clientY: number } | null>(null);
-    const [frame, setFrame] = useState<Box>(() => ({
-        x: initialCrop.x * toView,
-        y: initialCrop.y * toView,
-        width: initialCrop.width * toView,
-        height: initialCrop.height * toView,
-    }));
-    const [image, setImage] = useState<ImageView>({ zoom: 1, x: 0, y: 0 });
+    const anchorRef = useRef<ZoomAnchor | null>(null);
+    const [crop, setCrop] = useState<Box>(initialCrop);
+    const [zoom, setZoom] = useState(1);
+    // Width of the viewport, which is the image width at 100%.
+    const [baseWidth, setBaseWidth] = useState(0);
 
-    // The part of the image under the crop box, in image pixels.
     useEffect(() => {
-        const scale = imageWidth / (VIEW_WIDTH * image.zoom);
-        const left = Math.max(0, (frame.x - image.x) * scale);
-        const top = Math.max(0, (frame.y - image.y) * scale);
-        const right = Math.min(
-            imageWidth,
-            (frame.x + frame.width - image.x) * scale,
-        );
-        const bottom = Math.min(
-            imageHeight,
-            (frame.y + frame.height - image.y) * scale,
-        );
+        onChange(crop);
+    }, [crop, onChange]);
 
-        onChange({
-            x: Math.round(left),
-            y: Math.round(top),
-            width: Math.max(1, Math.round(right - left)),
-            height: Math.max(1, Math.round(bottom - top)),
-        });
-    }, [frame, image, imageWidth, imageHeight, onChange]);
+    useEffect(() => {
+        const viewport = viewportRef.current;
 
-    // Keep at least part of the image inside the view.
-    const clampImage = (next: ImageView): ImageView => {
-        const width = VIEW_WIDTH * next.zoom;
-        const height = viewHeight * next.zoom;
-        const margin = 50;
+        if (!viewport) {
+            return;
+        }
 
-        return {
-            zoom: next.zoom,
-            x: Math.min(VIEW_WIDTH - margin, Math.max(margin - width, next.x)),
-            y: Math.min(viewHeight - margin, Math.max(margin - height, next.y)),
+        const measure = () =>
+            setBaseWidth(viewport.getBoundingClientRect().width);
+
+        measure();
+        const observer = new ResizeObserver(measure);
+        observer.observe(viewport);
+
+        return () => observer.disconnect();
+    }, []);
+
+    // Zoom around a viewport point (its centre by default).
+    const zoomTo = (next: number, pointX?: number, pointY?: number) => {
+        const viewport = viewportRef.current;
+        const nextZoom = Math.min(MAX_ZOOM, Math.max(1, next));
+
+        if (!viewport || nextZoom === zoom) {
+            return;
+        }
+
+        anchorRef.current = {
+            x: pointX ?? viewport.clientWidth / 2,
+            y: pointY ?? viewport.clientHeight / 2,
+            ratio: nextZoom / zoom,
         };
+        setZoom(nextZoom);
     };
 
-    // Zoom around a point given in view units (the view centre by default).
-    const zoomAround = (
-        current: ImageView,
-        zoom: number,
-        pointX = VIEW_WIDTH / 2,
-        pointY = viewHeight / 2,
-    ): ImageView => {
-        const nextZoom = Math.min(MAX_ZOOM, Math.max(1, zoom));
-        const ratio = nextZoom / current.zoom;
-
-        return clampImage({
-            zoom: nextZoom,
-            x: pointX - (pointX - current.x) * ratio,
-            y: pointY - (pointY - current.y) * ratio,
-        });
-    };
-
-    const zoomAroundRef = useRef(zoomAround);
+    const zoomToRef = useRef(zoomTo);
+    const zoomRef = useRef(zoom);
 
     useEffect(() => {
-        zoomAroundRef.current = zoomAround;
+        zoomToRef.current = zoomTo;
+        zoomRef.current = zoom;
     });
 
-    const pixelsToView = () => {
-        const rect = viewportRef.current?.getBoundingClientRect();
+    // Once the canvas has its new size, scroll so the anchor stays in place.
+    useLayoutEffect(() => {
+        const viewport = viewportRef.current;
+        const anchor = anchorRef.current;
 
-        return rect && rect.width > 0 ? VIEW_WIDTH / rect.width : 1;
-    };
+        if (!viewport || !anchor) {
+            return;
+        }
 
-    // React's wheel listener is passive, so the dialog would scroll as well.
+        anchorRef.current = null;
+        viewport.scrollLeft =
+            (viewport.scrollLeft + anchor.x) * anchor.ratio - anchor.x;
+        viewport.scrollTop =
+            (viewport.scrollTop + anchor.y) * anchor.ratio - anchor.y;
+    }, [zoom]);
+
+    // Ctrl/⌘ + wheel zooms; a plain wheel scrolls the viewport. React's wheel
+    // listener is passive, so it cannot stop the browser zooming the page.
     useEffect(() => {
         const viewport = viewportRef.current;
 
@@ -114,20 +108,18 @@ export function CropEditor({
         }
 
         const handleWheel = (event: WheelEvent) => {
+            if (!event.ctrlKey && !event.metaKey) {
+                return;
+            }
+
             event.preventDefault();
             const rect = viewport.getBoundingClientRect();
-            const factor = rect.width > 0 ? VIEW_WIDTH / rect.width : 1;
-            const pointX = (event.clientX - rect.left) * factor;
-            const pointY = (event.clientY - rect.top) * factor;
             const step = event.deltaY < 0 ? 1.15 : 1 / 1.15;
 
-            setImage((current) =>
-                zoomAroundRef.current(
-                    current,
-                    current.zoom * step,
-                    pointX,
-                    pointY,
-                ),
+            zoomToRef.current(
+                zoomRef.current * step,
+                event.clientX - rect.left,
+                event.clientY - rect.top,
             );
         };
 
@@ -136,7 +128,7 @@ export function CropEditor({
         return () => viewport.removeEventListener('wheel', handleWheel);
     }, []);
 
-    // Dragging anywhere outside the crop box moves the image.
+    // Dragging anywhere outside the crop box scrolls the image.
     const startPan = (event: ReactPointerEvent<HTMLDivElement>) => {
         if (event.button !== 0) {
             return;
@@ -148,76 +140,63 @@ export function CropEditor({
 
     const movePan = (event: ReactPointerEvent<HTMLDivElement>) => {
         const pan = panRef.current;
+        const viewport = viewportRef.current;
 
-        if (!pan) {
+        if (!pan || !viewport) {
             return;
         }
 
-        const factor = pixelsToView();
-        const deltaX = (event.clientX - pan.clientX) * factor;
-        const deltaY = (event.clientY - pan.clientY) * factor;
-
+        viewport.scrollLeft -= event.clientX - pan.clientX;
+        viewport.scrollTop -= event.clientY - pan.clientY;
         panRef.current = { clientX: event.clientX, clientY: event.clientY };
-        setImage((current) =>
-            clampImage({
-                ...current,
-                x: current.x + deltaX,
-                y: current.y + deltaY,
-            }),
-        );
     };
 
     const endPan = () => {
         panRef.current = null;
     };
 
-    const percent = (value: number, total: number) =>
-        `${(value / total) * 100}%`;
+    const canvasWidth = baseWidth * zoom;
+    const canvasHeight = (canvasWidth * imageHeight) / imageWidth;
 
     return (
         <div className="grid gap-3">
             <div
                 ref={viewportRef}
-                className="relative mx-auto max-h-[65dvh] w-full cursor-grab touch-none overflow-hidden rounded-lg bg-[repeating-conic-gradient(#d4d4d4_0_25%,#f5f5f5_0_50%)] bg-[length:20px_20px] select-none active:cursor-grabbing"
+                className="mx-auto max-h-[65dvh] w-full overflow-auto rounded-lg bg-[repeating-conic-gradient(#d4d4d4_0_25%,#f5f5f5_0_50%)] bg-[length:20px_20px]"
                 style={{
                     aspectRatio: `${imageWidth} / ${imageHeight}`,
                     maxWidth: `calc(65dvh * ${imageWidth / imageHeight})`,
                 }}
-                onPointerDown={startPan}
-                onPointerMove={movePan}
-                onPointerUp={endPan}
-                onPointerCancel={endPan}
             >
-                <img
-                    src={url}
-                    alt="Gambar yang dipotong"
-                    draggable={false}
-                    className="pointer-events-none absolute max-w-none object-fill"
-                    style={{
-                        left: percent(image.x, VIEW_WIDTH),
-                        top: percent(image.y, viewHeight),
-                        width: `${image.zoom * 100}%`,
-                        height: `${image.zoom * 100}%`,
-                    }}
-                />
-                <DraggableBox
-                    spaceWidth={VIEW_WIDTH}
-                    spaceHeight={viewHeight}
-                    box={frame}
-                    onChange={setFrame}
-                    minSize={20}
-                    dimOutside
-                />
+                <div
+                    className="relative cursor-grab touch-none select-none active:cursor-grabbing"
+                    style={{ width: canvasWidth, height: canvasHeight }}
+                    onPointerDown={startPan}
+                    onPointerMove={movePan}
+                    onPointerUp={endPan}
+                    onPointerCancel={endPan}
+                >
+                    <img
+                        src={url}
+                        alt="Gambar yang dipotong"
+                        draggable={false}
+                        className="pointer-events-none absolute inset-0 size-full max-w-none object-fill"
+                    />
+                    <DraggableBox
+                        spaceWidth={imageWidth}
+                        spaceHeight={imageHeight}
+                        box={crop}
+                        onChange={setCrop}
+                        minSize={Math.max(1, Math.round(imageWidth * 0.02))}
+                        dimOutside
+                    />
+                </div>
             </div>
             <div className="flex items-center justify-center gap-3">
                 <button
                     type="button"
-                    onClick={() =>
-                        setImage((current) =>
-                            zoomAround(current, current.zoom / 1.25),
-                        )
-                    }
-                    disabled={image.zoom <= 1}
+                    onClick={() => zoomTo(zoom / 1.25)}
+                    disabled={zoom <= 1}
                     aria-label="Perkecil gambar"
                     title="Perkecil gambar"
                     className="inline-flex size-9 items-center justify-center rounded-lg border border-tb-outline-variant text-tb-on-surface hover:bg-tb-surface-container disabled:opacity-40"
@@ -229,23 +208,15 @@ export function CropEditor({
                     min={1}
                     max={MAX_ZOOM}
                     step={0.05}
-                    value={image.zoom}
-                    onChange={(event) =>
-                        setImage((current) =>
-                            zoomAround(current, Number(event.target.value)),
-                        )
-                    }
+                    value={zoom}
+                    onChange={(event) => zoomTo(Number(event.target.value))}
                     aria-label="Ukuran gambar"
                     className="w-48 accent-tb-primary"
                 />
                 <button
                     type="button"
-                    onClick={() =>
-                        setImage((current) =>
-                            zoomAround(current, current.zoom * 1.25),
-                        )
-                    }
-                    disabled={image.zoom >= MAX_ZOOM}
+                    onClick={() => zoomTo(zoom * 1.25)}
+                    disabled={zoom >= MAX_ZOOM}
                     aria-label="Perbesar gambar"
                     title="Perbesar gambar"
                     className="inline-flex size-9 items-center justify-center rounded-lg border border-tb-outline-variant text-tb-on-surface hover:bg-tb-surface-container disabled:opacity-40"
@@ -253,12 +224,13 @@ export function CropEditor({
                     <Plus className="size-4" />
                 </button>
                 <span className="w-12 text-sm text-tb-on-surface-variant tabular-nums">
-                    {Math.round(image.zoom * 100)}%
+                    {Math.round(zoom * 100)}%
                 </span>
             </div>
             <p className="text-center text-xs text-tb-on-surface-variant">
-                Perbesar/perkecil gambar dengan scroll atau slider, geser gambar
-                di luar kotak. Bagian di dalam kotak menjadi hasil potongan.
+                Perbesar/perkecil gambar dengan slider, tombol, atau Ctrl +
+                scroll. Saat diperbesar, gunakan scroll bar atau geser gambar di
+                luar kotak. Bagian di dalam kotak menjadi hasil potongan.
             </p>
         </div>
     );
