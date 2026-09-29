@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
  *
  * @property int $id
  * @property int|null $marga_news_topic_id
+ * @property int|null $marga_news_source_id
  * @property string $title
  * @property string $url
  * @property string $url_hash
@@ -38,6 +39,7 @@ use Illuminate\Support\Carbon;
  */
 #[Fillable([
     'marga_news_topic_id',
+    'marga_news_source_id',
     'title',
     'url',
     'url_hash',
@@ -70,6 +72,12 @@ class MargaNews extends Model
     public function topic(): BelongsTo
     {
         return $this->belongsTo(MargaNewsTopic::class, 'marga_news_topic_id');
+    }
+
+    /** @return BelongsTo<MargaNewsSource, $this> */
+    public function source(): BelongsTo
+    {
+        return $this->belongsTo(MargaNewsSource::class, 'marga_news_source_id');
     }
 
     /** @return BelongsToMany<Marga, $this> */

@@ -72,7 +72,10 @@ export function NameCombobox({
         return maxResults === null ? matches : matches.slice(0, maxResults);
     }, [maxResults, suggestions, query]);
 
-    const rows: Array<string | NameSuggestion> = allowNa
+    // Keep the unknown-name option available for blank fields, but never let
+    // it become the only keyboard match while someone is typing a real name.
+    const rows: Array<string | NameSuggestion> =
+        allowNa && (query === '' || query === 'n/a')
         ? [...filtered, '__NA__']
         : filtered;
     const siblingNames = useMemo(() => {

@@ -27,22 +27,22 @@ HERMES_POLL_SECONDS=2
 
 Buka **Administrasi → Otomatisasi Berita Marga** untuk mengisi prompt Hermes, mengaktifkan atau menonaktifkan pengambilan berita, dan mengatur jeda 1–10.080 menit. Prompt wajib diisi sebelum otomatisasi diaktifkan. Prompt admin dikirim apa adanya sebagai `input.instructions`; placeholder contoh di halaman hanya panduan dan tidak digunakan otomatis. Jeda dihitung setelah satu siklus selesai. Halaman ini juga menampilkan waktu run, berita baru yang diterima, duplikat, dan error terakhir.
 
-Topik dan kata kunci tetap diatur melalui menu **Topik Berita Marga**. Semua berita yang dikembalikan Hermes masuk ke status Menunggu.
+Topik dan kata kunci tetap diatur melalui menu **Topik Berita Marga**. Website sumber diatur admin melalui menu **Sumber Website Berita**. Admin memasukkan URL website langsung, tanpa RSS. Sumber dapat dipakai untuk semua topik atau dibatasi ke beberapa topik. Hermes hanya boleh membaca website pada daftar sumber untuk topik yang sedang dikerjakan. Semua berita yang dikembalikan Hermes masuk ke status Menunggu.
 
 ## Cara kerja API Hermes
 
-Setiap siklus untuk topik aktif mengirim `POST {HERMES_BASE_URL}{HERMES_RUNS_ENDPOINT}`. `input` berupa pesan user berbentuk JSON string dengan konteks topik, sedangkan prompt admin dikirim terpisah sebagai `instructions`:
+Setiap siklus untuk topik aktif mengirim `POST {HERMES_BASE_URL}{HERMES_RUNS_ENDPOINT}`. `input` berupa pesan user berbentuk JSON string dengan konteks topik dan sumber website yang diizinkan, sedangkan prompt admin dikirim terpisah sebagai `instructions`:
 
 ```json
 {
-  "input": "{\"keyword\":\"kata kunci topik\",\"marga\":null,\"notes\":null,\"margas\":[\"daftar nama marga\"],\"known_urls\":[]}",
-  "instructions": "prompt yang diisi admin"
+    "input": "{\"keyword\":\"kata kunci topik\",\"marga\":null,\"notes\":null,\"sources\":[{\"id\":1,\"name\":\"Harian SIB\",\"url\":\"https://www.hariansib.com\",\"domain\":\"hariansib.com\"}],\"margas\":[\"daftar nama marga\"],\"known_urls\":[]}",
+    "instructions": "prompt admin ditambah aturan wajib: baca website langsung, tanpa RSS, dan jangan gunakan domain lain"
 }
 ```
 
-API Hermes mengembalikan `run_id`; Laravel melakukan polling `GET {HERMES_BASE_URL}{HERMES_RUNS_ENDPOINT}/{run_id}` sampai status `completed`. Output teks Hermes harus berupa JSON object dengan properti `items`, berisi artikel dengan field `title`, `url`, `publisher`, `published_at`, `excerpt`, `summary`, `content`, `image_url`, dan `margas`.
+API Hermes mengembalikan `run_id`; Laravel melakukan polling `GET {HERMES_BASE_URL}{HERMES_RUNS_ENDPOINT}/{run_id}` sampai status `completed`. Output teks Hermes harus berupa JSON object dengan properti `items`, berisi artikel dengan field `source_id`, `title`, `url`, `publisher`, `published_at`, `excerpt`, `summary`, `content`, `image_url`, dan `margas`.
 
-`content` harus berupa isi lengkap artikel minimal 200 kata dalam bahasa Indonesia, diambil dari halaman URL sumber asli dan bukan cuplikan hasil pencarian. Artikel dengan isi kurang dari 200 kata tidak disimpan. `image_url` harus berisi URL absolut gambar utama artikel; isi `null` hanya jika halaman sumber memang tidak menyediakan gambar. Hermes tidak boleh mengarang isi, fakta, atau URL gambar. Gambar ditampilkan pada halaman berita, sementara isi lengkap dapat dibuka melalui kontrol “Baca isi lengkap artikel”. Duplikat tetap disaring sebelum disimpan.
+`source_id` wajib merujuk ke website yang mengandung artikel. Laravel memeriksa host URL artikel dan hanya menerima domain yang sama atau subdomain dari website tersebut. `content` harus berupa isi lengkap artikel minimal 200 kata dalam bahasa Indonesia, diambil dengan membuka langsung halaman website dan URL artikel asli, bukan cuplikan pencarian atau RSS. Artikel dari domain lain atau dengan isi kurang dari 200 kata tidak disimpan. `image_url` harus berisi URL absolut gambar utama artikel; isi `null` hanya jika halaman sumber memang tidak menyediakan gambar. Hermes tidak boleh mengarang isi, fakta, atau URL gambar. Gambar ditampilkan pada halaman berita, sementara isi lengkap dapat dibuka melalui kontrol “Baca isi lengkap artikel”. Duplikat tetap disaring sebelum disimpan.
 
 ## Menjalankan scheduler
 

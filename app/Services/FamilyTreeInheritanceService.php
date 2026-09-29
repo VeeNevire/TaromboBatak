@@ -33,12 +33,21 @@ class FamilyTreeInheritanceService
         $localNodes = $tree->nodes->keyBy('person_id');
 
         if ($tree->basedOn === null) {
-            return $localNodes->map(fn (FamilyTreeNode $node) => $this->rawNode($node))->values();
+            return $localNodes
+                ->reject(fn (FamilyTreeNode $node) => $node->is_removed)
+                ->map(fn (FamilyTreeNode $node) => $this->rawNode($node))
+                ->values();
         }
 
         $resolved = $this->resolve($tree->basedOn, $visitedTreeIds)->keyBy('person_id');
 
         foreach ($localNodes as $personId => $localNode) {
+            if ($localNode->is_removed) {
+                $resolved->forget($personId);
+
+                continue;
+            }
+
             $sourceNode = $resolved->get($personId);
 
             if ($sourceNode === null) {

@@ -27,7 +27,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read FamilyTreeNode|null $fatherNode
  * @property-read FamilyTreeNode|null $motherNode
  */
-#[Fillable(['family_tree_id', 'person_id', 'father_node_id', 'mother_node_id', 'birth_order', 'sibling_count', 'chain', 'pending_father', 'family_name', 'structure_overrides'])]
+#[Fillable(['family_tree_id', 'person_id', 'father_node_id', 'mother_node_id', 'birth_order', 'sibling_count', 'chain', 'pending_father', 'family_name', 'structure_overrides', 'is_removed'])]
 class FamilyTreeNode extends Model
 {
     /** @return BelongsTo<FamilyTree, $this> */
@@ -65,6 +65,7 @@ class FamilyTreeNode extends Model
         return [
             'pending_father' => 'boolean',
             'structure_overrides' => 'array',
+            'is_removed' => 'boolean',
         ];
     }
 }

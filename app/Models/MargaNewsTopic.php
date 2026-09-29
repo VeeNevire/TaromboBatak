@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
@@ -33,6 +34,12 @@ class MargaNewsTopic extends Model
     public function news(): HasMany
     {
         return $this->hasMany(MargaNews::class);
+    }
+
+    /** @return BelongsToMany<MargaNewsSource, $this> */
+    public function sources(): BelongsToMany
+    {
+        return $this->belongsToMany(MargaNewsSource::class, 'marga_news_source_topic');
     }
 
     protected function casts(): array

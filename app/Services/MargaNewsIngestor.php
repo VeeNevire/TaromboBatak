@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Marga;
 use App\Models\MargaNews;
+use App\Models\MargaNewsSource;
 use App\Models\MargaNewsTopic;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -21,20 +22,35 @@ class MargaNewsIngestor
 
     /**
      * @param  array<int, array<string, mixed>>  $items
-     * @return array{accepted: int, duplicates: int, insufficient_content: int, without_image: int}
+     * @return array{accepted: int, duplicates: int, insufficient_content: int, without_image: int, invalid_source: int}
      */
     public function ingest(array $items, ?string $agent): array
     {
         $margas = $this->taggableMargas();
-        $topics = MargaNewsTopic::query()->pluck('marga_id', 'id');
+        $topics = MargaNewsTopic::query()->with('sources:id,name')->get()->keyBy('id');
         $accepted = 0;
         $duplicates = 0;
         $insufficientContent = 0;
         $withoutImage = 0;
+        $invalidSource = 0;
         $seenUrls = [];
         $seenTitles = [];
+        $sources = MargaNewsSource::query()->where('is_active', true)->with('topics:id,keyword')->get()->keyBy('id');
 
         foreach ($items as $item) {
+            $source = isset($item['source_id']) ? $sources->get((int) $item['source_id']) : null;
+            $topic = isset($item['topic_id']) ? $topics->get((int) $item['topic_id']) : null;
+
+            if (! $source instanceof MargaNewsSource
+                || ! $source->allowsArticleUrl((string) ($item['url'] ?? ''))
+                || ($topic instanceof MargaNewsTopic
+                    ? ! $source->appliesToTopic($topic)
+                    : ! $source->applies_to_all_topics)) {
+                $invalidSource++;
+
+                continue;
+            }
+
             $title = $this->cleanTitle((string) $item['title'], $item['publisher'] ?? null);
             $urlHash = MargaNews::hashUrl((string) $item['url']);
             $titleHash = MargaNews::hashTitle($title);
@@ -60,15 +76,16 @@ class MargaNewsIngestor
 
             $excerpt = $this->cleanText($item['excerpt'] ?? null, 300);
             $imageUrl = $this->cleanImageUrl($item['image_url'] ?? null);
-            $topicId = isset($item['topic_id']) && $topics->has($item['topic_id']) ? (int) $item['topic_id'] : null;
+            $topicId = $topic instanceof MargaNewsTopic ? $topic->id : null;
 
             $news = MargaNews::query()->create([
                 'marga_news_topic_id' => $topicId,
+                'marga_news_source_id' => $source->id,
                 'title' => Str::limit($title, 297),
                 'url' => (string) $item['url'],
                 'url_hash' => $urlHash,
                 'title_hash' => $titleHash,
-                'publisher' => $this->cleanText($item['publisher'] ?? null, 120),
+                'publisher' => $this->cleanText($item['publisher'] ?? $source->name, 120),
                 'excerpt' => $excerpt,
                 'summary' => $this->cleanText($item['summary'] ?? null, 500),
                 'content' => $content,
@@ -84,8 +101,8 @@ class MargaNewsIngestor
                 (array) ($item['margas'] ?? []),
             );
 
-            if ($topicId !== null && $topics->get($topicId) !== null) {
-                $margaIds[] = (int) $topics->get($topicId);
+            if ($topicId !== null && $topic->marga_id !== null) {
+                $margaIds[] = (int) $topic->marga_id;
             }
 
             $news->margas()->sync(array_values(array_unique($margaIds)));
@@ -101,6 +118,7 @@ class MargaNewsIngestor
             'duplicates' => $duplicates,
             'insufficient_content' => $insufficientContent,
             'without_image' => $withoutImage,
+            'invalid_source' => $invalidSource,
         ];
     }
 

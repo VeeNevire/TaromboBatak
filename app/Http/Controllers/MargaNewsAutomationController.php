@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\UpdateMargaNewsAutomationRequest;
 use App\Models\MargaNewsAutomationSetting;
+use App\Models\MargaNewsSource;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -44,6 +45,12 @@ class MargaNewsAutomationController extends Controller
         if ($enabled && (! filled(config('services.hermes.base_url')) || ! filled(config('services.hermes.token')))) {
             throw ValidationException::withMessages([
                 'enabled' => 'Isi HERMES_BASE_URL dan HERMES_TOKEN yang cocok dengan API_SERVER_KEY Hermes di .env sebelum mengaktifkan otomatisasi.',
+            ]);
+        }
+
+        if ($enabled && ! MargaNewsSource::query()->where('is_active', true)->exists()) {
+            throw ValidationException::withMessages([
+                'enabled' => 'Tambahkan dan aktifkan minimal satu website di menu Sumber Website Berita sebelum mengaktifkan otomatisasi.',
             ]);
         }
 
