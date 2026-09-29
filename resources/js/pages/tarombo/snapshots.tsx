@@ -20,6 +20,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ZoomableImage } from '@/components/zoomable-image';
 import { dashboard } from '@/routes';
 import tarombo from '@/routes/tarombo';
@@ -48,6 +49,8 @@ type SnapshotPage = {
     next_page_url: string | null;
 };
 
+type SnapshotFilter = 'all' | 'compiled' | 'original';
+
 type FrameOption = {
     id: number;
     name: string;
@@ -56,12 +59,14 @@ type FrameOption = {
 
 export default function TaromboSnapshots({
     snapshots,
+    filter,
     snapshotOptions,
     frames,
     accountName,
     canDownload,
 }: {
     snapshots: SnapshotPage;
+    filter: SnapshotFilter;
     snapshotOptions: Snapshot[];
     frames: FrameOption[];
     accountName: string;
@@ -92,6 +97,16 @@ export default function TaromboSnapshots({
         router.delete(tarombo.snapshots.destroy(snapshot.id).url, {
             preserveScroll: true,
         });
+    };
+
+    const applyFilter = (value: string) => {
+        router.get(
+            tarombo.snapshots.index.url(
+                value === 'all' ? undefined : { query: { filter: value } },
+            ),
+            {},
+            { preserveState: true, preserveScroll: true, replace: true },
+        );
     };
 
     return (
@@ -168,6 +183,18 @@ export default function TaromboSnapshots({
                         </Button>
                     </div>
                 </div>
+
+                <Tabs value={filter} defaultValue="all" onValueChange={applyFilter}>
+                    <TabsList>
+                        <TabsTrigger value="all">Semua</TabsTrigger>
+                        <TabsTrigger value="compiled">
+                            Hasil Compile
+                        </TabsTrigger>
+                        <TabsTrigger value="original">
+                            Gambar Original
+                        </TabsTrigger>
+                    </TabsList>
+                </Tabs>
 
                 <div className="flex items-start gap-3 rounded-xl border border-tb-outline-variant bg-tb-surface-container/50 p-4 text-sm text-tb-on-surface-variant">
                     <ShieldCheck className="mt-0.5 size-5 shrink-0 text-tb-primary" />

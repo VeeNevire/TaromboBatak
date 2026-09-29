@@ -16,6 +16,8 @@ import {
     Save,
     Trash2,
     Wand2,
+    ZoomIn,
+    ZoomOut,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CollageDialog } from '@/components/collage-dialog';
@@ -296,6 +298,11 @@ export default function TaromboSnapshotCompile({
     const layerCounter = useRef(0);
     const nameCounter = useRef({ ranting: 0, background: 0 });
     const copiedIdRef = useRef<string | null>(null);
+    const [naturalSize, setNaturalSize] = useState<{
+        width: number;
+        height: number;
+    } | null>(null);
+    const [viewZoom, setViewZoom] = useState<number | null>(null);
     const label =
         snapshot.title ?? snapshot.center_person_name ?? 'Pohon Tarombo';
     const loadKey = selectedFrame
@@ -422,6 +429,11 @@ export default function TaromboSnapshotCompile({
             ),
             { maxSide: PREVIEW_MAX_SIDE },
         );
+
+        setNaturalSize({
+            width: canvasRef.current.width,
+            height: canvasRef.current.height,
+        });
     }, [ready, assets, selectedFrame, crop, placement, layers, order]);
 
     // Rebuild the saved compile's layers once the tree image is loaded.
@@ -804,6 +816,7 @@ export default function TaromboSnapshotCompile({
         setSelectedFrame(frame);
         setPlacement(null);
         setFramePickerOpen(false);
+        setViewZoom(null);
     };
 
     const toggleRemoveBackground = (checked: boolean) => {
@@ -831,6 +844,21 @@ export default function TaromboSnapshotCompile({
             height: Math.round(height),
         });
     };
+
+    const VIEW_ZOOM_MIN = 0.25;
+    const VIEW_ZOOM_MAX = 3;
+    const VIEW_ZOOM_STEP = 0.25;
+
+    const clampViewZoom = (value: number) =>
+        Math.min(VIEW_ZOOM_MAX, Math.max(VIEW_ZOOM_MIN, value));
+
+    const zoomInView = () =>
+        setViewZoom((current) => clampViewZoom((current ?? 1) + VIEW_ZOOM_STEP));
+
+    const zoomOutView = () =>
+        setViewZoom((current) => clampViewZoom((current ?? 1) - VIEW_ZOOM_STEP));
+
+    const resetView = () => setViewZoom(null);
 
     const resetSelected = () => {
         if (!selectedItem || !selectedFrame) {
@@ -989,12 +1017,9 @@ export default function TaromboSnapshotCompile({
         };
     }, [unsaved]);
 
-    const saveDraft = async () => {
-        if (!ready || restoring || savingDraft) {
-            return;
-        }
-
-        setSavingDraft(true);
+    // Shared by the "Simpan" button and "Produce" (which saves the draft
+    // first so the compile can be reopened and edited again afterwards).
+    const persistDraft = async (): Promise<boolean> => {
         setPreviewError(null);
 
         // Only images that are not on the server yet are uploaded.
@@ -1011,10 +1036,9 @@ export default function TaromboSnapshotCompile({
                 }
             }
         } catch {
-            setSavingDraft(false);
             setPreviewError('Gambar lapisan gagal disiapkan untuk disimpan.');
 
-            return;
+            return false;
         }
 
         const state = draftState(
@@ -1024,52 +1048,78 @@ export default function TaromboSnapshotCompile({
 
         // PHP only reads multipart bodies of POST requests, so the PUT is
         // sent as a POST with Laravel's method spoofing.
-        router.post(
-            compileDraft.update.url(snapshot.id),
-            { _method: 'put', state: JSON.stringify(state), images },
-            {
-                forceFormData: true,
-                preserveScroll: true,
-                preserveState: true,
-                onSuccess: (page) => {
-                    const saved = page.props.draft as CompileDraft | null;
+        return new Promise<boolean>((resolve) => {
+            router.post(
+                compileDraft.update.url(snapshot.id),
+                { _method: 'put', state: JSON.stringify(state), images },
+                {
+                    forceFormData: true,
+                    preserveScroll: true,
+                    preserveState: true,
+                    onSuccess: (page) => {
+                        const saved = page.props.draft as CompileDraft | null;
 
-                    if (saved) {
-                        const keys = new Map(
-                            saved.state.layers.map((layer) => [
-                                layer.id,
-                                layer.source,
-                            ]),
+                        if (saved) {
+                            const keys = new Map(
+                                saved.state.layers.map((layer) => [
+                                    layer.id,
+                                    layer.source,
+                                ]),
+                            );
+
+                            setLayers((current) =>
+                                current.map((layer) => ({
+                                    ...layer,
+                                    sourceKey:
+                                        keys.get(layer.id) ?? layer.sourceKey,
+                                })),
+                            );
+                            setSavedAt(saved.updated_at);
+                        }
+
+                        setSavedSignature(signatureAtSave);
+                        resolve(true);
+                    },
+                    onError: (errors) => {
+                        setPreviewError(
+                            Object.values(errors)[0] ??
+                                'Compile Gambar gagal disimpan.',
                         );
-
-                        setLayers((current) =>
-                            current.map((layer) => ({
-                                ...layer,
-                                sourceKey:
-                                    keys.get(layer.id) ?? layer.sourceKey,
-                            })),
-                        );
-                        setSavedAt(saved.updated_at);
-                    }
-
-                    setSavedSignature(signatureAtSave);
+                        resolve(false);
+                    },
                 },
-                onError: (errors) =>
-                    setPreviewError(
-                        Object.values(errors)[0] ??
-                            'Compile Gambar gagal disimpan.',
-                    ),
-                onFinish: () => setSavingDraft(false),
-            },
-        );
+            );
+        });
+    };
+
+    const saveDraft = async () => {
+        if (!ready || restoring || savingDraft) {
+            return;
+        }
+
+        setSavingDraft(true);
+        await persistDraft();
+        setSavingDraft(false);
     };
 
     const produce = async () => {
-        if (!selectedFrame || producing || !ready) {
+        if (!selectedFrame || producing || !ready || savingDraft) {
             return;
         }
 
         setProducing(true);
+
+        // Save the draft too, so this compile can be reopened and edited
+        // again later instead of only producing a final flattened image.
+        setSavingDraft(true);
+        const saved = await persistDraft();
+        setSavingDraft(false);
+
+        if (!saved) {
+            setProducing(false);
+
+            return;
+        }
 
         const output = document.createElement('canvas');
         composeLayers(
@@ -1219,7 +1269,9 @@ export default function TaromboSnapshotCompile({
                         </Button>
                         <Button
                             type="button"
-                            disabled={!ready || restoring || producing}
+                            disabled={
+                                !ready || restoring || producing || savingDraft
+                            }
                             onClick={produce}
                             className="bg-tb-primary hover:bg-tb-primary-light"
                         >
@@ -1275,8 +1327,55 @@ export default function TaromboSnapshotCompile({
                     </p>
                 )}
 
+                <div className="flex items-center justify-end gap-2">
+                    <span className="text-xs text-tb-on-surface-variant">
+                        Perbesar tampilan
+                    </span>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        title="Perkecil"
+                        aria-label="Perkecil tampilan"
+                        disabled={
+                            !ready ||
+                            (viewZoom !== null && viewZoom <= VIEW_ZOOM_MIN)
+                        }
+                        onClick={zoomOutView}
+                    >
+                        <ZoomOut className="size-4" />
+                    </Button>
+                    <span className="w-12 text-center text-sm tabular-nums text-tb-on-surface">
+                        {Math.round((viewZoom ?? 1) * 100)}%
+                    </span>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        title="Perbesar"
+                        aria-label="Perbesar tampilan"
+                        disabled={
+                            !ready ||
+                            (viewZoom !== null && viewZoom >= VIEW_ZOOM_MAX)
+                        }
+                        onClick={zoomInView}
+                    >
+                        <ZoomIn className="size-4" />
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        title="Sesuaikan ke bidang pratinjau"
+                        disabled={!ready || viewZoom === null}
+                        onClick={resetView}
+                    >
+                        Sesuaikan
+                    </Button>
+                </div>
+
                 <div className="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
-                    <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-xl bg-tb-surface-container p-6 select-none">
+                    <div className="flex max-h-[calc(100dvh-15rem)] min-h-0 flex-1 items-center justify-center overflow-auto rounded-xl bg-tb-surface-container p-6 select-none">
                         {selectedFrame ? (
                             <div
                                 className={`relative ${ready ? '' : 'min-h-40 min-w-60'}`}
@@ -1290,7 +1389,23 @@ export default function TaromboSnapshotCompile({
                                 )}
                                 <canvas
                                     ref={canvasRef}
-                                    className="block max-h-[calc(100dvh-15rem)] max-w-full shadow-md"
+                                    className={
+                                        viewZoom === null
+                                            ? 'block max-h-[calc(100dvh-15rem)] max-w-full shadow-md'
+                                            : 'block shadow-md'
+                                    }
+                                    style={
+                                        viewZoom !== null && naturalSize
+                                            ? {
+                                                  width:
+                                                      naturalSize.width *
+                                                      viewZoom,
+                                                  height:
+                                                      naturalSize.height *
+                                                      viewZoom,
+                                              }
+                                            : undefined
+                                    }
                                 />
                                 {ready && selectedItem && (
                                     <DraggableBox
