@@ -39,7 +39,7 @@ class MargaNewsSourceRequest extends FormRequest
             'website_url' => ['required', 'string', 'max:2048', 'url:http,https'],
             'is_active' => ['required', 'boolean'],
             'applies_to_all_topics' => ['required', 'boolean'],
-            'topic_ids' => ['nullable', 'array', 'required_if:applies_to_all_topics,false', 'min:1'],
+            'topic_ids' => ['exclude_if:applies_to_all_topics,true', 'required', 'array', 'min:1'],
             'topic_ids.*' => ['integer', 'distinct', 'exists:marga_news_topics,id'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ];

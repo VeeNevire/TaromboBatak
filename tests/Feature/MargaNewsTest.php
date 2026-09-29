@@ -248,6 +248,37 @@ test('only admins manage website sources and sources can be limited to selected 
     expect(MargaNewsSource::query()->whereKey($source->id)->exists())->toBeFalse();
 });
 
+test('a source for all topics can be stored with an empty topic list', function () {
+    $admin = User::factory()->asAdmin()->create();
+
+    $this->actingAs($admin)
+        ->post(route('marga-news-sources.store'), [
+            'name' => 'Partarombo',
+            'website_url' => 'https://partarombo.com/artikel',
+            'is_active' => true,
+            'applies_to_all_topics' => true,
+            'topic_ids' => [],
+            'notes' => '',
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    $source = MargaNewsSource::query()->where('domain', 'partarombo.com')->sole();
+
+    expect($source->applies_to_all_topics)->toBeTrue()
+        ->and($source->topics)->toBeEmpty();
+
+    $this->actingAs($admin)
+        ->post(route('marga-news-sources.store'), [
+            'name' => 'Tanpa Topik',
+            'website_url' => 'https://tanpatopik.com',
+            'is_active' => true,
+            'applies_to_all_topics' => false,
+            'topic_ids' => [],
+        ])
+        ->assertSessionHasErrors('topic_ids');
+});
+
 test('the agent cannot ingest an article outside its configured source domain', function () {
     $this->postJson(route('api.marga-news.ingest'), [
         'items' => [newsItem(['url' => 'https://outside.example/news/article'])],

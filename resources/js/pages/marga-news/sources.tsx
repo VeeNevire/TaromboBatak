@@ -253,11 +253,9 @@ export default function MargaNewsSources({
                                             ))}
                                         </div>
                                     )}
-                                    <InputError
-                                        message={form.errors.topic_ids}
-                                    />
                                 </fieldset>
                             )}
+                            <InputError message={form.errors.topic_ids} />
 
                             <div className="flex justify-end gap-2">
                                 {editingId !== null && (
