@@ -14,7 +14,7 @@ use Throwable;
  * submit a run, then poll it until it finishes or times out.
  *
  * Env vars (see docs/hermes-agent-berita-marga.md):
- *   HERMES_BASE_URL, HERMES_TOKEN, HERMES_RUNS_ENDPOINT,
+ *   HERMES_BASE_URL, HERMES_TOKEN or API_SERVER_KEY, HERMES_RUNS_ENDPOINT,
  *   HERMES_TIMEOUT, HERMES_RUN_TIMEOUT, HERMES_POLL_SECONDS
  */
 class HermesRunClient
@@ -29,15 +29,13 @@ class HermesRunClient
 
         $token = config('services.hermes.token');
 
-        if (! filled($token)) {
-            throw new RuntimeException('HERMES_TOKEN belum diisi. Hermes API memerlukan API_SERVER_KEY.');
-        }
-
         $request = Http::baseUrl(rtrim($baseUrl, '/'))
             ->acceptJson()
             ->timeout((int) config('services.hermes.timeout', 90));
 
-        $request->withToken($token);
+        if (filled($token)) {
+            $request->withToken($token);
+        }
 
         return $request;
     }

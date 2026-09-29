@@ -12,11 +12,11 @@ return [
         'agent_token' => env('MARGA_NEWS_AGENT_TOKEN'),
     ],
 
-    // Hermes run/poll API called by Laravel. The bearer token must match the
-    // Hermes API server's API_SERVER_KEY.
+    // Hermes run/poll API called by Laravel. A dedicated token takes priority;
+    // API_SERVER_KEY is the shared fallback used by the other Hermes client.
     'hermes' => [
         'base_url' => env('HERMES_BASE_URL'),
-        'token' => env('HERMES_TOKEN'),
+        'token' => env('HERMES_TOKEN') ?: env('API_SERVER_KEY'),
         'runs_endpoint' => env('HERMES_RUNS_ENDPOINT', '/runs'),
         'timeout' => env('HERMES_TIMEOUT', 90),
         'run_timeout' => env('HERMES_RUN_TIMEOUT', 300),
