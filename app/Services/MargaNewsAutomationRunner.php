@@ -29,9 +29,12 @@ class MargaNewsAutomationRunner
                 ->lockForUpdate()
                 ->findOrFail(MargaNewsAutomationSetting::SINGLETON_ID);
 
+            $recoveringStaleRun = $setting->last_status === 'running'
+                && ! $setting->run_lease_until?->isFuture();
+
             if (! $setting->enabled
-                || ($setting->next_run_at !== null && $setting->next_run_at->isFuture())
-                || ($setting->last_status === 'running' && $setting->run_lease_until?->isFuture())) {
+                || ($setting->last_status === 'running' && ! $recoveringStaleRun)
+                || (! $recoveringStaleRun && $setting->next_run_at?->isFuture())) {
                 return null;
             }
 
@@ -46,9 +49,6 @@ class MargaNewsAutomationRunner
 
                 return null;
             }
-
-            $recoveringStaleRun = $setting->last_status === 'running'
-                && ! $setting->run_lease_until?->isFuture();
 
             $activeTopicCount = MargaNewsTopic::query()->where('is_active', true)->count();
             $perRunMinutes = (int) ceil((int) config('services.hermes.run_timeout', 300) / 60);

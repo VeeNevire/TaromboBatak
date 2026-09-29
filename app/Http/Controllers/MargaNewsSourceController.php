@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\MargaNewsSourceRequest;
+use App\Models\MargaNewsAutomationSetting;
 use App\Models\MargaNewsSource;
 use App\Models\MargaNewsTopic;
 use Illuminate\Http\RedirectResponse;
@@ -48,6 +49,10 @@ class MargaNewsSourceController extends Controller
             $source->topics()->sync($topicIds);
         });
 
+        if ($values['is_active']) {
+            MargaNewsAutomationSetting::scheduleImmediateRunIfEnabled();
+        }
+
         return back()->with('toast', ['type' => 'success', 'message' => 'Sumber berita ditambahkan.']);
     }
 
@@ -61,6 +66,10 @@ class MargaNewsSourceController extends Controller
             $source->update($values);
             $source->topics()->sync($topicIds);
         });
+
+        if ($values['is_active']) {
+            MargaNewsAutomationSetting::scheduleImmediateRunIfEnabled();
+        }
 
         return back()->with('toast', ['type' => 'success', 'message' => 'Sumber berita diperbarui.']);
     }

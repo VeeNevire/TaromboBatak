@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\UpdateMargaNewsAutomationRequest;
 use App\Models\MargaNewsAutomationSetting;
 use App\Models\MargaNewsSource;
+use App\Models\MargaNewsTopic;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -53,17 +54,26 @@ class MargaNewsAutomationController extends Controller
             ]);
         }
 
+        if ($enabled && ! MargaNewsTopic::query()->where('is_active', true)->exists()) {
+            throw ValidationException::withMessages([
+                'enabled' => 'Tambahkan dan aktifkan minimal satu topik di menu Topik Berita Marga sebelum mengaktifkan otomatisasi.',
+            ]);
+        }
+
         MargaNewsAutomationSetting::current()->update([
             'enabled' => $enabled,
             'interval_minutes' => $interval,
             'prompt' => $values['prompt'] ?? null,
-            'next_run_at' => $enabled ? now()->addMinutes($interval) : null,
+            // Start soon after saving. The selected interval applies after the
+            // first completed run, in MargaNewsAutomationRunner::finish().
+            'next_run_at' => $enabled ? now() : null,
+            'last_error' => null,
         ]);
 
         return back()->with('toast', [
             'type' => 'success',
             'message' => $enabled
-                ? "Otomatisasi berita aktif. Run berikutnya sekitar {$interval} menit lagi."
+                ? "Otomatisasi berita aktif. Pencarian pertama dimulai pada siklus scheduler berikutnya; selanjutnya setiap {$interval} menit."
                 : 'Otomatisasi berita dinonaktifkan.',
         ]);
     }

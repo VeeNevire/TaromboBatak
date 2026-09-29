@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Api\MargaNewsAgentController;
 use App\Http\Requests\MargaNewsTopicRequest;
 use App\Models\Marga;
+use App\Models\MargaNewsAutomationSetting;
 use App\Models\MargaNewsTopic;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Cache;
@@ -45,14 +46,24 @@ class MargaNewsTopicController extends Controller
 
     public function store(MargaNewsTopicRequest $request): RedirectResponse
     {
-        MargaNewsTopic::query()->create($request->validated());
+        $values = $request->validated();
+        MargaNewsTopic::query()->create($values);
+
+        if ($values['is_active']) {
+            MargaNewsAutomationSetting::scheduleImmediateRunIfEnabled();
+        }
 
         return back()->with('toast', ['type' => 'success', 'message' => 'Topik berita ditambahkan.']);
     }
 
     public function update(MargaNewsTopicRequest $request, MargaNewsTopic $topic): RedirectResponse
     {
-        $topic->update($request->validated());
+        $values = $request->validated();
+        $topic->update($values);
+
+        if ($values['is_active']) {
+            MargaNewsAutomationSetting::scheduleImmediateRunIfEnabled();
+        }
 
         return back()->with('toast', ['type' => 'success', 'message' => 'Topik berita diperbarui.']);
     }
