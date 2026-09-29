@@ -49,6 +49,17 @@ class MargaNewsAutomationSetting extends Model
         );
     }
 
+    public static function scheduleImmediateRunIfEnabled(): void
+    {
+        self::query()
+            ->whereKey(self::SINGLETON_ID)
+            ->where('enabled', true)
+            ->update([
+                'next_run_at' => now(),
+                'last_error' => null,
+            ]);
+    }
+
     protected function casts(): array
     {
         return [

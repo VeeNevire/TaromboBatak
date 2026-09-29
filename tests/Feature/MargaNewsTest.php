@@ -192,12 +192,21 @@ test('other accounts cannot review news', function (?string $state) {
 
 test('only admins manage the search topics', function () {
     $admin = User::factory()->asAdmin()->create();
+    MargaNewsAutomationSetting::current()->update([
+        'enabled' => true,
+        'next_run_at' => now()->addHours(6),
+        'last_error' => 'Tidak ada topik aktif.',
+    ]);
 
     $this->actingAs($admin)
         ->post(route('marga-news-topics.store'), ['keyword' => 'pesta tugu', 'is_active' => true])
         ->assertRedirect();
 
     $topic = MargaNewsTopic::query()->sole();
+    $setting = MargaNewsAutomationSetting::current()->fresh();
+
+    expect($setting->next_run_at->isFuture())->toBeFalse()
+        ->and($setting->last_error)->toBeNull();
 
     $this->actingAs($admin)
         ->put(route('marga-news-topics.update', $topic), ['keyword' => 'pesta tugu marga', 'is_active' => false])
@@ -220,6 +229,11 @@ test('only admins manage website sources and sources can be limited to selected 
         'keyword' => 'pesta tugu',
         'is_active' => true,
     ]);
+    MargaNewsAutomationSetting::current()->update([
+        'enabled' => true,
+        'next_run_at' => now()->addHours(6),
+        'last_error' => 'Tidak ada sumber aktif.',
+    ]);
 
     $this->actingAs($admin)
         ->post(route('marga-news-sources.store'), [
@@ -233,9 +247,12 @@ test('only admins manage website sources and sources can be limited to selected 
         ->assertRedirect();
 
     $source = MargaNewsSource::query()->where('domain', 'beritabatak.com')->sole();
+    $setting = MargaNewsAutomationSetting::current()->fresh();
 
     expect($source->website_url)->toBe('https://www.beritabatak.com/daerah')
-        ->and($source->topics->modelKeys())->toBe([$topic->id]);
+        ->and($source->topics->modelKeys())->toBe([$topic->id])
+        ->and($setting->next_run_at->isFuture())->toBeFalse()
+        ->and($setting->last_error)->toBeNull();
 
     $this->actingAs(User::factory()->asSubAdmin()->create())
         ->get(route('marga-news-sources.index'))
@@ -291,6 +308,10 @@ test('the agent cannot ingest an article outside its configured source domain', 
 
 test('admin can enable news automation without a dedicated Hermes token', function () {
     $admin = User::factory()->asAdmin()->create();
+    MargaNewsTopic::query()->create([
+        'keyword' => 'kegiatan punguan marga Batak',
+        'is_active' => true,
+    ]);
     config([
         'services.hermes.base_url' => 'http://127.0.0.1:8642/v1',
         'services.hermes.token' => null,
@@ -304,7 +325,25 @@ test('admin can enable news automation without a dedicated Hermes token', functi
         ])
         ->assertRedirect();
 
-    expect(MargaNewsAutomationSetting::current()->fresh()->enabled)->toBeTrue();
+    $setting = MargaNewsAutomationSetting::current()->fresh();
+
+    expect($setting->enabled)->toBeTrue()
+        ->and($setting->next_run_at->isFuture())->toBeFalse();
+});
+
+test('news automation cannot be enabled without an active topic', function () {
+    $admin = User::factory()->asAdmin()->create();
+    config(['services.hermes.base_url' => 'http://127.0.0.1:8642/v1']);
+
+    $this->actingAs($admin)
+        ->put(route('marga-news-automation.update'), [
+            'enabled' => true,
+            'interval_minutes' => 60,
+            'prompt' => 'Cari berita kegiatan marga.',
+        ])
+        ->assertSessionHasErrors('enabled');
+
+    expect(MargaNewsAutomationSetting::current()->fresh()->enabled)->toBeFalse();
 });
 
 test('scheduled Hermes runs receive the configured topic source list', function () {
@@ -373,4 +412,48 @@ test('scheduled Hermes runs can work without a bearer token when the API allows 
     Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
         && ! $request->hasHeader('Authorization'));
     expect(MargaNewsAutomationSetting::current()->fresh()->last_status)->toBe('succeeded');
+});
+
+test('scheduled Hermes run recovers an expired lease even when next run is in the future', function () {
+    MargaNewsTopic::query()->create([
+        'keyword' => 'pesta bona taon',
+        'is_active' => true,
+    ]);
+    MargaNewsAutomationSetting::current()->update([
+        'enabled' => true,
+        'interval_minutes' => 60,
+        'prompt' => 'Cari berita kegiatan marga.',
+        'last_status' => 'running',
+        'run_lease_until' => now()->subMinute(),
+        'next_run_at' => now()->addHours(6),
+    ]);
+    config(['services.hermes.base_url' => 'http://127.0.0.1:8642/v1']);
+    Http::fake([
+        '*' => Http::response([
+            'run_id' => 'replacement-run',
+            'status' => 'completed',
+            'output' => ['items' => []],
+        ]),
+    ]);
+
+    app(MargaNewsAutomationRunner::class)->runIfDue();
+
+    Http::assertSentCount(1);
+    expect(MargaNewsAutomationSetting::current()->fresh()->last_status)->toBe('succeeded');
+});
+
+test('scheduled Hermes run keeps an active lease even when next run is due', function () {
+    MargaNewsAutomationSetting::current()->update([
+        'enabled' => true,
+        'prompt' => 'Cari berita kegiatan marga.',
+        'last_status' => 'running',
+        'run_lease_until' => now()->addMinute(),
+        'next_run_at' => now()->subMinute(),
+    ]);
+    Http::fake();
+
+    app(MargaNewsAutomationRunner::class)->runIfDue();
+
+    Http::assertNothingSent();
+    expect(MargaNewsAutomationSetting::current()->fresh()->last_status)->toBe('running');
 });
