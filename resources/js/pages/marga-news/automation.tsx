@@ -187,8 +187,7 @@ export default function MargaNewsAutomation({
                                 </Button>
                                 {!hermes.configured && (
                                     <Badge variant="destructive">
-                                        HERMES_BASE_URL / HERMES_TOKEN belum
-                                        lengkap
+                                        HERMES_BASE_URL belum diisi
                                     </Badge>
                                 )}
                             </div>

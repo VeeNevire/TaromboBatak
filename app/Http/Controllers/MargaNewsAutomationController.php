@@ -30,8 +30,7 @@ class MargaNewsAutomationController extends Controller
                 'last_error' => $setting->last_error,
             ],
             'hermes' => [
-                'configured' => filled(config('services.hermes.base_url'))
-                    && filled(config('services.hermes.token')),
+                'configured' => filled(config('services.hermes.base_url')),
             ],
         ]);
     }
@@ -42,9 +41,9 @@ class MargaNewsAutomationController extends Controller
         $enabled = (bool) $values['enabled'];
         $interval = (int) $values['interval_minutes'];
 
-        if ($enabled && (! filled(config('services.hermes.base_url')) || ! filled(config('services.hermes.token')))) {
+        if ($enabled && ! filled(config('services.hermes.base_url'))) {
             throw ValidationException::withMessages([
-                'enabled' => 'Isi HERMES_BASE_URL dan HERMES_TOKEN yang cocok dengan API_SERVER_KEY Hermes di .env sebelum mengaktifkan otomatisasi.',
+                'enabled' => 'Isi HERMES_BASE_URL Hermes di .env sebelum mengaktifkan otomatisasi.',
             ]);
         }
 

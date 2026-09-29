@@ -257,6 +257,24 @@ test('the agent cannot ingest an article outside its configured source domain', 
     expect(MargaNews::query()->exists())->toBeFalse();
 });
 
+test('admin can enable news automation without a dedicated Hermes token', function () {
+    $admin = User::factory()->asAdmin()->create();
+    config([
+        'services.hermes.base_url' => 'http://127.0.0.1:8642/v1',
+        'services.hermes.token' => null,
+    ]);
+
+    $this->actingAs($admin)
+        ->put(route('marga-news-automation.update'), [
+            'enabled' => true,
+            'interval_minutes' => 60,
+            'prompt' => 'Cari berita kegiatan marga.',
+        ])
+        ->assertRedirect();
+
+    expect(MargaNewsAutomationSetting::current()->fresh()->enabled)->toBeTrue();
+});
+
 test('scheduled Hermes runs receive the configured topic source list', function () {
     $topic = MargaNewsTopic::query()->create([
         'keyword' => 'pesta bona taon',
@@ -293,4 +311,34 @@ test('scheduled Hermes runs receive the configured topic source list', function 
             && ($input['output_contract']['items'][0]['source_id'] ?? null) !== null;
     });
     expect(MargaNews::query()->sole()->marga_news_source_id)->toBe(MargaNewsSource::query()->value('id'));
+});
+
+test('scheduled Hermes runs can work without a bearer token when the API allows it', function () {
+    MargaNewsTopic::query()->create([
+        'keyword' => 'pesta bona taon',
+        'is_active' => true,
+    ]);
+    MargaNewsAutomationSetting::current()->update([
+        'enabled' => true,
+        'interval_minutes' => 60,
+        'prompt' => 'Cari berita kegiatan marga.',
+        'next_run_at' => now()->subMinute(),
+    ]);
+    config([
+        'services.hermes.base_url' => 'http://127.0.0.1:8642/v1',
+        'services.hermes.token' => null,
+    ]);
+    Http::fake([
+        '*' => Http::sequence()->push([
+            'run_id' => 'run-without-token',
+            'status' => 'completed',
+            'output' => ['items' => []],
+        ]),
+    ]);
+
+    app(MargaNewsAutomationRunner::class)->runIfDue();
+
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
+        && ! $request->hasHeader('Authorization'));
+    expect(MargaNewsAutomationSetting::current()->fresh()->last_status)->toBe('succeeded');
 });

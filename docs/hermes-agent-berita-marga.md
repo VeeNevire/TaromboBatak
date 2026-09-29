@@ -14,14 +14,15 @@ Isi `.env` proyek lokal:
 
 ```dotenv
 HERMES_BASE_URL=http://127.0.0.1:18642/v1
-HERMES_TOKEN=<samakan dengan API_SERVER_KEY Hermes>
+# Opsional; API_SERVER_KEY digunakan jika HERMES_TOKEN kosong.
+HERMES_TOKEN=
 HERMES_RUNS_ENDPOINT=/runs
 HERMES_TIMEOUT=90
 HERMES_RUN_TIMEOUT=300
 HERMES_POLL_SECONDS=2
 ```
 
-`HERMES_TOKEN` wajib diisi dengan nilai yang sama seperti `API_SERVER_KEY` yang dimuat oleh Hermes API server. Hermes API memakai Bearer token meskipun koneksi dilakukan melalui SSH tunnel. Jangan commit nilai token.
+`HERMES_TOKEN` opsional dan diprioritaskan jika diisi; jika kosong, aplikasi memakai `API_SERVER_KEY`. Jika keduanya kosong, request dikirim tanpa Bearer token, sesuai konfigurasi Hermes API yang menerima akses tanpa autentikasi. Jika API Hermes mewajibkan Bearer token, isi salah satu variabel dengan nilai yang sama seperti `API_SERVER_KEY` pada service Hermes. Jangan commit nilai token.
 
 ## Pengaturan admin
 
