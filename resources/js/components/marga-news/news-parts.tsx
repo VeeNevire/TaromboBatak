@@ -7,6 +7,8 @@ export type MargaNewsItem = {
     publisher: string | null;
     excerpt: string | null;
     summary: string | null;
+    content: string | null;
+    image_url: string | null;
     published_at: string | null;
     margas: { id: number; name: string; color: string | null }[];
 };

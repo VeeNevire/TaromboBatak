@@ -149,6 +149,14 @@ export default function MargaNewsIndex({
                                 className="border-tb-outline-variant bg-tb-surface-bright"
                             >
                                 <CardContent className="flex flex-col gap-2 p-4">
+                                    {item.image_url && (
+                                        <img
+                                            src={item.image_url}
+                                            alt={`Gambar berita: ${item.title}`}
+                                            loading="lazy"
+                                            className="max-h-80 w-full rounded-lg object-cover"
+                                        />
+                                    )}
                                     <div className="flex flex-wrap items-center gap-x-2 text-xs text-tb-on-surface-variant">
                                         {item.publisher && (
                                             <span className="font-semibold text-tb-primary">
@@ -172,6 +180,16 @@ export default function MargaNewsIndex({
                                         <p className="text-sm text-tb-on-surface-variant">
                                             {item.summary ?? item.excerpt}
                                         </p>
+                                    )}
+                                    {item.content && (
+                                        <details className="rounded-lg border border-tb-outline-variant px-3 py-2">
+                                            <summary className="cursor-pointer text-sm font-semibold text-tb-primary">
+                                                Baca isi lengkap artikel
+                                            </summary>
+                                            <p className="mt-3 text-sm leading-7 whitespace-pre-line text-tb-on-surface-variant">
+                                                {item.content}
+                                            </p>
+                                        </details>
                                     )}
                                     <MargaChips margas={item.margas} />
                                 </CardContent>

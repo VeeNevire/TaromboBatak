@@ -1,5 +1,6 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
+    Bot,
     BookOpen,
     BarChart3,
     BellRing,
@@ -43,6 +44,7 @@ import familyTrees from '@/routes/family-trees';
 import groups from '@/routes/groups';
 import marga from '@/routes/marga';
 import margaNews from '@/routes/marga-news';
+import margaNewsAutomation from '@/routes/marga-news-automation';
 import margaNewsTopics from '@/routes/marga-news-topics';
 import messageLogs from '@/routes/message-logs';
 import newsFeed from '@/routes/news-feed';
@@ -227,6 +229,11 @@ export function AppSidebar() {
                               title: 'Daftar Silsilah Milik Akun',
                               href: familyTrees.index(),
                               icon: TreePine,
+                          },
+                          {
+                              title: 'Otomatisasi Berita Marga',
+                              href: margaNewsAutomation.index(),
+                              icon: Bot,
                           },
                           {
                               title: 'Topik Berita Marga',

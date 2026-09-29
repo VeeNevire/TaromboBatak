@@ -10,6 +10,7 @@ use App\Models\Person;
 use App\Notifications\FamilyTreeAppendSubmitted;
 use App\Services\FamilyTreeActivityLogger;
 use App\Services\FamilyTreeDescendantSyncService;
+use App\Services\FormSubmissionGuard;
 use App\Services\SharedFamilyTreeAppendService;
 use App\Services\TreeActivityLogger;
 use Illuminate\Http\RedirectResponse;
@@ -109,9 +110,17 @@ class SharedFamilyTreePersonController extends Controller
     ): RedirectResponse {
         $validated = $request->validated();
         if (! $request->user()->can('manage', $familyTree)) {
-            $appendRequest = DB::transaction(function () use ($validated, $request, $familyTree): FamilyTreeAppendRequest {
+            $appendRequest = DB::transaction(function () use ($validated, $request, $familyTree): ?FamilyTreeAppendRequest {
                 $tree = FamilyTree::query()->lockForUpdate()->findOrFail($familyTree->id);
                 $tree->ensureStructureIsEditable();
+
+                if (! app(FormSubmissionGuard::class)->claim(
+                    $request->user()->id,
+                    "family-tree.{$tree->id}.append",
+                    $validated['submission_key'] ?? null,
+                )) {
+                    return null;
+                }
 
                 return FamilyTreeAppendRequest::create([
                     'family_tree_id' => $tree->id,
@@ -119,6 +128,10 @@ class SharedFamilyTreePersonController extends Controller
                     'payload' => $validated,
                 ]);
             });
+            if ($appendRequest === null) {
+                return back();
+            }
+
             $appendRequest->load(['requester', 'familyTree']);
             $appendRequest->familyTree->user->notify(new FamilyTreeAppendSubmitted($appendRequest));
 
@@ -134,12 +147,24 @@ class SharedFamilyTreePersonController extends Controller
             $familyTree = FamilyTree::query()->lockForUpdate()->findOrFail($familyTree->id);
             $familyTree->ensureStructureIsEditable();
 
+            if (! app(FormSubmissionGuard::class)->claim(
+                $request->user()->id,
+                "family-tree.{$familyTree->id}.append",
+                $validated['submission_key'] ?? null,
+            )) {
+                return null;
+            }
+
             return $appendService->append(
                 tree: $familyTree,
                 payload: $validated,
                 createdBy: $request->user()->id,
             );
         });
+
+        if ($person === null) {
+            return back();
+        }
 
         $descendantSync->syncTreesForNewDescendant($familyTree, $person);
 

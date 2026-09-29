@@ -198,6 +198,12 @@ class SharedFamilyTreeAppendService
             $payload['new_marga'] ?? null,
         ) ?? $fatherNode->person->marga_id;
 
+        app(DuplicateChildGuard::class)->assertCanCreate(
+            $fatherNode->person_id,
+            (string) $payload['name'],
+            'name',
+        );
+
         $person = Person::create([
             'name' => $payload['name'],
             'alias' => $payload['alias'] ?? null,

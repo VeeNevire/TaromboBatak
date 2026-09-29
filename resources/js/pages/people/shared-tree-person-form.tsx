@@ -1,5 +1,6 @@
 import { Head, Link, useForm } from '@inertiajs/react';
 import { ArrowLeft, Plus, Trash2, UserPlus, Users } from 'lucide-react';
+import { useRef } from 'react';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import {
@@ -81,7 +82,9 @@ export default function SharedTreePersonForm({
     initialFatherNodeId,
     initialBranchFather,
 }: Props) {
+    const submitLockRef = useRef(false);
     const { data, setData, post, transform, processing, errors } = useForm({
+        submission_key: createUid(),
         name: '',
         alias: '',
         gender: '',
@@ -131,6 +134,12 @@ export default function SharedTreePersonForm({
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
 
+        if (submitLockRef.current || processing) {
+            return;
+        }
+
+        submitLockRef.current = true;
+
         transform((formData) => ({
             ...formData,
             children: formData.children
@@ -141,7 +150,14 @@ export default function SharedTreePersonForm({
                 .map((row) => toMemberPayload(row)),
         }));
 
-        post(familyTrees.people.store.url(familyTree.id));
+        // A successful append must clear the submitted names. Inertia keeps
+        // POST form state by default, which lets the same people be added again.
+        post(familyTrees.people.store.url(familyTree.id), {
+            preserveState: 'errors',
+            onFinish: () => {
+                submitLockRef.current = false;
+            },
+        });
     };
 
     const renderMemberRow = (

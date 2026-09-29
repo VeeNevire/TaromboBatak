@@ -24,6 +24,8 @@ use Illuminate\Support\Carbon;
  * @property string|null $publisher
  * @property string|null $excerpt
  * @property string|null $summary
+ * @property string|null $content
+ * @property string|null $image_url
  * @property Carbon|null $published_at
  * @property string $status
  * @property string|null $submitted_by
@@ -43,6 +45,8 @@ use Illuminate\Support\Carbon;
     'publisher',
     'excerpt',
     'summary',
+    'content',
+    'image_url',
     'published_at',
     'status',
     'submitted_by',

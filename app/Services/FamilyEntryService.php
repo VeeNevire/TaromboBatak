@@ -1116,6 +1116,17 @@ class FamilyEntryService
             if ($child) {
                 $child->update($attributes);
             } else {
+                if ($fatherId !== null) {
+                    // Serialize new siblings under one father before checking
+                    // names, including repeated submissions of an old form.
+                    Person::query()->whereKey($fatherId)->lockForUpdate()->firstOrFail();
+                    app(DuplicateChildGuard::class)->assertCanCreate(
+                        $fatherId,
+                        $attributes['name'],
+                        ($focusOrder === null ? 'ownChildren' : 'children').".$index.name",
+                    );
+                }
+
                 $child = Person::create([...$attributes, 'created_by' => $createdBy]);
             }
 

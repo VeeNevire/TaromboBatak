@@ -37,11 +37,17 @@ class TaromboSnapshotController extends Controller
             ->pluck('tarombo_snapshot_id')
             ->flip();
 
+        $filter = $request->string('filter')->toString();
+        $filter = in_array($filter, ['compiled', 'original'], true) ? $filter : 'all';
+
         $snapshots = TaromboSnapshot::query()
             ->tap($ownerScope)
+            ->when($filter === 'compiled', fn ($query) => $query->whereNotNull('tarombo_frame_id'))
+            ->when($filter === 'original', fn ($query) => $query->whereNull('tarombo_frame_id'))
             ->with(['centerPerson:id,name', 'user:id,name'])
             ->latest()
             ->paginate(12)
+            ->withQueryString()
             ->through(fn (TaromboSnapshot $snapshot) => [
                 'id' => $snapshot->id,
                 'view' => $snapshot->view,
@@ -73,6 +79,7 @@ class TaromboSnapshotController extends Controller
 
         return Inertia::render('tarombo/snapshots', [
             'snapshots' => $snapshots,
+            'filter' => $filter,
             'snapshotOptions' => $snapshotOptions,
             'frames' => TaromboFrame::query()
                 ->active()

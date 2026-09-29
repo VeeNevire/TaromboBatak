@@ -12,10 +12,8 @@ return [
         'agent_token' => env('MARGA_NEWS_AGENT_TOKEN'),
     ],
 
-    // Hermes-style run/poll agent server (push-based: Laravel calls Hermes),
-    // kept alive by Supervisor on the agent's VPS.
-    // "Must match API_SERVER_KEY" on Hermes's own .env — that key is
-    // MARGA_NEWS_AGENT_TOKEN above, since Hermes calls api/berita-marga/masuk.
+    // Hermes run/poll API called by Laravel. The bearer token must match the
+    // Hermes API server's API_SERVER_KEY.
     'hermes' => [
         'base_url' => env('HERMES_BASE_URL'),
         'token' => env('HERMES_TOKEN'),

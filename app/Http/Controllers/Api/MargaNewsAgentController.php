@@ -44,7 +44,9 @@ class MargaNewsAgentController extends Controller
                 ->pluck('url'),
             'instructions' => 'Cari berita terbaru tentang kegiatan marga/punguan/parsadaan/pomparan Batak untuk tiap keyword. '
                 .'Kirim hanya berita yang benar-benar tentang kegiatan marga Batak (bukan kata "marga" dalam arti lain seperti "Sapta Marga"). '
-                .'Isi title, url artikel asli, publisher, published_at (ISO 8601), excerpt singkat, summary 1-2 kalimat berbahasa Indonesia, dan margas yang disebut.',
+                .'Ambil isi lengkap artikel dari URL asli, bukan cuplikan hasil pencarian, minimal 200 kata berbahasa Indonesia. '
+                .'Ambil juga URL gambar utama/featured dari halaman artikel; isi image_url dengan URL absolut, atau null hanya jika sumber memang tidak memiliki gambar. '
+                .'Jangan mengarang fakta atau URL gambar. Isi title, url, publisher, published_at (ISO 8601), excerpt singkat, summary 1-2 kalimat, content, image_url, dan margas yang disebut.',
         ]);
     }
 

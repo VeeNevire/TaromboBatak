@@ -30,6 +30,7 @@ class StoreSharedFamilyTreePersonRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'submission_key' => ['nullable', 'string', 'max:80'],
             'name' => ['required', 'string', 'max:255'],
             'alias' => ['nullable', 'string', 'max:255'],
             'gender' => ['nullable', Rule::in(['L', 'P'])],

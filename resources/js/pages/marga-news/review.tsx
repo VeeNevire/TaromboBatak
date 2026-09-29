@@ -136,11 +136,13 @@ function MargaTagEditor({
 export default function MargaNewsReview({
     status,
     counts,
+    pendingHermesCount,
     news,
     margas,
 }: {
     status: Status;
     counts: Partial<Record<Status, number>>;
+    pendingHermesCount: number;
     news: Paginated<ReviewItem>;
     margas: MargaOption[];
 }) {
@@ -216,6 +218,42 @@ export default function MargaNewsReview({
                     ))}
                 </div>
 
+                {status === 'pending' && pendingHermesCount > 0 && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/30">
+                        <p className="text-sm text-tb-on-surface">
+                            Ada {pendingHermesCount} berita hasil pencarian
+                            Hermes yang menunggu review.
+                        </p>
+                        <Button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                                if (
+                                    window.confirm(
+                                        `Setujui semua ${pendingHermesCount} berita yang ditemukan Hermes?`,
+                                    )
+                                ) {
+                                    setBusy(true);
+                                    router.post(
+                                        margaNews.approveAllHermes.url(),
+                                        {},
+                                        {
+                                            preserveScroll: true,
+                                            onFinish: () => setBusy(false),
+                                        },
+                                    );
+                                }
+                            }}
+                            className="bg-emerald-600 text-white hover:bg-emerald-700"
+                        >
+                            <Check className="size-4" />
+                            {busy
+                                ? 'Memproses…'
+                                : `Setujui semua berita Hermes (${pendingHermesCount})`}
+                        </Button>
+                    </div>
+                )}
+
                 {news.data.length > 0 && (
                     <div className="flex flex-wrap items-center gap-3 rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 py-2">
                         <label className="flex items-center gap-2 text-sm text-tb-on-surface">
@@ -281,6 +319,14 @@ export default function MargaNewsReview({
                                         className="mt-1"
                                     />
                                     <div className="flex min-w-0 flex-1 flex-col gap-2">
+                                        {item.image_url && (
+                                            <img
+                                                src={item.image_url}
+                                                alt={`Gambar berita: ${item.title}`}
+                                                loading="lazy"
+                                                className="max-h-72 w-full rounded-lg object-cover"
+                                            />
+                                        )}
                                         <div className="flex flex-wrap items-center gap-x-2 text-xs text-tb-on-surface-variant">
                                             {item.publisher && (
                                                 <span className="font-semibold text-tb-primary">
@@ -321,6 +367,17 @@ export default function MargaNewsReview({
                                             <p className="text-sm text-tb-on-surface-variant">
                                                 {item.summary ?? item.excerpt}
                                             </p>
+                                        )}
+                                        {item.content && (
+                                            <details className="rounded-lg border border-tb-outline-variant px-3 py-2">
+                                                <summary className="cursor-pointer text-sm font-semibold text-tb-primary">
+                                                    Baca isi lengkap artikel
+                                                    (200+ kata)
+                                                </summary>
+                                                <p className="mt-3 text-sm leading-7 whitespace-pre-line text-tb-on-surface-variant">
+                                                    {item.content}
+                                                </p>
+                                            </details>
                                         )}
                                         {editingId === item.id ? (
                                             <MargaTagEditor

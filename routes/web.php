@@ -25,6 +25,7 @@ use App\Http\Controllers\KomunitasController;
 use App\Http\Controllers\MargaBranchEntryController;
 use App\Http\Controllers\MargaChatController;
 use App\Http\Controllers\MargaController;
+use App\Http\Controllers\MargaNewsAutomationController;
 use App\Http\Controllers\MargaNewsController;
 use App\Http\Controllers\MargaNewsTopicController;
 use App\Http\Controllers\MargaSiblingOrderController;
@@ -291,6 +292,8 @@ Route::middleware(['auth', 'role.staff'])->group(function () {
         ->name('marga-news.review');
     Route::post('dashboard/berita-marga/review', [MargaNewsController::class, 'decide'])
         ->name('marga-news.decide');
+    Route::post('dashboard/berita-marga/review/approve-all-hermes', [MargaNewsController::class, 'approveAllHermes'])
+        ->name('marga-news.approve-all-hermes');
     Route::put('dashboard/berita-marga/{margaNews}/margas', [MargaNewsController::class, 'updateMargas'])
         ->name('marga-news.margas.update');
     Route::delete('people/{person}', [PersonController::class, 'destroy'])->name('people.destroy');
@@ -313,6 +316,10 @@ Route::middleware(['auth', 'role.admin'])->group(function () {
         ->only(['index', 'store', 'update', 'destroy'])
         ->parameters(['topik' => 'topic'])
         ->names('marga-news-topics');
+    Route::get('dashboard/berita-marga/otomatisasi', [MargaNewsAutomationController::class, 'index'])
+        ->name('marga-news-automation.index');
+    Route::put('dashboard/berita-marga/otomatisasi', [MargaNewsAutomationController::class, 'update'])
+        ->name('marga-news-automation.update');
     Route::resource('dashboard/tarombo/frames', TaromboFrameController::class)
         ->except(['create', 'show', 'edit'])
         ->parameters(['frames' => 'taromboFrame'])
