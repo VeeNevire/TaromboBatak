@@ -1,13 +1,18 @@
 import { Head, Link, router } from '@inertiajs/react';
 import {
+    AlignCenter,
+    AlignLeft,
+    AlignRight,
     ArrowDown,
     ArrowLeft,
     ArrowUp,
+    Bold,
     ChevronsDown,
     ChevronsUp,
     Copy,
     Crop,
     ImagePlus,
+    Italic,
     Layers,
     LayoutGrid,
     LoaderCircle,
@@ -15,6 +20,7 @@ import {
     RotateCcw,
     Save,
     Trash2,
+    Type,
     Wand2,
     ZoomIn,
     ZoomOut,
@@ -44,6 +50,16 @@ import {
     treeUpscale,
 } from '@/lib/tarombo-compose';
 import type { ComposeItem, LayerKind } from '@/lib/tarombo-compose';
+import {
+    defaultTextStyle,
+    fontStack,
+    renderTextCanvas,
+    TEXT_FONTS,
+    TEXT_SIZE_MAX,
+    TEXT_SIZE_MIN,
+    textPlacement,
+} from '@/lib/tarombo-text';
+import type { TextStyle } from '@/lib/tarombo-text';
 import { dashboard } from '@/routes';
 import tarombo from '@/routes/tarombo';
 import compileDraft from '@/routes/tarombo/snapshots/compile/draft';
@@ -85,6 +101,8 @@ type Layer = {
     thumb: string;
     crop: Box | null;
     placement: Box;
+    // Text layers are drawn from this; their sourceKey is "text".
+    text?: TextStyle;
 };
 
 type StackItem = {
@@ -104,6 +122,7 @@ type DraftLayer = {
     source: string;
     crop: Box | null;
     placement: Box;
+    text?: TextStyle;
 };
 
 type DraftState = {
@@ -115,6 +134,8 @@ type DraftState = {
 };
 
 type CompileDraft = {
+    id: number;
+    name: string | null;
     state: DraftState;
     image_urls: Record<string, string>;
     updated_at: string | null;
@@ -124,6 +145,8 @@ type MoveAction = 'up' | 'down' | 'front' | 'back';
 
 // The on-screen preview is drawn smaller so dragging stays smooth; Produce renders full size.
 const PREVIEW_MAX_SIDE = 1600;
+// Quick text colours: dark brown, the app's red-brown, gold, white, black.
+const TEXT_SWATCHES = ['#3b2a1a', '#b34b1e', '#c9a227', '#ffffff', '#000000'];
 const TREE_ID = 'tree';
 
 const fullBox = (canvas: HTMLCanvasElement): Box => ({
@@ -215,6 +238,7 @@ function buildDraftState(
             source: sourceFor(layer),
             crop: layer.crop,
             placement: layer.placement,
+            ...(layer.text ? { text: layer.text } : {}),
         })),
     };
 }
@@ -279,6 +303,8 @@ export default function TaromboSnapshotCompile({
     const [restoring, setRestoring] = useState(draft !== null);
     const [savingDraft, setSavingDraft] = useState(false);
     const [savedAt, setSavedAt] = useState(draft?.updated_at ?? null);
+    // The saved compile Simpan writes to; null starts a new one.
+    const [draftId, setDraftId] = useState(draft?.id ?? null);
     const [savedSignature, setSavedSignature] = useState<string | null>(null);
     const [layers, setLayers] = useState<Layer[]>([]);
     const [order, setOrder] = useState<string[]>([TREE_ID]);
@@ -299,7 +325,9 @@ export default function TaromboSnapshotCompile({
     const backgroundInputRef = useRef<HTMLInputElement>(null);
     const treeCacheRef = useRef(new Map<boolean, HTMLCanvasElement>());
     const layerCounter = useRef(0);
-    const nameCounter = useRef({ ranting: 0, background: 0 });
+    const nameCounter = useRef({ ranting: 0, background: 0, text: 0 });
+    // Only the latest render of a text layer is applied.
+    const textRenderRef = useRef(new Map<string, number>());
     const copiedIdRef = useRef<string | null>(null);
     const [naturalSize, setNaturalSize] = useState<{
         width: number;
@@ -362,6 +390,8 @@ export default function TaromboSnapshotCompile({
     }
 
     const selectedItem = stack.find((item) => item.id === selectedId) ?? null;
+    const selectedText =
+        layers.find((layer) => layer.id === selectedItem?.id)?.text ?? null;
     // Size relative to the default size the selected image starts with.
     const baseWidth =
         selectedItem && selectedFrame
@@ -454,6 +484,8 @@ export default function TaromboSnapshotCompile({
 
                 if (saved.source === 'tree') {
                     source = tree;
+                } else if (saved.source === 'text' && saved.text) {
+                    source = (await renderTextCanvas(saved.text)).canvas;
                 } else if (saved.source.startsWith('stored:')) {
                     const url = draft.image_urls[saved.source.slice(7)];
 
@@ -476,6 +508,7 @@ export default function TaromboSnapshotCompile({
                           thumb: canvasThumbnail(source),
                           crop: saved.crop,
                           placement: saved.placement,
+                          ...(saved.text ? { text: saved.text } : {}),
                       }
                     : null;
             }),
@@ -512,7 +545,7 @@ export default function TaromboSnapshotCompile({
                     );
                 }
 
-                const nameNumber = /^(?:Ranting|Background) (\d+)$/.exec(
+                const nameNumber = /^(?:Ranting|Background|Teks) (\d+)$/.exec(
                     layer.name,
                 );
 
@@ -613,6 +646,80 @@ export default function TaromboSnapshotCompile({
         setSelectedId(id);
     };
 
+    const addText = async () => {
+        if (!selectedFrame) {
+            return;
+        }
+
+        const text = defaultTextStyle(selectedFrame);
+        const { canvas, unitsPerPixel } = await renderTextCanvas(text);
+        const id = `layer-${++layerCounter.current}`;
+
+        setLayers((current) => [
+            ...current,
+            {
+                id,
+                name: `Teks ${++nameCounter.current.text}`,
+                kind: 'text',
+                source: canvas,
+                sourceKey: 'text',
+                thumb: canvasThumbnail(canvas),
+                crop: null,
+                placement: textPlacement(
+                    selectedFrame,
+                    canvas,
+                    unitsPerPixel,
+                    text.align,
+                ),
+                text,
+            },
+        ]);
+        // Text goes on top so it is not hidden behind the tree.
+        setOrder((current) => [...current, id]);
+        setSelectedId(id);
+    };
+
+    // Applies a text change at once and redraws the layer; its box keeps its
+    // position and any enlargement the user gave it.
+    const updateText = async (id: string, patch: Partial<TextStyle>) => {
+        const layer = layers.find((item) => item.id === id);
+
+        if (!layer?.text || !selectedFrame) {
+            return;
+        }
+
+        const text = { ...layer.text, ...patch };
+        const token = (textRenderRef.current.get(id) ?? 0) + 1;
+        textRenderRef.current.set(id, token);
+        updateLayer(id, { text });
+
+        const { canvas } = await renderTextCanvas(text);
+
+        if (textRenderRef.current.get(id) !== token) {
+            return;
+        }
+
+        setLayers((current) =>
+            current.map((item) =>
+                item.id === id
+                    ? {
+                          ...item,
+                          source: canvas,
+                          thumb: canvasThumbnail(canvas),
+                          placement: textPlacement(
+                              selectedFrame,
+                              canvas,
+                              item.placement.width /
+                                  Math.max(1, item.source.width),
+                              text.align,
+                              item.placement,
+                          ),
+                      }
+                    : item,
+            ),
+        );
+    };
+
     const addFiles = async (files: File[], kind: LayerKind) => {
         for (const file of files) {
             if (!file.type.startsWith('image/')) {
@@ -656,6 +763,7 @@ export default function TaromboSnapshotCompile({
                     x: item.placement.x + offset,
                     y: item.placement.y + offset,
                 },
+                text: layers.find((layer) => layer.id === id)?.text,
             },
         ]);
         setOrder((current) => {
@@ -879,6 +987,29 @@ export default function TaromboSnapshotCompile({
             return;
         }
 
+        const text = layers.find((layer) => layer.id === selectedItem.id)?.text;
+
+        if (text) {
+            // Back to its own size, centred in the content area.
+            const frame = selectedFrame;
+            const id = selectedItem.id;
+
+            void renderTextCanvas(text).then(({ canvas, unitsPerPixel }) =>
+                updateLayer(id, {
+                    source: canvas,
+                    thumb: canvasThumbnail(canvas),
+                    placement: textPlacement(
+                        frame,
+                        canvas,
+                        unitsPerPixel,
+                        text.align,
+                    ),
+                }),
+            );
+
+            return;
+        }
+
         updateLayer(selectedItem.id, {
             crop: null,
             placement: defaultLayerPlacement(
@@ -1083,6 +1214,7 @@ export default function TaromboSnapshotCompile({
                 compileDraft.update.url(snapshot.id),
                 {
                     _method: 'put',
+                    ...(draftId !== null ? { draft_id: draftId } : {}),
                     state: JSON.stringify(state),
                     images,
                     ...(preview ? { preview } : {}),
@@ -1110,6 +1242,7 @@ export default function TaromboSnapshotCompile({
                                 })),
                             );
                             setSavedAt(saved.updated_at);
+                            setDraftId(saved.id);
                         }
 
                         setSavedSignature(signatureAtSave);
@@ -1226,6 +1359,7 @@ export default function TaromboSnapshotCompile({
                             {targetSnapshotId !== null
                                 ? 'Mengedit hasil compile · '
                                 : ''}
+                            {draft?.name ? `${draft.name} · ` : ''}
                             {label}
                             {selectedFrame ? ` · ${selectedFrame.name}` : ''}
                         </p>
@@ -1258,7 +1392,14 @@ export default function TaromboSnapshotCompile({
                         <Button
                             type="button"
                             variant="outline"
-                            disabled={!selectedItem}
+                            disabled={
+                                !selectedItem || selectedItem.kind === 'text'
+                            }
+                            title={
+                                selectedItem?.kind === 'text'
+                                    ? 'Teks tidak dapat dipotong'
+                                    : undefined
+                            }
                             onClick={openCrop}
                         >
                             <Crop className="size-4" />
@@ -1650,6 +1791,17 @@ export default function TaromboSnapshotCompile({
                                 type="button"
                                 variant="outline"
                                 size="icon"
+                                title="Tambah Teks"
+                                aria-label="Tambah Teks"
+                                disabled={!selectedFrame || !ready}
+                                onClick={() => void addText()}
+                            >
+                                <Type className="size-4" />
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
                                 title="Hapus"
                                 aria-label="Hapus"
                                 disabled={
@@ -1663,6 +1815,210 @@ export default function TaromboSnapshotCompile({
                                 <Trash2 className="size-4" />
                             </Button>
                         </div>
+
+                        {selectedText && selectedItem && (
+                            <div className="grid gap-3 border-t border-tb-outline-variant pt-3">
+                                <p className="text-sm font-semibold text-tb-on-surface">
+                                    Teks
+                                </p>
+                                <textarea
+                                    value={selectedText.content}
+                                    rows={3}
+                                    maxLength={500}
+                                    aria-label="Isi teks"
+                                    onChange={(event) =>
+                                        void updateText(selectedItem.id, {
+                                            content: event.target.value,
+                                        })
+                                    }
+                                    className="w-full resize-y rounded-md border border-tb-outline-variant bg-transparent px-3 py-2 text-sm text-tb-on-surface focus-visible:ring-2 focus-visible:ring-tb-primary focus-visible:outline-none"
+                                />
+                                <label className="grid gap-1 text-xs text-tb-on-surface-variant">
+                                    Font
+                                    <select
+                                        value={selectedText.font}
+                                        onChange={(event) =>
+                                            void updateText(selectedItem.id, {
+                                                font: event.target.value,
+                                            })
+                                        }
+                                        style={{
+                                            fontFamily: fontStack(
+                                                selectedText.font,
+                                            ),
+                                        }}
+                                        className="h-9 rounded-md border border-tb-outline-variant bg-tb-surface-bright px-2 text-sm text-tb-on-surface"
+                                    >
+                                        {TEXT_FONTS.map((font) => (
+                                            <option
+                                                key={font.value}
+                                                value={font.value}
+                                                style={{
+                                                    fontFamily: font.stack,
+                                                }}
+                                            >
+                                                {font.value}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+                                <label className="grid gap-1 text-xs text-tb-on-surface-variant">
+                                    Ukuran huruf
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="range"
+                                            min={TEXT_SIZE_MIN}
+                                            max={TEXT_SIZE_MAX}
+                                            value={selectedText.size}
+                                            onChange={(event) =>
+                                                void updateText(
+                                                    selectedItem.id,
+                                                    {
+                                                        size: Number(
+                                                            event.target.value,
+                                                        ),
+                                                    },
+                                                )
+                                            }
+                                            className="min-w-0 flex-1 accent-tb-primary"
+                                        />
+                                        <input
+                                            type="number"
+                                            min={TEXT_SIZE_MIN}
+                                            max={TEXT_SIZE_MAX}
+                                            value={selectedText.size}
+                                            onChange={(event) => {
+                                                const size = Number(
+                                                    event.target.value,
+                                                );
+
+                                                if (
+                                                    size >= TEXT_SIZE_MIN &&
+                                                    size <= TEXT_SIZE_MAX
+                                                ) {
+                                                    void updateText(
+                                                        selectedItem.id,
+                                                        { size },
+                                                    );
+                                                }
+                                            }}
+                                            className="h-8 w-16 rounded-md border border-tb-outline-variant bg-transparent px-2 text-sm text-tb-on-surface"
+                                        />
+                                    </div>
+                                </label>
+                                <div className="grid gap-1 text-xs text-tb-on-surface-variant">
+                                    Warna
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                        <input
+                                            type="color"
+                                            value={selectedText.color}
+                                            aria-label="Warna teks"
+                                            onChange={(event) =>
+                                                void updateText(
+                                                    selectedItem.id,
+                                                    {
+                                                        color: event.target
+                                                            .value,
+                                                    },
+                                                )
+                                            }
+                                            className="h-8 w-10 cursor-pointer rounded border border-tb-outline-variant bg-transparent p-0.5"
+                                        />
+                                        {TEXT_SWATCHES.map((color) => (
+                                            <button
+                                                key={color}
+                                                type="button"
+                                                title={color}
+                                                aria-label={`Warna ${color}`}
+                                                onClick={() =>
+                                                    void updateText(
+                                                        selectedItem.id,
+                                                        { color },
+                                                    )
+                                                }
+                                                style={{
+                                                    backgroundColor: color,
+                                                }}
+                                                className={`size-6 rounded-full border ${
+                                                    selectedText.color === color
+                                                        ? 'border-tb-primary ring-2 ring-tb-primary/40'
+                                                        : 'border-tb-outline-variant'
+                                                }`}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                    {(
+                                        [
+                                            ['bold', Bold, 'Tebal'],
+                                            ['italic', Italic, 'Miring'],
+                                        ] as const
+                                    ).map(([key, Icon, label]) => (
+                                        <Button
+                                            key={key}
+                                            type="button"
+                                            size="icon"
+                                            variant={
+                                                selectedText[key]
+                                                    ? 'default'
+                                                    : 'outline'
+                                            }
+                                            title={label}
+                                            aria-label={label}
+                                            aria-pressed={selectedText[key]}
+                                            onClick={() =>
+                                                void updateText(
+                                                    selectedItem.id,
+                                                    {
+                                                        [key]: !selectedText[
+                                                            key
+                                                        ],
+                                                    },
+                                                )
+                                            }
+                                        >
+                                            <Icon className="size-4" />
+                                        </Button>
+                                    ))}
+                                    {(
+                                        [
+                                            ['left', AlignLeft, 'Rata kiri'],
+                                            [
+                                                'center',
+                                                AlignCenter,
+                                                'Rata tengah',
+                                            ],
+                                            ['right', AlignRight, 'Rata kanan'],
+                                        ] as const
+                                    ).map(([align, Icon, label]) => (
+                                        <Button
+                                            key={align}
+                                            type="button"
+                                            size="icon"
+                                            variant={
+                                                selectedText.align === align
+                                                    ? 'default'
+                                                    : 'outline'
+                                            }
+                                            title={label}
+                                            aria-label={label}
+                                            aria-pressed={
+                                                selectedText.align === align
+                                            }
+                                            onClick={() =>
+                                                void updateText(
+                                                    selectedItem.id,
+                                                    { align },
+                                                )
+                                            }
+                                        >
+                                            <Icon className="size-4" />
+                                        </Button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </aside>
                 </div>
             </div>

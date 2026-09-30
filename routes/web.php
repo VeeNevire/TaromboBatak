@@ -236,12 +236,17 @@ Route::middleware(['auth'])->group(function () {
     Route::put('dashboard/tarombo/snapshots/{taromboSnapshot}/compile/draft', [TaromboCompileDraftController::class, 'update'])
         ->middleware('throttle:20,1')
         ->name('tarombo.snapshots.compile.draft.update');
-    Route::delete('dashboard/tarombo/snapshots/{taromboSnapshot}/compile/draft', [TaromboCompileDraftController::class, 'destroy'])
-        ->name('tarombo.snapshots.compile.draft.destroy');
     Route::get('dashboard/tarombo/snapshots/{taromboSnapshot}/compile/draft/images/{uuid}', [TaromboCompileDraftController::class, 'image'])
         ->name('tarombo.snapshots.compile.draft.image');
-    Route::get('dashboard/tarombo/snapshots/{taromboSnapshot}/compile/draft/preview', [TaromboCompileDraftController::class, 'preview'])
-        ->name('tarombo.snapshots.compile.draft.preview');
+    Route::patch('dashboard/tarombo/compile-drafts/{taromboCompileDraft}', [TaromboCompileDraftController::class, 'rename'])
+        ->name('tarombo.compile-drafts.rename');
+    Route::post('dashboard/tarombo/compile-drafts/{taromboCompileDraft}/duplicate', [TaromboCompileDraftController::class, 'duplicate'])
+        ->middleware('throttle:20,1')
+        ->name('tarombo.compile-drafts.duplicate');
+    Route::delete('dashboard/tarombo/compile-drafts/{taromboCompileDraft}', [TaromboCompileDraftController::class, 'destroy'])
+        ->name('tarombo.compile-drafts.destroy');
+    Route::get('dashboard/tarombo/compile-drafts/{taromboCompileDraft}/preview', [TaromboCompileDraftController::class, 'preview'])
+        ->name('tarombo.compile-drafts.preview');
     Route::get('dashboard/tarombo/snapshots/{taromboSnapshot}/image', [TaromboSnapshotController::class, 'image'])
         ->name('tarombo.snapshots.image');
     Route::get('dashboard/tarombo/snapshots/{taromboSnapshot}/download', [TaromboSnapshotController::class, 'download'])

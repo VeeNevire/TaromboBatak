@@ -21,6 +21,13 @@ export default defineConfig({
                 bunny('Libre Caslon Text', {
                     weights: [400, 700],
                 }),
+                // Extra choices for text layers in Compile Gambar.
+                bunny('Cinzel', {
+                    weights: [400, 700],
+                }),
+                bunny('Great Vibes', {
+                    weights: [400],
+                }),
             ],
         }),
         inertia(),

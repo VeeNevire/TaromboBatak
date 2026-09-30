@@ -144,28 +144,33 @@ class TaromboSnapshotController extends Controller
                     'area_height' => $frame->area_height,
                 ]),
             'accountName' => $request->user()->name,
-            'draft' => $this->draftData($request->user()->id, $taromboSnapshot),
+            'draft' => $this->draftData($request->user()->id, $taromboSnapshot, $request->integer('draft') ?: null),
         ]);
     }
 
     /**
      * The signed-in account's saved Compile Gambar arrangement, with a URL for
-     * every layer image it uses.
+     * every layer image it uses: the one asked for (?draft=), otherwise the
+     * most recently saved one.
      *
      * @return array<string, mixed>|null
      */
-    private function draftData(int $userId, TaromboSnapshot $snapshot): ?array
+    private function draftData(int $userId, TaromboSnapshot $snapshot, ?int $draftId): ?array
     {
-        $draft = TaromboCompileDraft::query()
+        $drafts = TaromboCompileDraft::query()
             ->where('user_id', $userId)
-            ->where('tarombo_snapshot_id', $snapshot->id)
-            ->first();
+            ->where('tarombo_snapshot_id', $snapshot->id);
+
+        $draft = ($draftId !== null ? (clone $drafts)->find($draftId) : null)
+            ?? $drafts->latest('updated_at')->latest('id')->first();
 
         if ($draft === null) {
             return null;
         }
 
         return [
+            'id' => $draft->id,
+            'name' => $draft->name,
             'state' => $draft->state,
             'image_urls' => collect(TaromboCompileDraft::storedImages($draft->state))
                 ->mapWithKeys(fn (string $uuid) => [
@@ -350,21 +355,25 @@ class TaromboSnapshotController extends Controller
             ->whereHas('snapshot')
             ->with(['snapshot.centerPerson:id,name', 'snapshot.user:id,name'])
             ->latest('updated_at')
+            ->latest('id')
             ->paginate(12)
             ->withQueryString()
-            ->through(function (TaromboCompileDraft $draft) use ($disk, $userId) {
+            ->through(function (TaromboCompileDraft $draft) use ($disk) {
                 $snapshot = $draft->snapshot;
-                $previewPath = TaromboCompileDraft::previewPath($userId, $snapshot->id);
+                $previewPath = $draft->previewPath();
                 $hasPreview = $disk->exists($previewPath);
 
                 return [
                     'id' => $snapshot->id,
+                    'draft_id' => $draft->id,
+                    'draft_name' => $draft->name,
                     'view' => $snapshot->view,
-                    'title' => $snapshot->title,
+                    // A saved compile is shown under its own name once it has one.
+                    'title' => $draft->name ?? $snapshot->title,
                     'center_person_name' => $snapshot->centerPerson?->name,
                     'owner_name' => $snapshot->user?->name,
                     'image_url' => $hasPreview
-                        ? route('tarombo.snapshots.compile.draft.preview', $snapshot).'?v='.$draft->updated_at?->timestamp
+                        ? route('tarombo.compile-drafts.preview', ['taromboCompileDraft' => $draft, 'v' => $draft->updated_at?->timestamp])
                         : route('tarombo.snapshots.image', $snapshot),
                     'download_url' => null,
                     'can_delete' => false,

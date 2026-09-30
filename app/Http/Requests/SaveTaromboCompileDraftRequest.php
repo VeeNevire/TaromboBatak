@@ -4,10 +4,17 @@ namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 class SaveTaromboCompileDraftRequest extends FormRequest
 {
+    /** Fonts a text layer may use; keep in sync with TEXT_FONTS in resources/js/lib/tarombo-text.ts. */
+    public const TEXT_FONTS = [
+        'Libre Caslon Text', 'Cinzel', 'Great Vibes', 'Inter', 'Instrument Sans',
+        'Georgia', 'Times New Roman', 'Arial', 'Courier New',
+    ];
+
     public function authorize(): bool
     {
         // The snapshot itself is authorized in the controller.
@@ -37,6 +44,8 @@ class SaveTaromboCompileDraftRequest extends FormRequest
         ];
 
         return [
+            // The saved compile being edited; empty starts a new one.
+            'draft_id' => ['nullable', 'integer'],
             'state' => ['required', 'array'],
             'state.frame_id' => ['nullable', 'integer', 'exists:tarombo_frames,id'],
             'state.remove_background' => ['required', 'boolean'],
@@ -47,8 +56,17 @@ class SaveTaromboCompileDraftRequest extends FormRequest
             'state.layers' => ['present', 'array', 'max:30'],
             'state.layers.*.id' => ['required', 'string', 'max:40'],
             'state.layers.*.name' => ['required', 'string', 'max:80'],
-            'state.layers.*.kind' => ['required', 'in:ranting,background'],
-            'state.layers.*.source' => ['required', 'string', 'regex:/^(tree|stored:[0-9a-f-]{36}|upload:\d{1,2})$/'],
+            'state.layers.*.kind' => ['required', 'in:ranting,background,text'],
+            'state.layers.*.source' => ['required', 'string', 'regex:/^(tree|text|stored:[0-9a-f-]{36}|upload:\d{1,2})$/'],
+            // A text layer is drawn in the browser from these settings.
+            'state.layers.*.text' => ['required_if:state.layers.*.kind,text', 'nullable', 'array'],
+            'state.layers.*.text.content' => ['nullable', 'string', 'max:500'],
+            'state.layers.*.text.font' => ['required_with:state.layers.*.text', 'string', Rule::in(self::TEXT_FONTS)],
+            'state.layers.*.text.size' => ['required_with:state.layers.*.text', 'numeric', 'min:1', 'max:2000'],
+            'state.layers.*.text.color' => ['required_with:state.layers.*.text', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'state.layers.*.text.bold' => ['required_with:state.layers.*.text', 'boolean'],
+            'state.layers.*.text.italic' => ['required_with:state.layers.*.text', 'boolean'],
+            'state.layers.*.text.align' => ['required_with:state.layers.*.text', 'in:left,center,right'],
             ...$box('state.layers.*.crop', false),
             ...$box('state.layers.*.placement', true),
             'images' => ['nullable', 'array', 'max:30'],
@@ -58,17 +76,22 @@ class SaveTaromboCompileDraftRequest extends FormRequest
         ];
     }
 
-    /** Every "upload:n" source must come with its file. */
+    /** Every "upload:n" source must come with its file; text and only text is drawn from "text". */
     public function after(): array
     {
         return [
             function (Validator $validator) {
                 foreach ((array) $this->input('state.layers', []) as $index => $layer) {
                     $source = is_array($layer) ? ($layer['source'] ?? null) : null;
+                    $kind = is_array($layer) ? ($layer['kind'] ?? null) : null;
 
                     if (is_string($source) && str_starts_with($source, 'upload:')
                         && ! $this->hasFile('images.'.substr($source, 7))) {
                         $validator->errors()->add("state.layers.{$index}.source", 'Gambar lapisan tidak ikut terkirim.');
+                    }
+
+                    if (($source === 'text') !== ($kind === 'text')) {
+                        $validator->errors()->add("state.layers.{$index}.source", 'Lapisan teks tidak valid.');
                     }
                 }
             },

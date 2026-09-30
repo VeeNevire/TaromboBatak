@@ -10,11 +10,13 @@ use Illuminate\Support\Carbon;
 /**
  * A saved Compile Gambar arrangement (frame, layers, crops and positions) so
  * the compile can be opened and edited again. Layer images live privately in
- * storage under directory().
+ * storage under directory(), shared by every saved compile (duplicates) of
+ * the same account and snapshot.
  *
  * @property int $id
  * @property int $user_id
  * @property int $tarombo_snapshot_id
+ * @property string|null $name
  * @property int|null $tarombo_frame_id
  * @property array<string, mixed> $state
  * @property Carbon|null $created_at
@@ -22,10 +24,10 @@ use Illuminate\Support\Carbon;
  * @property-read User $user
  * @property-read TaromboSnapshot $snapshot
  */
-#[Fillable(['user_id', 'tarombo_snapshot_id', 'tarombo_frame_id', 'state'])]
+#[Fillable(['user_id', 'tarombo_snapshot_id', 'name', 'tarombo_frame_id', 'state'])]
 class TaromboCompileDraft extends Model
 {
-    public const PREVIEW_FILE = 'preview.jpg';
+    public const PREVIEW_PREFIX = 'preview-';
 
     /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
@@ -50,10 +52,28 @@ class TaromboCompileDraft extends Model
         return self::directory($userId, $snapshotId)."/{$uuid}.png";
     }
 
-    /** The composed look of the saved compile, shown in "Hasil Simpan". */
-    public static function previewPath(int $userId, int $snapshotId): string
+    /** The composed look of this saved compile, shown in "Hasil Simpan". */
+    public function previewPath(): string
     {
-        return self::directory($userId, $snapshotId).'/'.self::PREVIEW_FILE;
+        return self::directory($this->user_id, $this->tarombo_snapshot_id).'/'.self::PREVIEW_PREFIX.$this->id.'.jpg';
+    }
+
+    /**
+     * Uuids of the layer images used by any saved compile of this account and
+     * snapshot; images outside this list can be deleted.
+     *
+     * @return array<int, string>
+     */
+    public static function usedImages(int $userId, int $snapshotId): array
+    {
+        return self::query()
+            ->where('user_id', $userId)
+            ->where('tarombo_snapshot_id', $snapshotId)
+            ->get()
+            ->flatMap(fn (self $draft) => self::storedImages($draft->state))
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**

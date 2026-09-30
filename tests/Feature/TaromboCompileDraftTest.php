@@ -70,7 +70,7 @@ test('the owner saves a compile with its layer images and gets it back on the co
         ->assertOk();
 });
 
-test('saving again replaces the compile and removes images no longer used', function () {
+test('saving again with its id replaces the compile and removes images no longer used', function () {
     $user = User::factory()->create();
     $snapshot = TaromboSnapshot::factory()->for($user)->create();
 
@@ -79,9 +79,11 @@ test('saving again replaces the compile and removes images no longer used', func
         'images' => [UploadedFile::fake()->image('a.png')],
     ])->assertRedirect();
 
-    $oldUuid = substr(TaromboCompileDraft::query()->sole()->state['layers'][0]['source'], 7);
+    $draft = TaromboCompileDraft::query()->sole();
+    $oldUuid = substr($draft->state['layers'][0]['source'], 7);
 
     $this->actingAs($user)->put(route('tarombo.snapshots.compile.draft.update', $snapshot), [
+        'draft_id' => $draft->id,
         'state' => compileState([compileLayer('layer-2', 'upload:0', 'background')]),
         'images' => [UploadedFile::fake()->image('b.png')],
     ])->assertRedirect();
@@ -123,7 +125,6 @@ test('a saved compile keeps its composed preview and lists it under Hasil Simpan
     $user = User::factory()->create();
     $snapshot = TaromboSnapshot::factory()->for($user)->create();
     $frame = TaromboFrame::factory()->create();
-    $previewPath = TaromboCompileDraft::previewPath($user->id, $snapshot->id);
 
     $this->actingAs($user)->put(route('tarombo.snapshots.compile.draft.update', $snapshot), [
         'state' => compileState([compileLayer('layer-1', 'upload:0')], ['frame_id' => $frame->id]),
@@ -131,16 +132,19 @@ test('a saved compile keeps its composed preview and lists it under Hasil Simpan
         'preview' => UploadedFile::fake()->image('preview.jpg', 800, 600),
     ])->assertRedirect();
 
-    Storage::disk('local')->assertExists($previewPath);
+    $draft = TaromboCompileDraft::query()->sole();
+
+    Storage::disk('local')->assertExists($draft->previewPath());
 
     // Saving again without a new preview must not treat it as an unused layer image.
-    $uuid = substr(TaromboCompileDraft::query()->sole()->state['layers'][0]['source'], 7);
+    $uuid = substr($draft->state['layers'][0]['source'], 7);
 
     $this->actingAs($user)->put(route('tarombo.snapshots.compile.draft.update', $snapshot), [
+        'draft_id' => $draft->id,
         'state' => compileState([compileLayer('layer-1', "stored:{$uuid}")], ['frame_id' => $frame->id]),
     ])->assertRedirect();
 
-    Storage::disk('local')->assertExists($previewPath);
+    Storage::disk('local')->assertExists($draft->previewPath());
 
     // Another account's compile is not listed.
     TaromboCompileDraft::query()->create([
@@ -155,15 +159,16 @@ test('a saved compile keeps its composed preview and lists it under Hasil Simpan
             ->where('filter', 'saved')
             ->has('snapshots.data', 1)
             ->where('snapshots.data.0.id', $snapshot->id)
+            ->where('snapshots.data.0.draft_id', $draft->id)
             ->where('snapshots.data.0.saved_compile', true)
             ->where('snapshots.data.0.has_preview', true)
             ->where('snapshots.data.0.image_url', fn (string $url) => str_starts_with(
                 $url,
-                route('tarombo.snapshots.compile.draft.preview', $snapshot),
+                route('tarombo.compile-drafts.preview', $draft),
             )));
 
     $this->actingAs($user)
-        ->get(route('tarombo.snapshots.compile.draft.preview', $snapshot))
+        ->get(route('tarombo.compile-drafts.preview', $draft))
         ->assertOk();
 });
 
@@ -176,7 +181,9 @@ test('a compile saved without a frame has no preview and falls back to the tree 
         'preview' => UploadedFile::fake()->image('preview.jpg'),
     ])->assertRedirect();
 
-    Storage::disk('local')->assertMissing(TaromboCompileDraft::previewPath($user->id, $snapshot->id));
+    $draft = TaromboCompileDraft::query()->sole();
+
+    Storage::disk('local')->assertMissing($draft->previewPath());
 
     $this->actingAs($user)
         ->get(route('tarombo.snapshots.index', ['filter' => 'saved']))
@@ -185,8 +192,139 @@ test('a compile saved without a frame has no preview and falls back to the tree 
             ->where('snapshots.data.0.image_url', route('tarombo.snapshots.image', $snapshot)));
 
     $this->actingAs($user)
-        ->get(route('tarombo.snapshots.compile.draft.preview', $snapshot))
+        ->get(route('tarombo.compile-drafts.preview', $draft))
         ->assertNotFound();
+});
+
+test('a saved compile can be duplicated under a new name and edited on its own', function () {
+    $user = User::factory()->create();
+    $snapshot = TaromboSnapshot::factory()->for($user)->create();
+    $frame = TaromboFrame::factory()->create();
+
+    $this->actingAs($user)->put(route('tarombo.snapshots.compile.draft.update', $snapshot), [
+        'state' => compileState([compileLayer('layer-1', 'upload:0')], ['frame_id' => $frame->id]),
+        'images' => [UploadedFile::fake()->image('a.png')],
+        'preview' => UploadedFile::fake()->image('preview.jpg'),
+    ])->assertRedirect();
+
+    $original = TaromboCompileDraft::query()->sole();
+    $uuid = substr($original->state['layers'][0]['source'], 7);
+
+    $this->actingAs($user)
+        ->post(route('tarombo.compile-drafts.duplicate', $original), ['name' => 'Versi Keluarga Besar'])
+        ->assertRedirect();
+
+    $copy = TaromboCompileDraft::query()->whereKeyNot($original->id)->sole();
+
+    expect($copy->name)->toBe('Versi Keluarga Besar')
+        ->and($copy->state)->toBe($original->state);
+    Storage::disk('local')->assertExists($copy->previewPath());
+
+    // The copy opens on the compile page by its id.
+    $this->actingAs($user)
+        ->get(route('tarombo.snapshots.compile', ['taromboSnapshot' => $snapshot, 'draft' => $copy->id]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('draft.id', $copy->id)
+            ->where('draft.name', 'Versi Keluarga Besar'));
+
+    // Changing the copy drops its layer, but the shared image stays for the original.
+    $this->actingAs($user)->put(route('tarombo.snapshots.compile.draft.update', $snapshot), [
+        'draft_id' => $copy->id,
+        'state' => compileState([], ['frame_id' => $frame->id]),
+    ])->assertRedirect();
+
+    Storage::disk('local')->assertExists(TaromboCompileDraft::imagePath($user->id, $snapshot->id, $uuid));
+
+    // Deleting the original frees the image nobody uses any more.
+    $this->actingAs($user)
+        ->delete(route('tarombo.compile-drafts.destroy', $original))
+        ->assertRedirect();
+
+    Storage::disk('local')->assertMissing(TaromboCompileDraft::imagePath($user->id, $snapshot->id, $uuid));
+    Storage::disk('local')->assertMissing($original->previewPath());
+    expect(TaromboCompileDraft::query()->pluck('id')->all())->toBe([$copy->id]);
+});
+
+test('a saved compile can be renamed only by its own account', function () {
+    $user = User::factory()->create();
+    $draft = TaromboCompileDraft::query()->create([
+        'user_id' => $user->id,
+        'tarombo_snapshot_id' => TaromboSnapshot::factory()->for($user)->create()->id,
+        'state' => json_decode(compileState(), true),
+    ]);
+
+    $this->actingAs($user)
+        ->patch(route('tarombo.compile-drafts.rename', $draft), ['name' => '  Tarombo Utama  '])
+        ->assertRedirect();
+
+    expect($draft->fresh()->name)->toBe('Tarombo Utama');
+
+    $this->actingAs($user)
+        ->patch(route('tarombo.compile-drafts.rename', $draft), ['name' => ''])
+        ->assertSessionHasErrors('name');
+
+    $this->actingAs(User::factory()->create())
+        ->patch(route('tarombo.compile-drafts.rename', $draft), ['name' => 'Bukan milik saya'])
+        ->assertNotFound();
+
+    $this->actingAs(User::factory()->create())
+        ->post(route('tarombo.compile-drafts.duplicate', $draft), ['name' => 'Salinan'])
+        ->assertNotFound();
+
+    expect($draft->fresh()->name)->toBe('Tarombo Utama')
+        ->and(TaromboCompileDraft::query()->count())->toBe(1);
+});
+
+test('a text layer is saved with its settings and without an image', function () {
+    $user = User::factory()->create();
+    $snapshot = TaromboSnapshot::factory()->for($user)->create();
+    $text = [
+        'content' => "Horas!\nKeluarga Besar",
+        'font' => 'Cinzel',
+        'size' => 42,
+        'color' => '#b34b1e',
+        'bold' => true,
+        'italic' => false,
+        'align' => 'center',
+    ];
+
+    $this->actingAs($user)->put(route('tarombo.snapshots.compile.draft.update', $snapshot), [
+        'state' => compileState([[...compileLayer('layer-1', 'text', 'text'), 'name' => 'Teks 1', 'text' => $text]]),
+    ])->assertSessionHasNoErrors();
+
+    $draft = TaromboCompileDraft::query()->sole();
+
+    expect($draft->state['layers'][0]['text'])->toBe($text)
+        ->and($draft->state['layers'][0]['source'])->toBe('text');
+
+    $this->actingAs($user)
+        ->get(route('tarombo.snapshots.compile', $snapshot))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('draft.state.layers.0.text.font', 'Cinzel')
+            ->where('draft.state.layers.0.text.content', "Horas!\nKeluarga Besar"));
+});
+
+test('an invalid text layer is rejected', function () {
+    $user = User::factory()->create();
+    $snapshot = TaromboSnapshot::factory()->for($user)->create();
+    $text = ['content' => 'Horas', 'font' => 'Cinzel', 'size' => 42, 'color' => '#b34b1e', 'bold' => false, 'italic' => false, 'align' => 'left'];
+    $save = fn (array $layer) => $this->actingAs($user)->put(route('tarombo.snapshots.compile.draft.update', $snapshot), [
+        'state' => compileState([$layer]),
+    ]);
+
+    $save([...compileLayer('layer-1', 'text', 'text'), 'text' => [...$text, 'font' => 'Comic Sans MS']])
+        ->assertSessionHasErrors('state.layers.0.text.font');
+    $save([...compileLayer('layer-1', 'text', 'text'), 'text' => [...$text, 'color' => 'red']])
+        ->assertSessionHasErrors('state.layers.0.text.color');
+    $save([...compileLayer('layer-1', 'text', 'text'), 'text' => [...$text, 'content' => str_repeat('a', 501)]])
+        ->assertSessionHasErrors('state.layers.0.text.content');
+    $save(compileLayer('layer-1', 'text', 'text'))
+        ->assertSessionHasErrors('state.layers.0.text');
+    // An image layer cannot pretend to be text.
+    $save([...compileLayer('layer-1', 'text'), 'text' => $text])
+        ->assertSessionHasErrors('state.layers.0.source');
+
+    expect(TaromboCompileDraft::query()->exists())->toBeFalse();
 });
 
 test('deleting the snapshot removes its saved compile and images', function () {
