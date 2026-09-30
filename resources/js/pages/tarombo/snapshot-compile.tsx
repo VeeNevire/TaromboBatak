@@ -1048,6 +1048,29 @@ export default function TaromboSnapshotCompile({
             return false;
         }
 
+        // How the compile looks now, shown in "Hasil Simpan" like a Produce
+        // result. Without a frame there is nothing to compose.
+        let preview: File | null = null;
+
+        if (ready && selectedFrame) {
+            const output = document.createElement('canvas');
+            composeLayers(
+                output,
+                assets.frameImage,
+                selectedFrame,
+                composeItems(
+                    order,
+                    layers,
+                    assets.tree,
+                    crop,
+                    placement,
+                    selectedFrame,
+                ),
+                { maxSide: PREVIEW_MAX_SIDE },
+            );
+            preview = await composeCanvasToFile(output, 'preview.jpg');
+        }
+
         const state = draftState(
             (layer) => layer.sourceKey ?? `upload:${uploadIndex.get(layer.id)}`,
         );
@@ -1058,7 +1081,12 @@ export default function TaromboSnapshotCompile({
         return new Promise<boolean>((resolve) => {
             router.post(
                 compileDraft.update.url(snapshot.id),
-                { _method: 'put', state: JSON.stringify(state), images },
+                {
+                    _method: 'put',
+                    state: JSON.stringify(state),
+                    images,
+                    ...(preview ? { preview } : {}),
+                },
                 {
                     forceFormData: true,
                     preserveScroll: true,

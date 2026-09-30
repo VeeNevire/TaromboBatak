@@ -25,6 +25,8 @@ use Illuminate\Support\Carbon;
 #[Fillable(['user_id', 'tarombo_snapshot_id', 'tarombo_frame_id', 'state'])]
 class TaromboCompileDraft extends Model
 {
+    public const PREVIEW_FILE = 'preview.jpg';
+
     /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
@@ -46,6 +48,12 @@ class TaromboCompileDraft extends Model
     public static function imagePath(int $userId, int $snapshotId, string $uuid): string
     {
         return self::directory($userId, $snapshotId)."/{$uuid}.png";
+    }
+
+    /** The composed look of the saved compile, shown in "Hasil Simpan". */
+    public static function previewPath(int $userId, int $snapshotId): string
+    {
+        return self::directory($userId, $snapshotId).'/'.self::PREVIEW_FILE;
     }
 
     /**

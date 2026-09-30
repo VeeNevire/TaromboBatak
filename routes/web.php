@@ -240,6 +240,8 @@ Route::middleware(['auth'])->group(function () {
         ->name('tarombo.snapshots.compile.draft.destroy');
     Route::get('dashboard/tarombo/snapshots/{taromboSnapshot}/compile/draft/images/{uuid}', [TaromboCompileDraftController::class, 'image'])
         ->name('tarombo.snapshots.compile.draft.image');
+    Route::get('dashboard/tarombo/snapshots/{taromboSnapshot}/compile/draft/preview', [TaromboCompileDraftController::class, 'preview'])
+        ->name('tarombo.snapshots.compile.draft.preview');
     Route::get('dashboard/tarombo/snapshots/{taromboSnapshot}/image', [TaromboSnapshotController::class, 'image'])
         ->name('tarombo.snapshots.image');
     Route::get('dashboard/tarombo/snapshots/{taromboSnapshot}/download', [TaromboSnapshotController::class, 'download'])

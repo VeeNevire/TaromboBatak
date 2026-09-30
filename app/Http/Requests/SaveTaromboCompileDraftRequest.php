@@ -53,6 +53,8 @@ class SaveTaromboCompileDraftRequest extends FormRequest
             ...$box('state.layers.*.placement', true),
             'images' => ['nullable', 'array', 'max:30'],
             'images.*' => ['file', 'image', 'mimes:png,jpg,jpeg', 'max:20480'],
+            // The compile composed in the browser, like a Produce result.
+            'preview' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg', 'max:10240'],
         ];
     }
 

@@ -119,6 +119,76 @@ test('another account cannot save a compile for a snapshot it cannot see', funct
     expect(TaromboCompileDraft::query()->exists())->toBeFalse();
 });
 
+test('a saved compile keeps its composed preview and lists it under Hasil Simpan', function () {
+    $user = User::factory()->create();
+    $snapshot = TaromboSnapshot::factory()->for($user)->create();
+    $frame = TaromboFrame::factory()->create();
+    $previewPath = TaromboCompileDraft::previewPath($user->id, $snapshot->id);
+
+    $this->actingAs($user)->put(route('tarombo.snapshots.compile.draft.update', $snapshot), [
+        'state' => compileState([compileLayer('layer-1', 'upload:0')], ['frame_id' => $frame->id]),
+        'images' => [UploadedFile::fake()->image('a.png')],
+        'preview' => UploadedFile::fake()->image('preview.jpg', 800, 600),
+    ])->assertRedirect();
+
+    Storage::disk('local')->assertExists($previewPath);
+
+    // Saving again without a new preview must not treat it as an unused layer image.
+    $uuid = substr(TaromboCompileDraft::query()->sole()->state['layers'][0]['source'], 7);
+
+    $this->actingAs($user)->put(route('tarombo.snapshots.compile.draft.update', $snapshot), [
+        'state' => compileState([compileLayer('layer-1', "stored:{$uuid}")], ['frame_id' => $frame->id]),
+    ])->assertRedirect();
+
+    Storage::disk('local')->assertExists($previewPath);
+
+    // Another account's compile is not listed.
+    TaromboCompileDraft::query()->create([
+        'user_id' => User::factory()->create()->id,
+        'tarombo_snapshot_id' => TaromboSnapshot::factory()->create()->id,
+        'state' => json_decode(compileState(), true),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('tarombo.snapshots.index', ['filter' => 'saved']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('filter', 'saved')
+            ->has('snapshots.data', 1)
+            ->where('snapshots.data.0.id', $snapshot->id)
+            ->where('snapshots.data.0.saved_compile', true)
+            ->where('snapshots.data.0.has_preview', true)
+            ->where('snapshots.data.0.image_url', fn (string $url) => str_starts_with(
+                $url,
+                route('tarombo.snapshots.compile.draft.preview', $snapshot),
+            )));
+
+    $this->actingAs($user)
+        ->get(route('tarombo.snapshots.compile.draft.preview', $snapshot))
+        ->assertOk();
+});
+
+test('a compile saved without a frame has no preview and falls back to the tree image', function () {
+    $user = User::factory()->create();
+    $snapshot = TaromboSnapshot::factory()->for($user)->create();
+
+    $this->actingAs($user)->put(route('tarombo.snapshots.compile.draft.update', $snapshot), [
+        'state' => compileState(),
+        'preview' => UploadedFile::fake()->image('preview.jpg'),
+    ])->assertRedirect();
+
+    Storage::disk('local')->assertMissing(TaromboCompileDraft::previewPath($user->id, $snapshot->id));
+
+    $this->actingAs($user)
+        ->get(route('tarombo.snapshots.index', ['filter' => 'saved']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('snapshots.data.0.has_preview', false)
+            ->where('snapshots.data.0.image_url', route('tarombo.snapshots.image', $snapshot)));
+
+    $this->actingAs($user)
+        ->get(route('tarombo.snapshots.compile.draft.preview', $snapshot))
+        ->assertNotFound();
+});
+
 test('deleting the snapshot removes its saved compile and images', function () {
     $user = User::factory()->create();
     $snapshot = TaromboSnapshot::factory()->for($user)->create([
