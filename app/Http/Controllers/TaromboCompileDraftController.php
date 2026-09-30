@@ -112,9 +112,10 @@ class TaromboCompileDraftController extends Controller
         $copy->save();
 
         $disk = Storage::disk('local');
+        $source = $taromboCompileDraft->existingPreviewPath();
 
-        if ($disk->exists($taromboCompileDraft->previewPath())) {
-            $disk->copy($taromboCompileDraft->previewPath(), $copy->previewPath());
+        if ($source !== null) {
+            $disk->copy($source, $copy->previewPath());
         }
 
         return back()->with('toast', ['type' => 'success', 'message' => 'Gambar berhasil diduplikat.']);
@@ -152,9 +153,11 @@ class TaromboCompileDraftController extends Controller
     {
         $this->authorizeOwner($request, $taromboCompileDraft);
 
-        abort_unless(Storage::disk('local')->exists($taromboCompileDraft->previewPath()), 404);
+        $path = $taromboCompileDraft->existingPreviewPath();
 
-        return Storage::disk('local')->response($taromboCompileDraft->previewPath(), 'hasil-simpan.jpg', [
+        abort_if($path === null, 404);
+
+        return Storage::disk('local')->response($path, 'hasil-simpan.jpg', [
             'Cache-Control' => 'private, max-age=0',
             'X-Content-Type-Options' => 'nosniff',
         ], 'inline');
@@ -172,7 +175,10 @@ class TaromboCompileDraftController extends Controller
         $keep = TaromboCompileDraft::usedImages($userId, $snapshotId);
 
         foreach ($disk->files(TaromboCompileDraft::directory($userId, $snapshotId)) as $file) {
-            if (str_starts_with(basename($file), TaromboCompileDraft::PREVIEW_PREFIX)) {
+            $name = basename($file);
+
+            if ($name === TaromboCompileDraft::LEGACY_PREVIEW_FILE
+                || str_starts_with($name, TaromboCompileDraft::PREVIEW_PREFIX)) {
                 continue;
             }
 

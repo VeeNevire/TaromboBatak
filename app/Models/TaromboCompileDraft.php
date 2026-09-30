@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * A saved Compile Gambar arrangement (frame, layers, crops and positions) so
@@ -28,6 +29,13 @@ use Illuminate\Support\Carbon;
 class TaromboCompileDraft extends Model
 {
     public const PREVIEW_PREFIX = 'preview-';
+
+    /**
+     * The one preview file arrangements saved before previews became
+     * per-draft shared; read as a fallback so those keeps showing their
+     * composed look.
+     */
+    public const LEGACY_PREVIEW_FILE = 'preview.jpg';
 
     /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
@@ -56,6 +64,29 @@ class TaromboCompileDraft extends Model
     public function previewPath(): string
     {
         return self::directory($this->user_id, $this->tarombo_snapshot_id).'/'.self::PREVIEW_PREFIX.$this->id.'.jpg';
+    }
+
+    /** Where arrangements saved before previews were per-draft keep theirs. */
+    public function legacyPreviewPath(): string
+    {
+        return self::directory($this->user_id, $this->tarombo_snapshot_id).'/'.self::LEGACY_PREVIEW_FILE;
+    }
+
+    /**
+     * The preview to show for this saved compile: its own, or the shared one
+     * written before previews were kept per draft. Null when it has none.
+     */
+    public function existingPreviewPath(): ?string
+    {
+        $disk = Storage::disk('local');
+
+        if ($disk->exists($this->previewPath())) {
+            return $this->previewPath();
+        }
+
+        $legacy = $this->legacyPreviewPath();
+
+        return $disk->exists($legacy) ? $legacy : null;
     }
 
     /**
