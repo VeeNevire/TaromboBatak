@@ -14,9 +14,9 @@ type ZoomAnchor = { x: number; y: number; ratio: number };
 
 /**
  * Crop with a zoomable canvas: the + / − buttons resize the crop box, while
- * zooming enlarges the image under a box that keeps its size on screen, and
- * the viewport scrolls horizontally and vertically once the image is larger
- * than it. Reports the crop in image pixels through `onChange`.
+ * zooming enlarges the image together with the crop box, and the viewport
+ * scrolls horizontally and vertically once the canvas is larger than it.
+ * Reports the crop in image pixels through `onChange`.
  */
 export function CropEditor({
     url,
@@ -88,9 +88,9 @@ export function CropEditor({
         };
     };
 
-    // Zoom the image around a viewport point, or around the crop box when
-    // none is given. The box keeps its size on screen, so zooming in crops a
-    // smaller part of the image and zooming out a larger one.
+    // Zoom the whole canvas (image and crop box together) around a viewport
+    // point, or around the crop box when none is given. The cropped part of
+    // the image stays the same; zooming only shows it larger.
     const zoomTo = (next: number, pointX?: number, pointY?: number) => {
         const viewport = viewportRef.current;
         const nextZoom = Math.min(MAX_ZOOM, Math.max(1, next));
@@ -103,7 +103,6 @@ export function CropEditor({
             pointX !== undefined && pointY !== undefined
                 ? { x: pointX, y: pointY, ratio: nextZoom / zoom }
                 : 'crop';
-        setCrop(scaleCrop(zoom / nextZoom));
         setZoom(nextZoom);
     };
 
@@ -291,11 +290,11 @@ export function CropEditor({
                 </div>
             </div>
             <p className="text-center text-xs text-tb-on-surface-variant">
-                Tombol + / − mengubah ukuran kotak potong. Slider atau Ctrl +
-                scroll memperbesar gambar dengan ukuran kotak tetap, jadi bagian
-                yang dipotong makin kecil; saat diperbesar gunakan scroll bar
-                atau geser gambar di luar kotak. Bagian di dalam kotak menjadi
-                hasil potongan.
+                Tombol + / − atau sudut kotak mengubah ukuran kotak potong.
+                Slider atau Ctrl + scroll memperbesar seluruh tampilan (gambar
+                beserta kotaknya); saat diperbesar gunakan scroll bar atau geser
+                gambar di luar kotak. Bagian di dalam kotak menjadi hasil
+                potongan.
             </p>
         </div>
     );

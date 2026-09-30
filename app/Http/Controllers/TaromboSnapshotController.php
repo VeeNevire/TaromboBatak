@@ -8,6 +8,7 @@ use App\Models\TaromboCompileDraft;
 use App\Models\TaromboFrame;
 use App\Models\TaromboSnapshot;
 use App\Services\FamilyTreeActivityLogger;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -38,35 +39,37 @@ class TaromboSnapshotController extends Controller
             ->flip();
 
         $filter = $request->string('filter')->toString();
-        $filter = in_array($filter, ['compiled', 'original'], true) ? $filter : 'all';
+        $filter = in_array($filter, ['compiled', 'original', 'saved'], true) ? $filter : 'all';
 
-        $snapshots = TaromboSnapshot::query()
-            ->tap($ownerScope)
-            ->when($filter === 'compiled', fn ($query) => $query->whereNotNull('tarombo_frame_id'))
-            ->when($filter === 'original', fn ($query) => $query->whereNull('tarombo_frame_id'))
-            ->with(['centerPerson:id,name', 'user:id,name'])
-            ->latest()
-            ->paginate(12)
-            ->withQueryString()
-            ->through(fn (TaromboSnapshot $snapshot) => [
-                'id' => $snapshot->id,
-                'view' => $snapshot->view,
-                'title' => $snapshot->title,
-                'center_person_name' => $snapshot->centerPerson?->name,
-                'owner_name' => $snapshot->user?->name,
-                'image_url' => route('tarombo.snapshots.image', $snapshot),
-                'download_url' => $canDownload
-                    ? route('tarombo.snapshots.download', $snapshot)
-                    : null,
-                'can_delete' => $snapshot->user_id === $user->id,
-                'size_bytes' => Storage::disk('local')->exists($snapshot->path)
-                    ? Storage::disk('local')->size($snapshot->path)
-                    : null,
-                'created_at' => $snapshot->created_at?->toISOString(),
-                // A result shares the saved arrangement of the tree it came from.
-                'has_compile_draft' => $draftSnapshotIds->has($snapshot->source_snapshot_id ?? $snapshot->id),
-                'editable_result' => $snapshot->source_snapshot_id !== null && $snapshot->user_id === $user->id,
-            ]);
+        $snapshots = $filter === 'saved'
+            ? $this->savedCompiles($user->id)
+            : TaromboSnapshot::query()
+                ->tap($ownerScope)
+                ->when($filter === 'compiled', fn ($query) => $query->whereNotNull('tarombo_frame_id'))
+                ->when($filter === 'original', fn ($query) => $query->whereNull('tarombo_frame_id'))
+                ->with(['centerPerson:id,name', 'user:id,name'])
+                ->latest()
+                ->paginate(12)
+                ->withQueryString()
+                ->through(fn (TaromboSnapshot $snapshot) => [
+                    'id' => $snapshot->id,
+                    'view' => $snapshot->view,
+                    'title' => $snapshot->title,
+                    'center_person_name' => $snapshot->centerPerson?->name,
+                    'owner_name' => $snapshot->user?->name,
+                    'image_url' => route('tarombo.snapshots.image', $snapshot),
+                    'download_url' => $canDownload
+                        ? route('tarombo.snapshots.download', $snapshot)
+                        : null,
+                    'can_delete' => $snapshot->user_id === $user->id,
+                    'size_bytes' => Storage::disk('local')->exists($snapshot->path)
+                        ? Storage::disk('local')->size($snapshot->path)
+                        : null,
+                    'created_at' => $snapshot->created_at?->toISOString(),
+                    // A result shares the saved arrangement of the tree it came from.
+                    'has_compile_draft' => $draftSnapshotIds->has($snapshot->source_snapshot_id ?? $snapshot->id),
+                    'editable_result' => $snapshot->source_snapshot_id !== null && $snapshot->user_id === $user->id,
+                ]);
 
         $snapshotOptions = TaromboSnapshot::query()
             ->tap($ownerScope)
@@ -329,6 +332,50 @@ class TaromboSnapshotController extends Controller
         ]);
 
         return back();
+    }
+
+    /**
+     * The "Hasil Simpan" tab: this account's saved Compile Gambar arrangements,
+     * shown with the composed preview made on save (the source tree image for
+     * arrangements saved before previews existed).
+     *
+     * @return LengthAwarePaginator<int, array<string, mixed>>
+     */
+    private function savedCompiles(int $userId): LengthAwarePaginator
+    {
+        $disk = Storage::disk('local');
+
+        return TaromboCompileDraft::query()
+            ->where('user_id', $userId)
+            ->whereHas('snapshot')
+            ->with(['snapshot.centerPerson:id,name', 'snapshot.user:id,name'])
+            ->latest('updated_at')
+            ->paginate(12)
+            ->withQueryString()
+            ->through(function (TaromboCompileDraft $draft) use ($disk, $userId) {
+                $snapshot = $draft->snapshot;
+                $previewPath = TaromboCompileDraft::previewPath($userId, $snapshot->id);
+                $hasPreview = $disk->exists($previewPath);
+
+                return [
+                    'id' => $snapshot->id,
+                    'view' => $snapshot->view,
+                    'title' => $snapshot->title,
+                    'center_person_name' => $snapshot->centerPerson?->name,
+                    'owner_name' => $snapshot->user?->name,
+                    'image_url' => $hasPreview
+                        ? route('tarombo.snapshots.compile.draft.preview', $snapshot).'?v='.$draft->updated_at?->timestamp
+                        : route('tarombo.snapshots.image', $snapshot),
+                    'download_url' => null,
+                    'can_delete' => false,
+                    'size_bytes' => $hasPreview ? $disk->size($previewPath) : null,
+                    'created_at' => $draft->updated_at?->toISOString(),
+                    'has_compile_draft' => true,
+                    'editable_result' => false,
+                    'saved_compile' => true,
+                    'has_preview' => $hasPreview,
+                ];
+            });
     }
 
     /** @return array<string, mixed> */

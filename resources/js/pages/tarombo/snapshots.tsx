@@ -25,6 +25,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ZoomableImage } from '@/components/zoomable-image';
 import { dashboard } from '@/routes';
 import tarombo from '@/routes/tarombo';
+import compileDraft from '@/routes/tarombo/snapshots/compile/draft';
 
 type Snapshot = {
     id: number;
@@ -41,6 +42,10 @@ type Snapshot = {
     has_compile_draft?: boolean;
     // A Produce result that can be reopened in Compile Gambar and replaced.
     editable_result?: boolean;
+    // A card of the "Hasil Simpan" tab: a saved Compile Gambar arrangement.
+    saved_compile?: boolean;
+    // False for arrangements saved before the composed preview existed.
+    has_preview?: boolean;
 };
 
 type SnapshotPage = {
@@ -52,7 +57,7 @@ type SnapshotPage = {
     next_page_url: string | null;
 };
 
-type SnapshotFilter = 'all' | 'compiled' | 'original';
+type SnapshotFilter = 'all' | 'compiled' | 'original' | 'saved';
 
 type FrameOption = {
     id: number;
@@ -98,6 +103,16 @@ export default function TaromboSnapshots({
         }
 
         router.delete(tarombo.snapshots.destroy(snapshot.id).url, {
+            preserveScroll: true,
+        });
+    };
+
+    const removeSavedCompile = (snapshot: Snapshot) => {
+        if (!window.confirm('Hapus simpanan Compile Gambar ini?')) {
+            return;
+        }
+
+        router.delete(compileDraft.destroy.url(snapshot.id), {
             preserveScroll: true,
         });
     };
@@ -200,6 +215,7 @@ export default function TaromboSnapshots({
                         <TabsTrigger value="original">
                             Gambar Original
                         </TabsTrigger>
+                        <TabsTrigger value="saved">Hasil Simpan</TabsTrigger>
                     </TabsList>
                 </Tabs>
 
@@ -230,11 +246,14 @@ export default function TaromboSnapshots({
                             <Images className="size-10 text-tb-outline" />
                             <div>
                                 <p className="font-semibold text-tb-on-surface">
-                                    Belum ada Tarombo tersimpan
+                                    {filter === 'saved'
+                                        ? 'Belum ada Compile Gambar yang disimpan'
+                                        : 'Belum ada Tarombo tersimpan'}
                                 </p>
                                 <p className="mt-1 text-sm text-tb-on-surface-variant">
-                                    Buka Pohon Tarombo fullscreen lalu tekan
-                                    tombol Simpan.
+                                    {filter === 'saved'
+                                        ? 'Buka Compile Gambar, pilih frame, lalu tekan tombol Simpan.'
+                                        : 'Buka Pohon Tarombo fullscreen lalu tekan tombol Simpan.'}
                                 </p>
                             </div>
                         </CardContent>
@@ -268,11 +287,12 @@ export default function TaromboSnapshots({
                                             Tarombo Batak · {accountName}
                                         </span>
                                     </div>
-                                    {snapshot.has_compile_draft && (
-                                        <span className="text-tb-on-primary pointer-events-none absolute top-2 left-2 rounded-full bg-tb-primary px-2 py-0.5 text-[10px] font-semibold shadow-sm">
-                                            Compile tersimpan
-                                        </span>
-                                    )}
+                                    {snapshot.has_compile_draft &&
+                                        !snapshot.saved_compile && (
+                                            <span className="text-tb-on-primary pointer-events-none absolute top-2 left-2 rounded-full bg-tb-primary px-2 py-0.5 text-[10px] font-semibold shadow-sm">
+                                                Compile tersimpan
+                                            </span>
+                                        )}
                                 </button>
                                 <CardContent className="flex items-start justify-between gap-3 p-4">
                                     <div className="min-w-0">
@@ -285,6 +305,11 @@ export default function TaromboSnapshots({
                                                     ? 'Vertikal'
                                                     : 'Radial'}
                                             </Badge>
+                                            {snapshot.saved_compile && (
+                                                <Badge variant="outline">
+                                                    Tersimpan
+                                                </Badge>
+                                            )}
                                         </div>
                                         <p className="mt-1 text-xs text-tb-on-surface-variant">
                                             {snapshot.owner_name
@@ -300,6 +325,13 @@ export default function TaromboSnapshots({
                                                   )
                                                 : 'Waktu tidak tersedia'}
                                         </p>
+                                        {snapshot.saved_compile &&
+                                            !snapshot.has_preview && (
+                                                <p className="mt-1 text-xs text-tb-on-surface-variant italic">
+                                                    Buka & Simpan lagi untuk
+                                                    memperbarui pratinjau.
+                                                </p>
+                                            )}
                                     </div>
                                     <div className="flex shrink-0 items-center gap-1">
                                         {snapshot.editable_result ? (
@@ -350,6 +382,21 @@ export default function TaromboSnapshots({
                                                 >
                                                     <Download className="size-4" />
                                                 </a>
+                                            </Button>
+                                        )}
+                                        {snapshot.saved_compile && (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() =>
+                                                    removeSavedCompile(snapshot)
+                                                }
+                                                aria-label="Hapus simpanan Compile Gambar"
+                                                title="Hapus simpanan"
+                                                className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/40"
+                                            >
+                                                <Trash2 className="size-4" />
                                             </Button>
                                         )}
                                         {snapshot.can_delete && (

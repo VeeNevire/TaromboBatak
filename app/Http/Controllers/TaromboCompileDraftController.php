@@ -71,6 +71,16 @@ class TaromboCompileDraftController extends Controller
 
         $this->deleteUnusedImages($userId, $taromboSnapshot->id, TaromboCompileDraft::storedImages($state));
 
+        // Without a frame there is nothing Produce-like to show.
+        $previewPath = TaromboCompileDraft::previewPath($userId, $taromboSnapshot->id);
+        $preview = $request->file('preview');
+
+        if ($preview instanceof UploadedFile && ($state['frame_id'] ?? null) !== null) {
+            $disk->putFileAs(dirname($previewPath), $preview, basename($previewPath));
+        } elseif (($state['frame_id'] ?? null) === null) {
+            $disk->delete($previewPath);
+        }
+
         return back()->with('toast', ['type' => 'success', 'message' => 'Compile Gambar disimpan. Bisa dibuka dan diedit lagi nanti.']);
     }
 
@@ -105,12 +115,31 @@ class TaromboCompileDraftController extends Controller
         ], 'inline');
     }
 
+    /** The composed preview of the signed-in account's own draft. */
+    public function preview(Request $request, TaromboSnapshot $taromboSnapshot): StreamedResponse
+    {
+        Gate::authorize('view', $taromboSnapshot);
+
+        $path = TaromboCompileDraft::previewPath($request->user()->id, $taromboSnapshot->id);
+
+        abort_unless(Storage::disk('local')->exists($path), 404);
+
+        return Storage::disk('local')->response($path, 'hasil-simpan.jpg', [
+            'Cache-Control' => 'private, max-age=0',
+            'X-Content-Type-Options' => 'nosniff',
+        ], 'inline');
+    }
+
     /** @param  array<int, string>  $keep */
     private function deleteUnusedImages(int $userId, int $snapshotId, array $keep): void
     {
         $disk = Storage::disk('local');
 
         foreach ($disk->files(TaromboCompileDraft::directory($userId, $snapshotId)) as $file) {
+            if (basename($file) === TaromboCompileDraft::PREVIEW_FILE) {
+                continue;
+            }
+
             if (! in_array(pathinfo($file, PATHINFO_FILENAME), $keep, true)) {
                 $disk->delete($file);
             }
