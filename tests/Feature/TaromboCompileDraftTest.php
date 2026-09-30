@@ -327,6 +327,107 @@ test('an invalid text layer is rejected', function () {
     expect(TaromboCompileDraft::query()->exists())->toBeFalse();
 });
 
+test('an arrangement saved before previews were per-draft still shows its composed look', function () {
+    $user = User::factory()->create();
+    $snapshot = TaromboSnapshot::factory()->for($user)->create();
+
+    $this->actingAs($user)->put(route('tarombo.snapshots.compile.draft.update', $snapshot), [
+        'state' => compileState([compileLayer('layer-1', 'upload:0')], ['frame_id' => TaromboFrame::factory()->create()->id]),
+        'images' => [UploadedFile::fake()->image('a.png')],
+        'preview' => UploadedFile::fake()->image('preview.jpg'),
+    ])->assertRedirect();
+
+    $draft = TaromboCompileDraft::query()->sole();
+
+    // Such an arrangement kept its preview in one shared file, not its own.
+    Storage::disk('local')->put($draft->legacyPreviewPath(), 'legacy');
+    Storage::disk('local')->delete($draft->previewPath());
+
+    expect($draft->existingPreviewPath())->toBe($draft->legacyPreviewPath());
+
+    $this->actingAs($user)
+        ->get(route('tarombo.snapshots.index', ['filter' => 'saved']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('snapshots.data.0.draft_id', $draft->id)
+            ->where('snapshots.data.0.saved_compile', true)
+            ->where('snapshots.data.0.has_preview', true)
+            ->where('snapshots.data.0.image_url', fn (string $url) => str_starts_with(
+                $url,
+                route('tarombo.compile-drafts.preview', $draft),
+            )));
+
+    // The route serves the shared file, so the thumbnail does not 404.
+    $this->actingAs($user)
+        ->get(route('tarombo.compile-drafts.preview', $draft))
+        ->assertOk();
+});
+
+test('a per-draft preview wins over the shared one left by an older save', function () {
+    $user = User::factory()->create();
+    $snapshot = TaromboSnapshot::factory()->for($user)->create();
+
+    $this->actingAs($user)->put(route('tarombo.snapshots.compile.draft.update', $snapshot), [
+        'state' => compileState([compileLayer('layer-1', 'upload:0')], ['frame_id' => TaromboFrame::factory()->create()->id]),
+        'images' => [UploadedFile::fake()->image('a.png')],
+        'preview' => UploadedFile::fake()->image('preview.jpg'),
+    ])->assertRedirect();
+
+    $draft = TaromboCompileDraft::query()->sole();
+    Storage::disk('local')->put($draft->legacyPreviewPath(), 'legacy');
+
+    expect($draft->existingPreviewPath())->toBe($draft->previewPath());
+});
+
+test('duplicating an older arrangement gives the copy a preview of its own', function () {
+    $user = User::factory()->create();
+    $snapshot = TaromboSnapshot::factory()->for($user)->create();
+
+    $this->actingAs($user)->put(route('tarombo.snapshots.compile.draft.update', $snapshot), [
+        'state' => compileState([compileLayer('layer-1', 'upload:0')], ['frame_id' => TaromboFrame::factory()->create()->id]),
+        'images' => [UploadedFile::fake()->image('a.png')],
+        'preview' => UploadedFile::fake()->image('preview.jpg'),
+    ])->assertRedirect();
+
+    $original = TaromboCompileDraft::query()->sole();
+    Storage::disk('local')->put($original->legacyPreviewPath(), 'legacy');
+    Storage::disk('local')->delete($original->previewPath());
+
+    $this->actingAs($user)
+        ->post(route('tarombo.compile-drafts.duplicate', $original), ['name' => 'Salinan lama'])
+        ->assertRedirect();
+
+    $copy = TaromboCompileDraft::query()->whereKeyNot($original->id)->sole();
+
+    Storage::disk('local')->assertExists($copy->previewPath());
+    Storage::disk('local')->assertExists($original->legacyPreviewPath());
+});
+
+test('saving another arrangement leaves the shared preview in place', function () {
+    $user = User::factory()->create();
+    $snapshot = TaromboSnapshot::factory()->for($user)->create();
+    $frame = TaromboFrame::factory()->create();
+
+    $this->actingAs($user)->put(route('tarombo.snapshots.compile.draft.update', $snapshot), [
+        'state' => compileState([compileLayer('layer-1', 'upload:0')], ['frame_id' => $frame->id]),
+        'images' => [UploadedFile::fake()->image('a.png')],
+        'preview' => UploadedFile::fake()->image('preview.jpg'),
+    ])->assertRedirect();
+
+    $original = TaromboCompileDraft::query()->sole();
+    Storage::disk('local')->put($original->legacyPreviewPath(), 'legacy');
+    Storage::disk('local')->delete($original->previewPath());
+
+    // A second, separately named arrangement of the same tree.
+    $this->actingAs($user)->put(route('tarombo.snapshots.compile.draft.update', $snapshot), [
+        'state' => compileState([], ['frame_id' => $frame->id]),
+        'preview' => UploadedFile::fake()->image('preview.jpg'),
+    ])->assertRedirect();
+
+    expect(TaromboCompileDraft::query()->count())->toBe(2);
+    Storage::disk('local')->assertExists($original->legacyPreviewPath());
+    expect($original->existingPreviewPath())->toBe($original->legacyPreviewPath());
+});
+
 test('deleting the snapshot removes its saved compile and images', function () {
     $user = User::factory()->create();
     $snapshot = TaromboSnapshot::factory()->for($user)->create([

@@ -360,8 +360,8 @@ class TaromboSnapshotController extends Controller
             ->withQueryString()
             ->through(function (TaromboCompileDraft $draft) use ($disk) {
                 $snapshot = $draft->snapshot;
-                $previewPath = $draft->previewPath();
-                $hasPreview = $disk->exists($previewPath);
+                $previewPath = $draft->existingPreviewPath();
+                $hasPreview = $previewPath !== null;
 
                 return [
                     'id' => $snapshot->id,
