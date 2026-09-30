@@ -3684,8 +3684,9 @@ export default function FamilyForm({
                                                             Hanya identitas
                                                             genealogis ringkas
                                                             yang ditampilkan.
-                                                            Ayah harus sudah
-                                                            publik agar jalur
+                                                            Ayah dan leluhur
+                                                            ikut dipublikasikan
+                                                            otomatis agar jalur
                                                             silsilah tetap
                                                             lengkap.
                                                         </p>

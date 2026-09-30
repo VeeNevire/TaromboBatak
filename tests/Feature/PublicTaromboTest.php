@@ -1,9 +1,56 @@
 <?php
 
+use App\Models\FamilyTree;
+use App\Models\FamilyTreeNode;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
+
+test('publication changes are saved when editing a family tree version', function (bool $publish, bool $cascade, bool $privateFather, bool $regularUser, bool $valid) {
+    $user = $regularUser ? User::factory()->create() : User::factory()->asAdmin()->create();
+    $father = Person::factory()->create(['is_public' => ! $privateFather]);
+    $grandfather = Person::factory()->create(['is_public' => false]);
+    $father->update(['father_id' => $grandfather->id]);
+    $person = Person::factory()->create(['father_id' => $father->id, 'is_public' => ! $publish]);
+    $child = Person::factory()->create(['father_id' => $person->id, 'is_public' => ! $publish]);
+    $tree = FamilyTree::create([
+        'user_id' => $user->id,
+        'root_person_id' => $person->id,
+        'name' => 'Publication test',
+    ]);
+    FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $person->id]);
+
+    $response = $this->actingAs($user)
+        ->put(route('people.update', ['person' => $person, 'version_tree' => $tree->id]), [
+            'name' => $person->name,
+            'birth_order' => 1,
+            'sibling_count' => 1,
+            'is_public' => $publish,
+            'cascade_public_descendants' => $cascade,
+            'children' => [],
+            'ownChildren' => [],
+        ]);
+
+    if ($valid) {
+        $response->assertSessionHasNoErrors()
+            ->assertRedirect(route('people.edit', ['person' => $person, 'version_tree' => $tree->id]));
+    } else {
+        $response->assertSessionHasErrors('is_public');
+    }
+
+    expect($person->fresh()->is_public)->toBe($valid ? $publish : ! $publish)
+        ->and($grandfather->fresh()->is_public)->toBe($valid && $publish)
+        ->and($father->fresh()->is_public)->toBe($valid && $publish ? true : ! $privateFather)
+        ->and($person->fresh()->father_id)->toBe($father->id)
+        ->and($child->fresh()->is_public)->toBe($valid && $cascade ? false : ! $publish);
+})->with([
+    'publish' => [true, false, false, false, true],
+    'unpublish branch with confirmation' => [false, true, false, false, true],
+    'unpublish branch requires confirmation' => [false, false, false, false, false],
+    'publish includes private ancestors' => [true, false, true, false, true],
+    'regular users cannot publish' => [true, false, false, true, false],
+]);
 
 test('the public tarombo excludes private people and sensitive person fields', function () {
     $marga = Marga::factory()->create();
