@@ -7,11 +7,50 @@ use App\Models\ContributionRequest;
 use App\Models\FamilyTreeShare;
 use App\Models\Person;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Collection;
 
 class PersonPolicy
 {
     /** @var array<int, true>|null */
     protected ?array $lockedAncestorIds = null;
+
+    /** @var array<int, bool> */
+    protected array $preparedUpdates = [];
+
+    protected ?int $preparedUserId = null;
+
+    public function prepareUpdates(User $user, Collection $people): void
+    {
+        $this->preparedUpdates = [];
+        $this->preparedUserId = $user->id;
+        if ($user->isStaff() || $people->isEmpty()) {
+            return;
+        }
+
+        $accessible = $user->accessibleMargaIds()->merge($user->approvedMargaAccessIds());
+        $contacts = ContactRequest::query()
+            ->whereIn('status', [ContactRequest::STATUS_PENDING, ContactRequest::STATUS_APPROVED])
+            ->where(fn ($query) => $query->where('requester_id', $user->id)->orWhere('recipient_id', $user->id))
+            ->with(['requester:id,current_person_id', 'recipient:id,current_person_id'])
+            ->get()
+            ->map(fn ($contact) => $contact->requester_id === $user->id
+                ? $contact->recipient?->current_person_id : $contact->requester?->current_person_id);
+
+        $people->loadExists([
+            'familyTrees as editable_shared_tree' => fn ($trees) => $trees->whereHas('shares', fn ($shares) => $shares
+                ->whereBelongsTo($user, 'recipient')->where('status', FamilyTreeShare::STATUS_ACCEPTED)),
+            'familyTrees as editable_owned_tree' => fn ($trees) => $trees->where('family_trees.user_id', $user->id),
+            'familyTrees as editable_staff_tree' => fn ($trees) => $trees->whereHas('user', fn ($owner) => $owner->whereIn('role', ['admin', 'subadmin'])),
+        ]);
+
+        foreach ($people as $person) {
+            $visible = ($person->marga_id !== null && $accessible->contains($person->marga_id)) || $contacts->contains($person->id);
+            $this->preparedUpdates[$person->id] = $visible
+                && ($person->editable_owned_tree || (int) $person->created_by === (int) $user->id
+                    || (! $person->editable_shared_tree && ! $person->editable_staff_tree))
+                && ! $this->isLockedAncestor($person);
+        }
+    }
 
     public function create(User $user): bool
     {
@@ -31,6 +70,10 @@ class PersonPolicy
     {
         if ($user->isStaff()) {
             return true;
+        }
+
+        if ($this->preparedUserId === $user->id && array_key_exists($person->id, $this->preparedUpdates)) {
+            return $this->preparedUpdates[$person->id];
         }
 
         $sharedTreeExists = $person->familyTrees()

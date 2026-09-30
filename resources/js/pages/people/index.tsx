@@ -1,16 +1,7 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
-import {
-    ChevronLeft,
-    ChevronRight,
-    NotebookPen,
-    Pencil,
-    Plus,
-    Route,
-    Search,
-    Trash2,
-} from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { NotebookPen, Pencil, Plus, Route, Search, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { AppAvatar } from '@/components/app-avatar';
 import { Button } from '@/components/ui/button';
@@ -81,37 +72,32 @@ export default function PeopleIndex({
 }: Props) {
     const [search, setSearch] = useState(filters.search ?? '');
     const [margaFilter, setMargaFilter] = useState(filters.marga_id ?? 'all');
-    const [currentPage, setCurrentPage] = useState(1);
     const [toDelete, setToDelete] = useState<PersonItem | null>(null);
     const deleteForm = useForm<{ person?: string }>({});
-    const filteredPeople = useMemo(() => {
-        const query = search.trim().toLocaleLowerCase();
+    const paginatedPeople = page.data;
 
-        return page.data.filter((person) => {
-            const matchesSearch =
-                query === '' ||
-                [person.name, person.alias ?? '', person.marga ?? ''].some(
-                    (value) => value.toLocaleLowerCase().includes(query),
-                );
-            const matchesMarga =
-                margaFilter === 'all' ||
-                String(person.marga_id) === margaFilter;
-
-            return matchesSearch && matchesMarga;
-        });
-    }, [margaFilter, page, search]);
-    const pageSize = 12;
-    const totalPages = Math.max(1, Math.ceil(filteredPeople.length / pageSize));
-    const visiblePage = Math.min(currentPage, totalPages);
-    const paginatedPeople = useMemo(() => {
-        if (isGuest) {
-            return filteredPeople;
+    useEffect(() => {
+        if (
+            search === (filters.search ?? '') &&
+            margaFilter === (filters.marga_id ?? 'all')
+        ) {
+            return;
         }
 
-        const start = (visiblePage - 1) * pageSize;
+        const timer = window.setTimeout(() => {
+            router.get(
+                people.index.url(),
+                {
+                    search,
+                    ...(margaFilter !== 'all' ? { marga_id: margaFilter } : {}),
+                },
+                { preserveState: true, preserveScroll: true, replace: true },
+            );
+        }, 300);
 
-        return filteredPeople.slice(start, start + pageSize);
-    }, [filteredPeople, isGuest, visiblePage]);
+        return () => window.clearTimeout(timer);
+    }, [search, margaFilter, filters.search, filters.marga_id]);
+
     const showActions =
         !isGuest && (canManage || page.data.some((person) => person.editable));
 
@@ -183,7 +169,6 @@ export default function PeopleIndex({
                                     value={search}
                                     onChange={(e) => {
                                         setSearch(e.target.value);
-                                        setCurrentPage(1);
                                     }}
                                     placeholder="Cari nama, alias, atau marga..."
                                     className="border-tb-outline-variant bg-tb-surface-bright pl-10 focus:border-tb-primary focus:ring-tb-primary/20"
@@ -194,7 +179,6 @@ export default function PeopleIndex({
                                     value={margaFilter}
                                     onValueChange={(value) => {
                                         setMargaFilter(value);
-                                        setCurrentPage(1);
                                     }}
                                 >
                                     <SelectTrigger className="w-full border-tb-outline-variant bg-tb-surface-bright md:w-56">
@@ -425,7 +409,7 @@ export default function PeopleIndex({
                                         </motion.tr>
                                     ))}
                                 </AnimatePresence>
-                                {filteredPeople.length === 0 && (
+                                {page.data.length === 0 && (
                                     <tr>
                                         <td
                                             colSpan={showActions ? 5 : 4}
@@ -440,66 +424,7 @@ export default function PeopleIndex({
                     </CardContent>
                 </Card>
 
-                {isGuest ? (
-                    <Pagination page={page} />
-                ) : (
-                    <div className="text-sm text-tb-on-surface-variant">
-                        <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
-                            <span>
-                                Menampilkan{' '}
-                                {filteredPeople.length === 0
-                                    ? 0
-                                    : (visiblePage - 1) * pageSize + 1}
-                                –
-                                {Math.min(
-                                    visiblePage * pageSize,
-                                    filteredPeople.length,
-                                )}{' '}
-                                dari {filteredPeople.length} anggota
-                            </span>
-                            {totalPages > 1 && (
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="border-tb-outline-variant bg-tb-surface-bright"
-                                        disabled={visiblePage === 1}
-                                        onClick={() =>
-                                            setCurrentPage((current) =>
-                                                Math.max(1, current - 1),
-                                            )
-                                        }
-                                        aria-label="Halaman sebelumnya"
-                                    >
-                                        <ChevronLeft className="size-4" />
-                                        Sebelumnya
-                                    </Button>
-                                    <span className="min-w-20 text-center text-xs font-medium">
-                                        Halaman {visiblePage} dari {totalPages}
-                                    </span>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="border-tb-outline-variant bg-tb-surface-bright"
-                                        disabled={visiblePage === totalPages}
-                                        onClick={() =>
-                                            setCurrentPage((current) =>
-                                                Math.min(
-                                                    totalPages,
-                                                    current + 1,
-                                                ),
-                                            )
-                                        }
-                                        aria-label="Halaman berikutnya"
-                                    >
-                                        Berikutnya
-                                        <ChevronRight className="size-4" />
-                                    </Button>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
+                <Pagination page={page} />
 
                 {!isGuest && (
                     <Dialog

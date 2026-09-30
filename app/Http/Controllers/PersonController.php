@@ -17,6 +17,7 @@ use App\Models\Person;
 use App\Models\TreeChangeRequest;
 use App\Models\User;
 use App\Notifications\FatherMatchSubmitted;
+use App\Policies\PersonPolicy;
 use App\Services\ChainNumberingService;
 use App\Services\FamilyEntryService;
 use App\Services\FamilyTreeActivityLogger;
@@ -44,6 +45,28 @@ use Inertia\Response;
 
 class PersonController extends Controller
 {
+    /** @var array<int, \Illuminate\Support\Collection<int, Person>> */
+    protected array $descendantChildren = [];
+
+    protected function loadDescendantChildren(array $ids): void
+    {
+        $queue = array_values(array_unique($ids));
+        while ($queue !== []) {
+            $queue = array_values(array_filter($queue, fn ($id) => ! array_key_exists($id, $this->descendantChildren)));
+            if ($queue === []) {
+                break;
+            }
+            $children = Person::query()->whereIn('father_id', $queue)
+                ->orderBy('birth_order')->orderBy('id')
+                ->get(['id', 'father_id', 'name', 'birth_order', 'is_public']);
+            $groups = $children->groupBy('father_id');
+            foreach ($queue as $id) {
+                $this->descendantChildren[$id] = $groups->get($id, collect());
+            }
+            $queue = $children->pluck('id')->all();
+        }
+    }
+
     /**
      * List people with search and marga filter.
      */
@@ -89,7 +112,14 @@ class PersonController extends Controller
                 });
             })
             ->when($request->filled('marga_id'), fn ($query) => $query->where('marga_id', $request->integer('marga_id')))
-            ->orderBy('name');
+            ->orderBy('name')
+            ->orderBy('id');
+
+        $policy = app(PersonPolicy::class);
+        $paginatedPeople = $people->paginate(12)->withQueryString();
+        if ($user !== null) {
+            $policy->prepareUpdates($user, $paginatedPeople->getCollection());
+        }
 
         $mapPerson = fn (Person $person) => [
             'id' => $person->id,
@@ -104,18 +134,11 @@ class PersonController extends Controller
             'chain' => $person->chain,
             'pending' => (bool) $person->pending_father,
             'created_at' => $person->created_at?->format('d M Y'),
-            'editable' => $user?->can('update', $person) ?? false,
+            'editable' => $user !== null && $policy->update($user, $person),
             'version_tree_id' => $person->familyTrees->first()?->id,
         ];
 
-        if ($isGuest) {
-            $paginatedPeople = $people
-                ->paginate(12)
-                ->withQueryString()
-                ->through($mapPerson);
-        } else {
-            $people = $people->get()->map($mapPerson);
-        }
+        $paginatedPeople->through($mapPerson);
 
         $margas = $isGuest
             ? collect()
@@ -129,17 +152,7 @@ class PersonController extends Controller
                 ]);
 
         return Inertia::render('people/index', [
-            'people' => $isGuest ? $paginatedPeople : [
-                'data' => $people->values()->all(),
-                'links' => [],
-                'current_page' => 1,
-                'last_page' => 1,
-                'total' => $people->count(),
-                'from' => $people->isNotEmpty() ? 1 : null,
-                'to' => $people->isNotEmpty() ? $people->count() : null,
-                'next_page_url' => null,
-                'prev_page_url' => null,
-            ],
+            'people' => $paginatedPeople,
             'filters' => [
                 'search' => $request->string('search')->toString(),
                 'marga_id' => $request->input('marga_id'),
@@ -1733,7 +1746,8 @@ class PersonController extends Controller
             return [];
         }
 
-        $byId = Person::query()->whereIn('id', $ids)->get()->keyBy('id');
+        $byId = Person::query()->whereIn('id', $ids)->get(['id'])->keyBy('id');
+        $this->loadDescendantChildren($byId->keys()->all());
         $map = [];
 
         foreach ($ids as $id) {
@@ -1763,16 +1777,19 @@ class PersonController extends Controller
      */
     protected function descendantsOf(Person $person): \Illuminate\Support\Collection
     {
+        $this->loadDescendantChildren([$person->id]);
         $result = collect();
         $queue = [$person->id];
+        $seen = [$person->id => true];
 
         while ($queue !== []) {
-            $children = Person::query()
-                ->whereIn('father_id', $queue)
-                ->orderBy('birth_order')
-                ->orderBy('id')
-                ->get();
-
+            $children = collect($queue)->flatMap(fn ($id) => $this->descendantChildren[$id] ?? collect())
+                ->reject(fn ($child) => isset($seen[$child->id]))
+                ->unique('id')
+                ->sortBy([['birth_order', 'asc'], ['id', 'asc']])->values();
+            foreach ($children as $child) {
+                $seen[$child->id] = true;
+            }
             $result = $result->merge($children);
             $queue = $children->pluck('id')->all();
         }
@@ -1885,7 +1902,7 @@ class PersonController extends Controller
                 fn ($nodes) => $nodes->where('person_id', $focus->id),
             ))
             ->with([
-                'user:id,name',
+                'user:id,name,role',
                 'rootPerson:id,name,marga_id',
                 'shares.recipient:id,name,email',
                 'contributionRequests:id,family_tree_id,status',
@@ -1893,11 +1910,14 @@ class PersonController extends Controller
                     ->where('status', FamilyTreeAppendRequest::STATUS_PENDING)
                     ->with('requester:id,name'),
             ])
+            ->withExists(['nodes as has_approved_marga_node' => fn ($nodes) => $nodes
+                ->whereHas('person', fn ($person) => $person->whereIn('marga_id', $user->approvedMargaAccessIds()))])
             ->withExists(['deletionRequests as deletion_pending' => fn ($query) => $query
                 ->where('status', FamilyTreeDeletionRequest::STATUS_PENDING)])
             ->latest('updated_at')
             ->get(['id', 'user_id', 'root_person_id', 'name', 'source_name', 'is_primary', 'updated_at'])
             ->filter(fn (FamilyTree $tree) => $tree->rootPerson !== null)
+            ->each(fn (FamilyTree $tree) => $tree->setAttribute('approval_access_user_id', $user->id))
             ->values();
         $summaries = $this->familyTreeSummaries($trees);
 

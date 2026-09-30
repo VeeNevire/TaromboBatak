@@ -187,14 +187,12 @@ class ChatGroupController extends Controller
             ->orderByDesc('last_message_at')
             ->orderByDesc('id')
             ->limit(TelegramGroupSync::MAX_DIALOGS)
+            ->with(['messages' => fn ($messages) => $messages
+                ->whereBelongsTo($account, 'account')
+                ->orderByDesc('sent_at')->orderByDesc('id')
+                ->limit(TelegramGroupSync::HISTORY_LIMIT)
+                ->select(['id', 'telegram_dialog_id', 'body', 'sender_name', 'is_outgoing', 'sent_at'])])
             ->get(['id', 'type', 'title', 'username', 'telegram_peer_id', 'last_message_at']);
-
-        $messages = TelegramMessage::query()
-            ->whereBelongsTo($account, 'account')
-            ->whereIn('telegram_dialog_id', $dialogs->pluck('id'))
-            ->latest('sent_at')
-            ->get(['id', 'telegram_dialog_id', 'body', 'sender_name', 'is_outgoing', 'sent_at'])
-            ->groupBy('telegram_dialog_id');
 
         return [
             'items' => $dialogs->map(fn (TelegramDialog $dialog): array => [
@@ -203,8 +201,7 @@ class ChatGroupController extends Controller
                 'title' => $dialog->title,
                 'username' => $dialog->username,
                 'last_message_at' => $dialog->last_message_at?->toISOString(),
-                'messages' => $messages->get($dialog->id, collect())
-                    ->take(TelegramGroupSync::HISTORY_LIMIT)
+                'messages' => $dialog->messages
                     ->values()
                     ->map(fn (TelegramMessage $message): array => [
                         'id' => $message->id,

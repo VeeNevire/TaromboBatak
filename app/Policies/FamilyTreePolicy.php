@@ -27,10 +27,7 @@ class FamilyTreePolicy
                 && $familyTree->rootPerson()
                     ->whereIn('marga_id', $user->accessibleMargaIds())
                     ->exists())
-            || $familyTree->shares()
-                ->whereBelongsTo($user, 'recipient')
-                ->where('status', FamilyTreeShare::STATUS_ACCEPTED)
-                ->exists();
+            || $this->hasAcceptedShare($user, $familyTree);
     }
 
     /**
@@ -87,10 +84,7 @@ class FamilyTreePolicy
     {
         return $this->manage($user, $familyTree)
             || $this->hasApprovedMargaAccess($user, $familyTree)
-            || $familyTree->shares()
-                ->whereBelongsTo($user, 'recipient')
-                ->where('status', FamilyTreeShare::STATUS_ACCEPTED)
-                ->exists();
+            || $this->hasAcceptedShare($user, $familyTree);
     }
 
     protected function hasApprovedMargaAccess(User $user, FamilyTree $familyTree): bool
@@ -99,11 +93,28 @@ class FamilyTreePolicy
             return false;
         }
 
+        if ((int) $familyTree->approval_access_user_id === (int) $user->id
+            && $familyTree->relationLoaded('user') && array_key_exists('has_approved_marga_node', $familyTree->getAttributes())) {
+            return in_array($familyTree->user?->role, ['admin', 'subadmin'], true)
+                && (bool) $familyTree->has_approved_marga_node;
+        }
+
         return $user->approvedMargaAccessIds()->isNotEmpty()
             && $familyTree->user()->whereIn('role', ['admin', 'subadmin'])->exists()
             && $familyTree->nodes()
                 ->whereHas('person', fn ($person) => $person
                     ->whereIn('marga_id', $user->approvedMargaAccessIds()))
                 ->exists();
+    }
+
+    protected function hasAcceptedShare(User $user, FamilyTree $familyTree): bool
+    {
+        if ($familyTree->relationLoaded('shares')) {
+            return $familyTree->shares->contains(fn ($share) => (int) $share->recipient_id === (int) $user->id
+                && $share->status === FamilyTreeShare::STATUS_ACCEPTED);
+        }
+
+        return $familyTree->shares()->whereBelongsTo($user, 'recipient')
+            ->where('status', FamilyTreeShare::STATUS_ACCEPTED)->exists();
     }
 }
