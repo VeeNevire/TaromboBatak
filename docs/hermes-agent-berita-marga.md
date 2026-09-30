@@ -17,9 +17,7 @@ Laravel bertindak sebagai orchestrator: aplikasi memanggil Hermes API, Hermes me
 
 Biarkan tunnel ini tetap berjalan di terminal:
 
-```bash
-ssh -N -L 18642:127.0.0.1:8642 root@76.13.22.54
-```
+
 
 Isi `.env` proyek lokal:
 
