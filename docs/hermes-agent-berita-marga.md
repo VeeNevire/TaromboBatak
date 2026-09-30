@@ -2,6 +2,17 @@
 
 Laravel bertindak sebagai orchestrator: aplikasi memanggil Hermes API, Hermes mencari berita, lalu Laravel menyimpan berita baru sebagai **Menunggu** untuk direview admin. Proses pencarian tidak menggunakan endpoint berita Laravel.
 
+## Daftar isi
+
+- [Koneksi lokal melalui SSH tunnel](#koneksi-lokal-melalui-ssh-tunnel)
+- [Pengaturan admin](#pengaturan-admin)
+- [Cara kerja API Hermes](#cara-kerja-api-hermes)
+- [Menjalankan scheduler](#menjalankan-scheduler)
+
+> Untuk referensi environment variable secara lengkap, lihat
+> [configs.md](configs.md). Untuk setup server, lihat
+> [deployment.md](deployment.md).
+
 ## Koneksi lokal melalui SSH tunnel
 
 Biarkan tunnel ini tetap berjalan di terminal:
@@ -54,3 +65,21 @@ Laravel mengecek pengaturan admin setiap menit dan hanya memanggil Hermes ketika
 ```
 
 Tidak ada command berita khusus yang perlu dijalankan manual. Proses berita dilakukan Hermes melalui API.
+
+Verifikasi scheduler terpasang dengan:
+
+```bash
+php artisan schedule:list
+```
+
+## Kode terkait
+
+| File | Tanggung jawab |
+| --- | --- |
+| `app/Services/MargaNewsAutomationRunner.php` | Entry point scheduler, dilindungi lease (`run_lease_until`). |
+| `app/Services/HermesRunClient.php` | Client HTTP (`POST/GET {HERMES_BASE_URL}/runs` + polling). |
+| `app/Services/MargaNewsIngestor.php` | Validasi domain, minimal 200 kata, dedupe, set status. |
+| `app/Http/Controllers/Api/MargaNewsAgentController.php` | Endpoint `tugas` dan `masuk` untuk agen Hermes. |
+| `app/Http/Middleware/AuthenticateMargaNewsAgent.php` | Auth Bearer `MARGA_NEWS_AGENT_TOKEN`. |
+| `routes/console.php` | Jadwal `marga-news-hermes-automation` setiap menit. |
+| `tests/Feature/MargaNewsTest.php` | Test alur berita marga. |
