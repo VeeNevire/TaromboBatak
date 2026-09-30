@@ -1136,6 +1136,8 @@ class PersonController extends Controller
                     ->only(['bio', 'related_stories'])
                     ->all());
 
+                app(FamilyEntryService::class)->updatePublication($person, $validated);
+
                 app(FamilyTreeStructureService::class)->updateFromFamilyForm($familyTree, $person, $validated, $user->id);
 
                 return true;

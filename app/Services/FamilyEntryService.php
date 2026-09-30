@@ -13,6 +13,22 @@ use Illuminate\Validation\ValidationException;
 
 class FamilyEntryService
 {
+    /** @param array<string, mixed> $data */
+    public function updatePublication(Person $person, array $data): void
+    {
+        if (! array_key_exists('is_public', $data)) {
+            return;
+        }
+
+        $this->validatePublication($data, $person->father);
+        $this->publishAncestors($data, $person->father);
+        $person->update(['is_public' => filter_var($data['is_public'], FILTER_VALIDATE_BOOL)]);
+
+        if (! $person->is_public && filter_var($data['cascade_public_descendants'] ?? false, FILTER_VALIDATE_BOOL)) {
+            $this->makeDescendantsPrivate($person);
+        }
+    }
+
     public function syncTreeNodes(FamilyTree $tree): void
     {
         $this->syncLegacyNodes($tree);
@@ -234,6 +250,7 @@ class FamilyEntryService
 
             $this->validateParentLinks($data, $father, $mothers);
             $this->validatePublication($data, $father);
+            $this->publishAncestors($data, $father);
 
             $children = $this->upsertChildren(
                 $data['children'] ?? [],
@@ -780,12 +797,6 @@ class FamilyEntryService
 
         $isPublic = filter_var($data['is_public'], FILTER_VALIDATE_BOOL);
 
-        if ($isPublic && $father !== null && ! $father->is_public) {
-            throw ValidationException::withMessages([
-                'is_public' => 'Ayah harus dipublikasikan lebih dahulu agar jalur silsilah publik tetap lengkap.',
-            ]);
-        }
-
         if (! $isPublic && isset($data['id']) && Person::query()
             ->where('father_id', (int) $data['id'])
             ->public()
@@ -793,6 +804,24 @@ class FamilyEntryService
             throw ValidationException::withMessages([
                 'is_public' => 'Person ini masih memiliki keturunan publik. Konfirmasikan untuk menjadikan seluruh cabang private.',
             ]);
+        }
+    }
+
+    /** @param array<string, mixed> $data */
+    protected function publishAncestors(array $data, ?Person $father): void
+    {
+        if (! filter_var($data['is_public'] ?? false, FILTER_VALIDATE_BOOL)) {
+            return;
+        }
+
+        $visited = [];
+
+        while ($father !== null && ! isset($visited[$father->id])) {
+            $visited[$father->id] = true;
+            if (! $father->is_public) {
+                $father->update(['is_public' => true]);
+            }
+            $father = $father->father;
         }
     }
 
