@@ -201,7 +201,7 @@ export function fitInArea(
     };
 }
 
-export type LayerKind = 'ranting' | 'background';
+export type LayerKind = 'ranting' | 'background' | 'text';
 
 export type ComposeItem = {
     source: HTMLCanvasElement;

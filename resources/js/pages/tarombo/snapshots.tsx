@@ -1,6 +1,7 @@
 import { Head, Link, router } from '@inertiajs/react';
 import {
     ArrowLeft,
+    Copy,
     Download,
     Images,
     LayoutGrid,
@@ -10,6 +11,7 @@ import {
     Wand2,
 } from 'lucide-react';
 import { useState } from 'react';
+import type { FormEvent } from 'react';
 import { CollageDialog } from '@/components/collage-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,14 +20,16 @@ import {
     Dialog,
     DialogContent,
     DialogDescription,
+    DialogFooter,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ZoomableImage } from '@/components/zoomable-image';
 import { dashboard } from '@/routes';
 import tarombo from '@/routes/tarombo';
-import compileDraft from '@/routes/tarombo/snapshots/compile/draft';
+import compileDrafts from '@/routes/tarombo/compile-drafts';
 
 type Snapshot = {
     id: number;
@@ -44,6 +48,8 @@ type Snapshot = {
     editable_result?: boolean;
     // A card of the "Hasil Simpan" tab: a saved Compile Gambar arrangement.
     saved_compile?: boolean;
+    draft_id?: number;
+    draft_name?: string | null;
     // False for arrangements saved before the composed preview existed.
     has_preview?: boolean;
 };
@@ -86,6 +92,14 @@ export default function TaromboSnapshots({
     const [sourceSnapshot, setSourceSnapshot] = useState<Snapshot | null>(null);
     const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
     const [collageOpen, setCollageOpen] = useState(false);
+    // Name entry for duplicating or renaming a saved compile.
+    const [nameDialog, setNameDialog] = useState<{
+        mode: 'duplicate' | 'rename';
+        snapshot: Snapshot;
+    } | null>(null);
+    const [nameInput, setNameInput] = useState('');
+    const [nameError, setNameError] = useState<string | null>(null);
+    const [savingName, setSavingName] = useState(false);
     const dateFormatter = new Intl.DateTimeFormat('id-ID', {
         dateStyle: 'long',
         timeStyle: 'short',
@@ -108,13 +122,62 @@ export default function TaromboSnapshots({
     };
 
     const removeSavedCompile = (snapshot: Snapshot) => {
-        if (!window.confirm('Hapus simpanan Compile Gambar ini?')) {
+        if (
+            !snapshot.draft_id ||
+            !window.confirm('Hapus simpanan Compile Gambar ini?')
+        ) {
             return;
         }
 
-        router.delete(compileDraft.destroy.url(snapshot.id), {
+        router.delete(compileDrafts.destroy.url(snapshot.draft_id), {
             preserveScroll: true,
         });
+    };
+
+    const openNameDialog = (
+        mode: 'duplicate' | 'rename',
+        snapshot: Snapshot,
+    ) => {
+        setNameDialog({ mode, snapshot });
+        setNameInput(
+            mode === 'duplicate'
+                ? `${snapshotLabel(snapshot)} (Salinan)`.slice(0, 120)
+                : snapshotLabel(snapshot),
+        );
+        setNameError(null);
+    };
+
+    const submitName = (event: FormEvent) => {
+        event.preventDefault();
+
+        const draftId = nameDialog?.snapshot.draft_id;
+
+        if (!nameDialog || !draftId || savingName) {
+            return;
+        }
+
+        const options = {
+            preserveScroll: true,
+            onStart: () => setSavingName(true),
+            onFinish: () => setSavingName(false),
+            onSuccess: () => setNameDialog(null),
+            onError: (errors: Record<string, string>) =>
+                setNameError(errors.name ?? 'Nama gagal disimpan.'),
+        };
+
+        if (nameDialog.mode === 'duplicate') {
+            router.post(
+                compileDrafts.duplicate.url(draftId),
+                { name: nameInput },
+                options,
+            );
+        } else {
+            router.patch(
+                compileDrafts.rename.url(draftId),
+                { name: nameInput },
+                options,
+            );
+        }
     };
 
     const applyFilter = (value: string) => {
@@ -262,7 +325,7 @@ export default function TaromboSnapshots({
                     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
                         {snapshots.data.map((snapshot) => (
                             <Card
-                                key={snapshot.id}
+                                key={snapshot.draft_id ?? snapshot.id}
                                 className="overflow-hidden border-tb-outline-variant bg-tb-surface-bright"
                             >
                                 <button
@@ -300,6 +363,22 @@ export default function TaromboSnapshots({
                                             <p className="truncate text-sm font-semibold text-tb-on-surface">
                                                 {snapshotLabel(snapshot)}
                                             </p>
+                                            {snapshot.saved_compile && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        openNameDialog(
+                                                            'rename',
+                                                            snapshot,
+                                                        )
+                                                    }
+                                                    aria-label="Ubah nama gambar"
+                                                    title="Ubah nama"
+                                                    className="-ml-1 rounded p-1 text-tb-on-surface-variant hover:bg-tb-surface-container hover:text-tb-on-surface"
+                                                >
+                                                    <Pencil className="size-3.5" />
+                                                </button>
+                                            )}
                                             <Badge variant="outline">
                                                 {snapshot.view === 'tree'
                                                     ? 'Vertikal'
@@ -332,6 +411,23 @@ export default function TaromboSnapshots({
                                                     memperbarui pratinjau.
                                                 </p>
                                             )}
+                                        {snapshot.saved_compile && (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                className="mt-2"
+                                                onClick={() =>
+                                                    openNameDialog(
+                                                        'duplicate',
+                                                        snapshot,
+                                                    )
+                                                }
+                                            >
+                                                <Copy className="size-4" />
+                                                Duplikat
+                                            </Button>
+                                        )}
                                     </div>
                                     <div className="flex shrink-0 items-center gap-1">
                                         {snapshot.editable_result ? (
@@ -360,6 +456,13 @@ export default function TaromboSnapshots({
                                                     <Link
                                                         href={tarombo.snapshots.compile(
                                                             snapshot.id,
+                                                            snapshot.draft_id
+                                                                ? {
+                                                                      query: {
+                                                                          draft: snapshot.draft_id,
+                                                                      },
+                                                                  }
+                                                                : undefined,
                                                         )}
                                                         title="Buka Compile Gambar yang tersimpan"
                                                     >
@@ -541,6 +644,68 @@ export default function TaromboSnapshots({
                             </p>
                         )}
                     </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={nameDialog !== null}
+                onOpenChange={(open) => !open && setNameDialog(null)}
+            >
+                <DialogContent className="sm:max-w-md">
+                    <form onSubmit={submitName} className="grid gap-4">
+                        <DialogHeader>
+                            <DialogTitle>
+                                {nameDialog?.mode === 'duplicate'
+                                    ? 'Duplikat Gambar'
+                                    : 'Ubah Nama Gambar'}
+                            </DialogTitle>
+                            <DialogDescription>
+                                {nameDialog?.mode === 'duplicate'
+                                    ? 'Salinan dibuat dengan susunan yang sama dan bisa diedit terpisah. Beri nama untuk gambar duplikat ini.'
+                                    : 'Nama ini ditampilkan pada daftar Hasil Simpan.'}
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-2">
+                            <label
+                                htmlFor="saved-compile-name"
+                                className="text-sm font-medium text-tb-on-surface"
+                            >
+                                Nama gambar
+                            </label>
+                            <Input
+                                id="saved-compile-name"
+                                value={nameInput}
+                                maxLength={120}
+                                autoFocus
+                                onChange={(event) =>
+                                    setNameInput(event.target.value)
+                                }
+                            />
+                            {nameError && (
+                                <p className="text-sm text-red-600">
+                                    {nameError}
+                                </p>
+                            )}
+                        </div>
+                        <DialogFooter>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setNameDialog(null)}
+                            >
+                                Batal
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={savingName || !nameInput.trim()}
+                                className="bg-tb-primary hover:bg-tb-primary-light"
+                            >
+                                {nameDialog?.mode === 'duplicate'
+                                    ? 'Duplikat'
+                                    : 'Simpan'}
+                            </Button>
+                        </DialogFooter>
+                    </form>
                 </DialogContent>
             </Dialog>
 
