@@ -24,6 +24,18 @@ class TaromboCompileDraftController extends Controller
     {
         Gate::authorize('view', $taromboSnapshot);
 
+        return $this->save($request, $taromboSnapshot);
+    }
+
+    /** Saves a compile started on a blank canvas (no tree image). */
+    public function updateBlank(SaveTaromboCompileDraftRequest $request): RedirectResponse
+    {
+        return $this->save($request, null);
+    }
+
+    private function save(SaveTaromboCompileDraftRequest $request, ?TaromboSnapshot $taromboSnapshot): RedirectResponse
+    {
+        $snapshotId = $taromboSnapshot?->id;
         $userId = $request->user()->id;
         $disk = Storage::disk('local');
         /** @var array<string, mixed> $state */
@@ -34,13 +46,13 @@ class TaromboCompileDraftController extends Controller
         $draft = $request->filled('draft_id')
             ? TaromboCompileDraft::query()
                 ->where('user_id', $userId)
-                ->where('tarombo_snapshot_id', $taromboSnapshot->id)
+                ->where('tarombo_snapshot_id', $snapshotId)
                 ->findOrFail($request->integer('draft_id'))
-            : new TaromboCompileDraft(['user_id' => $userId, 'tarombo_snapshot_id' => $taromboSnapshot->id]);
+            : new TaromboCompileDraft(['user_id' => $userId, 'tarombo_snapshot_id' => $snapshotId]);
 
         // New layer images get a uuid; the state refers to them from now on.
         $state['layers'] = collect($state['layers'] ?? [])
-            ->map(function (array $layer) use ($request, $disk, $userId, $taromboSnapshot, &$uploads) {
+            ->map(function (array $layer) use ($request, $disk, $userId, $snapshotId, &$uploads) {
                 if (! str_starts_with($layer['source'], 'upload:')) {
                     return $layer;
                 }
@@ -52,7 +64,7 @@ class TaromboCompileDraftController extends Controller
                     $file = $request->file("images.{$index}");
                     $uuid = (string) Str::uuid();
                     $disk->putFileAs(
-                        TaromboCompileDraft::directory($userId, $taromboSnapshot->id),
+                        TaromboCompileDraft::directory($userId, $snapshotId),
                         $file,
                         "{$uuid}.png",
                     );
@@ -67,7 +79,7 @@ class TaromboCompileDraftController extends Controller
         // A "stored:" image must belong to this account's saved compiles.
         foreach (TaromboCompileDraft::storedImages($state) as $uuid) {
             abort_unless(
-                $disk->exists(TaromboCompileDraft::imagePath($userId, $taromboSnapshot->id, $uuid)),
+                $disk->exists(TaromboCompileDraft::imagePath($userId, $snapshotId, $uuid)),
                 422,
                 'Gambar lapisan tidak ditemukan. Muat ulang halaman lalu simpan lagi.',
             );
@@ -75,7 +87,7 @@ class TaromboCompileDraftController extends Controller
 
         $draft->fill(['tarombo_frame_id' => $state['frame_id'] ?? null, 'state' => $state])->save();
 
-        $this->deleteUnusedImages($userId, $taromboSnapshot->id);
+        $this->deleteUnusedImages($userId, $snapshotId);
 
         // Without a frame there is nothing Produce-like to show.
         $preview = $request->file('preview');
@@ -136,9 +148,21 @@ class TaromboCompileDraftController extends Controller
     public function image(Request $request, TaromboSnapshot $taromboSnapshot, string $uuid): StreamedResponse
     {
         Gate::authorize('view', $taromboSnapshot);
+
+        return $this->layerImage($request, $taromboSnapshot->id, $uuid);
+    }
+
+    /** A layer image of the signed-in account's blank-canvas saved compiles. */
+    public function imageBlank(Request $request, string $uuid): StreamedResponse
+    {
+        return $this->layerImage($request, null, $uuid);
+    }
+
+    private function layerImage(Request $request, ?int $snapshotId, string $uuid): StreamedResponse
+    {
         abort_unless(Str::isUuid($uuid), 404);
 
-        $path = TaromboCompileDraft::imagePath($request->user()->id, $taromboSnapshot->id, $uuid);
+        $path = TaromboCompileDraft::imagePath($request->user()->id, $snapshotId, $uuid);
 
         abort_unless(Storage::disk('local')->exists($path), 404);
 
@@ -169,7 +193,7 @@ class TaromboCompileDraftController extends Controller
     }
 
     /** Removes layer images no saved compile of this account and snapshot uses. */
-    private function deleteUnusedImages(int $userId, int $snapshotId): void
+    private function deleteUnusedImages(int $userId, ?int $snapshotId): void
     {
         $disk = Storage::disk('local');
         $keep = TaromboCompileDraft::usedImages($userId, $snapshotId);

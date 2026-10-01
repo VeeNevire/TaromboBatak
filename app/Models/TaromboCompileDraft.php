@@ -16,14 +16,14 @@ use Illuminate\Support\Facades\Storage;
  *
  * @property int $id
  * @property int $user_id
- * @property int $tarombo_snapshot_id
+ * @property int|null $tarombo_snapshot_id
  * @property string|null $name
  * @property int|null $tarombo_frame_id
  * @property array<string, mixed> $state
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read User $user
- * @property-read TaromboSnapshot $snapshot
+ * @property-read TaromboSnapshot|null $snapshot
  */
 #[Fillable(['user_id', 'tarombo_snapshot_id', 'name', 'tarombo_frame_id', 'state'])]
 class TaromboCompileDraft extends Model
@@ -50,12 +50,13 @@ class TaromboCompileDraft extends Model
     }
 
     /** Private storage folder of this draft's layer images. */
-    public static function directory(int $userId, int $snapshotId): string
+    public static function directory(int $userId, ?int $snapshotId): string
     {
-        return "tarombo-compile/{$userId}/{$snapshotId}";
+        // A compile started on a blank canvas has no snapshot.
+        return "tarombo-compile/{$userId}/".($snapshotId ?? 'blank');
     }
 
-    public static function imagePath(int $userId, int $snapshotId, string $uuid): string
+    public static function imagePath(int $userId, ?int $snapshotId, string $uuid): string
     {
         return self::directory($userId, $snapshotId)."/{$uuid}.png";
     }
@@ -95,7 +96,7 @@ class TaromboCompileDraft extends Model
      *
      * @return array<int, string>
      */
-    public static function usedImages(int $userId, int $snapshotId): array
+    public static function usedImages(int $userId, ?int $snapshotId): array
     {
         return self::query()
             ->where('user_id', $userId)

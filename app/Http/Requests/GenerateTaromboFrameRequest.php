@@ -16,7 +16,8 @@ class GenerateTaromboFrameRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'snapshot_id' => ['required', 'integer', 'exists:tarombo_snapshots,id'],
+            // Empty when the compile was made on a blank canvas.
+            'snapshot_id' => ['nullable', 'integer', 'exists:tarombo_snapshots,id'],
             // An earlier result of this snapshot to replace instead of adding a new one.
             'target_snapshot_id' => ['nullable', 'integer', 'exists:tarombo_snapshots,id'],
             'frame_id' => ['required', 'integer', 'exists:tarombo_frames,id'],

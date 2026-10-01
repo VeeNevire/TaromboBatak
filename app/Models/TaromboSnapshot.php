@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -59,6 +60,16 @@ class TaromboSnapshot extends Model
     public function source(): BelongsTo
     {
         return $this->belongsTo(TaromboSnapshot::class, 'source_snapshot_id');
+    }
+
+    /**
+     * Saved Compile Gambar arrangements built from this original image.
+     *
+     * @return HasMany<TaromboCompileDraft, $this>
+     */
+    public function compileDrafts(): HasMany
+    {
+        return $this->hasMany(TaromboCompileDraft::class, 'tarombo_snapshot_id');
     }
 
     protected function casts(): array

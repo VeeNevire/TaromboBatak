@@ -444,3 +444,74 @@ test('deleting the snapshot removes its saved compile and images', function () {
     expect(TaromboCompileDraft::query()->exists())->toBeFalse()
         ->and(Storage::disk('local')->files(TaromboCompileDraft::directory($user->id, $snapshot->id)))->toBe([]);
 });
+
+test('a compile can start on a blank canvas, be saved and be reopened', function () {
+    $user = User::factory()->create();
+    $frame = TaromboFrame::factory()->create();
+
+    $this->actingAs($user)
+        ->get(route('tarombo.compile.blank'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('tarombo/snapshot-compile')
+            ->where('snapshot', null)
+            ->where('draft', null));
+
+    $this->actingAs($user)
+        ->put(route('tarombo.compile.blank.draft.update'), [
+            'state' => compileState(
+                [compileLayer('layer-1', 'upload:0'), compileLayer('layer-2', 'upload:1', 'background')],
+                ['frame_id' => $frame->id, 'order' => ['layer-2', 'layer-1']],
+            ),
+            'images' => [UploadedFile::fake()->image('a.png'), UploadedFile::fake()->image('b.png')],
+        ])
+        ->assertRedirect();
+
+    $draft = TaromboCompileDraft::query()->sole();
+    $uuid = substr($draft->state['layers'][0]['source'], 7);
+
+    expect($draft->tarombo_snapshot_id)->toBeNull();
+    Storage::disk('local')->assertExists(TaromboCompileDraft::imagePath($user->id, null, $uuid));
+
+    $this->actingAs($user)
+        ->get(route('tarombo.compile.blank', ['draft' => $draft->id]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('draft.id', $draft->id)
+            ->where("draft.image_urls.{$uuid}", route('tarombo.compile.blank.draft.image', $uuid)));
+
+    $this->actingAs($user)->get(route('tarombo.compile.blank.draft.image', $uuid))->assertOk();
+});
+
+test('a blank canvas compile is listed under Hasil Simpan', function () {
+    $user = User::factory()->create();
+    $draft = TaromboCompileDraft::query()->create([
+        'user_id' => $user->id,
+        'tarombo_snapshot_id' => null,
+        'state' => json_decode(compileState(), true),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('tarombo.snapshots.index', ['filter' => 'saved']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('snapshots.data', 1)
+            ->where('snapshots.data.0.blank_canvas', true)
+            ->where('snapshots.data.0.draft_id', $draft->id));
+});
+
+test('producing without a tree image creates a compiled result without a source', function () {
+    $user = User::factory()->create();
+    $frame = TaromboFrame::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('tarombo.snapshots.generate'), [
+            'frame_id' => $frame->id,
+            'image' => UploadedFile::fake()->image('hasil.jpg'),
+        ])
+        ->assertRedirect(route('tarombo.snapshots.index'));
+
+    $result = TaromboSnapshot::query()->sole();
+
+    expect($result->tarombo_frame_id)->toBe($frame->id)
+        ->and($result->source_snapshot_id)->toBeNull()
+        ->and($result->user_id)->toBe($user->id);
+});

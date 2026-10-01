@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\Person;
+use App\Models\TaromboCompileDraft;
+use App\Models\TaromboFrame;
 use App\Models\TaromboSnapshot;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
@@ -67,6 +69,50 @@ test('the gallery only lists snapshots owned by the signed in account', function
             ->has('snapshots.data', 1)
             ->where('snapshots.data.0.id', $ownSnapshot->id)
             ->where('snapshots.data.0.image_url', route('tarombo.snapshots.image', $ownSnapshot)));
+});
+
+test('the free original filter hides originals with a saved compile and compile results', function () {
+    $user = User::factory()->create();
+    $free = TaromboSnapshot::factory()->for($user)->create(['tarombo_frame_id' => null]);
+    $used = TaromboSnapshot::factory()->for($user)->create(['tarombo_frame_id' => null]);
+    TaromboCompileDraft::query()->create([
+        'user_id' => $user->id,
+        'tarombo_snapshot_id' => $used->id,
+        'state' => [],
+    ]);
+    $frame = TaromboFrame::factory()->create();
+    TaromboSnapshot::factory()->for($user)->create([
+        'tarombo_frame_id' => $frame->id,
+        'source_snapshot_id' => $free->id,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('tarombo.snapshots.index', ['filter' => 'free']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('filter', 'free')
+            ->has('snapshots.data', 1)
+            ->where('snapshots.data.0.id', $free->id));
+});
+
+test('the compile page offers only the own free originals for ranting layers', function () {
+    $user = User::factory()->create();
+    $current = TaromboSnapshot::factory()->for($user)->create(['tarombo_frame_id' => null]);
+    $free = TaromboSnapshot::factory()->for($user)->create(['tarombo_frame_id' => null]);
+    $used = TaromboSnapshot::factory()->for($user)->create(['tarombo_frame_id' => null]);
+    TaromboCompileDraft::query()->create([
+        'user_id' => $user->id,
+        'tarombo_snapshot_id' => $used->id,
+        'state' => [],
+    ]);
+    TaromboSnapshot::factory()->create(['tarombo_frame_id' => null]);
+
+    $this->actingAs($user)
+        ->get(route('tarombo.snapshots.compile', $current))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('freeOriginals', 1)
+            ->where('freeOriginals.0.id', $free->id));
 });
 
 test('only the owner can view a private snapshot image inline', function () {

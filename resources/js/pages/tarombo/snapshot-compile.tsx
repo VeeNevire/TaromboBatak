@@ -45,7 +45,6 @@ import {
     composeLayers,
     defaultLayerPlacement,
     fitInArea,
-    imageFileToCanvas,
     snapshotCanvas,
     treeUpscale,
 } from '@/lib/tarombo-compose';
@@ -62,6 +61,7 @@ import {
 import type { TextStyle } from '@/lib/tarombo-text';
 import { dashboard } from '@/routes';
 import tarombo from '@/routes/tarombo';
+import blankDraft from '@/routes/tarombo/compile/blank/draft';
 import compileDraft from '@/routes/tarombo/snapshots/compile/draft';
 
 type Snapshot = {
@@ -84,10 +84,18 @@ type Frame = {
     area_height: number;
 };
 
+type FreeOriginal = {
+    id: number;
+    title: string | null;
+    center_person_name: string | null;
+    image_url: string;
+};
+
 type Assets = {
     key: string;
     frameImage: HTMLImageElement;
-    tree: HTMLCanvasElement;
+    // Null on a blank canvas, which has no tree image.
+    tree: HTMLCanvasElement | null;
 };
 
 type Layer = {
@@ -160,7 +168,7 @@ const fullBox = (canvas: HTMLCanvasElement): Box => ({
 function composeItems(
     order: string[],
     layers: Layer[],
-    tree: HTMLCanvasElement,
+    tree: HTMLCanvasElement | null,
     treeCrop: Box | null,
     treePlacement: Box | null,
     frame: Frame,
@@ -169,6 +177,10 @@ function composeItems(
 
     for (const id of order) {
         if (id === TREE_ID) {
+            if (!tree) {
+                continue;
+            }
+
             const source = treeCrop ?? fullBox(tree);
 
             items.push({
@@ -268,12 +280,15 @@ const ARROW_DIRECTIONS = {
 export default function TaromboSnapshotCompile({
     snapshot,
     frames,
+    freeOriginals,
     accountName,
     draft,
     targetSnapshotId,
 }: {
-    snapshot: Snapshot;
+    // Null when the compile starts on a blank canvas.
+    snapshot: Snapshot | null;
     frames: Frame[];
+    freeOriginals: FreeOriginal[];
     accountName: string;
     draft: CompileDraft | null;
     // A produced result being edited; Produce replaces it.
@@ -307,8 +322,12 @@ export default function TaromboSnapshotCompile({
     const [draftId, setDraftId] = useState(draft?.id ?? null);
     const [savedSignature, setSavedSignature] = useState<string | null>(null);
     const [layers, setLayers] = useState<Layer[]>([]);
-    const [order, setOrder] = useState<string[]>([TREE_ID]);
-    const [selectedId, setSelectedId] = useState<string>(TREE_ID);
+    const [order, setOrder] = useState<string[]>(
+        snapshot ? [TREE_ID] : [],
+    );
+    const [selectedId, setSelectedId] = useState<string>(
+        snapshot ? TREE_ID : '',
+    );
     const [cropDraft, setCropDraft] = useState<Box | null>(null);
     // Where the crop editor starts; a new value restarts it.
     const [cropStart, setCropStart] = useState<{
@@ -321,8 +340,8 @@ export default function TaromboSnapshotCompile({
         url: string;
     } | null>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const rantingInputRef = useRef<HTMLInputElement>(null);
-    const backgroundInputRef = useRef<HTMLInputElement>(null);
+    // Which image library the Ranting / Background picker is showing.
+    const [library, setLibrary] = useState<LayerKind | null>(null);
     const treeCacheRef = useRef(new Map<boolean, HTMLCanvasElement>());
     const layerCounter = useRef(0);
     const nameCounter = useRef({ ranting: 0, background: 0, text: 0 });
@@ -334,15 +353,15 @@ export default function TaromboSnapshotCompile({
         height: number;
     } | null>(null);
     const [viewZoom, setViewZoom] = useState<number | null>(null);
-    const label =
-        snapshot.title ?? snapshot.center_person_name ?? 'Pohon Tarombo';
+    const label = snapshot
+        ? (snapshot.title ?? snapshot.center_person_name ?? 'Pohon Tarombo')
+        : 'Kanvas kosong';
     const loadKey = selectedFrame
         ? `${selectedFrame.id}-${removeBackground}`
         : null;
     const ready = assets !== null && assets.key === loadKey;
-    const treeSource: Box | null = ready
-        ? (crop ?? fullBox(assets.tree))
-        : null;
+    const treeSource: Box | null =
+        ready && assets.tree ? (crop ?? fullBox(assets.tree)) : null;
     const fittedSpot =
         selectedFrame && treeSource
             ? fitInArea(selectedFrame, treeSource.width, treeSource.height)
@@ -358,7 +377,7 @@ export default function TaromboSnapshotCompile({
               )
             : 1;
     const treeThumb = useMemo(
-        () => (assets ? canvasThumbnail(assets.tree) : ''),
+        () => (assets?.tree ? canvasThumbnail(assets.tree) : ''),
         [assets],
     );
 
@@ -367,7 +386,7 @@ export default function TaromboSnapshotCompile({
 
     for (const id of order) {
         if (id === TREE_ID) {
-            if (ready && treeSpot) {
+            if (ready && assets.tree && treeSpot) {
                 stack.push({
                     id,
                     name: 'Pohon',
@@ -416,17 +435,19 @@ export default function TaromboSnapshotCompile({
 
         Promise.all([
             loadImageUrl(selectedFrame.image_url),
-            loadImageUrl(snapshot.image_url),
+            snapshot ? loadImageUrl(snapshot.image_url) : null,
         ])
             .then(([frameImage, snapshotImage]) => {
                 if (cancelled) {
                     return;
                 }
 
-                let tree = treeCacheRef.current.get(removeBackground);
+                let tree: HTMLCanvasElement | null = null;
 
-                if (!tree) {
-                    tree = snapshotCanvas(snapshotImage, removeBackground);
+                if (snapshotImage) {
+                    tree =
+                        treeCacheRef.current.get(removeBackground) ??
+                        snapshotCanvas(snapshotImage, removeBackground);
                     treeCacheRef.current.set(removeBackground, tree);
                 }
 
@@ -441,7 +462,7 @@ export default function TaromboSnapshotCompile({
         return () => {
             cancelled = true;
         };
-    }, [selectedFrame, snapshot.image_url, removeBackground, loadKey]);
+    }, [selectedFrame, snapshot, removeBackground, loadKey]);
 
     useEffect(() => {
         if (!ready || !selectedFrame || !canvasRef.current) {
@@ -521,7 +542,7 @@ export default function TaromboSnapshotCompile({
                 (layer): layer is Layer => layer !== null,
             );
             const known = new Set([
-                TREE_ID,
+                ...(tree ? [TREE_ID] : []),
                 ...restored.map((layer) => layer.id),
             ]);
             const restoredOrder = draft.state.order.filter((id) =>
@@ -639,7 +660,10 @@ export default function TaromboSnapshotCompile({
             }
 
             const next = [...current];
-            next.splice(Math.max(0, next.indexOf(TREE_ID)), 0, id);
+            const treeIndex = next.indexOf(TREE_ID);
+
+            // Without a tree, images stack up in the order they are added.
+            next.splice(treeIndex < 0 ? next.length : treeIndex, 0, id);
 
             return next;
         });
@@ -720,17 +744,15 @@ export default function TaromboSnapshotCompile({
         );
     };
 
-    const addFiles = async (files: File[], kind: LayerKind) => {
-        for (const file of files) {
-            if (!file.type.startsWith('image/')) {
-                continue;
-            }
+    // Ranting images come from the free originals, backgrounds from the
+    // template frame images; both are loaded from the server, never uploaded.
+    const addFromUrl = async (url: string, kind: LayerKind) => {
+        setLibrary(null);
 
-            try {
-                addLayer(await imageFileToCanvas(file), kind);
-            } catch {
-                setPreviewError('Gambar gagal dimuat. Coba file lain.');
-            }
+        try {
+            addLayer(imageToCanvas(await loadImageUrl(url)), kind);
+        } catch {
+            setPreviewError('Gambar gagal dimuat. Coba gambar lain.');
         }
     };
 
@@ -782,7 +804,9 @@ export default function TaromboSnapshotCompile({
 
         setLayers((current) => current.filter((layer) => layer.id !== id));
         setOrder((current) => current.filter((entry) => entry !== id));
-        setSelectedId((current) => (current === id ? TREE_ID : current));
+        setSelectedId((current) =>
+            current === id ? (snapshot ? TREE_ID : '') : current,
+        );
     };
 
     const moveItem = (id: string, action: MoveAction) =>
@@ -826,7 +850,6 @@ export default function TaromboSnapshotCompile({
     };
 
     const actionsRef = useRef({
-        addFiles,
         duplicateItem,
         removeItem,
         nudgeItem,
@@ -835,7 +858,6 @@ export default function TaromboSnapshotCompile({
 
     useEffect(() => {
         actionsRef.current = {
-            addFiles,
             duplicateItem,
             removeItem,
             nudgeItem,
@@ -849,17 +871,6 @@ export default function TaromboSnapshotCompile({
 
         const onPaste = (event: ClipboardEvent) => {
             if (blocked(event.target)) {
-                return;
-            }
-
-            const files = Array.from(event.clipboardData?.files ?? []).filter(
-                (file) => file.type.startsWith('image/'),
-            );
-
-            if (files.length > 0) {
-                event.preventDefault();
-                void actionsRef.current.addFiles(files, 'ranting');
-
                 return;
             }
 
@@ -1211,7 +1222,9 @@ export default function TaromboSnapshotCompile({
         // sent as a POST with Laravel's method spoofing.
         return new Promise<boolean>((resolve) => {
             router.post(
-                compileDraft.update.url(snapshot.id),
+                snapshot
+                    ? compileDraft.update.url(snapshot.id)
+                    : blankDraft.update.url(),
                 {
                     _method: 'put',
                     ...(draftId !== null ? { draft_id: draftId } : {}),
@@ -1316,7 +1329,7 @@ export default function TaromboSnapshotCompile({
         router.post(
             tarombo.snapshots.generate().url,
             {
-                snapshot_id: snapshot.id,
+                snapshot_id: snapshot?.id ?? null,
                 target_snapshot_id: targetSnapshotId,
                 frame_id: selectedFrame.id,
                 image,
@@ -1365,16 +1378,20 @@ export default function TaromboSnapshotCompile({
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                        <label className="flex h-9 items-center gap-2 rounded-md border border-tb-outline-variant px-3 text-sm text-tb-on-surface">
-                            <input
-                                type="checkbox"
-                                checked={removeBackground}
-                                onChange={(event) =>
-                                    toggleRemoveBackground(event.target.checked)
-                                }
-                            />
-                            Hapus latar gambar
-                        </label>
+                        {snapshot && (
+                            <label className="flex h-9 items-center gap-2 rounded-md border border-tb-outline-variant px-3 text-sm text-tb-on-surface">
+                                <input
+                                    type="checkbox"
+                                    checked={removeBackground}
+                                    onChange={(event) =>
+                                        toggleRemoveBackground(
+                                            event.target.checked,
+                                        )
+                                    }
+                                />
+                                Hapus latar gambar
+                            </label>
+                        )}
                         <Button asChild variant="outline">
                             <Link href={tarombo.snapshots.index()}>
                                 <ArrowLeft className="size-4" /> Kembali
@@ -1481,9 +1498,8 @@ export default function TaromboSnapshotCompile({
                             Klik gambar di pratinjau atau di daftar lapisan
                             untuk memilihnya, lalu geser kotaknya atau tarik
                             sudutnya, atau geser dengan tombol panah (Shift +
-                            panah untuk lebih jauh). Tempel gambar dengan
-                            Ctrl+V, salin lapisan dengan Ctrl+C lalu Ctrl+V,
-                            hapus dengan Delete.
+                            panah untuk lebih jauh). Salin lapisan dengan
+                            Ctrl+C lalu Ctrl+V, hapus dengan Delete.
                         </p>
                     )}
                     <label className="flex shrink-0 items-center gap-3 text-sm text-tb-on-surface">
@@ -1563,7 +1579,11 @@ export default function TaromboSnapshotCompile({
                 </div>
 
                 <div className="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
-                    <div className="flex max-h-[calc(100dvh-15rem)] min-h-0 flex-1 items-center justify-center overflow-auto rounded-xl bg-tb-surface-container p-6 select-none">
+                    <div
+                        // Double-clicking anywhere in the preview area clears the selection.
+                        onDoubleClick={() => setSelectedId('')}
+                        className="flex max-h-[calc(100dvh-15rem)] min-h-0 flex-1 items-center justify-center overflow-auto rounded-xl bg-tb-surface-container p-6 select-none"
+                    >
                         {selectedFrame ? (
                             <div
                                 className={`relative ${ready ? '' : 'min-h-40 min-w-60'}`}
@@ -1641,7 +1661,7 @@ export default function TaromboSnapshotCompile({
                                 variant="outline"
                                 size="sm"
                                 disabled={!selectedFrame}
-                                onClick={() => rantingInputRef.current?.click()}
+                                onClick={() => setLibrary('ranting')}
                             >
                                 <ImagePlus className="size-4" /> Ranting
                             </Button>
@@ -1650,41 +1670,11 @@ export default function TaromboSnapshotCompile({
                                 variant="outline"
                                 size="sm"
                                 disabled={!selectedFrame}
-                                onClick={() =>
-                                    backgroundInputRef.current?.click()
-                                }
+                                onClick={() => setLibrary('background')}
                             >
                                 <ImagePlus className="size-4" /> Background
                             </Button>
                         </div>
-                        <input
-                            ref={rantingInputRef}
-                            type="file"
-                            accept="image/*"
-                            multiple
-                            className="hidden"
-                            onChange={(event) => {
-                                void addFiles(
-                                    Array.from(event.target.files ?? []),
-                                    'ranting',
-                                );
-                                event.target.value = '';
-                            }}
-                        />
-                        <input
-                            ref={backgroundInputRef}
-                            type="file"
-                            accept="image/*"
-                            multiple
-                            className="hidden"
-                            onChange={(event) => {
-                                void addFiles(
-                                    Array.from(event.target.files ?? []),
-                                    'background',
-                                );
-                                event.target.value = '';
-                            }}
-                        />
 
                         <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto">
                             {[...stack].reverse().map((item) => (
@@ -2058,6 +2048,71 @@ export default function TaromboSnapshotCompile({
                             <p className="col-span-full py-6 text-center text-sm text-tb-on-surface-variant">
                                 Belum ada frame aktif. Hubungi admin untuk
                                 menambah template.
+                            </p>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={library !== null}
+                onOpenChange={(open) => !open && setLibrary(null)}
+            >
+                <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
+                    <DialogHeader>
+                        <DialogTitle>
+                            {library === 'background'
+                                ? 'Pilih Background Template Frame'
+                                : 'Pilih Gambar Original Bebas'}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {library === 'background'
+                                ? 'Gambar template frame dipakai sebagai background di lapisan paling belakang.'
+                                : 'Gambar original yang belum punya compile tersimpan ditambahkan sebagai ranting.'}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+                        {(library === 'background'
+                            ? frames.map((frame) => ({
+                                  id: `frame-${frame.id}`,
+                                  label: frame.name,
+                                  image_url: frame.image_url,
+                              }))
+                            : freeOriginals.map((free) => ({
+                                  id: `original-${free.id}`,
+                                  label:
+                                      free.title ??
+                                      free.center_person_name ??
+                                      'Pohon Tarombo',
+                                  image_url: free.image_url,
+                              }))
+                        ).map((option) => (
+                            <button
+                                key={option.id}
+                                type="button"
+                                onClick={() =>
+                                    library &&
+                                    void addFromUrl(option.image_url, library)
+                                }
+                                className="overflow-hidden rounded-xl border border-tb-outline-variant text-left transition-colors hover:border-tb-primary focus-visible:ring-2 focus-visible:ring-tb-primary focus-visible:outline-none"
+                            >
+                                <img
+                                    src={option.image_url}
+                                    alt={option.label}
+                                    className="aspect-video w-full bg-tb-surface-container object-contain"
+                                />
+                                <p className="truncate px-3 py-2 text-sm font-medium text-tb-on-surface">
+                                    {option.label}
+                                </p>
+                            </button>
+                        ))}
+                        {(library === 'background'
+                            ? frames.length
+                            : freeOriginals.length) === 0 && (
+                            <p className="col-span-full py-6 text-center text-sm text-tb-on-surface-variant">
+                                {library === 'background'
+                                    ? 'Belum ada template frame aktif.'
+                                    : 'Belum ada Gambar Original Bebas. Simpan pohon dari Pohon Tarombo untuk menambahnya.'}
                             </p>
                         )}
                     </div>

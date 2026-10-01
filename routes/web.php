@@ -231,6 +231,14 @@ Route::middleware(['auth'])->group(function () {
     Route::post('dashboard/tarombo/snapshots', [TaromboSnapshotController::class, 'store'])
         ->middleware('throttle:10,1')
         ->name('tarombo.snapshots.store');
+    // Compile Gambar started on a blank canvas, without a tree image.
+    Route::get('dashboard/tarombo/compile', [TaromboSnapshotController::class, 'compileBlank'])
+        ->name('tarombo.compile.blank');
+    Route::put('dashboard/tarombo/compile/draft', [TaromboCompileDraftController::class, 'updateBlank'])
+        ->middleware('throttle:20,1')
+        ->name('tarombo.compile.blank.draft.update');
+    Route::get('dashboard/tarombo/compile/draft/images/{uuid}', [TaromboCompileDraftController::class, 'imageBlank'])
+        ->name('tarombo.compile.blank.draft.image');
     Route::get('dashboard/tarombo/snapshots/{taromboSnapshot}/compile', [TaromboSnapshotController::class, 'compile'])
         ->name('tarombo.snapshots.compile');
     Route::put('dashboard/tarombo/snapshots/{taromboSnapshot}/compile/draft', [TaromboCompileDraftController::class, 'update'])

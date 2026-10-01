@@ -52,6 +52,8 @@ type Snapshot = {
     draft_name?: string | null;
     // False for arrangements saved before the composed preview existed.
     has_preview?: boolean;
+    // A saved compile made on a blank canvas, without a tree image.
+    blank_canvas?: boolean;
 };
 
 type SnapshotPage = {
@@ -63,7 +65,7 @@ type SnapshotPage = {
     next_page_url: string | null;
 };
 
-type SnapshotFilter = 'all' | 'compiled' | 'original' | 'saved';
+type SnapshotFilter = 'all' | 'compiled' | 'original' | 'free' | 'saved';
 
 type FrameOption = {
     id: number;
@@ -248,13 +250,16 @@ export default function TaromboSnapshots({
                             </Button>
                         ) : (
                             <Button
-                                type="button"
-                                disabled
-                                title="Pilih gambar terlebih dahulu"
+                                asChild
                                 className="bg-tb-primary hover:bg-tb-primary-light"
                             >
-                                <Wand2 className="size-4" />
-                                Compile Gambar
+                                <Link
+                                    href={tarombo.compile.blank()}
+                                    title="Mulai dari kanvas kosong; tambah ranting dan background di editor"
+                                >
+                                    <Wand2 className="size-4" />
+                                    Compile Gambar
+                                </Link>
                             </Button>
                         )}
                         <Button asChild variant="outline">
@@ -277,6 +282,9 @@ export default function TaromboSnapshots({
                         </TabsTrigger>
                         <TabsTrigger value="original">
                             Gambar Original
+                        </TabsTrigger>
+                        <TabsTrigger value="free">
+                            Gambar Original Bebas
                         </TabsTrigger>
                         <TabsTrigger value="saved">Hasil Simpan</TabsTrigger>
                     </TabsList>
@@ -311,12 +319,16 @@ export default function TaromboSnapshots({
                                 <p className="font-semibold text-tb-on-surface">
                                     {filter === 'saved'
                                         ? 'Belum ada Compile Gambar yang disimpan'
-                                        : 'Belum ada Tarombo tersimpan'}
+                                        : filter === 'free'
+                                          ? 'Belum ada Gambar Original Bebas'
+                                          : 'Belum ada Tarombo tersimpan'}
                                 </p>
                                 <p className="mt-1 text-sm text-tb-on-surface-variant">
                                     {filter === 'saved'
                                         ? 'Buka Compile Gambar, pilih frame, lalu tekan tombol Simpan.'
-                                        : 'Buka Pohon Tarombo fullscreen lalu tekan tombol Simpan.'}
+                                        : filter === 'free'
+                                          ? 'Gambar original yang belum punya compile tersimpan akan muncul di sini.'
+                                          : 'Buka Pohon Tarombo fullscreen lalu tekan tombol Simpan.'}
                                 </p>
                             </div>
                         </CardContent>
@@ -454,16 +466,24 @@ export default function TaromboSnapshots({
                                                     size="sm"
                                                 >
                                                     <Link
-                                                        href={tarombo.snapshots.compile(
-                                                            snapshot.id,
-                                                            snapshot.draft_id
-                                                                ? {
+                                                        href={
+                                                            snapshot.blank_canvas
+                                                                ? tarombo.compile.blank({
                                                                       query: {
                                                                           draft: snapshot.draft_id,
                                                                       },
-                                                                  }
-                                                                : undefined,
-                                                        )}
+                                                                  })
+                                                                : tarombo.snapshots.compile(
+                                                                      snapshot.id,
+                                                                      snapshot.draft_id
+                                                                          ? {
+                                                                                query: {
+                                                                                    draft: snapshot.draft_id,
+                                                                                },
+                                                                            }
+                                                                          : undefined,
+                                                                  )
+                                                        }
                                                         title="Buka Compile Gambar yang tersimpan"
                                                     >
                                                         <Wand2 className="size-4" />
