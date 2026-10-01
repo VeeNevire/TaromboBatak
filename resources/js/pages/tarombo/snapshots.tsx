@@ -1,9 +1,10 @@
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     ArrowLeft,
     Copy,
     Download,
     Images,
+    QrCode,
     Search,
     List,
     LayoutGrid,
@@ -29,6 +30,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ZoomableImage } from '@/components/zoomable-image';
+import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import tarombo from '@/routes/tarombo';
 import compileDrafts from '@/routes/tarombo/compile-drafts';
@@ -50,6 +52,7 @@ type Snapshot = {
     editable_result?: boolean;
     // A card of the "Hasil Simpan" tab: a saved Compile Gambar arrangement.
     saved_compile?: boolean;
+    is_compiled?: boolean;
     draft_id?: number;
     draft_name?: string | null;
     // False for arrangements saved before the composed preview existed.
@@ -94,6 +97,7 @@ export default function TaromboSnapshots({
     accountName: string;
     canDownload: boolean;
 }) {
+    const { auth } = usePage().props;
     const [searchInput, setSearchInput] = useState(search);
     const [selectedSnapshot, setSelectedSnapshot] = useState<Snapshot | null>(
         null,
@@ -113,6 +117,12 @@ export default function TaromboSnapshots({
         dateStyle: 'long',
         timeStyle: 'short',
     });
+
+    const canAttachQr = (snapshot: Snapshot) =>
+        auth.user?.role === 'admin' &&
+        (snapshot.is_compiled ||
+            snapshot.editable_result ||
+            filter === 'compiled');
 
     const snapshotLabel = (snapshot: Snapshot) =>
         snapshot.title ?? snapshot.center_person_name ?? 'Pohon Tarombo';
@@ -362,7 +372,10 @@ export default function TaromboSnapshots({
                             onSubmit={submitSearch}
                             className="flex min-w-0 flex-1 gap-2 xl:w-72 xl:flex-none"
                         >
-                            <label htmlFor="snapshot-search" className="sr-only">
+                            <label
+                                htmlFor="snapshot-search"
+                                className="sr-only"
+                            >
                                 Cari kata dalam judul gambar
                             </label>
                             <Input
@@ -453,13 +466,16 @@ export default function TaromboSnapshots({
                         className={
                             display === 'images'
                                 ? 'grid gap-5 md:grid-cols-2 xl:grid-cols-3'
-                                : 'flex flex-col gap-3'
+                                : 'flex flex-col gap-2'
                         }
                     >
                         {snapshots.data.map((snapshot) => (
                             <Card
                                 key={snapshot.draft_id ?? snapshot.id}
-                                className="overflow-hidden border-tb-outline-variant bg-tb-surface-bright"
+                                className={cn(
+                                    'overflow-hidden border-tb-outline-variant bg-tb-surface-bright',
+                                    display === 'titles' && 'gap-0 py-0',
+                                )}
                             >
                                 {display === 'images' && (
                                     <button
@@ -492,8 +508,21 @@ export default function TaromboSnapshots({
                                             )}
                                     </button>
                                 )}
-                                <CardContent className="flex flex-wrap items-start justify-between gap-3 p-4">
-                                    <div className="min-w-0">
+                                <CardContent
+                                    className={cn(
+                                        'flex flex-wrap justify-between p-4',
+                                        display === 'titles'
+                                            ? 'items-center gap-x-4 gap-y-2 py-3'
+                                            : 'items-start gap-3',
+                                    )}
+                                >
+                                    <div
+                                        className={cn(
+                                            'min-w-0',
+                                            display === 'titles' &&
+                                                'flex-1 basis-64',
+                                        )}
+                                    >
                                         <div className="flex flex-wrap items-center gap-2">
                                             <button
                                                 type="button"
@@ -555,26 +584,59 @@ export default function TaromboSnapshots({
                                                     memperbarui pratinjau.
                                                 </p>
                                             )}
-                                        {snapshot.saved_compile && (
+                                        {snapshot.saved_compile &&
+                                            display === 'images' && (
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="mt-2"
+                                                    onClick={() =>
+                                                        openNameDialog(
+                                                            'duplicate',
+                                                            snapshot,
+                                                        )
+                                                    }
+                                                >
+                                                    <Copy className="size-4" />
+                                                    Duplikat
+                                                </Button>
+                                            )}
+                                    </div>
+                                    <div className="flex shrink-0 flex-wrap items-center gap-1">
+                                        {snapshot.saved_compile &&
+                                            display === 'titles' && (
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() =>
+                                                        openNameDialog(
+                                                            'duplicate',
+                                                            snapshot,
+                                                        )
+                                                    }
+                                                >
+                                                    <Copy className="size-4" />{' '}
+                                                    Duplikat
+                                                </Button>
+                                            )}
+                                        {canAttachQr(snapshot) ? (
                                             <Button
-                                                type="button"
+                                                asChild
                                                 variant="outline"
                                                 size="sm"
-                                                className="mt-2"
-                                                onClick={() =>
-                                                    openNameDialog(
-                                                        'duplicate',
-                                                        snapshot,
-                                                    )
-                                                }
                                             >
-                                                <Copy className="size-4" />
-                                                Duplikat
+                                                <Link
+                                                    href={tarombo.qr.create(
+                                                        snapshot.id,
+                                                    )}
+                                                >
+                                                    <QrCode className="size-4" />{' '}
+                                                    Tempel QR Code
+                                                </Link>
                                             </Button>
-                                        )}
-                                    </div>
-                                    <div className="flex shrink-0 items-center gap-1">
-                                        {snapshot.editable_result ? (
+                                        ) : snapshot.editable_result ? (
                                             <Button
                                                 asChild
                                                 variant="outline"
@@ -600,11 +662,13 @@ export default function TaromboSnapshots({
                                                     <Link
                                                         href={
                                                             snapshot.blank_canvas
-                                                                ? tarombo.compile.blank({
-                                                                      query: {
-                                                                          draft: snapshot.draft_id,
+                                                                ? tarombo.compile.blank(
+                                                                      {
+                                                                          query: {
+                                                                              draft: snapshot.draft_id,
+                                                                          },
                                                                       },
-                                                                  })
+                                                                  )
                                                                 : tarombo.snapshots.compile(
                                                                       snapshot.id,
                                                                       snapshot.draft_id

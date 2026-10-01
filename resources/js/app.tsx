@@ -37,6 +37,7 @@ function baseLayout(
         case name === 'welcome':
         case name === 'home':
         case name === 'tarombo/public':
+        case name === 'tarombo/qr-result':
         case name === 'tarombo/fullscreen':
         case name === 'tarombo/public-fullscreen':
         case name === 'traffic-monitor/public':

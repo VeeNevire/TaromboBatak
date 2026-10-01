@@ -78,6 +78,7 @@ class TaromboSnapshotController extends Controller
                     // A result shares the saved arrangement of the tree it came from.
                     'has_compile_draft' => $draftSnapshotIds->has($snapshot->source_snapshot_id ?? $snapshot->id),
                     'editable_result' => $snapshot->source_snapshot_id !== null && $snapshot->user_id === $user->id,
+                    'is_compiled' => $snapshot->tarombo_frame_id !== null,
                 ]);
 
         $snapshotOptions = TaromboSnapshot::query()

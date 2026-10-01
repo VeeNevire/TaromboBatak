@@ -42,6 +42,7 @@ use App\Http\Controllers\SubAdminController;
 use App\Http\Controllers\TaromboCompileDraftController;
 use App\Http\Controllers\TaromboController;
 use App\Http\Controllers\TaromboFrameController;
+use App\Http\Controllers\TaromboQrController;
 use App\Http\Controllers\TaromboSnapshotController;
 use App\Http\Controllers\TelegramAnnouncementController;
 use App\Http\Controllers\TelegramGroupLinkController;
@@ -120,6 +121,10 @@ Route::get('regions/villages/{districtCode}', [IndonesiaRegionController::class,
     ->where('districtCode', '\\d{2}\\.\\d{2}\\.\\d{2}')
     ->middleware('throttle:120,1')
     ->name('regions.villages');
+
+Route::get('tarombo/view/{token}', [TaromboQrController::class, 'show'])->whereUuid('token')->name('tarombo.qr.show');
+Route::get('tarombo/view/{token}/image', [TaromboQrController::class, 'image'])->whereUuid('token')->name('tarombo.qr.image');
+Route::get('tarombo/view/{token}/download', [TaromboQrController::class, 'download'])->whereUuid('token')->middleware('throttle:30,1')->name('tarombo.qr.download');
 
 Route::middleware(['auth'])->group(function () {
     Route::post('marga-branch-entries/{person}', [MargaBranchEntryController::class, 'store'])
@@ -330,6 +335,9 @@ Route::get('monitor-traffic', [TrafficMonitorController::class, 'publicReport'])
     ->name('traffic-monitor.public');
 
 Route::middleware(['auth', 'role.admin'])->group(function () {
+    Route::get('dashboard/tarombo/snapshots/{taromboSnapshot}/qr', [TaromboQrController::class, 'create'])->name('tarombo.qr.create');
+    Route::post('dashboard/tarombo/snapshots/{taromboSnapshot}/qr', [TaromboQrController::class, 'store'])->middleware('throttle:10,1')->name('tarombo.qr.store');
+    Route::get('dashboard/tarombo/qr-code/{token}', [TaromboQrController::class, 'code'])->name('tarombo.qr.code');
     Route::get('dashboard/monitor-traffic', [TrafficMonitorController::class, 'index'])
         ->name('traffic-monitor.index');
     Route::resource('dashboard/berita-marga/topik', MargaNewsTopicController::class)
