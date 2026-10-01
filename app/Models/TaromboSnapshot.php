@@ -23,13 +23,14 @@ use Illuminate\Support\Carbon;
  * @property string|null $paper_size
  * @property string|null $orientation
  * @property array<int, int>|null $included_person_ids
+ * @property string|null $qr_token
  * @property string $path
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read User $user
  * @property-read Person|null $centerPerson
  */
-#[Fillable(['user_id', 'center_person_id', 'tarombo_frame_id', 'source_snapshot_id', 'view', 'title', 'resolution', 'paper_size', 'orientation', 'included_person_ids', 'path'])]
+#[Fillable(['user_id', 'center_person_id', 'tarombo_frame_id', 'source_snapshot_id', 'view', 'title', 'resolution', 'paper_size', 'orientation', 'included_person_ids', 'path', 'qr_token'])]
 class TaromboSnapshot extends Model
 {
     /** @use HasFactory<TaromboSnapshotFactory> */

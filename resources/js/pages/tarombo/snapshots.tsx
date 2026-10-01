@@ -1,9 +1,10 @@
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     ArrowLeft,
     Copy,
     Download,
     Images,
+    QrCode,
     Search,
     List,
     LayoutGrid,
@@ -51,6 +52,7 @@ type Snapshot = {
     editable_result?: boolean;
     // A card of the "Hasil Simpan" tab: a saved Compile Gambar arrangement.
     saved_compile?: boolean;
+    is_compiled?: boolean;
     draft_id?: number;
     draft_name?: string | null;
     // False for arrangements saved before the composed preview existed.
@@ -95,6 +97,7 @@ export default function TaromboSnapshots({
     accountName: string;
     canDownload: boolean;
 }) {
+    const { auth } = usePage().props;
     const [searchInput, setSearchInput] = useState(search);
     const [selectedSnapshot, setSelectedSnapshot] = useState<Snapshot | null>(
         null,
@@ -114,6 +117,12 @@ export default function TaromboSnapshots({
         dateStyle: 'long',
         timeStyle: 'short',
     });
+
+    const canAttachQr = (snapshot: Snapshot) =>
+        auth.user?.role === 'admin' &&
+        (snapshot.is_compiled ||
+            snapshot.editable_result ||
+            filter === 'compiled');
 
     const snapshotLabel = (snapshot: Snapshot) =>
         snapshot.title ?? snapshot.center_person_name ?? 'Pohon Tarombo';
@@ -612,7 +621,22 @@ export default function TaromboSnapshots({
                                                     Duplikat
                                                 </Button>
                                             )}
-                                        {snapshot.editable_result ? (
+                                        {canAttachQr(snapshot) ? (
+                                            <Button
+                                                asChild
+                                                variant="outline"
+                                                size="sm"
+                                            >
+                                                <Link
+                                                    href={tarombo.qr.create(
+                                                        snapshot.id,
+                                                    )}
+                                                >
+                                                    <QrCode className="size-4" />{' '}
+                                                    Tempel QR Code
+                                                </Link>
+                                            </Button>
+                                        ) : snapshot.editable_result ? (
                                             <Button
                                                 asChild
                                                 variant="outline"
