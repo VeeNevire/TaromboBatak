@@ -149,6 +149,7 @@ class TaromboSnapshotController extends Controller
                 'image_url' => route('tarombo.snapshots.image', $snapshot),
             ],
             'targetSnapshotId' => $target?->id,
+            'targetTitle' => $target?->title,
             'frames' => TaromboFrame::query()
                 ->active()
                 ->nonCollage()
@@ -286,6 +287,7 @@ class TaromboSnapshotController extends Controller
             abort_unless($snapshot !== null && $target->source_snapshot_id === $snapshot->id, 422, 'Gambar hasil tidak berasal dari gambar ini.');
         }
 
+        $title = trim((string) $request->validated('title', '')) ?: null;
         $image = $request->file('image');
 
         abort_unless($image instanceof UploadedFile, 422);
@@ -300,6 +302,7 @@ class TaromboSnapshotController extends Controller
             $target->update([
                 'tarombo_frame_id' => $frame->id,
                 'path' => $path,
+                ...($title !== null ? ['title' => $title] : []),
             ]);
 
             Storage::disk('local')->delete($oldPath);
@@ -309,6 +312,7 @@ class TaromboSnapshotController extends Controller
                 'tarombo_frame_id' => $frame->id,
                 'source_snapshot_id' => $snapshot?->id,
                 'view' => $snapshot->view ?? 'tree',
+                'title' => $title,
                 'path' => $path,
             ]);
         }

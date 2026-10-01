@@ -239,7 +239,14 @@ export default function TaromboSnapshots({
                             className="max-w-52 justify-start"
                         >
                             <Images className="size-4 shrink-0" />
-                            <span className="truncate">
+                            <span
+                                className="truncate"
+                                title={
+                                    sourceSnapshot
+                                        ? snapshotLabel(sourceSnapshot)
+                                        : undefined
+                                }
+                            >
                                 {sourceSnapshot
                                     ? snapshotLabel(sourceSnapshot)
                                     : 'Pilih Gambar'}
@@ -291,84 +298,89 @@ export default function TaromboSnapshots({
                     </div>
                 </div>
 
-                <Tabs
-                    value={filter}
-                    defaultValue="all"
-                    onValueChange={applyFilter}
-                >
-                    <TabsList>
-                        <TabsTrigger value="all">Semua</TabsTrigger>
-                        <TabsTrigger value="compiled">
-                            Hasil Compile
-                        </TabsTrigger>
-                        <TabsTrigger value="original">
-                            Gambar Original
-                        </TabsTrigger>
-                        <TabsTrigger value="free">
-                            Gambar Original Bebas
-                        </TabsTrigger>
-                        <TabsTrigger value="saved">Hasil Simpan</TabsTrigger>
-                    </TabsList>
-                </Tabs>
-
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                    <div className="flex flex-col gap-2">
-                        <span className="text-sm font-medium text-tb-on-surface">
-                            Tampilan daftar
-                        </span>
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                    <Tabs
+                        value={filter}
+                        defaultValue="all"
+                        onValueChange={applyFilter}
+                        className="min-w-0"
+                    >
+                        <TabsList className="h-auto flex-wrap justify-start">
+                            <TabsTrigger value="all">Semua</TabsTrigger>
+                            <TabsTrigger value="compiled">
+                                Hasil Compile
+                            </TabsTrigger>
+                            <TabsTrigger value="original">
+                                Gambar Original
+                            </TabsTrigger>
+                            <TabsTrigger value="free">
+                                Gambar Original Bebas
+                            </TabsTrigger>
+                            <TabsTrigger value="saved">
+                                Hasil Simpan
+                            </TabsTrigger>
+                        </TabsList>
+                    </Tabs>
+                    <div className="flex flex-wrap items-center gap-2">
                         <div
-                            className="flex flex-wrap gap-2"
+                            className="flex gap-1"
                             role="group"
                             aria-label="Tampilan daftar gambar"
                         >
                             <Button
                                 type="button"
+                                size="icon"
                                 variant={
                                     display === 'images' ? 'default' : 'outline'
                                 }
                                 aria-pressed={display === 'images'}
+                                aria-label="Tampil dengan gambar"
+                                title="Tampil dengan gambar"
                                 onClick={() =>
                                     visitGallery({ display: 'images' })
                                 }
                             >
-                                <Images className="size-4" /> Dengan gambar
+                                <Images className="size-4" />
                             </Button>
                             <Button
                                 type="button"
+                                size="icon"
                                 variant={
                                     display === 'titles' ? 'default' : 'outline'
                                 }
                                 aria-pressed={display === 'titles'}
+                                aria-label="Tampil hanya judul gambar"
+                                title="Tampil hanya judul gambar"
                                 onClick={() =>
                                     visitGallery({ display: 'titles' })
                                 }
                             >
-                                <List className="size-4" /> Hanya judul
+                                <List className="size-4" />
                             </Button>
                         </div>
-                    </div>
-                    <form
-                        onSubmit={submitSearch}
-                        className="flex w-full flex-col gap-2 lg:max-w-md"
-                    >
-                        <label
-                            htmlFor="snapshot-search"
-                            className="text-sm font-medium text-tb-on-surface"
+                        <form
+                            onSubmit={submitSearch}
+                            className="flex min-w-0 flex-1 gap-2 xl:w-72 xl:flex-none"
                         >
-                            Cari judul gambar
-                        </label>
-                        <div className="flex gap-2">
+                            <label htmlFor="snapshot-search" className="sr-only">
+                                Cari kata dalam judul gambar
+                            </label>
                             <Input
                                 id="snapshot-search"
                                 value={searchInput}
                                 onChange={(event) =>
                                     setSearchInput(event.target.value)
                                 }
-                                placeholder="Ketik kata dalam judul..."
+                                placeholder="Cari kata dalam judul..."
                                 maxLength={255}
                             />
-                            <Button type="submit">
-                                <Search className="size-4" /> Cari
+                            <Button
+                                type="submit"
+                                size="icon"
+                                aria-label="Cari"
+                                title="Cari"
+                            >
+                                <Search className="size-4" />
                             </Button>
                             {search && (
                                 <Button
@@ -382,8 +394,8 @@ export default function TaromboSnapshots({
                                     Reset
                                 </Button>
                             )}
-                        </div>
-                    </form>
+                        </form>
+                    </div>
                 </div>
                 <p className="text-sm text-tb-on-surface-variant">
                     {snapshots.total} hasil{search ? ` untuk “${search}”` : ''}
@@ -490,6 +502,7 @@ export default function TaromboSnapshots({
                                                         snapshot,
                                                     )
                                                 }
+                                                title={snapshotLabel(snapshot)}
                                                 className="text-left text-sm font-semibold break-words text-tb-on-surface hover:text-tb-primary hover:underline"
                                             >
                                                 {snapshotLabel(snapshot)}
@@ -769,7 +782,10 @@ export default function TaromboSnapshots({
                                     alt={snapshotLabel(snapshot)}
                                     className="aspect-video w-full bg-tb-surface-container object-contain"
                                 />
-                                <p className="truncate px-3 py-2 text-sm font-medium text-tb-on-surface">
+                                <p
+                                    className="truncate px-3 py-2 text-sm font-medium text-tb-on-surface"
+                                    title={`${snapshotLabel(snapshot)}${snapshot.owner_name ? ` · ${snapshot.owner_name}` : ''}`}
+                                >
                                     {snapshotLabel(snapshot)}
                                     {snapshot.owner_name
                                         ? ` · ${snapshot.owner_name}`

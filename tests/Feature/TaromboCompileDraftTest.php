@@ -505,11 +505,13 @@ test('producing without a tree image creates a compiled result without a source'
     $this->actingAs($user)
         ->post(route('tarombo.snapshots.generate'), [
             'frame_id' => $frame->id,
+            'title' => '  Nama Hasil  ',
             'image' => UploadedFile::fake()->image('hasil.jpg'),
         ])
         ->assertRedirect(route('tarombo.snapshots.index'));
 
     $result = TaromboSnapshot::query()->sole();
+    expect($result->title)->toBe('Nama Hasil');
 
     expect($result->tarombo_frame_id)->toBe($frame->id)
         ->and($result->source_snapshot_id)->toBeNull()

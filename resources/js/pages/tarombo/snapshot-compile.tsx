@@ -40,6 +40,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { composeCanvasToFile, loadImageUrl } from '@/lib/collage';
 import {
     canvasThumbnail,
@@ -292,6 +293,7 @@ export default function TaromboSnapshotCompile({
     accountName,
     draft,
     targetSnapshotId,
+    targetTitle,
 }: {
     // Null when the compile starts on a blank canvas.
     snapshot: Snapshot | null;
@@ -301,6 +303,8 @@ export default function TaromboSnapshotCompile({
     draft: CompileDraft | null;
     // A produced result being edited; Produce replaces it.
     targetSnapshotId: number | null;
+    // The name the result being edited already has.
+    targetTitle: string | null;
 }) {
     const [selectedFrame, setSelectedFrame] = useState<Frame | null>(
         () =>
@@ -309,6 +313,8 @@ export default function TaromboSnapshotCompile({
             null,
     );
     const [framePickerOpen, setFramePickerOpen] = useState(false);
+    const [produceOpen, setProduceOpen] = useState(false);
+    const [resultName, setResultName] = useState('');
     const [collageOpen, setCollageOpen] = useState(false);
     const [previewError, setPreviewError] = useState<string | null>(null);
     const [producing, setProducing] = useState(false);
@@ -1424,7 +1430,17 @@ export default function TaromboSnapshotCompile({
         setSavingDraft(false);
     };
 
-    const produce = async () => {
+    // The line under the page title, which is also the default result name.
+    const defaultResultName = `${draft?.name ? `${draft.name} · ` : ''}${label}${
+        selectedFrame ? ` · ${selectedFrame.name}` : ''
+    }`.slice(0, 255);
+
+    const openProduceDialog = () => {
+        setResultName(targetTitle ?? defaultResultName);
+        setProduceOpen(true);
+    };
+
+    const produce = async (title: string) => {
         if (!selectedFrame || producing || !ready || savingDraft) {
             return;
         }
@@ -1473,6 +1489,7 @@ export default function TaromboSnapshotCompile({
                 snapshot_id: snapshot?.id ?? null,
                 target_snapshot_id: targetSnapshotId,
                 frame_id: selectedFrame.id,
+                title: title.trim() || null,
                 image,
             },
             {
@@ -1614,7 +1631,7 @@ export default function TaromboSnapshotCompile({
                             disabled={
                                 !ready || restoring || producing || savingDraft
                             }
-                            onClick={produce}
+                            onClick={openProduceDialog}
                             className="bg-tb-primary hover:bg-tb-primary-light"
                         >
                             {producing ? (
@@ -2278,6 +2295,54 @@ export default function TaromboSnapshotCompile({
                     </aside>
                 </div>
             </div>
+
+            <Dialog open={produceOpen} onOpenChange={setProduceOpen}>
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Nama gambar hasil compile</DialogTitle>
+                        <DialogDescription>
+                            Nama ini ditampilkan pada gambar hasil di Tarombo
+                            Tersimpan.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form
+                        className="flex flex-col gap-4"
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            setProduceOpen(false);
+                            void produce(resultName);
+                        }}
+                    >
+                        <Input
+                            value={resultName}
+                            onChange={(event) =>
+                                setResultName(event.target.value)
+                            }
+                            maxLength={255}
+                            autoFocus
+                            aria-label="Nama gambar hasil compile"
+                        />
+                        <DialogFooter>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setProduceOpen(false)}
+                            >
+                                Batal
+                            </Button>
+                            <Button
+                                type="submit"
+                                className="bg-tb-primary hover:bg-tb-primary-light"
+                            >
+                                <Wand2 className="size-4" />
+                                {targetSnapshotId !== null
+                                    ? 'Perbarui Hasil'
+                                    : 'Produce'}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
 
             <Dialog open={framePickerOpen} onOpenChange={setFramePickerOpen}>
                 <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
