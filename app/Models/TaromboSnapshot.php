@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Database\Factories\TaromboSnapshotFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -70,6 +71,19 @@ class TaromboSnapshot extends Model
     public function compileDrafts(): HasMany
     {
         return $this->hasMany(TaromboCompileDraft::class, 'tarombo_snapshot_id');
+    }
+
+    /** Match the same title (or fallback name) that is displayed in the gallery. */
+    public function scopeMatchingTitle(Builder $query, string $search): Builder
+    {
+        $term = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower($search)).'%';
+
+        return $query->where(fn (Builder $titles) => $titles
+            ->whereRaw("LOWER(title) LIKE ? ESCAPE '!'", [$term])
+            ->orWhere(fn (Builder $fallback) => $fallback->whereNull('title')
+                ->whereHas('centerPerson', fn (Builder $people) => $people->whereRaw("LOWER(name) LIKE ? ESCAPE '!'", [$term])))
+            ->when(str_contains(mb_strtolower('Pohon Tarombo'), mb_strtolower($search)), fn (Builder $titles) => $titles
+                ->orWhere(fn (Builder $fallback) => $fallback->whereNull('title')->whereDoesntHave('centerPerson'))));
     }
 
     protected function casts(): array

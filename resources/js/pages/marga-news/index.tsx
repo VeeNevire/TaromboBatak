@@ -1,5 +1,5 @@
-import { Head, router } from '@inertiajs/react';
-import { ExternalLink, Globe, Search } from 'lucide-react';
+import { Head, Link, router } from '@inertiajs/react';
+import { Globe, Search } from 'lucide-react';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import {
@@ -74,7 +74,7 @@ export default function MargaNewsIndex({
                     <p className="mt-1 text-sm text-tb-on-surface-variant">
                         Kabar kegiatan punguan, parsadaan, dan pomparan marga
                         dari berbagai portal berita. Klik judul untuk membaca
-                        artikel aslinya.
+                        detail berita dan berkomentar.
                     </p>
                 </div>
 
@@ -138,7 +138,7 @@ export default function MargaNewsIndex({
                             Belum ada berita
                             {filters.marga || filters.q
                                 ? ' untuk filter ini.'
-                                : '. Berita baru akan muncul setelah disetujui admin.'}
+                                : '. Berita baru akan muncul otomatis setelah diambil.'}
                         </CardContent>
                     </Card>
                 ) : (
@@ -163,33 +163,22 @@ export default function MargaNewsIndex({
                                                 {item.publisher}
                                             </span>
                                         )}
-                                        {item.publisher &&
-                                            item.published_at && <span>·</span>}
-                                        {formatNewsDate(item.published_at)}
+                                        {item.publisher && item.updated_at && (
+                                            <span>·</span>
+                                        )}
+                                        Diperbarui{' '}
+                                        {formatNewsDate(item.updated_at)}
                                     </div>
-                                    <a
-                                        href={item.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
+                                    <Link
+                                        href={margaNews.show(item.id)}
                                         className="group inline-flex items-start gap-1.5 font-display text-lg leading-snug font-bold text-tb-on-surface hover:text-tb-primary"
                                     >
                                         {item.title}
-                                        <ExternalLink className="mt-1 size-4 shrink-0 opacity-50 group-hover:opacity-100" />
-                                    </a>
+                                    </Link>
                                     {(item.summary ?? item.excerpt) && (
                                         <p className="text-sm text-tb-on-surface-variant">
                                             {item.summary ?? item.excerpt}
                                         </p>
-                                    )}
-                                    {item.content && (
-                                        <details className="rounded-lg border border-tb-outline-variant px-3 py-2">
-                                            <summary className="cursor-pointer text-sm font-semibold text-tb-primary">
-                                                Baca isi lengkap artikel
-                                            </summary>
-                                            <p className="mt-3 text-sm leading-7 whitespace-pre-line text-tb-on-surface-variant">
-                                                {item.content}
-                                            </p>
-                                        </details>
                                     )}
                                     <MargaChips margas={item.margas} />
                                 </CardContent>

@@ -87,7 +87,7 @@ export default function MargaNewsAutomation({
                     <p className="mt-1 text-sm text-tb-on-surface-variant">
                         Atur kapan Hermes mencari berita. Hermes melakukan
                         pencarian lewat API; hasil yang diterima disimpan
-                        sebagai berita menunggu review.
+                        sebagai berita yang langsung disetujui dan terbit.
                     </p>
                 </div>
 

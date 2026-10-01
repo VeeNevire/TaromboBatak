@@ -515,3 +515,15 @@ test('producing without a tree image creates a compiled result without a source'
         ->and($result->source_snapshot_id)->toBeNull()
         ->and($result->user_id)->toBe($user->id);
 });
+
+test('saved compile search uses its displayed name and stays private', function () {
+    $user = User::factory()->create();
+    $snapshot = TaromboSnapshot::factory()->for($user)->create(['title' => 'Pohon Silaban']);
+    $named = TaromboCompileDraft::query()->create(['user_id' => $user->id, 'tarombo_snapshot_id' => $snapshot->id, 'name' => 'Bona Taon Sihombing', 'state' => []]);
+    $fallback = TaromboCompileDraft::query()->create(['user_id' => $user->id, 'tarombo_snapshot_id' => $snapshot->id, 'state' => []]);
+    TaromboCompileDraft::query()->create(['user_id' => User::factory()->create()->id, 'tarombo_snapshot_id' => $snapshot->id, 'name' => 'Bona Taon Privat', 'state' => []]);
+    $this->actingAs($user)->get(route('tarombo.snapshots.index', ['filter' => 'saved', 'q' => 'taon', 'display' => 'titles']))
+        ->assertInertia(fn (Assert $page) => $page->has('snapshots.data', 1)->where('snapshots.data.0.draft_id', $named->id)->where('display', 'titles'));
+    $this->get(route('tarombo.snapshots.index', ['filter' => 'saved', 'q' => 'silaban']))
+        ->assertInertia(fn (Assert $page) => $page->has('snapshots.data', 1)->where('snapshots.data.0.draft_id', $fallback->id));
+});

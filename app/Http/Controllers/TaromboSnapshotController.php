@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\GenerateTaromboFrameRequest;
+use App\Http\Requests\ListTaromboSnapshotsRequest;
 use App\Http\Requests\StoreTaromboSnapshotRequest;
 use App\Models\TaromboCompileDraft;
 use App\Models\TaromboFrame;
@@ -21,7 +22,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TaromboSnapshotController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(ListTaromboSnapshotsRequest $request): Response
     {
         Gate::authorize('viewAny', TaromboSnapshot::class);
 
@@ -39,13 +40,16 @@ class TaromboSnapshotController extends Controller
             ->pluck('tarombo_snapshot_id')
             ->flip();
 
+        $search = trim((string) $request->validated('q', ''));
+        $display = $request->validated('display') ?? 'images';
         $filter = $request->string('filter')->toString();
         $filter = in_array($filter, ['compiled', 'original', 'free', 'saved'], true) ? $filter : 'all';
 
         $snapshots = $filter === 'saved'
-            ? $this->savedCompiles($user->id)
+            ? $this->savedCompiles($user->id, $search)
             : TaromboSnapshot::query()
                 ->tap($ownerScope)
+                ->when($search !== '', fn ($query) => $query->matchingTitle($search))
                 ->when($filter === 'compiled', fn ($query) => $query->whereNotNull('tarombo_frame_id'))
                 ->when($filter === 'original', fn ($query) => $query->whereNull('tarombo_frame_id'))
                 // Free originals: raw tree images with no saved compile arrangement.
@@ -90,6 +94,8 @@ class TaromboSnapshotController extends Controller
         return Inertia::render('tarombo/snapshots', [
             'snapshots' => $snapshots,
             'filter' => $filter,
+            'search' => $search,
+            'display' => $display,
             'snapshotOptions' => $snapshotOptions,
             'frames' => TaromboFrame::query()
                 ->active()
@@ -387,12 +393,19 @@ class TaromboSnapshotController extends Controller
      *
      * @return LengthAwarePaginator<int, array<string, mixed>>
      */
-    private function savedCompiles(int $userId): LengthAwarePaginator
+    private function savedCompiles(int $userId, string $search = ''): LengthAwarePaginator
     {
         $disk = Storage::disk('local');
 
         return TaromboCompileDraft::query()
             ->where('user_id', $userId)
+            ->when($search !== '', function ($query) use ($search) {
+                $term = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower($search)).'%';
+                $query->where(fn ($titles) => $titles
+                    ->whereRaw("LOWER(name) LIKE ? ESCAPE '!'", [$term])
+                    ->orWhere(fn ($fallback) => $fallback->whereNull('name')
+                        ->whereHas('snapshot', fn ($snapshots) => $snapshots->matchingTitle($search))));
+            })
             ->with(['snapshot.centerPerson:id,name', 'snapshot.user:id,name', 'user:id,name'])
             ->latest('updated_at')
             ->latest('id')
