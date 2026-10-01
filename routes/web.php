@@ -65,6 +65,10 @@ Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard'
 Route::get('dashboard/news-feed', [NewsFeedController::class, 'index'])
     ->name('news-feed.index');
 
+Route::get('berita-marga/{margaNews}', [MargaNewsController::class, 'show'])->name('marga-news.show');
+Route::post('berita-marga/{margaNews}/comments', [MargaNewsController::class, 'comment'])
+    ->middleware(['auth', 'throttle:10,1'])->name('marga-news.comments.store');
+
 Route::get('berita-marga', [MargaNewsController::class, 'index'])
     ->name('marga-news.index');
 

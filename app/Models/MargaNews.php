@@ -9,11 +9,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
  * A news article about marga activities found by the news agent. Only the
- * headline, a short excerpt and the link are kept; readers open the original.
+ * headline, excerpt, full content and source link are kept for readers.
  *
  * @property int $id
  * @property int|null $marga_news_topic_id
@@ -66,6 +67,8 @@ class MargaNews extends Model
 
     public const STATUS_REJECTED = 'rejected';
 
+    public const STATUS_INACTIVE = 'inactive';
+
     protected $table = 'marga_news';
 
     /** @return BelongsTo<MargaNewsTopic, $this> */
@@ -99,6 +102,11 @@ class MargaNews extends Model
     public function scopeApproved(Builder $query): Builder
     {
         return $query->where('status', self::STATUS_APPROVED);
+    }
+
+    public function comments(): HasMany
+    {
+        return $this->hasMany(MargaNewsComment::class);
     }
 
     /** Same article under a slightly different URL (tracking parameters, trailing slash). */
