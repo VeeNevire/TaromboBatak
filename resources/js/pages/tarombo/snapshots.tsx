@@ -4,6 +4,8 @@ import {
     Copy,
     Download,
     Images,
+    Search,
+    List,
     LayoutGrid,
     Pencil,
     ShieldCheck,
@@ -52,6 +54,8 @@ type Snapshot = {
     draft_name?: string | null;
     // False for arrangements saved before the composed preview existed.
     has_preview?: boolean;
+    // A saved compile made on a blank canvas, without a tree image.
+    blank_canvas?: boolean;
 };
 
 type SnapshotPage = {
@@ -63,7 +67,7 @@ type SnapshotPage = {
     next_page_url: string | null;
 };
 
-type SnapshotFilter = 'all' | 'compiled' | 'original' | 'saved';
+type SnapshotFilter = 'all' | 'compiled' | 'original' | 'free' | 'saved';
 
 type FrameOption = {
     id: number;
@@ -74,6 +78,8 @@ type FrameOption = {
 export default function TaromboSnapshots({
     snapshots,
     filter,
+    search,
+    display,
     snapshotOptions,
     frames,
     accountName,
@@ -81,11 +87,14 @@ export default function TaromboSnapshots({
 }: {
     snapshots: SnapshotPage;
     filter: SnapshotFilter;
+    search: string;
+    display: 'images' | 'titles';
     snapshotOptions: Snapshot[];
     frames: FrameOption[];
     accountName: string;
     canDownload: boolean;
 }) {
+    const [searchInput, setSearchInput] = useState(search);
     const [selectedSnapshot, setSelectedSnapshot] = useState<Snapshot | null>(
         null,
     );
@@ -180,14 +189,28 @@ export default function TaromboSnapshots({
         }
     };
 
-    const applyFilter = (value: string) => {
+    const visitGallery = (next: {
+        filter?: string;
+        q?: string;
+        display?: 'images' | 'titles';
+    }) => {
         router.get(
-            tarombo.snapshots.index.url(
-                value === 'all' ? undefined : { query: { filter: value } },
-            ),
+            tarombo.snapshots.index.url({
+                query: {
+                    filter: next.filter ?? filter,
+                    q: next.q ?? search,
+                    display: next.display ?? display,
+                },
+            }),
             {},
             { preserveState: true, preserveScroll: true, replace: true },
         );
+    };
+
+    const applyFilter = (value: string) => visitGallery({ filter: value });
+    const submitSearch = (event: FormEvent) => {
+        event.preventDefault();
+        visitGallery({ q: searchInput.trim() });
     };
 
     return (
@@ -216,7 +239,14 @@ export default function TaromboSnapshots({
                             className="max-w-52 justify-start"
                         >
                             <Images className="size-4 shrink-0" />
-                            <span className="truncate">
+                            <span
+                                className="truncate"
+                                title={
+                                    sourceSnapshot
+                                        ? snapshotLabel(sourceSnapshot)
+                                        : undefined
+                                }
+                            >
                                 {sourceSnapshot
                                     ? snapshotLabel(sourceSnapshot)
                                     : 'Pilih Gambar'}
@@ -248,13 +278,16 @@ export default function TaromboSnapshots({
                             </Button>
                         ) : (
                             <Button
-                                type="button"
-                                disabled
-                                title="Pilih gambar terlebih dahulu"
+                                asChild
                                 className="bg-tb-primary hover:bg-tb-primary-light"
                             >
-                                <Wand2 className="size-4" />
-                                Compile Gambar
+                                <Link
+                                    href={tarombo.compile.blank()}
+                                    title="Mulai dari kanvas kosong; tambah ranting dan background di editor"
+                                >
+                                    <Wand2 className="size-4" />
+                                    Compile Gambar
+                                </Link>
                             </Button>
                         )}
                         <Button asChild variant="outline">
@@ -265,22 +298,108 @@ export default function TaromboSnapshots({
                     </div>
                 </div>
 
-                <Tabs
-                    value={filter}
-                    defaultValue="all"
-                    onValueChange={applyFilter}
-                >
-                    <TabsList>
-                        <TabsTrigger value="all">Semua</TabsTrigger>
-                        <TabsTrigger value="compiled">
-                            Hasil Compile
-                        </TabsTrigger>
-                        <TabsTrigger value="original">
-                            Gambar Original
-                        </TabsTrigger>
-                        <TabsTrigger value="saved">Hasil Simpan</TabsTrigger>
-                    </TabsList>
-                </Tabs>
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                    <Tabs
+                        value={filter}
+                        defaultValue="all"
+                        onValueChange={applyFilter}
+                        className="min-w-0"
+                    >
+                        <TabsList className="h-auto flex-wrap justify-start">
+                            <TabsTrigger value="all">Semua</TabsTrigger>
+                            <TabsTrigger value="compiled">
+                                Hasil Compile
+                            </TabsTrigger>
+                            <TabsTrigger value="original">
+                                Gambar Original
+                            </TabsTrigger>
+                            <TabsTrigger value="free">
+                                Gambar Original Bebas
+                            </TabsTrigger>
+                            <TabsTrigger value="saved">
+                                Hasil Simpan
+                            </TabsTrigger>
+                        </TabsList>
+                    </Tabs>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <div
+                            className="flex gap-1"
+                            role="group"
+                            aria-label="Tampilan daftar gambar"
+                        >
+                            <Button
+                                type="button"
+                                size="icon"
+                                variant={
+                                    display === 'images' ? 'default' : 'outline'
+                                }
+                                aria-pressed={display === 'images'}
+                                aria-label="Tampil dengan gambar"
+                                title="Tampil dengan gambar"
+                                onClick={() =>
+                                    visitGallery({ display: 'images' })
+                                }
+                            >
+                                <Images className="size-4" />
+                            </Button>
+                            <Button
+                                type="button"
+                                size="icon"
+                                variant={
+                                    display === 'titles' ? 'default' : 'outline'
+                                }
+                                aria-pressed={display === 'titles'}
+                                aria-label="Tampil hanya judul gambar"
+                                title="Tampil hanya judul gambar"
+                                onClick={() =>
+                                    visitGallery({ display: 'titles' })
+                                }
+                            >
+                                <List className="size-4" />
+                            </Button>
+                        </div>
+                        <form
+                            onSubmit={submitSearch}
+                            className="flex min-w-0 flex-1 gap-2 xl:w-72 xl:flex-none"
+                        >
+                            <label htmlFor="snapshot-search" className="sr-only">
+                                Cari kata dalam judul gambar
+                            </label>
+                            <Input
+                                id="snapshot-search"
+                                value={searchInput}
+                                onChange={(event) =>
+                                    setSearchInput(event.target.value)
+                                }
+                                placeholder="Cari kata dalam judul..."
+                                maxLength={255}
+                            />
+                            <Button
+                                type="submit"
+                                size="icon"
+                                aria-label="Cari"
+                                title="Cari"
+                            >
+                                <Search className="size-4" />
+                            </Button>
+                            {search && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => {
+                                        setSearchInput('');
+                                        visitGallery({ q: '' });
+                                    }}
+                                >
+                                    Reset
+                                </Button>
+                            )}
+                        </form>
+                    </div>
+                </div>
+                <p className="text-sm text-tb-on-surface-variant">
+                    {snapshots.total} hasil{search ? ` untuk “${search}”` : ''}
+                </p>
 
                 <div className="flex items-start gap-3 rounded-xl border border-tb-outline-variant bg-tb-surface-container/50 p-4 text-sm text-tb-on-surface-variant">
                     <ShieldCheck className="mt-0.5 size-5 shrink-0 text-tb-primary" />
@@ -309,60 +428,85 @@ export default function TaromboSnapshots({
                             <Images className="size-10 text-tb-outline" />
                             <div>
                                 <p className="font-semibold text-tb-on-surface">
-                                    {filter === 'saved'
-                                        ? 'Belum ada Compile Gambar yang disimpan'
-                                        : 'Belum ada Tarombo tersimpan'}
+                                    {search
+                                        ? 'Judul gambar tidak ditemukan'
+                                        : filter === 'saved'
+                                          ? 'Belum ada Compile Gambar yang disimpan'
+                                          : filter === 'free'
+                                            ? 'Belum ada Gambar Original Bebas'
+                                            : 'Belum ada Tarombo tersimpan'}
                                 </p>
                                 <p className="mt-1 text-sm text-tb-on-surface-variant">
-                                    {filter === 'saved'
-                                        ? 'Buka Compile Gambar, pilih frame, lalu tekan tombol Simpan.'
-                                        : 'Buka Pohon Tarombo fullscreen lalu tekan tombol Simpan.'}
+                                    {search
+                                        ? 'Coba kata lain atau reset pencarian.'
+                                        : filter === 'saved'
+                                          ? 'Buka Compile Gambar, pilih frame, lalu tekan tombol Simpan.'
+                                          : filter === 'free'
+                                            ? 'Gambar original yang belum punya compile tersimpan akan muncul di sini.'
+                                            : 'Buka Pohon Tarombo fullscreen lalu tekan tombol Simpan.'}
                                 </p>
                             </div>
                         </CardContent>
                     </Card>
                 ) : (
-                    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                    <div
+                        className={
+                            display === 'images'
+                                ? 'grid gap-5 md:grid-cols-2 xl:grid-cols-3'
+                                : 'flex flex-col gap-3'
+                        }
+                    >
                         {snapshots.data.map((snapshot) => (
                             <Card
                                 key={snapshot.draft_id ?? snapshot.id}
                                 className="overflow-hidden border-tb-outline-variant bg-tb-surface-bright"
                             >
-                                <button
-                                    type="button"
-                                    className="group relative block aspect-video w-full cursor-zoom-in overflow-hidden bg-tb-surface-container text-left select-none focus-visible:ring-2 focus-visible:ring-tb-primary focus-visible:outline-none"
-                                    onClick={() =>
-                                        setSelectedSnapshot(snapshot)
-                                    }
-                                    onDragStart={(event) =>
-                                        event.preventDefault()
-                                    }
-                                    aria-label={`Perbesar Tarombo ${snapshot.center_person_name ?? 'tersimpan'}`}
-                                >
-                                    <img
-                                        src={snapshot.image_url}
-                                        alt={`Tarombo ${snapshot.center_person_name ?? 'tersimpan'}`}
-                                        draggable={false}
-                                        className="pointer-events-none size-full object-contain transition-transform duration-200 select-none group-hover:scale-[1.02]"
-                                    />
-                                    <div className="pointer-events-none absolute right-2 bottom-2">
-                                        <span className="rounded bg-black/45 px-2 py-1 text-[9px] font-medium text-white/80 shadow-sm">
-                                            Tarombo Batak · {accountName}
-                                        </span>
-                                    </div>
-                                    {snapshot.has_compile_draft &&
-                                        !snapshot.saved_compile && (
-                                            <span className="text-tb-on-primary pointer-events-none absolute top-2 left-2 rounded-full bg-tb-primary px-2 py-0.5 text-[10px] font-semibold shadow-sm">
-                                                Compile tersimpan
+                                {display === 'images' && (
+                                    <button
+                                        type="button"
+                                        className="group relative block aspect-video w-full cursor-zoom-in overflow-hidden bg-tb-surface-container text-left select-none focus-visible:ring-2 focus-visible:ring-tb-primary focus-visible:outline-none"
+                                        onClick={() =>
+                                            setSelectedSnapshot(snapshot)
+                                        }
+                                        onDragStart={(event) =>
+                                            event.preventDefault()
+                                        }
+                                        aria-label={`Perbesar Tarombo ${snapshot.center_person_name ?? 'tersimpan'}`}
+                                    >
+                                        <img
+                                            src={snapshot.image_url}
+                                            alt={`Tarombo ${snapshot.center_person_name ?? 'tersimpan'}`}
+                                            draggable={false}
+                                            className="pointer-events-none size-full object-contain transition-transform duration-200 select-none group-hover:scale-[1.02]"
+                                        />
+                                        <div className="pointer-events-none absolute right-2 bottom-2">
+                                            <span className="rounded bg-black/45 px-2 py-1 text-[9px] font-medium text-white/80 shadow-sm">
+                                                Tarombo Batak · {accountName}
                                             </span>
-                                        )}
-                                </button>
-                                <CardContent className="flex items-start justify-between gap-3 p-4">
+                                        </div>
+                                        {snapshot.has_compile_draft &&
+                                            !snapshot.saved_compile && (
+                                                <span className="text-tb-on-primary pointer-events-none absolute top-2 left-2 rounded-full bg-tb-primary px-2 py-0.5 text-[10px] font-semibold shadow-sm">
+                                                    Compile tersimpan
+                                                </span>
+                                            )}
+                                    </button>
+                                )}
+                                <CardContent className="flex flex-wrap items-start justify-between gap-3 p-4">
                                     <div className="min-w-0">
                                         <div className="flex flex-wrap items-center gap-2">
-                                            <p className="truncate text-sm font-semibold text-tb-on-surface">
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    setSelectedSnapshot(
+                                                        snapshot,
+                                                    )
+                                                }
+                                                title={snapshotLabel(snapshot)}
+                                                className="text-left text-sm font-semibold break-words text-tb-on-surface hover:text-tb-primary hover:underline"
+                                            >
                                                 {snapshotLabel(snapshot)}
-                                            </p>
+                                            </button>
                                             {snapshot.saved_compile && (
                                                 <button
                                                     type="button"
@@ -454,16 +598,24 @@ export default function TaromboSnapshots({
                                                     size="sm"
                                                 >
                                                     <Link
-                                                        href={tarombo.snapshots.compile(
-                                                            snapshot.id,
-                                                            snapshot.draft_id
-                                                                ? {
+                                                        href={
+                                                            snapshot.blank_canvas
+                                                                ? tarombo.compile.blank({
                                                                       query: {
                                                                           draft: snapshot.draft_id,
                                                                       },
-                                                                  }
-                                                                : undefined,
-                                                        )}
+                                                                  })
+                                                                : tarombo.snapshots.compile(
+                                                                      snapshot.id,
+                                                                      snapshot.draft_id
+                                                                          ? {
+                                                                                query: {
+                                                                                    draft: snapshot.draft_id,
+                                                                                },
+                                                                            }
+                                                                          : undefined,
+                                                                  )
+                                                        }
                                                         title="Buka Compile Gambar yang tersimpan"
                                                     >
                                                         <Wand2 className="size-4" />
@@ -630,7 +782,10 @@ export default function TaromboSnapshots({
                                     alt={snapshotLabel(snapshot)}
                                     className="aspect-video w-full bg-tb-surface-container object-contain"
                                 />
-                                <p className="truncate px-3 py-2 text-sm font-medium text-tb-on-surface">
+                                <p
+                                    className="truncate px-3 py-2 text-sm font-medium text-tb-on-surface"
+                                    title={`${snapshotLabel(snapshot)}${snapshot.owner_name ? ` · ${snapshot.owner_name}` : ''}`}
+                                >
                                     {snapshotLabel(snapshot)}
                                     {snapshot.owner_name
                                         ? ` · ${snapshot.owner_name}`

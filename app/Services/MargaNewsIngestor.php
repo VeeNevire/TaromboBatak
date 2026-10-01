@@ -12,7 +12,7 @@ use Illuminate\Support\Str;
 use Throwable;
 
 /**
- * Stores news items sent by the news agent as pending articles: duplicates and
+ * Stores news items sent by the news agent as approved articles: duplicates and
  * articles shorter than 200 words are skipped, and mentioned margas are tagged.
  */
 class MargaNewsIngestor
@@ -91,7 +91,8 @@ class MargaNewsIngestor
                 'content' => $content,
                 'image_url' => $imageUrl,
                 'published_at' => $this->parseDate($item['published_at'] ?? null),
-                'status' => MargaNews::STATUS_PENDING,
+                'status' => MargaNews::STATUS_APPROVED,
+                'reviewed_at' => now(),
                 'submitted_by' => $agent !== null ? Str::limit($agent, 57) : null,
             ]);
 

@@ -16,7 +16,7 @@ class ReviewMargaNewsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'action' => ['required', 'in:approve,reject'],
+            'action' => ['required', 'in:approve,reject,deactivate'],
             'ids' => ['required', 'array', 'min:1', 'max:100'],
             'ids.*' => ['integer', 'exists:marga_news,id'],
         ];

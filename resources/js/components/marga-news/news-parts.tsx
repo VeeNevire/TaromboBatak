@@ -10,6 +10,7 @@ export type MargaNewsItem = {
     content: string | null;
     image_url: string | null;
     published_at: string | null;
+    updated_at: string | null;
     margas: { id: number; name: string; color: string | null }[];
 };
 

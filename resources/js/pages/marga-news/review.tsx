@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import margaNews from '@/routes/marga-news';
 
-type Status = 'pending' | 'approved' | 'rejected';
+type Status = 'pending' | 'approved' | 'rejected' | 'inactive';
 
 type ReviewItem = MargaNewsItem & {
     topic: string | null;
@@ -31,7 +31,8 @@ type MargaOption = { id: number; name: string };
 
 const TABS: { status: Status; label: string }[] = [
     { status: 'pending', label: 'Menunggu' },
-    { status: 'approved', label: 'Disetujui' },
+    { status: 'approved', label: 'Terbit' },
+    { status: 'inactive', label: 'Nonaktif' },
     { status: 'rejected', label: 'Ditolak' },
 ];
 
@@ -152,7 +153,10 @@ export default function MargaNewsReview({
     const allSelected =
         news.data.length > 0 && selected.length === news.data.length;
 
-    const decide = (action: 'approve' | 'reject', ids: number[]) => {
+    const decide = (
+        action: 'approve' | 'reject' | 'deactivate',
+        ids: number[],
+    ) => {
         if (ids.length === 0) {
             return;
         }
@@ -186,8 +190,8 @@ export default function MargaNewsReview({
                         Review Berita Marga
                     </h1>
                     <p className="mt-1 text-sm text-tb-on-surface-variant">
-                        Berita yang ditemukan agen. Hanya yang disetujui tampil
-                        di{' '}
+                        Berita yang diambil langsung disetujui dan terbit.
+                        Kelola atau nonaktifkan berita di{' '}
                         <Link
                             href={margaNews.index()}
                             className="font-semibold text-tb-primary hover:underline"
@@ -278,7 +282,7 @@ export default function MargaNewsReview({
                                     onClick={() => decide('approve', selected)}
                                     className="bg-emerald-600 text-white hover:bg-emerald-700"
                                 >
-                                    <Check className="size-4" /> Setujui
+                                    <Check className="size-4" /> Terbitkan
                                 </Button>
                             )}
                             {status !== 'rejected' && (
@@ -287,9 +291,19 @@ export default function MargaNewsReview({
                                     size="sm"
                                     variant="outline"
                                     disabled={busy || selected.length === 0}
-                                    onClick={() => decide('reject', selected)}
+                                    onClick={() =>
+                                        decide(
+                                            status === 'approved'
+                                                ? 'deactivate'
+                                                : 'reject',
+                                            selected,
+                                        )
+                                    }
                                 >
-                                    <X className="size-4" /> Tolak
+                                    <X className="size-4" />{' '}
+                                    {status === 'approved'
+                                        ? 'Nonaktifkan'
+                                        : 'Tolak'}
                                 </Button>
                             )}
                         </div>
@@ -435,10 +449,23 @@ export default function MargaNewsReview({
                                                 variant="outline"
                                                 disabled={busy}
                                                 onClick={() =>
-                                                    decide('reject', [item.id])
+                                                    decide(
+                                                        status === 'approved'
+                                                            ? 'deactivate'
+                                                            : 'reject',
+                                                        [item.id],
+                                                    )
                                                 }
-                                                aria-label="Tolak"
-                                                title="Tolak"
+                                                aria-label={
+                                                    status === 'approved'
+                                                        ? 'Nonaktifkan'
+                                                        : 'Tolak'
+                                                }
+                                                title={
+                                                    status === 'approved'
+                                                        ? 'Nonaktifkan'
+                                                        : 'Tolak'
+                                                }
                                             >
                                                 <X className="size-4" />
                                             </Button>

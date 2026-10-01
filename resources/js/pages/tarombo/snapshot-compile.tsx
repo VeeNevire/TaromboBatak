@@ -26,6 +26,7 @@ import {
     ZoomOut,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { CollageDialog } from '@/components/collage-dialog';
 import { CropEditor } from '@/components/crop-editor';
 import { DraggableBox } from '@/components/draggable-box';
@@ -39,13 +40,13 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { composeCanvasToFile, loadImageUrl } from '@/lib/collage';
 import {
     canvasThumbnail,
     composeLayers,
     defaultLayerPlacement,
     fitInArea,
-    imageFileToCanvas,
     snapshotCanvas,
     treeUpscale,
 } from '@/lib/tarombo-compose';
@@ -62,6 +63,7 @@ import {
 import type { TextStyle } from '@/lib/tarombo-text';
 import { dashboard } from '@/routes';
 import tarombo from '@/routes/tarombo';
+import blankDraft from '@/routes/tarombo/compile/blank/draft';
 import compileDraft from '@/routes/tarombo/snapshots/compile/draft';
 
 type Snapshot = {
@@ -84,10 +86,18 @@ type Frame = {
     area_height: number;
 };
 
+type FreeOriginal = {
+    id: number;
+    title: string | null;
+    center_person_name: string | null;
+    image_url: string;
+};
+
 type Assets = {
     key: string;
     frameImage: HTMLImageElement;
-    tree: HTMLCanvasElement;
+    // Null on a blank canvas, which has no tree image.
+    tree: HTMLCanvasElement | null;
 };
 
 type Layer = {
@@ -160,7 +170,7 @@ const fullBox = (canvas: HTMLCanvasElement): Box => ({
 function composeItems(
     order: string[],
     layers: Layer[],
-    tree: HTMLCanvasElement,
+    tree: HTMLCanvasElement | null,
     treeCrop: Box | null,
     treePlacement: Box | null,
     frame: Frame,
@@ -169,6 +179,10 @@ function composeItems(
 
     for (const id of order) {
         if (id === TREE_ID) {
+            if (!tree) {
+                continue;
+            }
+
             const source = treeCrop ?? fullBox(tree);
 
             items.push({
@@ -252,10 +266,17 @@ const savedAtFormat = new Intl.DateTimeFormat('id-ID', {
     timeStyle: 'short',
 });
 
+const VIEW_ZOOM_MIN = 0.05;
+const VIEW_ZOOM_MAX = 3;
+
+const clampViewZoom = (value: number) =>
+    Math.min(VIEW_ZOOM_MAX, Math.max(VIEW_ZOOM_MIN, value));
+
 const isTyping = (target: EventTarget | null) =>
     target instanceof HTMLElement &&
     (target.tagName === 'INPUT' ||
         target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
         target.isContentEditable);
 
 const ARROW_DIRECTIONS = {
@@ -268,16 +289,22 @@ const ARROW_DIRECTIONS = {
 export default function TaromboSnapshotCompile({
     snapshot,
     frames,
+    freeOriginals,
     accountName,
     draft,
     targetSnapshotId,
+    targetTitle,
 }: {
-    snapshot: Snapshot;
+    // Null when the compile starts on a blank canvas.
+    snapshot: Snapshot | null;
     frames: Frame[];
+    freeOriginals: FreeOriginal[];
     accountName: string;
     draft: CompileDraft | null;
     // A produced result being edited; Produce replaces it.
     targetSnapshotId: number | null;
+    // The name the result being edited already has.
+    targetTitle: string | null;
 }) {
     const [selectedFrame, setSelectedFrame] = useState<Frame | null>(
         () =>
@@ -286,6 +313,8 @@ export default function TaromboSnapshotCompile({
             null,
     );
     const [framePickerOpen, setFramePickerOpen] = useState(false);
+    const [produceOpen, setProduceOpen] = useState(false);
+    const [resultName, setResultName] = useState('');
     const [collageOpen, setCollageOpen] = useState(false);
     const [previewError, setPreviewError] = useState<string | null>(null);
     const [producing, setProducing] = useState(false);
@@ -307,8 +336,12 @@ export default function TaromboSnapshotCompile({
     const [draftId, setDraftId] = useState(draft?.id ?? null);
     const [savedSignature, setSavedSignature] = useState<string | null>(null);
     const [layers, setLayers] = useState<Layer[]>([]);
-    const [order, setOrder] = useState<string[]>([TREE_ID]);
-    const [selectedId, setSelectedId] = useState<string>(TREE_ID);
+    const [order, setOrder] = useState<string[]>(
+        snapshot ? [TREE_ID] : [],
+    );
+    const [selectedId, setSelectedId] = useState<string>(
+        snapshot ? TREE_ID : '',
+    );
     const [cropDraft, setCropDraft] = useState<Box | null>(null);
     // Where the crop editor starts; a new value restarts it.
     const [cropStart, setCropStart] = useState<{
@@ -320,9 +353,10 @@ export default function TaromboSnapshotCompile({
         canvas: HTMLCanvasElement;
         url: string;
     } | null>(null);
+    const viewportRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const rantingInputRef = useRef<HTMLInputElement>(null);
-    const backgroundInputRef = useRef<HTMLInputElement>(null);
+    // Which image library the Ranting / Background picker is showing.
+    const [library, setLibrary] = useState<LayerKind | null>(null);
     const treeCacheRef = useRef(new Map<boolean, HTMLCanvasElement>());
     const layerCounter = useRef(0);
     const nameCounter = useRef({ ranting: 0, background: 0, text: 0 });
@@ -333,16 +367,59 @@ export default function TaromboSnapshotCompile({
         width: number;
         height: number;
     } | null>(null);
+    const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
+    useEffect(() => {
+        const viewport = viewportRef.current;
+
+        if (!viewport) {
+            return;
+        }
+
+        const measure = () => {
+            const styles = getComputedStyle(viewport);
+            setViewportSize({
+                width: Math.max(
+                    1,
+                    viewport.clientWidth -
+                        parseFloat(styles.paddingLeft) -
+                        parseFloat(styles.paddingRight),
+                ),
+                height: Math.max(
+                    1,
+                    parseFloat(styles.maxHeight) -
+                        parseFloat(styles.paddingTop) -
+                        parseFloat(styles.paddingBottom),
+                ),
+            });
+        };
+        const observer = new ResizeObserver(measure);
+        observer.observe(viewport);
+        window.addEventListener('resize', measure);
+        measure();
+
+        return () => {
+            observer.disconnect();
+            window.removeEventListener('resize', measure);
+        };
+    }, []);
+    const fitViewZoom =
+        naturalSize && viewportSize.width > 0
+            ? Math.min(
+                  1,
+                  viewportSize.width / naturalSize.width,
+                  viewportSize.height / naturalSize.height,
+              )
+            : 1;
     const [viewZoom, setViewZoom] = useState<number | null>(null);
-    const label =
-        snapshot.title ?? snapshot.center_person_name ?? 'Pohon Tarombo';
+    const label = snapshot
+        ? (snapshot.title ?? snapshot.center_person_name ?? 'Pohon Tarombo')
+        : 'Kanvas kosong';
     const loadKey = selectedFrame
         ? `${selectedFrame.id}-${removeBackground}`
         : null;
     const ready = assets !== null && assets.key === loadKey;
-    const treeSource: Box | null = ready
-        ? (crop ?? fullBox(assets.tree))
-        : null;
+    const treeSource: Box | null =
+        ready && assets.tree ? (crop ?? fullBox(assets.tree)) : null;
     const fittedSpot =
         selectedFrame && treeSource
             ? fitInArea(selectedFrame, treeSource.width, treeSource.height)
@@ -358,7 +435,7 @@ export default function TaromboSnapshotCompile({
               )
             : 1;
     const treeThumb = useMemo(
-        () => (assets ? canvasThumbnail(assets.tree) : ''),
+        () => (assets?.tree ? canvasThumbnail(assets.tree) : ''),
         [assets],
     );
 
@@ -367,7 +444,7 @@ export default function TaromboSnapshotCompile({
 
     for (const id of order) {
         if (id === TREE_ID) {
-            if (ready && treeSpot) {
+            if (ready && assets.tree && treeSpot) {
                 stack.push({
                     id,
                     name: 'Pohon',
@@ -416,17 +493,19 @@ export default function TaromboSnapshotCompile({
 
         Promise.all([
             loadImageUrl(selectedFrame.image_url),
-            loadImageUrl(snapshot.image_url),
+            snapshot ? loadImageUrl(snapshot.image_url) : null,
         ])
             .then(([frameImage, snapshotImage]) => {
                 if (cancelled) {
                     return;
                 }
 
-                let tree = treeCacheRef.current.get(removeBackground);
+                let tree: HTMLCanvasElement | null = null;
 
-                if (!tree) {
-                    tree = snapshotCanvas(snapshotImage, removeBackground);
+                if (snapshotImage) {
+                    tree =
+                        treeCacheRef.current.get(removeBackground) ??
+                        snapshotCanvas(snapshotImage, removeBackground);
                     treeCacheRef.current.set(removeBackground, tree);
                 }
 
@@ -441,7 +520,7 @@ export default function TaromboSnapshotCompile({
         return () => {
             cancelled = true;
         };
-    }, [selectedFrame, snapshot.image_url, removeBackground, loadKey]);
+    }, [selectedFrame, snapshot, removeBackground, loadKey]);
 
     useEffect(() => {
         if (!ready || !selectedFrame || !canvasRef.current) {
@@ -521,7 +600,7 @@ export default function TaromboSnapshotCompile({
                 (layer): layer is Layer => layer !== null,
             );
             const known = new Set([
-                TREE_ID,
+                ...(tree ? [TREE_ID] : []),
                 ...restored.map((layer) => layer.id),
             ]);
             const restoredOrder = draft.state.order.filter((id) =>
@@ -639,7 +718,10 @@ export default function TaromboSnapshotCompile({
             }
 
             const next = [...current];
-            next.splice(Math.max(0, next.indexOf(TREE_ID)), 0, id);
+            const treeIndex = next.indexOf(TREE_ID);
+
+            // Without a tree, images stack up in the order they are added.
+            next.splice(treeIndex < 0 ? next.length : treeIndex, 0, id);
 
             return next;
         });
@@ -720,17 +802,15 @@ export default function TaromboSnapshotCompile({
         );
     };
 
-    const addFiles = async (files: File[], kind: LayerKind) => {
-        for (const file of files) {
-            if (!file.type.startsWith('image/')) {
-                continue;
-            }
+    // Ranting images come from the free originals, backgrounds from the
+    // template frame images; both are loaded from the server, never uploaded.
+    const addFromUrl = async (url: string, kind: LayerKind) => {
+        setLibrary(null);
 
-            try {
-                addLayer(await imageFileToCanvas(file), kind);
-            } catch {
-                setPreviewError('Gambar gagal dimuat. Coba file lain.');
-            }
+        try {
+            addLayer(imageToCanvas(await loadImageUrl(url)), kind);
+        } catch {
+            setPreviewError('Gambar gagal dimuat. Coba gambar lain.');
         }
     };
 
@@ -782,7 +862,9 @@ export default function TaromboSnapshotCompile({
 
         setLayers((current) => current.filter((layer) => layer.id !== id));
         setOrder((current) => current.filter((entry) => entry !== id));
-        setSelectedId((current) => (current === id ? TREE_ID : current));
+        setSelectedId((current) =>
+            current === id ? (snapshot ? TREE_ID : '') : current,
+        );
     };
 
     const moveItem = (id: string, action: MoveAction) =>
@@ -825,20 +907,53 @@ export default function TaromboSnapshotCompile({
         });
     };
 
+    // Keep the point under the cursor fixed as the preview changes size.
+    const zoomViewport = (
+        factor: number,
+        clientX?: number,
+        clientY?: number,
+    ) => {
+        const viewport = viewportRef.current;
+        const canvas = canvasRef.current;
+
+        if (!ready || !viewport || !canvas || !naturalSize) {
+            return;
+        }
+
+        const bounds = viewport.getBoundingClientRect();
+        const before = canvas.getBoundingClientRect();
+        const anchorX = clientX ?? bounds.left + viewport.clientWidth / 2;
+        const anchorY = clientY ?? bounds.top + viewport.clientHeight / 2;
+        const x = (anchorX - before.left) / before.width;
+        const y = (anchorY - before.top) / before.height;
+        const next = clampViewZoom((before.width / naturalSize.width) * factor);
+
+        flushSync(() => setViewZoom(next));
+        const after = canvas.getBoundingClientRect();
+        viewport.scrollLeft += after.left + x * after.width - anchorX;
+        viewport.scrollTop += after.top + y * after.height - anchorY;
+    };
+
+    const panViewport = (dx: number, dy: number) => {
+        viewportRef.current?.scrollBy({ left: dx, top: dy });
+    };
+
     const actionsRef = useRef({
-        addFiles,
         duplicateItem,
         removeItem,
         nudgeItem,
+        zoomViewport,
+        panViewport,
     });
     const selectedIdRef = useRef(selectedId);
 
     useEffect(() => {
         actionsRef.current = {
-            addFiles,
             duplicateItem,
             removeItem,
             nudgeItem,
+            zoomViewport,
+            panViewport,
         };
         selectedIdRef.current = selectedId;
     });
@@ -849,17 +964,6 @@ export default function TaromboSnapshotCompile({
 
         const onPaste = (event: ClipboardEvent) => {
             if (blocked(event.target)) {
-                return;
-            }
-
-            const files = Array.from(event.clipboardData?.files ?? []).filter(
-                (file) => file.type.startsWith('image/'),
-            );
-
-            if (files.length > 0) {
-                event.preventDefault();
-                void actionsRef.current.addFiles(files, 'ranting');
-
                 return;
             }
 
@@ -880,6 +984,19 @@ export default function TaromboSnapshotCompile({
                 !window.getSelection()?.toString()
             ) {
                 copiedIdRef.current = selectedIdRef.current;
+            } else if (
+                (event.ctrlKey || event.metaKey) &&
+                ['+', '=', '-', '0'].includes(event.key)
+            ) {
+                event.preventDefault();
+
+                if (event.key === '0') {
+                    setViewZoom(null);
+                } else {
+                    actionsRef.current.zoomViewport(
+                        event.key === '-' ? 1 / 1.2 : 1.2,
+                    );
+                }
             } else if (event.key === 'Delete') {
                 actionsRef.current.removeItem(selectedIdRef.current);
             } else if (event.key in ARROW_DIRECTIONS) {
@@ -890,7 +1007,15 @@ export default function TaromboSnapshotCompile({
                 const times = event.shiftKey ? 10 : 1;
 
                 event.preventDefault();
-                actionsRef.current.nudgeItem(dx * times, dy * times);
+
+                if (event.altKey) {
+                    actionsRef.current.panViewport(
+                        dx * times * 40,
+                        dy * times * 40,
+                    );
+                } else {
+                    actionsRef.current.nudgeItem(dx * times, dy * times);
+                }
             }
         };
 
@@ -902,6 +1027,51 @@ export default function TaromboSnapshotCompile({
             window.removeEventListener('keydown', onKeyDown);
         };
     }, []);
+
+    useEffect(() => {
+        const viewport = viewportRef.current;
+
+        if (!viewport) {
+            return;
+        }
+
+        const onWheel = (event: WheelEvent) => {
+            if (!ready || document.querySelector('[role="dialog"]')) {
+                return;
+            }
+
+            event.preventDefault();
+            // Ordinary scrolling pans. Trackpad pinch emits Ctrl + wheel.
+            const unit =
+                event.deltaMode === 1
+                    ? 16
+                    : event.deltaMode === 2
+                      ? viewport.clientHeight
+                      : 1;
+
+            if (!event.ctrlKey && !event.metaKey) {
+                const dx = event.deltaX * unit;
+                const dy = event.deltaY * unit;
+                actionsRef.current.panViewport(
+                    event.shiftKey && dx === 0 ? dy : dx,
+                    event.shiftKey && dx === 0 ? 0 : dy,
+                );
+
+                return;
+            }
+
+            const delta = Math.max(-100, Math.min(100, event.deltaY * unit));
+            actionsRef.current.zoomViewport(
+                Math.exp(-delta * 0.005),
+                event.clientX,
+                event.clientY,
+            );
+        };
+
+        viewport.addEventListener('wheel', onWheel, { passive: false });
+
+        return () => viewport.removeEventListener('wheel', onWheel);
+    }, [ready]);
 
     const pickFrame = (frame: Frame) => {
         setPreviewError(null);
@@ -956,24 +1126,12 @@ export default function TaromboSnapshotCompile({
         });
     };
 
-    const VIEW_ZOOM_MIN = 0.25;
-    const VIEW_ZOOM_MAX = 3;
-    const VIEW_ZOOM_STEP = 0.25;
-
-    const clampViewZoom = (value: number) =>
-        Math.min(VIEW_ZOOM_MAX, Math.max(VIEW_ZOOM_MIN, value));
-
-    const zoomInView = () =>
-        setViewZoom((current) =>
-            clampViewZoom((current ?? 1) + VIEW_ZOOM_STEP),
-        );
-
-    const zoomOutView = () =>
-        setViewZoom((current) =>
-            clampViewZoom((current ?? 1) - VIEW_ZOOM_STEP),
-        );
-
-    const resetView = () => setViewZoom(null);
+    const zoomInView = () => zoomViewport(1.25);
+    const zoomOutView = () => zoomViewport(1 / 1.25);
+    const resetView = () => {
+        setViewZoom(null);
+        viewportRef.current?.scrollTo({ left: 0, top: 0 });
+    };
 
     const resetSelected = () => {
         if (!selectedItem || !selectedFrame) {
@@ -1211,7 +1369,9 @@ export default function TaromboSnapshotCompile({
         // sent as a POST with Laravel's method spoofing.
         return new Promise<boolean>((resolve) => {
             router.post(
-                compileDraft.update.url(snapshot.id),
+                snapshot
+                    ? compileDraft.update.url(snapshot.id)
+                    : blankDraft.update.url(),
                 {
                     _method: 'put',
                     ...(draftId !== null ? { draft_id: draftId } : {}),
@@ -1270,7 +1430,17 @@ export default function TaromboSnapshotCompile({
         setSavingDraft(false);
     };
 
-    const produce = async () => {
+    // The line under the page title, which is also the default result name.
+    const defaultResultName = `${draft?.name ? `${draft.name} · ` : ''}${label}${
+        selectedFrame ? ` · ${selectedFrame.name}` : ''
+    }`.slice(0, 255);
+
+    const openProduceDialog = () => {
+        setResultName(targetTitle ?? defaultResultName);
+        setProduceOpen(true);
+    };
+
+    const produce = async (title: string) => {
         if (!selectedFrame || producing || !ready || savingDraft) {
             return;
         }
@@ -1316,9 +1486,10 @@ export default function TaromboSnapshotCompile({
         router.post(
             tarombo.snapshots.generate().url,
             {
-                snapshot_id: snapshot.id,
+                snapshot_id: snapshot?.id ?? null,
                 target_snapshot_id: targetSnapshotId,
                 frame_id: selectedFrame.id,
+                title: title.trim() || null,
                 image,
             },
             {
@@ -1365,16 +1536,20 @@ export default function TaromboSnapshotCompile({
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                        <label className="flex h-9 items-center gap-2 rounded-md border border-tb-outline-variant px-3 text-sm text-tb-on-surface">
-                            <input
-                                type="checkbox"
-                                checked={removeBackground}
-                                onChange={(event) =>
-                                    toggleRemoveBackground(event.target.checked)
-                                }
-                            />
-                            Hapus latar gambar
-                        </label>
+                        {snapshot && (
+                            <label className="flex h-9 items-center gap-2 rounded-md border border-tb-outline-variant px-3 text-sm text-tb-on-surface">
+                                <input
+                                    type="checkbox"
+                                    checked={removeBackground}
+                                    onChange={(event) =>
+                                        toggleRemoveBackground(
+                                            event.target.checked,
+                                        )
+                                    }
+                                />
+                                Hapus latar gambar
+                            </label>
+                        )}
                         <Button asChild variant="outline">
                             <Link href={tarombo.snapshots.index()}>
                                 <ArrowLeft className="size-4" /> Kembali
@@ -1456,7 +1631,7 @@ export default function TaromboSnapshotCompile({
                             disabled={
                                 !ready || restoring || producing || savingDraft
                             }
-                            onClick={produce}
+                            onClick={openProduceDialog}
                             className="bg-tb-primary hover:bg-tb-primary-light"
                         >
                             {producing ? (
@@ -1474,18 +1649,9 @@ export default function TaromboSnapshotCompile({
                 </div>
 
                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    {previewError ? (
-                        <p className="text-sm text-red-600">{previewError}</p>
-                    ) : (
-                        <p className="text-xs text-tb-on-surface-variant">
-                            Klik gambar di pratinjau atau di daftar lapisan
-                            untuk memilihnya, lalu geser kotaknya atau tarik
-                            sudutnya, atau geser dengan tombol panah (Shift +
-                            panah untuk lebih jauh). Tempel gambar dengan
-                            Ctrl+V, salin lapisan dengan Ctrl+C lalu Ctrl+V,
-                            hapus dengan Delete.
-                        </p>
-                    )}
+                    <p className="text-sm font-medium text-tb-on-surface">
+                        Pilih gambar untuk mengatur ukurannya.
+                    </p>
                     <label className="flex shrink-0 items-center gap-3 text-sm text-tb-on-surface">
                         Ukuran {selectedItem?.name ?? 'gambar'}
                         <input
@@ -1515,6 +1681,139 @@ export default function TaromboSnapshotCompile({
                     </p>
                 )}
 
+                {previewError && (
+                    <p role="alert" className="text-sm text-red-600">
+                        {previewError}
+                    </p>
+                )}
+
+                <details
+                    open
+                    className="rounded-xl border border-tb-outline-variant bg-tb-surface-bright"
+                >
+                    <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-tb-on-surface">
+                        Panduan menggunakan kanvas
+                    </summary>
+                    <div className="grid gap-5 border-t border-tb-outline-variant p-4 text-sm md:grid-cols-3">
+                        <div className="flex flex-col gap-2">
+                            <h3 className="flex items-center gap-2 font-semibold text-tb-on-surface">
+                                <ZoomIn className="size-4 text-tb-primary" />{' '}
+                                Zoom tampilan
+                            </h3>
+                            <ul className="flex list-disc flex-col gap-2 pl-4 leading-relaxed text-tb-on-surface-variant">
+                                <li>
+                                    Tahan Ctrl/Cmd sambil menggulir roda mouse,
+                                    atau cubit dua jari di touchpad untuk zoom.
+                                </li>
+                                <li>
+                                    Arahkan kursor ke bagian yang ingin dilihat
+                                    lebih dekat.
+                                </li>
+                                <li>
+                                    Keyboard:{' '}
+                                    <kbd className="font-semibold text-tb-on-surface">
+                                        Ctrl/Cmd + plus (+)
+                                    </kbd>{' '}
+                                    atau{' '}
+                                    <kbd className="font-semibold text-tb-on-surface">
+                                        minus (−)
+                                    </kbd>
+                                    .
+                                </li>
+                                <li>
+                                    Kembali ke tampilan penuh: klik{' '}
+                                    <strong>Sesuaikan</strong> atau tekan{' '}
+                                    <kbd className="font-semibold text-tb-on-surface">
+                                        Ctrl/Cmd + 0
+                                    </kbd>
+                                    .
+                                </li>
+                            </ul>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <h3 className="flex items-center gap-2 font-semibold text-tb-on-surface">
+                                <PanelsTopLeft className="size-4 text-tb-primary" />{' '}
+                                Geser tampilan
+                            </h3>
+                            <ul className="flex list-disc flex-col gap-2 pl-4 leading-relaxed text-tb-on-surface-variant">
+                                <li>
+                                    Gulir mouse untuk naik/turun, atau geser dua
+                                    jari di touchpad untuk menjelajahi gambar.
+                                </li>
+                                <li>
+                                    Tahan{' '}
+                                    <kbd className="font-semibold text-tb-on-surface">
+                                        Shift
+                                    </kbd>{' '}
+                                    sambil menggulir mouse untuk geser ke
+                                    kiri/kanan.
+                                </li>
+                                <li>
+                                    Keyboard: tahan{' '}
+                                    <kbd className="font-semibold text-tb-on-surface">
+                                        Alt
+                                    </kbd>
+                                    , lalu tekan tombol panah{' '}
+                                    <span aria-label="kiri, atas, bawah, kanan">
+                                        ← ↑ ↓ →
+                                    </span>
+                                    .
+                                </li>
+                                <li>
+                                    Tambahkan{' '}
+                                    <kbd className="font-semibold text-tb-on-surface">
+                                        Shift
+                                    </kbd>{' '}
+                                    untuk menggeser lebih jauh.
+                                </li>
+                            </ul>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <h3 className="flex items-center gap-2 font-semibold text-tb-on-surface">
+                                <Layers className="size-4 text-tb-primary" />{' '}
+                                Atur gambar & lapisan
+                            </h3>
+                            <ul className="flex list-disc flex-col gap-2 pl-4 leading-relaxed text-tb-on-surface-variant">
+                                <li>
+                                    Klik gambar atau nama lapisan untuk
+                                    memilihnya.
+                                </li>
+                                <li>
+                                    Seret kotak untuk memindahkan gambar. Tarik
+                                    sudut kotak untuk mengubah ukurannya.
+                                </li>
+                                <li>
+                                    Gunakan tombol panah untuk menggeser gambar;{' '}
+                                    <kbd className="font-semibold text-tb-on-surface">
+                                        Shift + panah
+                                    </kbd>{' '}
+                                    untuk langkah lebih jauh.
+                                </li>
+                                <li>
+                                    Salin:{' '}
+                                    <kbd className="font-semibold text-tb-on-surface">
+                                        Ctrl/Cmd + C
+                                    </kbd>
+                                    . Tempel gambar atau salinan:{' '}
+                                    <kbd className="font-semibold text-tb-on-surface">
+                                        Ctrl/Cmd + V
+                                    </kbd>
+                                    . Hapus lapisan tambahan:{' '}
+                                    <kbd className="font-semibold text-tb-on-surface">
+                                        Delete
+                                    </kbd>
+                                    .
+                                </li>
+                            </ul>
+                        </div>
+                        <p className="border-t border-tb-outline-variant pt-3 text-xs leading-relaxed text-tb-on-surface-variant md:col-span-3">
+                            Zoom hanya memperbesar tampilan di layar. Untuk
+                            mengubah ukuran gambar pada hasil akhir, gunakan
+                            pengatur ukuran atau tarik sudut kotak. Gunakan Ctrl
+                            di Windows/Linux dan Cmd di Mac.
+                        </p>
+                    </div>
+                </details>
                 <div className="flex items-center justify-end gap-2">
                     <span className="text-xs text-tb-on-surface-variant">
                         Perbesar tampilan
@@ -1534,7 +1833,7 @@ export default function TaromboSnapshotCompile({
                         <ZoomOut className="size-4" />
                     </Button>
                     <span className="w-12 text-center text-sm text-tb-on-surface tabular-nums">
-                        {Math.round((viewZoom ?? 1) * 100)}%
+                        {Math.round((viewZoom ?? fitViewZoom) * 100)}%
                     </span>
                     <Button
                         type="button"
@@ -1563,10 +1862,18 @@ export default function TaromboSnapshotCompile({
                 </div>
 
                 <div className="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
-                    <div className="flex max-h-[calc(100dvh-15rem)] min-h-0 flex-1 items-center justify-center overflow-auto rounded-xl bg-tb-surface-container p-6 select-none">
+                    <div
+                        // Double-clicking anywhere in the preview area clears the selection.
+                        onDoubleClick={() => setSelectedId('')}
+                        ref={viewportRef}
+                        tabIndex={0}
+                        role="region"
+                        aria-label="Kanvas compile. Scroll untuk geser tampilan. Ctrl atau Cmd dan scroll, atau pinch untuk zoom."
+                        className="max-h-[calc(100dvh-15rem)] min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain rounded-xl bg-tb-surface-container p-6 outline-none select-none focus-visible:ring-2 focus-visible:ring-tb-primary"
+                    >
                         {selectedFrame ? (
                             <div
-                                className={`relative ${ready ? '' : 'min-h-40 min-w-60'}`}
+                                className={`relative mx-auto w-fit ${ready ? '' : 'min-h-40 min-w-60'}`}
                                 onPointerDown={selectAtPoint}
                             >
                                 {!ready && (
@@ -1577,20 +1884,16 @@ export default function TaromboSnapshotCompile({
                                 )}
                                 <canvas
                                     ref={canvasRef}
-                                    className={
-                                        viewZoom === null
-                                            ? 'block max-h-[calc(100dvh-15rem)] max-w-full shadow-md'
-                                            : 'block shadow-md'
-                                    }
+                                    className="block max-w-none shadow-md"
                                     style={
-                                        viewZoom !== null && naturalSize
+                                        naturalSize
                                             ? {
                                                   width:
                                                       naturalSize.width *
-                                                      viewZoom,
+                                                      (viewZoom ?? fitViewZoom),
                                                   height:
                                                       naturalSize.height *
-                                                      viewZoom,
+                                                      (viewZoom ?? fitViewZoom),
                                               }
                                             : undefined
                                     }
@@ -1641,7 +1944,7 @@ export default function TaromboSnapshotCompile({
                                 variant="outline"
                                 size="sm"
                                 disabled={!selectedFrame}
-                                onClick={() => rantingInputRef.current?.click()}
+                                onClick={() => setLibrary('ranting')}
                             >
                                 <ImagePlus className="size-4" /> Ranting
                             </Button>
@@ -1650,41 +1953,11 @@ export default function TaromboSnapshotCompile({
                                 variant="outline"
                                 size="sm"
                                 disabled={!selectedFrame}
-                                onClick={() =>
-                                    backgroundInputRef.current?.click()
-                                }
+                                onClick={() => setLibrary('background')}
                             >
                                 <ImagePlus className="size-4" /> Background
                             </Button>
                         </div>
-                        <input
-                            ref={rantingInputRef}
-                            type="file"
-                            accept="image/*"
-                            multiple
-                            className="hidden"
-                            onChange={(event) => {
-                                void addFiles(
-                                    Array.from(event.target.files ?? []),
-                                    'ranting',
-                                );
-                                event.target.value = '';
-                            }}
-                        />
-                        <input
-                            ref={backgroundInputRef}
-                            type="file"
-                            accept="image/*"
-                            multiple
-                            className="hidden"
-                            onChange={(event) => {
-                                void addFiles(
-                                    Array.from(event.target.files ?? []),
-                                    'background',
-                                );
-                                event.target.value = '';
-                            }}
-                        />
 
                         <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto">
                             {[...stack].reverse().map((item) => (
@@ -2023,6 +2296,54 @@ export default function TaromboSnapshotCompile({
                 </div>
             </div>
 
+            <Dialog open={produceOpen} onOpenChange={setProduceOpen}>
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Nama gambar hasil compile</DialogTitle>
+                        <DialogDescription>
+                            Nama ini ditampilkan pada gambar hasil di Tarombo
+                            Tersimpan.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form
+                        className="flex flex-col gap-4"
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            setProduceOpen(false);
+                            void produce(resultName);
+                        }}
+                    >
+                        <Input
+                            value={resultName}
+                            onChange={(event) =>
+                                setResultName(event.target.value)
+                            }
+                            maxLength={255}
+                            autoFocus
+                            aria-label="Nama gambar hasil compile"
+                        />
+                        <DialogFooter>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setProduceOpen(false)}
+                            >
+                                Batal
+                            </Button>
+                            <Button
+                                type="submit"
+                                className="bg-tb-primary hover:bg-tb-primary-light"
+                            >
+                                <Wand2 className="size-4" />
+                                {targetSnapshotId !== null
+                                    ? 'Perbarui Hasil'
+                                    : 'Produce'}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
             <Dialog open={framePickerOpen} onOpenChange={setFramePickerOpen}>
                 <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
                     <DialogHeader>
@@ -2058,6 +2379,71 @@ export default function TaromboSnapshotCompile({
                             <p className="col-span-full py-6 text-center text-sm text-tb-on-surface-variant">
                                 Belum ada frame aktif. Hubungi admin untuk
                                 menambah template.
+                            </p>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={library !== null}
+                onOpenChange={(open) => !open && setLibrary(null)}
+            >
+                <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
+                    <DialogHeader>
+                        <DialogTitle>
+                            {library === 'background'
+                                ? 'Pilih Background Template Frame'
+                                : 'Pilih Gambar Original Bebas'}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {library === 'background'
+                                ? 'Gambar template frame dipakai sebagai background di lapisan paling belakang.'
+                                : 'Gambar original yang belum punya compile tersimpan ditambahkan sebagai ranting.'}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+                        {(library === 'background'
+                            ? frames.map((frame) => ({
+                                  id: `frame-${frame.id}`,
+                                  label: frame.name,
+                                  image_url: frame.image_url,
+                              }))
+                            : freeOriginals.map((free) => ({
+                                  id: `original-${free.id}`,
+                                  label:
+                                      free.title ??
+                                      free.center_person_name ??
+                                      'Pohon Tarombo',
+                                  image_url: free.image_url,
+                              }))
+                        ).map((option) => (
+                            <button
+                                key={option.id}
+                                type="button"
+                                onClick={() =>
+                                    library &&
+                                    void addFromUrl(option.image_url, library)
+                                }
+                                className="overflow-hidden rounded-xl border border-tb-outline-variant text-left transition-colors hover:border-tb-primary focus-visible:ring-2 focus-visible:ring-tb-primary focus-visible:outline-none"
+                            >
+                                <img
+                                    src={option.image_url}
+                                    alt={option.label}
+                                    className="aspect-video w-full bg-tb-surface-container object-contain"
+                                />
+                                <p className="truncate px-3 py-2 text-sm font-medium text-tb-on-surface">
+                                    {option.label}
+                                </p>
+                            </button>
+                        ))}
+                        {(library === 'background'
+                            ? frames.length
+                            : freeOriginals.length) === 0 && (
+                            <p className="col-span-full py-6 text-center text-sm text-tb-on-surface-variant">
+                                {library === 'background'
+                                    ? 'Belum ada template frame aktif.'
+                                    : 'Belum ada Gambar Original Bebas. Simpan pohon dari Pohon Tarombo untuk menambahnya.'}
                             </p>
                         )}
                     </div>

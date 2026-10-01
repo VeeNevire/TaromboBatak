@@ -70,7 +70,7 @@ test('the agent receives active topics, allowed website sources, marga names and
         ->assertJsonPath('known_urls.0', $known->url);
 });
 
-test('received news is stored pending, cleaned and tagged with the margas mentioned', function () {
+test('received news is immediately approved, cleaned and tagged with the margas mentioned', function () {
     $silaban = Marga::factory()->create(['name' => 'Silaban']);
     $sihombing = Marga::factory()->create(['name' => 'Sihombing']);
     Marga::factory()->create(['name' => 'Batak']);
@@ -86,7 +86,8 @@ test('received news is stored pending, cleaned and tagged with the margas mentio
 
     $news = MargaNews::query()->sole();
 
-    expect($news->status)->toBe(MargaNews::STATUS_PENDING)
+    expect($news->status)->toBe(MargaNews::STATUS_APPROVED)
+        ->and($news->reviewed_at)->not->toBeNull()
         ->and($news->title)->toBe('Seribuan Pomparan Borsak Junjungan Silaban Marpesta Bona Taon di Medan')
         ->and($news->excerpt)->toBe('Ribuan pomparan Silaban berkumpul.')
         ->and($news->submitted_by)->toBe('hermes-vps')
@@ -505,3 +506,45 @@ test('scheduled Hermes run keeps an active lease even when next run is due', fun
     Http::assertNothingSent();
     expect(MargaNewsAutomationSetting::current()->fresh()->last_status)->toBe('running');
 });
+
+test('staff can deactivate and republish news', function (string $state) {
+    $staff = User::factory()->{$state}()->create();
+    $news = MargaNews::factory()->approved()->create();
+    $this->actingAs($staff)->post(route('marga-news.decide'), ['action' => 'deactivate', 'ids' => [$news->id]])->assertRedirect();
+    expect($news->fresh()->status)->toBe(MargaNews::STATUS_INACTIVE);
+    $this->get(route('marga-news.show', $news))->assertNotFound();
+    $this->get(route('marga-news.index'))->assertInertia(fn (Assert $page) => $page->has('news.data', 0));
+    $this->post(route('marga-news.comments.store', $news), ['body' => 'Komentar'])->assertNotFound();
+    $this->post(route('marga-news.decide'), ['action' => 'approve', 'ids' => [$news->id]])->assertRedirect();
+    $this->get(route('marga-news.show', $news))->assertSuccessful();
+})->with(['asAdmin', 'asSubAdmin']);
+
+test('public news is ordered by newest update rather than source publication', function () {
+    $older = MargaNews::factory()->approved()->create(['updated_at' => now()->subDays(2), 'published_at' => now()]);
+    $newer = MargaNews::factory()->approved()->create(['updated_at' => now(), 'published_at' => now()->subYear()]);
+    $this->get(route('marga-news.index'))->assertInertia(fn (Assert $page) => $page
+        ->where('news.data.0.id', $newer->id)->where('news.data.1.id', $older->id));
+});
+
+test('guests can read news but only logged in users can comment', function () {
+    $news = MargaNews::factory()->approved()->create(['content' => 'Isi berita lengkap']);
+    $this->get(route('marga-news.show', $news))->assertInertia(fn (Assert $page) => $page
+        ->component('marga-news/show')->where('news.content', 'Isi berita lengkap'));
+    $this->post(route('marga-news.comments.store', $news), ['body' => 'Halo'])->assertRedirect(route('login'));
+    $user = User::factory()->create();
+    $this->actingAs($user)->post(route('marga-news.comments.store', $news), ['body' => '  Terima kasih  ', 'user_id' => 999])->assertRedirect();
+    expect($news->comments()->sole()->body)->toBe('Terima kasih')
+        ->and($news->comments()->sole()->user_id)->toBe($user->id);
+    $this->post(route('marga-news.comments.store', $news), ['body' => '   '])->assertSessionHasErrors('body');
+    $this->post(route('marga-news.comments.store', $news), ['body' => str_repeat('a', 1001)])->assertSessionHasErrors('body');
+    $this->get(route('marga-news.show', $news))->assertInertia(fn (Assert $page) => $page
+        ->has('comments.data', 1)->where('comments.data.0.author', $user->name));
+    $this->post(route('marga-news.decide'), ['action' => 'deactivate', 'ids' => [$news->id]])->assertForbidden();
+});
+
+test('unpublished articles cannot be read or commented on', function (string $status) {
+    $news = MargaNews::factory()->create(['status' => $status]);
+    $this->get(route('marga-news.show', $news))->assertNotFound();
+    $this->actingAs(User::factory()->create())->post(route('marga-news.comments.store', $news), ['body' => 'Halo'])->assertNotFound();
+    expect($news->comments()->count())->toBe(0);
+})->with(['pending', 'rejected', 'inactive']);

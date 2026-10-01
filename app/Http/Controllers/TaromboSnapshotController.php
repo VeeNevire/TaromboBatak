@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\GenerateTaromboFrameRequest;
+use App\Http\Requests\ListTaromboSnapshotsRequest;
 use App\Http\Requests\StoreTaromboSnapshotRequest;
 use App\Models\TaromboCompileDraft;
 use App\Models\TaromboFrame;
@@ -21,7 +22,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TaromboSnapshotController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(ListTaromboSnapshotsRequest $request): Response
     {
         Gate::authorize('viewAny', TaromboSnapshot::class);
 
@@ -35,18 +36,26 @@ class TaromboSnapshotController extends Controller
         // Snapshots with a saved Compile Gambar arrangement of this account.
         $draftSnapshotIds = TaromboCompileDraft::query()
             ->where('user_id', $user->id)
+            ->whereNotNull('tarombo_snapshot_id')
             ->pluck('tarombo_snapshot_id')
             ->flip();
 
+        $search = trim((string) $request->validated('q', ''));
+        $display = $request->validated('display') ?? 'images';
         $filter = $request->string('filter')->toString();
-        $filter = in_array($filter, ['compiled', 'original', 'saved'], true) ? $filter : 'all';
+        $filter = in_array($filter, ['compiled', 'original', 'free', 'saved'], true) ? $filter : 'all';
 
         $snapshots = $filter === 'saved'
-            ? $this->savedCompiles($user->id)
+            ? $this->savedCompiles($user->id, $search)
             : TaromboSnapshot::query()
                 ->tap($ownerScope)
+                ->when($search !== '', fn ($query) => $query->matchingTitle($search))
                 ->when($filter === 'compiled', fn ($query) => $query->whereNotNull('tarombo_frame_id'))
                 ->when($filter === 'original', fn ($query) => $query->whereNull('tarombo_frame_id'))
+                // Free originals: raw tree images with no saved compile arrangement.
+                ->when($filter === 'free', fn ($query) => $query
+                    ->whereNull('tarombo_frame_id')
+                    ->whereDoesntHave('compileDrafts'))
                 ->with(['centerPerson:id,name', 'user:id,name'])
                 ->latest()
                 ->paginate(12)
@@ -85,6 +94,8 @@ class TaromboSnapshotController extends Controller
         return Inertia::render('tarombo/snapshots', [
             'snapshots' => $snapshots,
             'filter' => $filter,
+            'search' => $search,
+            'display' => $display,
             'snapshotOptions' => $snapshotOptions,
             'frames' => TaromboFrame::query()
                 ->active()
@@ -118,15 +129,27 @@ class TaromboSnapshotController extends Controller
             $taromboSnapshot = $source;
         }
 
+        return $this->compilePage($request, $taromboSnapshot, $target);
+    }
+
+    /** Compile Gambar on a blank canvas: only a frame, ranting and background layers. */
+    public function compileBlank(Request $request): Response
+    {
+        return $this->compilePage($request, null, null);
+    }
+
+    private function compilePage(Request $request, ?TaromboSnapshot $snapshot, ?TaromboSnapshot $target): Response
+    {
         return Inertia::render('tarombo/snapshot-compile', [
-            'snapshot' => [
-                'id' => $taromboSnapshot->id,
-                'view' => $taromboSnapshot->view,
-                'title' => $taromboSnapshot->title,
-                'center_person_name' => $taromboSnapshot->centerPerson?->name,
-                'image_url' => route('tarombo.snapshots.image', $taromboSnapshot),
+            'snapshot' => $snapshot === null ? null : [
+                'id' => $snapshot->id,
+                'view' => $snapshot->view,
+                'title' => $snapshot->title,
+                'center_person_name' => $snapshot->centerPerson?->name,
+                'image_url' => route('tarombo.snapshots.image', $snapshot),
             ],
             'targetSnapshotId' => $target?->id,
+            'targetTitle' => $target?->title,
             'frames' => TaromboFrame::query()
                 ->active()
                 ->nonCollage()
@@ -143,8 +166,27 @@ class TaromboSnapshotController extends Controller
                     'area_width' => $frame->area_width,
                     'area_height' => $frame->area_height,
                 ]),
+            // Ranting layers are picked from the free originals (no saved compile).
+            'freeOriginals' => TaromboSnapshot::query()
+                ->when(
+                    ! $request->user()->isStaff(),
+                    fn ($query) => $query->whereBelongsTo($request->user()),
+                )
+                ->whereNull('tarombo_frame_id')
+                ->whereDoesntHave('compileDrafts')
+                ->when($snapshot !== null, fn ($query) => $query->whereKeyNot($snapshot->id))
+                ->with('centerPerson:id,name')
+                ->latest()
+                ->limit(60)
+                ->get()
+                ->map(fn (TaromboSnapshot $free) => [
+                    'id' => $free->id,
+                    'title' => $free->title,
+                    'center_person_name' => $free->centerPerson?->name,
+                    'image_url' => route('tarombo.snapshots.image', $free),
+                ]),
             'accountName' => $request->user()->name,
-            'draft' => $this->draftData($request->user()->id, $taromboSnapshot, $request->integer('draft') ?: null),
+            'draft' => $this->draftData($request->user()->id, $snapshot, $request->integer('draft') ?: null),
         ]);
     }
 
@@ -155,14 +197,15 @@ class TaromboSnapshotController extends Controller
      *
      * @return array<string, mixed>|null
      */
-    private function draftData(int $userId, TaromboSnapshot $snapshot, ?int $draftId): ?array
+    private function draftData(int $userId, ?TaromboSnapshot $snapshot, ?int $draftId): ?array
     {
         $drafts = TaromboCompileDraft::query()
             ->where('user_id', $userId)
-            ->where('tarombo_snapshot_id', $snapshot->id);
+            ->where('tarombo_snapshot_id', $snapshot?->id);
 
+        // A blank canvas starts empty unless a saved compile is asked for.
         $draft = ($draftId !== null ? (clone $drafts)->find($draftId) : null)
-            ?? $drafts->latest('updated_at')->latest('id')->first();
+            ?? ($snapshot !== null ? $drafts->latest('updated_at')->latest('id')->first() : null);
 
         if ($draft === null) {
             return null;
@@ -174,7 +217,9 @@ class TaromboSnapshotController extends Controller
             'state' => $draft->state,
             'image_urls' => collect(TaromboCompileDraft::storedImages($draft->state))
                 ->mapWithKeys(fn (string $uuid) => [
-                    $uuid => route('tarombo.snapshots.compile.draft.image', [$snapshot, $uuid]),
+                    $uuid => $snapshot === null
+                        ? route('tarombo.compile.blank.draft.image', $uuid)
+                        : route('tarombo.snapshots.compile.draft.image', [$snapshot, $uuid]),
                 ]),
             'updated_at' => $draft->updated_at?->toIso8601String(),
         ];
@@ -220,12 +265,15 @@ class TaromboSnapshotController extends Controller
      */
     public function generate(GenerateTaromboFrameRequest $request): RedirectResponse
     {
-        $snapshot = TaromboSnapshot::query()
-            ->when(
-                ! $request->user()->isStaff(),
-                fn ($query) => $query->whereBelongsTo($request->user()),
-            )
-            ->findOrFail($request->integer('snapshot_id'));
+        // No snapshot: the compile was made on a blank canvas.
+        $snapshot = $request->filled('snapshot_id')
+            ? TaromboSnapshot::query()
+                ->when(
+                    ! $request->user()->isStaff(),
+                    fn ($query) => $query->whereBelongsTo($request->user()),
+                )
+                ->findOrFail($request->integer('snapshot_id'))
+            : null;
         $frame = TaromboFrame::query()
             ->active()
             ->findOrFail($request->integer('frame_id'));
@@ -236,9 +284,10 @@ class TaromboSnapshotController extends Controller
             $target = TaromboSnapshot::query()->findOrFail($request->integer('target_snapshot_id'));
 
             Gate::authorize('delete', $target);
-            abort_unless($target->source_snapshot_id === $snapshot->id, 422, 'Gambar hasil tidak berasal dari gambar ini.');
+            abort_unless($snapshot !== null && $target->source_snapshot_id === $snapshot->id, 422, 'Gambar hasil tidak berasal dari gambar ini.');
         }
 
+        $title = trim((string) $request->validated('title', '')) ?: null;
         $image = $request->file('image');
 
         abort_unless($image instanceof UploadedFile, 422);
@@ -253,15 +302,17 @@ class TaromboSnapshotController extends Controller
             $target->update([
                 'tarombo_frame_id' => $frame->id,
                 'path' => $path,
+                ...($title !== null ? ['title' => $title] : []),
             ]);
 
             Storage::disk('local')->delete($oldPath);
         } else {
             $request->user()->taromboSnapshots()->create([
-                'center_person_id' => $snapshot->center_person_id,
+                'center_person_id' => $snapshot?->center_person_id,
                 'tarombo_frame_id' => $frame->id,
-                'source_snapshot_id' => $snapshot->id,
-                'view' => $snapshot->view,
+                'source_snapshot_id' => $snapshot?->id,
+                'view' => $snapshot->view ?? 'tree',
+                'title' => $title,
                 'path' => $path,
             ]);
         }
@@ -346,14 +397,20 @@ class TaromboSnapshotController extends Controller
      *
      * @return LengthAwarePaginator<int, array<string, mixed>>
      */
-    private function savedCompiles(int $userId): LengthAwarePaginator
+    private function savedCompiles(int $userId, string $search = ''): LengthAwarePaginator
     {
         $disk = Storage::disk('local');
 
         return TaromboCompileDraft::query()
             ->where('user_id', $userId)
-            ->whereHas('snapshot')
-            ->with(['snapshot.centerPerson:id,name', 'snapshot.user:id,name'])
+            ->when($search !== '', function ($query) use ($search) {
+                $term = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower($search)).'%';
+                $query->where(fn ($titles) => $titles
+                    ->whereRaw("LOWER(name) LIKE ? ESCAPE '!'", [$term])
+                    ->orWhere(fn ($fallback) => $fallback->whereNull('name')
+                        ->whereHas('snapshot', fn ($snapshots) => $snapshots->matchingTitle($search))));
+            })
+            ->with(['snapshot.centerPerson:id,name', 'snapshot.user:id,name', 'user:id,name'])
             ->latest('updated_at')
             ->latest('id')
             ->paginate(12)
@@ -364,15 +421,17 @@ class TaromboSnapshotController extends Controller
                 $hasPreview = $previewPath !== null;
 
                 return [
-                    'id' => $snapshot->id,
+                    // 0 and blank_canvas for a compile made without a tree image.
+                    'id' => $snapshot->id ?? 0,
+                    'blank_canvas' => $snapshot === null,
                     'draft_id' => $draft->id,
                     'draft_name' => $draft->name,
-                    'view' => $snapshot->view,
+                    'view' => $snapshot->view ?? 'tree',
                     // A saved compile is shown under its own name once it has one.
-                    'title' => $draft->name ?? $snapshot->title,
-                    'center_person_name' => $snapshot->centerPerson?->name,
-                    'owner_name' => $snapshot->user?->name,
-                    'image_url' => $hasPreview
+                    'title' => $draft->name ?? $snapshot?->title,
+                    'center_person_name' => $snapshot?->centerPerson?->name,
+                    'owner_name' => ($snapshot ?? $draft)->user?->name,
+                    'image_url' => $hasPreview || $snapshot === null
                         ? route('tarombo.compile-drafts.preview', ['taromboCompileDraft' => $draft, 'v' => $draft->updated_at?->timestamp])
                         : route('tarombo.snapshots.image', $snapshot),
                     'download_url' => null,

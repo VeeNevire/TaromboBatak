@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\Person;
+use App\Models\TaromboCompileDraft;
+use App\Models\TaromboFrame;
 use App\Models\TaromboSnapshot;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
@@ -67,6 +69,50 @@ test('the gallery only lists snapshots owned by the signed in account', function
             ->has('snapshots.data', 1)
             ->where('snapshots.data.0.id', $ownSnapshot->id)
             ->where('snapshots.data.0.image_url', route('tarombo.snapshots.image', $ownSnapshot)));
+});
+
+test('the free original filter hides originals with a saved compile and compile results', function () {
+    $user = User::factory()->create();
+    $free = TaromboSnapshot::factory()->for($user)->create(['tarombo_frame_id' => null]);
+    $used = TaromboSnapshot::factory()->for($user)->create(['tarombo_frame_id' => null]);
+    TaromboCompileDraft::query()->create([
+        'user_id' => $user->id,
+        'tarombo_snapshot_id' => $used->id,
+        'state' => [],
+    ]);
+    $frame = TaromboFrame::factory()->create();
+    TaromboSnapshot::factory()->for($user)->create([
+        'tarombo_frame_id' => $frame->id,
+        'source_snapshot_id' => $free->id,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('tarombo.snapshots.index', ['filter' => 'free']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('filter', 'free')
+            ->has('snapshots.data', 1)
+            ->where('snapshots.data.0.id', $free->id));
+});
+
+test('the compile page offers only the own free originals for ranting layers', function () {
+    $user = User::factory()->create();
+    $current = TaromboSnapshot::factory()->for($user)->create(['tarombo_frame_id' => null]);
+    $free = TaromboSnapshot::factory()->for($user)->create(['tarombo_frame_id' => null]);
+    $used = TaromboSnapshot::factory()->for($user)->create(['tarombo_frame_id' => null]);
+    TaromboCompileDraft::query()->create([
+        'user_id' => $user->id,
+        'tarombo_snapshot_id' => $used->id,
+        'state' => [],
+    ]);
+    TaromboSnapshot::factory()->create(['tarombo_frame_id' => null]);
+
+    $this->actingAs($user)
+        ->get(route('tarombo.snapshots.compile', $current))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('freeOriginals', 1)
+            ->where('freeOriginals.0.id', $free->id));
 });
 
 test('only the owner can view a private snapshot image inline', function () {
@@ -260,4 +306,38 @@ test('a non-staff owner cannot download a snapshot', function () {
     $this->actingAs($owner)
         ->getJson(route('tarombo.snapshots.download', $snapshot))
         ->assertForbidden();
+});
+
+test('gallery searches all matching titles before pagination and preserves display preferences', function () {
+    Storage::fake('local');
+    $user = User::factory()->create();
+    TaromboSnapshot::factory()->for($user)->count(13)->create(['title' => 'Pohon Silaban']);
+    TaromboSnapshot::factory()->for($user)->create(['title' => 'Pohon Sihombing']);
+    TaromboSnapshot::factory()->create(['title' => 'Pohon Silaban privat']);
+
+    $this->actingAs($user)->get(route('tarombo.snapshots.index', ['q' => 'silaban', 'display' => 'titles']))
+        ->assertInertia(fn (Assert $page) => $page->where('search', 'silaban')
+            ->where('display', 'titles')->where('snapshots.total', 13)->has('snapshots.data', 12)
+            ->where('snapshots.next_page_url', fn ($url) => str_contains($url, 'q=silaban') && str_contains($url, 'display=titles')));
+    $this->get(route('tarombo.snapshots.index', ['q' => 'silaban', 'display' => 'titles', 'page' => 2]))
+        ->assertInertia(fn (Assert $page) => $page->has('snapshots.data', 1));
+    $this->get(route('tarombo.snapshots.index'))->assertInertia(fn (Assert $page) => $page->where('display', 'images')->where('search', ''));
+});
+
+test('gallery searches displayed fallback names and literal wildcard characters', function () {
+    Storage::fake('local');
+    $user = User::factory()->create();
+    $person = Person::factory()->create(['name' => 'Raja Silaban']);
+    $fallback = TaromboSnapshot::factory()->for($user)->create(['title' => null, 'center_person_id' => $person->id]);
+    TaromboSnapshot::factory()->for($user)->create(['title' => 'Judul lain', 'center_person_id' => $person->id]);
+    $this->actingAs($user)->get(route('tarombo.snapshots.index', ['q' => 'silaban']))
+        ->assertInertia(fn (Assert $page) => $page->has('snapshots.data', 1)->where('snapshots.data.0.id', $fallback->id));
+    $literal = TaromboSnapshot::factory()->for($user)->create(['title' => 'Pohon 100%_utuh']);
+    $this->get(route('tarombo.snapshots.index', ['q' => '%_']))
+        ->assertInertia(fn (Assert $page) => $page->has('snapshots.data', 1)->where('snapshots.data.0.id', $literal->id));
+});
+
+test('gallery rejects malformed search parameters', function () {
+    $this->actingAs(User::factory()->create())->get(route('tarombo.snapshots.index', ['q' => ['invalid']]))->assertSessionHasErrors('q');
+    $this->get(route('tarombo.snapshots.index', ['display' => 'invalid']))->assertSessionHasErrors('display');
 });
