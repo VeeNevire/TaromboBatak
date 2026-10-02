@@ -23,7 +23,10 @@ export type Paginated<T> = {
     next_page_url: string | null;
 };
 
-const dateFormatter = new Intl.DateTimeFormat('id-ID', { dateStyle: 'long' });
+const dateFormatter = new Intl.DateTimeFormat('id-ID', {
+    dateStyle: 'long',
+    timeZone: 'Asia/Jakarta',
+});
 
 export function formatNewsDate(value: string | null): string | null {
     return value ? dateFormatter.format(new Date(value)) : null;

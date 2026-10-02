@@ -51,10 +51,14 @@ export default function MargaNewsShow({
                     <h1 className="font-display text-2xl font-bold md:text-3xl">
                         {news.title}
                     </h1>
-                    <p className="text-sm text-tb-on-surface-variant">
-                        {news.publisher} · Diperbarui{' '}
-                        {formatNewsDate(news.updated_at)}
-                    </p>
+                    {(news.publisher || news.published_at) && (
+                        <p className="text-sm text-tb-on-surface-variant">
+                            {news.publisher}
+                            {news.publisher && news.published_at && ' · '}
+                            {news.published_at &&
+                                `Terbit ${formatNewsDate(news.published_at)}`}
+                        </p>
+                    )}
                     <MargaChips margas={news.margas} />
                     {news.image_url && (
                         <img
