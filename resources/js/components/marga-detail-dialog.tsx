@@ -40,10 +40,10 @@ type ContentResult = {
     total: number;
 };
 const tabs = [
+    { value: 'news', label: 'Berita Terkait' },
     { value: 'stories', label: 'Cerita Leluhur & Budaya' },
     { value: 'events', label: 'Event & Kegiatan' },
     { value: 'statuses', label: 'News Feed' },
-    { value: 'news', label: 'Berita Terkait' },
 ] as const;
 
 export default function MargaDetailDialog({
@@ -55,7 +55,7 @@ export default function MargaDetailDialog({
     canSendMessage: boolean;
     onClose: () => void;
 }) {
-    const [tab, setTab] = useState<ContentTab>('stories');
+    const [tab, setTab] = useState<ContentTab>('news');
     const [page, setPage] = useState(1);
     const [retry, setRetry] = useState(0);
 
@@ -91,7 +91,7 @@ export default function MargaDetailDialog({
                     </Button>
                 )}
                 <Tabs
-                    defaultValue="stories"
+                    defaultValue="news"
                     value={tab}
                     onValueChange={(value) => {
                         setTab(value as ContentTab);

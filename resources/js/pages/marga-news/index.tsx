@@ -163,11 +163,16 @@ export default function MargaNewsIndex({
                                                 {item.publisher}
                                             </span>
                                         )}
-                                        {item.publisher && item.updated_at && (
-                                            <span>·</span>
+                                        {item.publisher &&
+                                            item.published_at && <span>·</span>}
+                                        {item.published_at && (
+                                            <span>
+                                                Terbit{' '}
+                                                {formatNewsDate(
+                                                    item.published_at,
+                                                )}
+                                            </span>
                                         )}
-                                        Diperbarui{' '}
-                                        {formatNewsDate(item.updated_at)}
                                     </div>
                                     <Link
                                         href={margaNews.show(item.id)}
