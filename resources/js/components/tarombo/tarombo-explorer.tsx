@@ -1908,8 +1908,10 @@ export function TaromboExplorer({
                             showSpouseMargas={margaTree?.direction === 'lower'}
                             siblingOrderMargaId={margaTree?.margaId}
                             canReorderSiblings={
-                                margaTree?.direction === 'lower' &&
-                                margaTree.canReorderSiblings
+                                margaTree
+                                    ? margaTree.direction === 'lower' &&
+                                      margaTree.canReorderSiblings
+                                    : selectedAccountTree?.canManage === true
                             }
                             allowBranchEntry={margaTree?.direction === 'lower'}
                             compactTerminalBranches={
@@ -2411,9 +2413,12 @@ export function TaromboExplorer({
                                                 margaTree?.margaId
                                             }
                                             canReorderSiblings={
-                                                margaTree?.direction ===
-                                                    'lower' &&
-                                                margaTree.canReorderSiblings
+                                                margaTree
+                                                    ? margaTree.direction ===
+                                                          'lower' &&
+                                                      margaTree.canReorderSiblings
+                                                    : selectedAccountTree?.canManage ===
+                                                      true
                                             }
                                             allowBranchEntry={
                                                 margaTree?.direction === 'lower'

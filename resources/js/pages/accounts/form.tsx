@@ -600,7 +600,7 @@ export default function AccountForm({
                             id="selected-managed-margas-title"
                             className="text-sm font-medium text-tb-on-surface"
                         >
-                            Marga yang dipilih ({selectedManagedMargas.length})
+                            Daftar Marga yang dipilih :
                         </h3>
                         {selectedManagedMargas.length > 0 ? (
                             <ul className="flex max-h-32 flex-wrap gap-2 overflow-y-auto">

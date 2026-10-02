@@ -12,13 +12,15 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import type { TaromboPerson } from '@/data/tarombo-tree';
+import familyTreeSiblingOrders from '@/routes/family-trees/sibling-order';
 import siblingOrders from '@/routes/margas/sibling-order';
 
 type Props = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    margaId: number;
-    father: { id: number; name: string };
+    margaId?: number;
+    familyTreeId?: number;
+    father: { id: number; nodeId?: number; name: string };
     siblings: TaromboPerson[];
 };
 
@@ -26,6 +28,7 @@ export function MargaSiblingOrderDialog({
     open,
     onOpenChange,
     margaId,
+    familyTreeId,
     father,
     siblings,
 }: Props) {
@@ -58,19 +61,38 @@ export function MargaSiblingOrderDialog({
         setProcessing(true);
         setError(undefined);
 
-        router.post(
-            siblingOrders.update({ marga: margaId }).url,
-            {
-                father_id: father.id,
-                person_ids: orderedSiblings.map((person) => Number(person.id)),
-            },
-            {
-                preserveScroll: true,
-                onSuccess: () => onOpenChange(false),
-                onError: (errors) => setError(errors.person_ids),
-                onFinish: () => setProcessing(false),
-            },
-        );
+        const request =
+            familyTreeId !== undefined
+                ? {
+                      url: familyTreeSiblingOrders.update({
+                          familyTree: familyTreeId,
+                      }).url,
+                      data: {
+                          father_node_id: father.nodeId,
+                          node_ids: orderedSiblings.map((person) =>
+                              Number(person.treeNodeId),
+                          ),
+                      },
+                  }
+                : {
+                      url: siblingOrders.update({ marga: Number(margaId) }).url,
+                      data: {
+                          father_id: father.id,
+                          person_ids: orderedSiblings.map((person) =>
+                              Number(person.id),
+                          ),
+                      },
+                  };
+
+        router.post(request.url, request.data, {
+            preserveScroll: true,
+            onSuccess: () => onOpenChange(false),
+            onError: (errors) =>
+                setError(
+                    errors.person_ids ?? errors.node_ids ?? errors.entries,
+                ),
+            onFinish: () => setProcessing(false),
+        });
     };
 
     return (

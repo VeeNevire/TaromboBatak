@@ -44,6 +44,7 @@ import familyTreeAppendRequests from '@/routes/family-tree-append-requests';
 import familyTreeShares from '@/routes/family-tree-shares';
 import familyTrees from '@/routes/family-trees';
 import margaAccessRequests from '@/routes/marga-access-requests';
+import margaBranchEntries from '@/routes/marga-branch-entries';
 import people from '@/routes/people';
 import tarombo from '@/routes/tarombo';
 
@@ -190,7 +191,7 @@ export function ApprovedMargaTreeList({
                                         <ArrowDown className="size-3.5" /> Pohon
                                         Bawah
                                     </Link>
-                                    {entry.family_tree_id !== null && (
+                                    {entry.family_tree_id !== null ? (
                                         <Link
                                             href={familyTrees.people.create(
                                                 entry.family_tree_id,
@@ -201,6 +202,22 @@ export function ApprovedMargaTreeList({
                                             <UserPlus className="size-3.5" />{' '}
                                             Tambah Anggota
                                         </Link>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            aria-label={`Tambah anggota pada silsilah marga ${entry.name}`}
+                                            onClick={() =>
+                                                router.post(
+                                                    margaBranchEntries.store({
+                                                        person: entry.identity_person_id,
+                                                    }).url,
+                                                )
+                                            }
+                                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-tb-primary px-3 py-2 text-xs font-semibold text-tb-primary transition-colors hover:bg-tb-primary/10"
+                                        >
+                                            <UserPlus className="size-3.5" />{' '}
+                                            Tambah Anggota
+                                        </button>
                                     )}
                                 </div>
                             </li>

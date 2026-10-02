@@ -1,5 +1,5 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { Pencil, Plus, ShieldCheck, Trash } from 'lucide-react';
+import { CircleOff, Pencil, Plus, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import { AppAvatar } from '@/components/app-avatar';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,7 @@ type SubAdminItem = {
     email: string;
     marga: string | null;
     marga_id: number | null;
+    is_active: boolean;
     created_at: string | null;
 };
 
@@ -41,17 +42,17 @@ type Props = {
 };
 
 export default function SubAdminsIndex({ subAdmins: page }: Props) {
-    const [toDelete, setToDelete] = useState<SubAdminItem | null>(null);
-    const deleteForm = useForm({});
+    const [toDeactivate, setToDeactivate] = useState<SubAdminItem | null>(null);
+    const deactivateForm = useForm({});
 
-    const confirmDelete = () => {
-        if (!toDelete) {
+    const confirmDeactivate = () => {
+        if (!toDeactivate) {
             return;
         }
 
-        deleteForm.delete(subAdmins.destroy(toDelete.id).url, {
+        deactivateForm.patch(subAdmins.deactivate(toDeactivate.id).url, {
             preserveScroll: true,
-            onSuccess: () => setToDelete(null),
+            onSuccess: () => setToDeactivate(null),
         });
     };
 
@@ -121,6 +122,11 @@ export default function SubAdminsIndex({ subAdmins: page }: Props) {
                                                         <ShieldCheck className="h-3 w-3" />{' '}
                                                         Sub Admin
                                                     </span>
+                                                    {!subAdmin.is_active && (
+                                                        <span className="bg-tb-error-container text-tb-error rounded-full px-2 py-0.5 text-[11px] font-medium">
+                                                            Non Aktif
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
                                         </td>
@@ -151,15 +157,25 @@ export default function SubAdminsIndex({ subAdmins: page }: Props) {
                                                     </Link>
                                                 </Button>
                                                 <Button
-                                                    title="Hapus"
                                                     variant="ghost"
-                                                    size="icon"
-                                                    className="size-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                                                    size="sm"
+                                                    title={
+                                                        subAdmin.is_active
+                                                            ? 'Non Aktif'
+                                                            : 'Akun sudah nonaktif'
+                                                    }
+                                                    disabled={
+                                                        !subAdmin.is_active
+                                                    }
+                                                    className="text-tb-error hover:bg-tb-error-container gap-1.5"
                                                     onClick={() =>
-                                                        setToDelete(subAdmin)
+                                                        setToDeactivate(
+                                                            subAdmin,
+                                                        )
                                                     }
                                                 >
-                                                    <Trash className="size-4" />
+                                                    <CircleOff className="size-4" />
+                                                    Non Aktif
                                                 </Button>
                                             </div>
                                         </td>
@@ -183,35 +199,35 @@ export default function SubAdminsIndex({ subAdmins: page }: Props) {
                 <Pagination page={page} />
 
                 <Dialog
-                    open={toDelete !== null}
-                    onOpenChange={(open) => !open && setToDelete(null)}
+                    open={toDeactivate !== null}
+                    onOpenChange={(open) => !open && setToDeactivate(null)}
                 >
                     <DialogContent className="sm:max-w-md">
                         <DialogHeader>
                             <DialogTitle className="text-tb-on-surface">
-                                Hapus Sub Admin
+                                Nonaktifkan Sub Admin
                             </DialogTitle>
                             <DialogDescription>
-                                Yakin ingin menghapus{' '}
-                                <strong>{toDelete?.name}</strong>? Akun tersebut
-                                tidak akan bisa login lagi.
+                                Nonaktifkan{' '}
+                                <strong>{toDeactivate?.name}</strong>? Akun
+                                tersebut tidak akan bisa login lagi.
                             </DialogDescription>
                         </DialogHeader>
                         <DialogFooter>
                             <Button
                                 variant="outline"
-                                onClick={() => setToDelete(null)}
+                                onClick={() => setToDeactivate(null)}
                             >
                                 Batal
                             </Button>
                             <Button
                                 variant="destructive"
-                                onClick={confirmDelete}
-                                disabled={deleteForm.processing}
+                                onClick={confirmDeactivate}
+                                disabled={deactivateForm.processing}
                             >
-                                {deleteForm.processing
-                                    ? 'Menghapus...'
-                                    : 'Ya, Hapus'}
+                                {deactivateForm.processing
+                                    ? 'Menonaktifkan...'
+                                    : 'Ya, Non Aktif'}
                             </Button>
                         </DialogFooter>
                     </DialogContent>

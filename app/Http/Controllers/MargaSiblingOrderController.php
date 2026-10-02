@@ -6,6 +6,7 @@ use App\Http\Requests\UpdateMargaSiblingOrderRequest;
 use App\Models\Marga;
 use App\Models\Person;
 use App\Services\ChainNumberingService;
+use App\Services\SiblingOrderSyncService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -47,6 +48,7 @@ class MargaSiblingOrderController extends Controller
         app(ChainNumberingService::class)->recomputeFromAncestor(
             Person::query()->findOrFail($validated['father_id']),
         );
+        app(SiblingOrderSyncService::class)->personsToTrees((int) $validated['father_id'], $orderedIds->all());
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Urutan abang–adik berhasil diperbarui.']);
 
