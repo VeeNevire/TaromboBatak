@@ -2,6 +2,8 @@ import { useForm } from '@inertiajs/react';
 import { Plus, Trash2, UserPlus, Users } from 'lucide-react';
 import { useEffect } from 'react';
 import InputError from '@/components/input-error';
+import { ExtraWivesInput } from '@/components/people/extra-wives-input';
+import type { WifeEntry } from '@/components/people/extra-wives-input';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -18,6 +20,7 @@ import familyTrees from '@/routes/family-trees';
 type NameRow = {
     id: string;
     name: string;
+    extra_wives: WifeEntry[];
 };
 
 type Props = {
@@ -41,6 +44,7 @@ const createRow = (): NameRow => ({
             ? crypto.randomUUID()
             : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     name: '',
+    extra_wives: [],
 });
 
 export function FamilyBranchDialog({
@@ -85,6 +89,19 @@ export function FamilyBranchDialog({
         );
     };
 
+    const updateWives = (
+        kind: 'children' | 'siblings',
+        id: string,
+        wives: WifeEntry[],
+    ) => {
+        setData(
+            kind,
+            data[kind].map((row) =>
+                row.id === id ? { ...row, extra_wives: wives } : row,
+            ),
+        );
+    };
+
     const addRow = (kind: 'children' | 'siblings') => {
         if (data[kind].length < MAX_ROWS) {
             setData(kind, [...data[kind], createRow()]);
@@ -105,10 +122,20 @@ export function FamilyBranchDialog({
             ...formData,
             children: formData.children
                 .filter((row) => row.name.trim() !== '')
-                .map((row) => ({ name: row.name.trim() })),
+                .map((row) => ({
+                    name: row.name.trim(),
+                    extra_wives: row.extra_wives.filter(
+                        (wife) => wife.name.trim() !== '',
+                    ),
+                })),
             siblings: formData.siblings
                 .filter((row) => row.name.trim() !== '')
-                .map((row) => ({ name: row.name.trim() })),
+                .map((row) => ({
+                    name: row.name.trim(),
+                    extra_wives: row.extra_wives.filter(
+                        (wife) => wife.name.trim() !== '',
+                    ),
+                })),
         }));
 
         post(familyTrees.people.store.url(familyTree.id), {
@@ -122,31 +149,41 @@ export function FamilyBranchDialog({
     const renderRows = (kind: 'children' | 'siblings') => (
         <div className="grid gap-3">
             {data[kind].map((row, index) => (
-                <div key={row.id} className="flex items-end gap-2">
-                    <div className="grid min-w-0 flex-1 gap-1.5">
-                        <Label htmlFor={`${kind}-${row.id}`}>
-                            Nama Lengkap {index + 1}
-                        </Label>
-                        <Input
-                            id={`${kind}-${row.id}`}
-                            value={row.name}
-                            onChange={(event) =>
-                                updateRow(kind, row.id, event.target.value)
-                            }
-                            placeholder="Nama lengkap"
-                        />
-                        <InputError message={errors[`${kind}.${index}.name`]} />
+                <div key={row.id} className="grid gap-2">
+                    <div className="flex items-end gap-2">
+                        <div className="grid min-w-0 flex-1 gap-1.5">
+                            <Label htmlFor={`${kind}-${row.id}`}>
+                                Nama Lengkap {index + 1}
+                            </Label>
+                            <Input
+                                id={`${kind}-${row.id}`}
+                                value={row.name}
+                                onChange={(event) =>
+                                    updateRow(kind, row.id, event.target.value)
+                                }
+                                placeholder="Nama lengkap"
+                            />
+                            <InputError
+                                message={errors[`${kind}.${index}.name`]}
+                            />
+                        </div>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Hapus ${kind === 'children' ? 'anak' : 'saudara'} ${index + 1}`}
+                            onClick={() => removeRow(kind, row.id)}
+                            className="shrink-0 text-red-600 hover:bg-red-50 hover:text-red-700"
+                        >
+                            <Trash2 className="size-4" />
+                        </Button>
                     </div>
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Hapus ${kind === 'children' ? 'anak' : 'saudara'} ${index + 1}`}
-                        onClick={() => removeRow(kind, row.id)}
-                        className="shrink-0 text-red-600 hover:bg-red-50 hover:text-red-700"
-                    >
-                        <Trash2 className="size-4" />
-                    </Button>
+                    <ExtraWivesInput
+                        value={row.extra_wives}
+                        label="Pasangan"
+                        addLabel="Tambah Pasangan"
+                        onChange={(next) => updateWives(kind, row.id, next)}
+                    />
                 </div>
             ))}
         </div>

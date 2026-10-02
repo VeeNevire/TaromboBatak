@@ -7,15 +7,14 @@ use Illuminate\Support\Collection;
 
 class MargaIdentityPersonService
 {
-    public const MAX_GENERATION = 11;
-
-    /** @return Collection<int, array{id: int, name: string, chain: string, generation: int}> */
+    /** @return Collection<int, array{id: int, name: string, marga: string|null, chain: string, generation: int}> */
     public function options(): Collection
     {
         $people = Person::query()
             ->whereNotNull('chain')
+            ->with('marga:id,name')
             ->orderBy('id')
-            ->get(['id', 'name', 'father_id', 'chain']);
+            ->get(['id', 'name', 'father_id', 'marga_id', 'chain']);
         $root = $people->first(fn (Person $person) => $person->name === 'Si Raja Batak');
 
         if (! $root instanceof Person) {
@@ -40,13 +39,10 @@ class MargaIdentityPersonService
             $seen[$person->id] = true;
             $generation = substr_count($person->chain, '-') + 1;
 
-            if ($generation > self::MAX_GENERATION) {
-                continue;
-            }
-
             $connectedPeople->push([
                 'id' => $person->id,
                 'name' => $person->name,
+                'marga' => $person->marga?->name,
                 'chain' => $person->chain,
                 'generation' => $generation,
             ]);

@@ -506,6 +506,9 @@ export function PersonSummaryDialog({
                         <span className="font-medium text-tb-on-surface">
                             {person.createdBy || 'Belum dicatat'}
                         </span>
+                        {person.createdAt && (
+                            <span className="ml-1">· {person.createdAt}</span>
+                        )}
                     </p>
 
                     <DialogFooter className="gap-2 sm:justify-between">

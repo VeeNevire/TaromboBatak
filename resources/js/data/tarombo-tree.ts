@@ -18,6 +18,7 @@ export type TaromboPersonRow = {
     image?: string | null;
     bio?: string;
     createdBy?: string | null;
+    createdAt?: string | null;
     canEdit?: boolean;
     canCopyCode?: boolean;
     fatherName?: string | null;
@@ -65,6 +66,7 @@ export type TaromboPerson = {
     image?: string | null;
     bio?: string;
     createdBy?: string | null;
+    createdAt?: string | null;
     canEdit?: boolean;
     canCopyCode?: boolean;
     fatherName?: string | null;

@@ -31,7 +31,7 @@ test('marga index is alphabetical and exposes connection state from its identity
             ->where('margas.1.identity_person_id', $connectedIdentity->id));
 });
 
-test('marga identity options use connected tarombo people through generation eleven without family tree nodes', function () {
+test('marga identity options use every connected tarombo person regardless of generation without family tree nodes', function () {
     $root = Person::factory()->create([
         'name' => 'Si Raja Batak',
         'father_id' => null,
@@ -42,7 +42,7 @@ test('marga identity options use connected tarombo people through generation ele
         'father_id' => $root->id,
         'chain' => '1-1-1-1-1-1-1-1-1-1-1',
     ]);
-    Person::factory()->create([
+    $generationTwelve = Person::factory()->create([
         'name' => 'Generasi Dua Belas',
         'father_id' => $generationEleven->id,
         'chain' => '1-1-1-1-1-1-1-1-1-1-1-1',
@@ -58,6 +58,7 @@ test('marga identity options use connected tarombo people through generation ele
     expect($options->pluck('id')->all())->toBe([
         $root->id,
         $generationEleven->id,
+        $generationTwelve->id,
     ]);
 });
 
@@ -74,9 +75,9 @@ test('an admin can save a valid marga identity and invalid tree nodes are reject
         'chain' => '1-1',
     ]);
     $invalidIdentity = Person::factory()->create([
-        'name' => 'Di luar batas',
-        'father_id' => $validIdentity->id,
-        'chain' => '1-1-1-1-1-1-1-1-1-1-1-1',
+        'name' => 'Di luar pohon',
+        'father_id' => null,
+        'chain' => '2',
     ]);
 
     $this->actingAs($admin)

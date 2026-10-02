@@ -263,6 +263,8 @@ class FamilyTreeStructureService
                         $row['new_marga'] ?? null,
                     );
 
+                    app(FamilyEntryService::class)->syncChildSpouses($node->person()->firstOrFail(), $row, $createdBy);
+
                     $node->person()->firstOrFail()->update(array_filter([
                         'alias' => $row['alias'] ?? null,
                         'gender' => $row['gender'] ?? null,
