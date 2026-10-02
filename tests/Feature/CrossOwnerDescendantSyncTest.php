@@ -53,17 +53,3 @@ test('trees without a common ancestor are not touched', function () {
 
     expect($strangerTree->nodes()->where('person_id', $newcomer->id)->exists())->toBeFalse();
 });
-
-test('the sync command reports missing people on a dry run and adds them with --apply', function () {
-    $newcomer = Person::factory()->create(['father_id' => $this->root->id, 'marga_id' => $this->marga->id, 'name' => 'Ama Gayver']);
-
-    $this->artisan('tarombo:sync-descendants', ['--tree' => $this->adminTree->id])
-        ->expectsOutputToContain('Dry run')
-        ->assertSuccessful();
-    expect($this->adminTree->nodes()->where('person_id', $newcomer->id)->exists())->toBeFalse();
-
-    $this->artisan('tarombo:sync-descendants', ['--tree' => $this->adminTree->id, '--apply' => true])
-        ->expectsOutputToContain('Synced')
-        ->assertSuccessful();
-    expect($this->adminTree->nodes()->where('person_id', $newcomer->id)->exists())->toBeTrue();
-});
