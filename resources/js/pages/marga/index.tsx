@@ -61,6 +61,7 @@ type Props = {
 type IdentityPersonOption = {
     id: number;
     name: string;
+    marga: string | null;
     chain: string;
     generation: number;
 };
@@ -77,7 +78,7 @@ function identityTreePeople(options: IdentityPersonOption[]): TaromboPerson[] {
         return {
             id: String(option.id),
             name: option.name,
-            marga: 'Batak',
+            marga: option.marga ?? 'Batak',
             generation: option.generation,
             parentId: parentChain ? (idByChain.get(parentChain) ?? null) : null,
             birthOrder:

@@ -2,6 +2,7 @@ import { Link } from '@inertiajs/react';
 import { MessageCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { relatedContent } from '@/actions/App/Http/Controllers/MargaController';
+import { MargaChips } from '@/components/marga-news/news-parts';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -14,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import cerita from '@/routes/cerita';
 import kegiatan from '@/routes/kegiatan';
 import margaRoutes from '@/routes/marga';
+import margaNews from '@/routes/marga-news';
 
 type MargaSummary = {
     id: number;
@@ -22,7 +24,7 @@ type MargaSummary = {
     people_count: number;
 };
 
-type ContentTab = 'stories' | 'events' | 'statuses';
+type ContentTab = 'stories' | 'events' | 'statuses' | 'news';
 type ContentResult = {
     items: {
         id: number;
@@ -31,6 +33,7 @@ type ContentResult = {
         author: string;
         date: string | null;
         location: string | null;
+        margas?: { id: number; name: string; color: string | null }[];
     }[];
     current_page: number;
     last_page: number;
@@ -40,6 +43,7 @@ const tabs = [
     { value: 'stories', label: 'Cerita Leluhur & Budaya' },
     { value: 'events', label: 'Event & Kegiatan' },
     { value: 'statuses', label: 'News Feed' },
+    { value: 'news', label: 'Berita Terkait' },
 ] as const;
 
 export default function MargaDetailDialog({
@@ -196,7 +200,9 @@ function RelatedContent({
         <div className="grid gap-3 pt-3">
             {result.items.length === 0 && (
                 <p className="rounded-lg border border-dashed border-tb-outline-variant px-4 py-10 text-center text-sm text-tb-on-surface-variant">
-                    Belum ada konten terkait marga ini yang dapat ditampilkan.
+                    {tab === 'news'
+                        ? 'Belum ada berita yang disetujui dengan tag marga ini.'
+                        : 'Belum ada konten terkait marga ini yang dapat ditampilkan.'}
                 </p>
             )}
             {result.items.map((item) => (
@@ -205,9 +211,13 @@ function RelatedContent({
                     className="grid gap-2 rounded-xl border border-tb-outline-variant p-4"
                 >
                     <p className="text-xs text-tb-on-surface-variant">
-                        {item.author} · {item.date}
+                        {item.author}
+                        {item.date && ` · ${item.date}`}
                         {item.location && ` · ${item.location}`}
                     </p>
+                    {tab === 'news' && item.margas && (
+                        <MargaChips margas={item.margas} />
+                    )}
                     {item.title && (
                         <h3 className="font-display font-semibold text-tb-on-surface">
                             {item.title}
@@ -236,7 +246,9 @@ function RelatedContent({
                                 href={
                                     tab === 'stories'
                                         ? cerita.show(item.id)
-                                        : kegiatan.show(item.id)
+                                        : tab === 'news'
+                                          ? margaNews.show(item.id)
+                                          : kegiatan.show(item.id)
                                 }
                             >
                                 Lihat selengkapnya

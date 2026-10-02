@@ -20,6 +20,8 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import InputError from '@/components/input-error';
 import { AlternativeVersionDialog } from '@/components/people/alternative-version-dialog';
+import { ExtraWivesInput } from '@/components/people/extra-wives-input';
+import type { WifeEntry } from '@/components/people/extra-wives-input';
 import { FamilyTreeHistoryCard } from '@/components/people/family-tree-history-card';
 import type {
     ApprovedMargaTreeEntry,
@@ -73,6 +75,7 @@ export type ChildRow = {
     gender: string;
     spouse: string;
     spouse_marga: string;
+    extra_wives?: WifeEntry[];
     marga_id?: number | null;
     new_marga?: string;
     marga?: string | null;
@@ -1383,6 +1386,7 @@ export default function FamilyForm({
                       gender: child.gender ?? '',
                       spouse: child.spouse ?? '',
                       spouse_marga: child.spouse_marga ?? '',
+                      extra_wives: child.extra_wives ?? [],
                       marga_id: child.marga_id ?? lockedMarga?.id ?? null,
                       new_marga: '',
                       pending: child.pending ?? false,
@@ -1400,6 +1404,7 @@ export default function FamilyForm({
                       gender: child.gender ?? '',
                       spouse: child.spouse ?? '',
                       spouse_marga: child.spouse_marga ?? '',
+                      extra_wives: child.extra_wives ?? [],
                       marga_id: child.marga_id ?? lockedMarga?.id ?? null,
                       new_marga: '',
                       pending: child.pending ?? false,
@@ -1832,6 +1837,24 @@ export default function FamilyForm({
         });
 
         setData('children', next);
+    };
+
+    const setChildExtraWives = (index: number, wives: WifeEntry[]) => {
+        setData(
+            'children',
+            data.children.map((child, i) =>
+                i === index ? { ...child, extra_wives: wives } : child,
+            ),
+        );
+    };
+
+    const setOwnChildExtraWives = (index: number, wives: WifeEntry[]) => {
+        setData(
+            'ownChildren',
+            data.ownChildren.map((child, i) =>
+                i === index ? { ...child, extra_wives: wives } : child,
+            ),
+        );
     };
 
     const selectChild = (index: number, suggestion: NameSuggestion) => {
@@ -4024,6 +4047,36 @@ export default function FamilyForm({
                                                                     }
                                                                 />
                                                             </div>
+                                                            <ExtraWivesInput
+                                                                value={
+                                                                    selectedChild.extra_wives ??
+                                                                    []
+                                                                }
+                                                                onChange={(
+                                                                    next,
+                                                                ) =>
+                                                                    setChildExtraWives(
+                                                                        selectedIndex,
+                                                                        next,
+                                                                    )
+                                                                }
+                                                                renderMarga={(
+                                                                    marga,
+                                                                    onMarga,
+                                                                ) => (
+                                                                    <SpouseMargaSelect
+                                                                        value={
+                                                                            marga
+                                                                        }
+                                                                        onChange={
+                                                                            onMarga
+                                                                        }
+                                                                        margas={
+                                                                            margas
+                                                                        }
+                                                                    />
+                                                                )}
+                                                            />
                                                         </div>
                                                     </div>
                                                 </div>
@@ -4545,6 +4598,30 @@ export default function FamilyForm({
                                                             margas={margas}
                                                         />
                                                     </div>
+                                                    <ExtraWivesInput
+                                                        value={
+                                                            child.extra_wives ??
+                                                            []
+                                                        }
+                                                        onChange={(next) =>
+                                                            setOwnChildExtraWives(
+                                                                index,
+                                                                next,
+                                                            )
+                                                        }
+                                                        renderMarga={(
+                                                            marga,
+                                                            onMarga,
+                                                        ) => (
+                                                            <SpouseMargaSelect
+                                                                value={marga}
+                                                                onChange={
+                                                                    onMarga
+                                                                }
+                                                                margas={margas}
+                                                            />
+                                                        )}
+                                                    />
                                                 </div>
                                             </motion.div>
                                         );
@@ -5013,6 +5090,30 @@ export default function FamilyForm({
                                                             margas={margas}
                                                         />
                                                     </div>
+                                                    <ExtraWivesInput
+                                                        value={
+                                                            child.extra_wives ??
+                                                            []
+                                                        }
+                                                        onChange={(next) =>
+                                                            setChildExtraWives(
+                                                                index,
+                                                                next,
+                                                            )
+                                                        }
+                                                        renderMarga={(
+                                                            marga,
+                                                            onMarga,
+                                                        ) => (
+                                                            <SpouseMargaSelect
+                                                                value={marga}
+                                                                onChange={
+                                                                    onMarga
+                                                                }
+                                                                margas={margas}
+                                                            />
+                                                        )}
+                                                    />
                                                     {!focused && (
                                                         <div className="grid gap-1.5">
                                                             <Label>

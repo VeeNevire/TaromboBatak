@@ -1422,7 +1422,7 @@ class PersonController extends Controller
                     ->where(fn ($query) => $query
                         ->where('pending_father', false)
                         ->orWhere('id', $person->id))
-                    ->with(['mother.marga', 'mother.father.marga'])
+                    ->with(['mother.marga', 'mother.father.marga', 'wives.marga'])
                     ->orderBy('birth_order')
                     ->get()
                 : collect([$person]);
@@ -1455,6 +1455,7 @@ class PersonController extends Controller
 
         $ownChildrenRows = $person->children()
             ->when($margaIds !== null, fn ($query) => $query->whereIn('marga_id', $margaIds))
+            ->with('wives.marga')
             ->orderBy('birth_order')
             ->get();
 
@@ -1570,8 +1571,7 @@ class PersonController extends Controller
                     'name' => $sibling->name,
                     'alias' => $sibling->alias,
                     'gender' => $sibling->gender,
-                    'spouse' => $sibling->spouse,
-                    'spouse_marga' => $sibling->spouse_marga,
+                    ...$this->spouseFields($sibling),
                     'marga_id' => $sibling->marga_id,
                     'marga' => $sibling->marga?->name,
                     'birth_order' => $sibling->birth_order,
@@ -1588,8 +1588,7 @@ class PersonController extends Controller
                     'name' => $child->name,
                     'alias' => $child->alias,
                     'gender' => $child->gender,
-                    'spouse' => $child->spouse,
-                    'spouse_marga' => $child->spouse_marga,
+                    ...$this->spouseFields($child),
                     'marga_id' => $child->marga_id,
                     'marga' => $child->marga?->name,
                     'new_marga' => '',
@@ -1797,6 +1796,26 @@ class PersonController extends Controller
         }
 
         return $result;
+    }
+
+    /**
+     * The first linked wife fills the row's spouse inputs and the rest become
+     * extra wives. Legacy rows without linked wives keep their spouse text.
+     *
+     * @return array{spouse: string|null, spouse_marga: string|null, extra_wives: array<int, array{name: string, marga: string}>}
+     */
+    protected function spouseFields(Person $person): array
+    {
+        $first = $person->wives->first();
+
+        return [
+            'spouse' => $first?->name ?? $person->spouse,
+            'spouse_marga' => $first !== null ? $first->marga?->name : $person->spouse_marga,
+            'extra_wives' => $person->wives->slice(1)
+                ->map(fn (Person $wife): array => ['name' => $wife->name, 'marga' => $wife->marga?->name ?? ''])
+                ->values()
+                ->all(),
+        ];
     }
 
     /**

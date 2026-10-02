@@ -506,6 +506,9 @@ export function PersonSummaryDialog({
                         <span className="font-medium text-tb-on-surface">
                             {person.createdBy || 'Belum dicatat'}
                         </span>
+                        {person.createdAt && (
+                            <span className="ml-1">· {person.createdAt}</span>
+                        )}
                     </p>
 
                     <DialogFooter className="gap-2 sm:justify-between">
@@ -535,7 +538,13 @@ export function PersonSummaryDialog({
                                 </Button>
                             )}
                             {canReorderSiblings &&
-                                margaId !== undefined &&
+                                (margaId !== undefined ||
+                                    (versionTreeId != null &&
+                                        father?.treeNodeId != null &&
+                                        siblings.every(
+                                            (sibling) =>
+                                                sibling.treeNodeId != null,
+                                        ))) &&
                                 person.parentId &&
                                 father &&
                                 siblings.length > 1 && (
@@ -635,7 +644,12 @@ export function PersonSummaryDialog({
                 />
             )}
             {person &&
-                margaId !== undefined &&
+                (margaId !== undefined ||
+                    (versionTreeId != null &&
+                        father?.treeNodeId != null &&
+                        siblings.every(
+                            (sibling) => sibling.treeNodeId != null,
+                        ))) &&
                 father &&
                 canReorderSiblings && (
                     <MargaSiblingOrderDialog
@@ -643,7 +657,16 @@ export function PersonSummaryDialog({
                         open={siblingOrderDialogOpen}
                         onOpenChange={setSiblingOrderDialogOpen}
                         margaId={margaId}
-                        father={{ id: Number(father.id), name: father.name }}
+                        familyTreeId={
+                            margaId === undefined && versionTreeId != null
+                                ? versionTreeId
+                                : undefined
+                        }
+                        father={{
+                            id: Number(father.id),
+                            nodeId: father.treeNodeId,
+                            name: father.name,
+                        }}
                         siblings={siblings}
                     />
                 )}

@@ -34,6 +34,7 @@ class SubAdminController extends Controller
                 'email' => $user->email,
                 'marga' => $user->marga?->name,
                 'marga_id' => $user->marga_id,
+                'is_active' => $user->is_active,
                 'created_at' => $user->created_at?->format('d M Y'),
             ]);
 
@@ -161,6 +162,30 @@ class SubAdminController extends Controller
         });
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Sub admin berhasil dihapus.')]);
+
+        return to_route('sub-admins.index');
+    }
+
+    /**
+     * Deactivate the specified sub-admin and end their sessions.
+     */
+    public function deactivate(Request $request, User $subAdmin): RedirectResponse
+    {
+        abort_unless($subAdmin->role === 'subadmin', 404);
+        abort_if($subAdmin->id === $request->user()?->id, 403, 'Anda tidak dapat menonaktifkan akun sendiri.');
+
+        DB::transaction(function () use ($request, $subAdmin): void {
+            $subAdmin->update(['is_active' => false]);
+            DB::table(config('session.table'))->where('user_id', $subAdmin->id)->delete();
+            $this->activityLogger->log(
+                $subAdmin,
+                $request->user(),
+                'deactivated',
+                'Akun sub-admin dinonaktifkan.',
+            );
+        });
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Sub admin berhasil dinonaktifkan.')]);
 
         return to_route('sub-admins.index');
     }

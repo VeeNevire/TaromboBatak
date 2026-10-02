@@ -317,6 +317,7 @@ class TaromboController extends Controller
                     'rootName' => $tree->rootPerson?->name ?? 'Akar belum ditentukan',
                     'rootPersonId' => $tree->root_person_id,
                     'group' => 'account',
+                    'canManage' => $user->isStaff() || $tree->user_id === $user->id,
                 ])
                 ->concat($approvedMargas
                     ->filter(fn (Marga $marga) => $marga->identity_person_id !== null)

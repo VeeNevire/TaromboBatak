@@ -35,6 +35,7 @@ export type TaromboFamilyTreeOption = {
     rootName: string;
     rootPersonId?: number | null;
     group: 'account' | 'marga';
+    canManage?: boolean;
 };
 
 export default function TaromboIndex({

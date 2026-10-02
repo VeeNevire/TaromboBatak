@@ -2,6 +2,8 @@ import { Head, Link, useForm } from '@inertiajs/react';
 import { ArrowLeft, Plus, Trash2, UserPlus, Users } from 'lucide-react';
 import { useRef } from 'react';
 import InputError from '@/components/input-error';
+import { ExtraWivesInput } from '@/components/people/extra-wives-input';
+import type { WifeEntry } from '@/components/people/extra-wives-input';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -27,6 +29,7 @@ type MemberRow = {
     death_year: string;
     spouse: string;
     spouse_marga: string;
+    extra_wives: WifeEntry[];
 };
 
 type Props = {
@@ -38,6 +41,9 @@ type Props = {
 };
 
 const MAX_EXTRA_ROWS = 20;
+const MAX_WIVES = 10;
+
+type WifeRow = { uid: string; name: string; marga: string };
 
 const optionLabel = (option: NodeOption) => option.name;
 
@@ -62,7 +68,10 @@ const toMemberPayload = (row: MemberRow) => ({
     death_year: row.death_year,
     spouse: row.spouse,
     spouse_marga: row.spouse_marga,
+    extra_wives: row.extra_wives.filter((wife) => wife.name.trim() !== ''),
 });
+
+const emptyWife = (): WifeRow => ({ uid: createUid(), name: '', marga: '' });
 
 const emptyMemberRow = (): MemberRow => ({
     uid: createUid(),
@@ -73,6 +82,7 @@ const emptyMemberRow = (): MemberRow => ({
     death_year: '',
     spouse: '',
     spouse_marga: '',
+    extra_wives: [],
 });
 
 export default function SharedTreePersonForm({
@@ -95,8 +105,7 @@ export default function SharedTreePersonForm({
         father_node_id: initialFatherNodeId?.toString() ?? '',
         branch_father_person_id: initialBranchFather?.id.toString() ?? '',
         mother_node_id: '',
-        spouse: '',
-        spouse_marga: '',
+        wives: [emptyWife()],
         children: [] as MemberRow[],
         siblings: [] as MemberRow[],
     });
@@ -105,6 +114,15 @@ export default function SharedTreePersonForm({
     const fatherChoice = data.father_node_id;
     const isFatherLocked =
         initialFatherNodeId !== null || initialBranchFather !== null;
+
+    const setWife = (index: number, field: 'name' | 'marga', value: string) => {
+        setData(
+            'wives',
+            data.wives.map((wife, i) =>
+                i === index ? { ...wife, [field]: value } : wife,
+            ),
+        );
+    };
 
     const addRow = (kind: 'children' | 'siblings') => {
         setData(kind, [...data[kind], emptyMemberRow()]);
@@ -131,6 +149,19 @@ export default function SharedTreePersonForm({
         );
     };
 
+    const setRowWives = (
+        kind: 'children' | 'siblings',
+        index: number,
+        wives: WifeEntry[],
+    ) => {
+        setData(
+            kind,
+            data[kind].map((row, rowIndex) =>
+                rowIndex === index ? { ...row, extra_wives: wives } : row,
+            ),
+        );
+    };
+
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -142,6 +173,9 @@ export default function SharedTreePersonForm({
 
         transform((formData) => ({
             ...formData,
+            wives: formData.wives
+                .filter((wife) => wife.name.trim() !== '')
+                .map(({ name, marga }) => ({ name, marga })),
             children: formData.children
                 .filter((row) => row.name.trim() !== '')
                 .map((row) => toMemberPayload(row)),
@@ -332,6 +366,10 @@ export default function SharedTreePersonForm({
                         message={errors[`${kind}.${index}.spouse_marga`]}
                     />
                 </div>
+                <ExtraWivesInput
+                    value={row.extra_wives}
+                    onChange={(next) => setRowWives(kind, index, next)}
+                />
             </div>
         </div>
     );
@@ -530,6 +568,112 @@ export default function SharedTreePersonForm({
                                             />
                                         </div>
                                     </div>
+                                    <div className="grid gap-3">
+                                        <Label className="text-tb-on-surface">
+                                            Data Istri
+                                        </Label>
+                                        {data.wives.map((wife, index) => (
+                                            <div
+                                                key={wife.uid}
+                                                className="grid gap-3 rounded-lg border border-tb-outline-variant p-3 sm:grid-cols-[1fr_1fr_auto] sm:items-start"
+                                            >
+                                                <div className="grid gap-1.5">
+                                                    <Input
+                                                        aria-label={
+                                                            'Nama istri ' +
+                                                            (index + 1)
+                                                        }
+                                                        placeholder={
+                                                            'Nama istri ' +
+                                                            (index + 1)
+                                                        }
+                                                        value={wife.name}
+                                                        onChange={(e) =>
+                                                            setWife(
+                                                                index,
+                                                                'name',
+                                                                e.target.value,
+                                                            )
+                                                        }
+                                                        className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                                    />
+                                                    <InputError
+                                                        message={
+                                                            (
+                                                                errors as Record<
+                                                                    string,
+                                                                    | string
+                                                                    | undefined
+                                                                >
+                                                            )[
+                                                                'wives.' +
+                                                                    index +
+                                                                    '.name'
+                                                            ]
+                                                        }
+                                                    />
+                                                </div>
+                                                <Input
+                                                    aria-label={
+                                                        'Marga istri ' +
+                                                        (index + 1)
+                                                    }
+                                                    placeholder="Marga istri"
+                                                    value={wife.marga}
+                                                    onChange={(e) =>
+                                                        setWife(
+                                                            index,
+                                                            'marga',
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    aria-label={
+                                                        'Hapus istri ' +
+                                                        (index + 1)
+                                                    }
+                                                    disabled={
+                                                        data.wives.length === 1
+                                                    }
+                                                    onClick={() =>
+                                                        setData(
+                                                            'wives',
+                                                            data.wives.filter(
+                                                                (_, i) =>
+                                                                    i !== index,
+                                                            ),
+                                                        )
+                                                    }
+                                                >
+                                                    <Trash2 className="size-4" />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                        <InputError message={errors.wives} />
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="w-fit"
+                                            disabled={
+                                                data.wives.length >= MAX_WIVES
+                                            }
+                                            onClick={() =>
+                                                setData('wives', [
+                                                    ...data.wives,
+                                                    emptyWife(),
+                                                ])
+                                            }
+                                        >
+                                            <Plus className="size-4" /> Tambah
+                                            Istri
+                                        </Button>
+                                    </div>
                                     <div className="grid gap-1.5">
                                         <Label
                                             htmlFor="bio"
@@ -694,48 +838,6 @@ export default function SharedTreePersonForm({
                                         </select>
                                         <InputError
                                             message={errors.mother_node_id}
-                                        />
-                                    </div>
-                                    <div className="grid gap-1.5">
-                                        <Label
-                                            htmlFor="spouse"
-                                            className="text-tb-on-surface"
-                                        >
-                                            Nama Pasangan
-                                        </Label>
-                                        <Input
-                                            id="spouse"
-                                            value={data.spouse}
-                                            onChange={(e) =>
-                                                setData(
-                                                    'spouse',
-                                                    e.target.value,
-                                                )
-                                            }
-                                            className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
-                                        />
-                                        <InputError message={errors.spouse} />
-                                    </div>
-                                    <div className="grid gap-1.5">
-                                        <Label
-                                            htmlFor="spouse_marga"
-                                            className="text-tb-on-surface"
-                                        >
-                                            Marga Pasangan
-                                        </Label>
-                                        <Input
-                                            id="spouse_marga"
-                                            value={data.spouse_marga}
-                                            onChange={(e) =>
-                                                setData(
-                                                    'spouse_marga',
-                                                    e.target.value,
-                                                )
-                                            }
-                                            className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
-                                        />
-                                        <InputError
-                                            message={errors.spouse_marga}
                                         />
                                     </div>
                                 </CardContent>

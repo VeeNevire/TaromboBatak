@@ -14,6 +14,7 @@ use App\Http\Controllers\FamilyTreeActivityController;
 use App\Http\Controllers\FamilyTreeAppendRequestController;
 use App\Http\Controllers\FamilyTreeDeletionController;
 use App\Http\Controllers\FamilyTreeShareController;
+use App\Http\Controllers\FamilyTreeSiblingOrderController;
 use App\Http\Controllers\FeedCommentController;
 use App\Http\Controllers\FeedItemEngagementController;
 use App\Http\Controllers\FeedPostController;
@@ -298,6 +299,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('family-trees/{familyTree}/edit', [PersonController::class, 'editFamilyTree'])->name('family-trees.edit');
     Route::post('family-trees/{familyTree}/sync-descendants', [PersonController::class, 'syncFamilyTreeDescendants'])->name('family-trees.sync-descendants');
     Route::put('family-trees/{familyTree}', [PersonController::class, 'updateFamilyTree'])->name('family-trees.update');
+    Route::post('family-trees/{familyTree}/sibling-order', [FamilyTreeSiblingOrderController::class, 'update'])->name('family-trees.sibling-order.update');
     Route::patch('family-trees/{familyTree}/name', [PersonController::class, 'updateFamilyTreeName'])->name('family-trees.name.update');
     Route::delete('family-trees/{familyTree}', [FamilyTreeDeletionController::class, 'destroy'])->name('family-trees.destroy');
     Route::post('family-trees/{familyTree}/shares', [FamilyTreeShareController::class, 'store'])->name('family-trees.shares.store');
@@ -366,6 +368,7 @@ Route::middleware(['auth', 'role.admin'])->group(function () {
     Route::resource('accounts', AccountController::class)->except(['show', 'destroy']);
     Route::patch('accounts/{account}/deactivate', [AccountController::class, 'deactivate'])->name('accounts.deactivate');
     Route::get('accounts/{account}/activity-log', [AccountController::class, 'activityLog'])->name('accounts.activity-log');
+    Route::patch('sub-admins/{subAdmin}/deactivate', [SubAdminController::class, 'deactivate'])->name('sub-admins.deactivate');
     Route::resource('sub-admins', SubAdminController::class)->except(['show']);
     Route::post('identity-requests/{identityRequest}/cancel', [IdentityRequestController::class, 'cancel'])->name('identity-requests.cancel');
     Route::post('dashboard/contributions/contributors', [ContributionController::class, 'storeContributor'])->name('contributions.contributors.store');

@@ -7,6 +7,7 @@ use App\Http\Requests\UpdateMargaRequest;
 use App\Models\Event;
 use App\Models\FeedPost;
 use App\Models\Marga;
+use App\Models\MargaNews;
 use App\Models\Person;
 use App\Models\Story;
 use App\Services\MargaIdentityPersonService;
@@ -105,10 +106,35 @@ class MargaController extends Controller
     public function relatedContent(Request $request, Marga $marga): JsonResponse
     {
         $validated = $request->validate([
-            'tab' => ['required', 'in:stories,events,statuses'],
+            'tab' => ['required', 'in:stories,events,statuses,news'],
             'page' => ['sometimes', 'integer', 'min:1'],
         ]);
         $tab = $validated['tab'];
+        if ($tab === 'news') {
+            $items = MargaNews::query()->approved()
+                ->whereHas('margas', fn ($query) => $query->whereKey($marga->id))
+                ->with('margas:id,name,color')
+                ->latest('published_at')->orderByDesc('id')->paginate(10)
+                ->through(fn (MargaNews $item) => [
+                    'id' => $item->id,
+                    'title' => $item->title,
+                    'body' => $item->excerpt ?? $item->summary ?? '',
+                    'author' => $item->publisher ?? 'Berita Marga',
+                    'date' => $item->published_at?->format('d M Y'),
+                    'location' => null,
+                    'margas' => $item->margas->map(fn (Marga $tag) => [
+                        'id' => $tag->id, 'name' => $tag->name, 'color' => $tag->color,
+                    ])->values(),
+                ]);
+
+            return response()->json([
+                'items' => $items->items(),
+                'current_page' => $items->currentPage(),
+                'last_page' => $items->lastPage(),
+                'total' => $items->total(),
+            ]);
+        }
+
         $query = match ($tab) {
             'stories' => Story::query()->publiclyVisible()->whereHas('relatedMargas', fn ($query) => $query->whereKey($marga->id)),
             'events' => Event::query()->publiclyVisible()->where(function ($query) use ($marga) {

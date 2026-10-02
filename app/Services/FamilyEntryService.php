@@ -1195,6 +1195,8 @@ class FamilyEntryService
                 $child = Person::create([...$attributes, 'created_by' => $createdBy]);
             }
 
+            $this->syncChildSpouses($child, $row, $createdBy);
+
             // Keep the submitted row index so a new family's focus remains
             // correct when blank placeholder rows before it are ignored.
             $children->put($index, $child);
@@ -1207,6 +1209,55 @@ class FamilyEntryService
         }
 
         return $children;
+    }
+
+    /**
+     * Link every spouse typed on a child row (the first spouse plus any extra
+     * ones) as the child's wives. Rows without a spouse name, female rows and
+     * unchanged lists are left alone so nothing is detached by accident.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    public function syncChildSpouses(Person $child, array $row, ?int $createdBy = null): void
+    {
+        $gender = $row['gender'] ?? $child->gender;
+
+        if ($gender === 'P') {
+            return;
+        }
+
+        $entries = [];
+        $candidates = [
+            ['name' => $row['spouse'] ?? null, 'marga' => $row['spouse_marga'] ?? null],
+            ...array_values(is_array($row['extra_wives'] ?? null) ? $row['extra_wives'] : []),
+            ...array_values(is_array($row['wives'] ?? null) ? $row['wives'] : []),
+        ];
+
+        foreach ($candidates as $candidate) {
+            $name = is_array($candidate) ? $this->normalizeName($candidate['name'] ?? null) : null;
+
+            if ($name === null) {
+                continue;
+            }
+
+            $entries[] = ['name' => $name, 'new_marga' => $candidate['marga'] ?? null];
+        }
+
+        if ($entries === []) {
+            return;
+        }
+
+        $signature = fn (string $name, ?string $marga): string => mb_strtolower($name).'|'.mb_strtolower(trim((string) $marga));
+        $current = $child->wives()->with('marga:id,name')->get()
+            ->map(fn (Person $wife) => $signature($wife->name, $wife->marga?->name))
+            ->all();
+        $submitted = array_map(fn (array $entry) => $signature($entry['name'], $entry['new_marga']), $entries);
+
+        if ($current === $submitted) {
+            return;
+        }
+
+        $this->syncWives($child, ['wives' => $entries], $createdBy, 'wives');
     }
 
     /**

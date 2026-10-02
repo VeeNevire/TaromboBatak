@@ -57,6 +57,17 @@ class SharedFamilyTreeAppendService
             ->where('person_id', $member->id)
             ->firstOrFail();
 
+        /** @var array<int, array{name: string, marga?: string|null}> $wives */
+        $wives = $payload['wives'] ?? [];
+        if ($wives !== []) {
+            app(FamilyEntryService::class)->syncWives($member, [
+                'wives' => array_map(fn (array $wife): array => [
+                    'name' => $wife['name'],
+                    'new_marga' => $wife['marga'] ?? null,
+                ], $wives),
+            ], $createdBy, 'wives');
+        }
+
         /** @var array<int, array<string, mixed>> $siblings */
         $siblings = $payload['siblings'] ?? [];
         foreach ($siblings as $sibling) {
@@ -227,6 +238,7 @@ class SharedFamilyTreeAppendService
             'mother_node_id' => $motherNode?->id,
             'birth_order' => $birthOrder,
         ]);
+        app(FamilyEntryService::class)->syncChildSpouses($person, $payload, $createdBy);
 
         return $person;
     }

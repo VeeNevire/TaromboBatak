@@ -3,8 +3,35 @@
 use App\Models\Event;
 use App\Models\FeedPost;
 use App\Models\Marga;
+use App\Models\MargaNews;
 use App\Models\Story;
 use App\Models\User;
+
+test('related news includes only approved articles tagged with the selected marga', function () {
+    $marga = Marga::factory()->create();
+    $other = Marga::factory()->create();
+    $news = MargaNews::factory()->approved()->create(['published_at' => now()]);
+    $news->margas()->attach([$marga->id, $other->id]);
+    foreach (['pending', 'rejected', 'inactive'] as $status) {
+        MargaNews::factory()->create(['status' => $status])->margas()->attach($marga);
+    }
+    MargaNews::factory()->approved()->create()->margas()->attach($other);
+    MargaNews::factory()->approved()->create();
+
+    $url = route('marga.related-content', [$marga, 'tab' => 'news']);
+    $this->getJson($url)->assertSuccessful()->assertJsonCount(1, 'items')
+        ->assertJsonPath('items.0.id', $news->id)
+        ->assertJsonPath('items.0.author', $news->publisher)
+        ->assertJsonCount(2, 'items.0.margas');
+
+    MargaNews::factory()->approved()->count(10)->create(['published_at' => now()->subDay()])
+        ->each(fn ($item) => $item->margas()->attach($marga));
+    $this->actingAs(User::factory()->create())->getJson($url)
+        ->assertSuccessful()->assertJsonCount(10, 'items')->assertJsonPath('last_page', 2)
+        ->assertJsonPath('items.0.id', $news->id);
+    $this->getJson(route('marga.related-content', [$marga, 'tab' => 'news', 'page' => 2]))
+        ->assertSuccessful()->assertJsonCount(1, 'items');
+});
 
 test('marga content shows only related approved published stories and events', function () {
     $admin = User::factory()->asAdmin()->create();

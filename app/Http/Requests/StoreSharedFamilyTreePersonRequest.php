@@ -42,6 +42,9 @@ class StoreSharedFamilyTreePersonRequest extends FormRequest
             'death_year' => ['nullable', 'digits:4'],
             'spouse' => ['nullable', 'string', 'max:255'],
             'spouse_marga' => ['nullable', 'string', 'max:255'],
+            'wives' => ['nullable', 'array', 'max:10'],
+            'wives.*.name' => ['required', 'string', 'max:255'],
+            'wives.*.marga' => ['nullable', 'string', 'max:255'],
             'bio' => ['nullable', 'string', 'max:5000'],
             'children' => ['nullable', 'array', 'max:20'],
             'children.*.name' => ['required', 'string', 'max:255'],
@@ -50,6 +53,9 @@ class StoreSharedFamilyTreePersonRequest extends FormRequest
             'children.*.birth_year' => ['nullable', 'digits:4'],
             'children.*.death_year' => ['nullable', 'digits:4'],
             'children.*.spouse' => ['nullable', 'string', 'max:255'],
+            'children.*.extra_wives' => ['nullable', 'array', 'max:10'],
+            'children.*.extra_wives.*.name' => ['nullable', 'string', 'max:255'],
+            'children.*.extra_wives.*.marga' => ['nullable', 'string', 'max:255'],
             'children.*.spouse_marga' => ['nullable', 'string', 'max:255'],
             'children.*.bio' => ['nullable', 'string', 'max:5000'],
             'siblings' => ['nullable', 'array', 'max:20'],
@@ -59,6 +65,9 @@ class StoreSharedFamilyTreePersonRequest extends FormRequest
             'siblings.*.birth_year' => ['nullable', 'digits:4'],
             'siblings.*.death_year' => ['nullable', 'digits:4'],
             'siblings.*.spouse' => ['nullable', 'string', 'max:255'],
+            'siblings.*.extra_wives' => ['nullable', 'array', 'max:10'],
+            'siblings.*.extra_wives.*.name' => ['nullable', 'string', 'max:255'],
+            'siblings.*.extra_wives.*.marga' => ['nullable', 'string', 'max:255'],
             'siblings.*.spouse_marga' => ['nullable', 'string', 'max:255'],
             'siblings.*.bio' => ['nullable', 'string', 'max:5000'],
         ];
@@ -132,6 +141,13 @@ class StoreSharedFamilyTreePersonRequest extends FormRequest
                         'Ibu harus merupakan pasangan dari ayah yang dipilih.',
                     );
                 }
+            }
+
+            if ($this->filled('wives') && $this->input('gender') === 'P') {
+                $validator->errors()->add(
+                    'wives',
+                    'Data istri hanya dapat ditambahkan saat anggota utama berjenis kelamin laki-laki.',
+                );
             }
 
             if ($this->filled('children') && $this->input('gender') !== 'L') {
