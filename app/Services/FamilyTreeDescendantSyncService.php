@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ContributionRequest;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeNode;
 use App\Models\Person;
@@ -11,31 +12,112 @@ use Illuminate\Support\Facades\DB;
 class FamilyTreeDescendantSyncService
 {
     /**
-     * Propagate a newly appended person to every tree (whoever owns it) that
-     * contains one of the person's paternal ancestors, plus the tree they
-     * edited. The marga trees read people globally, so an account tree owned by
-     * somebody else must still receive the new descendant.
+     * Propagate a newly appended person to this owner's trees that contain one
+     * of the person's paternal ancestors, plus the tree they edited. Trees of
+     * other owners only receive the new person (and their children) under the
+     * father's node, which stays cheap however many trees share the lineage.
      */
     public function syncTreesForNewDescendant(FamilyTree $sourceTree, Person $person): void
     {
-        $trees = $this->treesContainingAncestorsOf($person);
+        $trees = $this->treesContainingAncestorsOf($person, $sourceTree->user_id);
         $trees->push($sourceTree);
         $trees->unique('id')->each(fn (FamilyTree $tree) => $this->syncTreeAndDescendantVersions($tree));
+
+        $this->syncTreesForPerson($person);
     }
 
     /**
-     * Add a person to every tree that contains one of their paternal ancestors.
+     * Add a person, then their direct children, to every tree that already
+     * holds their father.
      */
     public function syncTreesForPerson(Person $person): void
     {
-        $this->treesContainingAncestorsOf($person)
-            ->each(fn (FamilyTree $tree) => $this->syncTreeAndDescendantVersions($tree));
+        $this->attachToTreesHoldingFather($person);
+
+        Person::query()
+            ->where('father_id', $person->id)
+            ->orderBy('birth_order')
+            ->orderBy('id')
+            ->get()
+            ->each(fn (Person $child) => $this->attachToTreesHoldingFather($child));
+    }
+
+    /**
+     * Insert one node for the person under the father's node in every unlocked
+     * tree that holds the father but not the person yet. Unlike sync(), this
+     * neither loads whole trees nor renumbers them: the chain is derived from
+     * the father's chain.
+     */
+    public function attachToTreesHoldingFather(Person $person): int
+    {
+        if ($person->father_id === null) {
+            return 0;
+        }
+
+        $fatherNodes = FamilyTreeNode::query()
+            ->where('person_id', $person->father_id)
+            ->where('is_removed', false)
+            ->whereNotIn('family_tree_id', FamilyTreeNode::query()
+                ->select('family_tree_id')
+                ->where('person_id', $person->id))
+            ->with('familyTree:id,based_on_id')
+            ->get(['id', 'family_tree_id', 'chain']);
+
+        if ($fatherNodes->isEmpty()) {
+            return 0;
+        }
+
+        $lockedTreeIds = ContributionRequest::query()
+            ->whereIn('family_tree_id', $fatherNodes->pluck('family_tree_id'))
+            ->whereIn('status', [ContributionRequest::STATUS_PENDING, ContributionRequest::STATUS_APPROVED])
+            ->pluck('family_tree_id')
+            ->flip();
+        $now = now();
+        $nodes = [];
+        $pivot = [];
+
+        foreach ($fatherNodes->unique('family_tree_id') as $fatherNode) {
+            $tree = $fatherNode->familyTree;
+
+            if ($tree === null || ($tree->based_on_id !== null && $lockedTreeIds->has($tree->id))) {
+                continue;
+            }
+
+            $nodes[] = [
+                'family_tree_id' => $tree->id,
+                'person_id' => $person->id,
+                'father_node_id' => $fatherNode->id,
+                'mother_node_id' => null,
+                'birth_order' => $person->birth_order,
+                'sibling_count' => $person->sibling_count,
+                'chain' => $fatherNode->chain !== null && $person->birth_order !== null
+                    ? $fatherNode->chain.'-'.$person->birth_order
+                    : null,
+                'pending_father' => false,
+                'structure_overrides' => $tree->based_on_id === null ? null : '[]',
+                'is_removed' => false,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+            $pivot[] = ['family_tree_id' => $tree->id, 'person_id' => $person->id];
+        }
+
+        if ($nodes === []) {
+            return 0;
+        }
+
+        DB::transaction(function () use ($nodes, $pivot): void {
+            FamilyTreeNode::query()->insert($nodes);
+            DB::table('family_tree_person')->insertOrIgnore($pivot);
+        });
+
+        return count($nodes);
     }
 
     /**
      * @return Collection<int, FamilyTree>
      */
-    private function treesContainingAncestorsOf(Person $person): Collection
+    private function treesContainingAncestorsOf(Person $person, int $userId): Collection
     {
         $ancestorIds = [];
         $seen = [];
@@ -50,6 +132,7 @@ class FamilyTreeDescendantSyncService
         }
 
         return FamilyTree::query()
+            ->where('user_id', $userId)
             ->where(function ($query) use ($ancestorIds): void {
                 $query->whereIn('root_person_id', $ancestorIds)
                     ->orWhereHas('people', fn ($people) => $people->whereIn('people.id', $ancestorIds))
