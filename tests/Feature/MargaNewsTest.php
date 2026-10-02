@@ -519,11 +519,14 @@ test('staff can deactivate and republish news', function (string $state) {
     $this->get(route('marga-news.show', $news))->assertSuccessful();
 })->with(['asAdmin', 'asSubAdmin']);
 
-test('public news is ordered by newest update rather than source publication', function () {
-    $older = MargaNews::factory()->approved()->create(['updated_at' => now()->subDays(2), 'published_at' => now()]);
-    $newer = MargaNews::factory()->approved()->create(['updated_at' => now(), 'published_at' => now()->subYear()]);
+test('public news is ordered by source publication date with undated news last', function () {
+    $older = MargaNews::factory()->approved()->create(['updated_at' => now(), 'published_at' => now()->subYear()]);
+    $newer = MargaNews::factory()->approved()->create(['updated_at' => now()->subDays(2), 'published_at' => now()->subDay()]);
+    $undated = MargaNews::factory()->approved()->create(['updated_at' => now()->addMinute(), 'published_at' => null]);
     $this->get(route('marga-news.index'))->assertInertia(fn (Assert $page) => $page
-        ->where('news.data.0.id', $newer->id)->where('news.data.1.id', $older->id));
+        ->where('news.data.0.id', $newer->id)
+        ->where('news.data.1.id', $older->id)
+        ->where('news.data.2.id', $undated->id));
 });
 
 test('guests can read news but only logged in users can comment', function () {

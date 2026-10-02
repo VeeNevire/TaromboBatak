@@ -26,7 +26,7 @@ class MargaNewsController extends Controller
             ->with('margas:id,name,color')
             ->when($margaId, fn ($query) => $query->whereHas('margas', fn ($margas) => $margas->whereKey($margaId)))
             ->when($search !== '', fn ($query) => $query->where('title', 'like', '%'.$search.'%'))
-            ->latest('updated_at')
+            ->latest('published_at')
             ->orderByDesc('id')
             ->paginate(20)
             ->withQueryString()
