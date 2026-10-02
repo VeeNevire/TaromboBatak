@@ -422,6 +422,12 @@ class PersonController extends Controller
                 ->syncTreeAndDescendantVersions($tree),
         );
 
+        collect([$result['focus'] ?? null])
+            ->merge($result['children'] ?? [])
+            ->merge($result['ownChildren'] ?? [])
+            ->filter()
+            ->each(fn (Person $synced) => app(FamilyTreeDescendantSyncService::class)->syncTreesForPerson($synced));
+
         $result['familyTrees']->each(fn (FamilyTree $tree) => app(FamilyTreeActivityLogger::class)->log(
             $tree,
             $user,
@@ -1201,6 +1207,12 @@ class PersonController extends Controller
             fn (FamilyTree $tree) => app(FamilyTreeDescendantSyncService::class)
                 ->syncTreeAndDescendantVersions($tree),
         );
+
+        collect([$result['focus'] ?? null])
+            ->merge($result['children'] ?? [])
+            ->merge($result['ownChildren'] ?? [])
+            ->filter()
+            ->each(fn (Person $synced) => app(FamilyTreeDescendantSyncService::class)->syncTreesForPerson($synced));
 
         $result['familyTrees']->each(fn (FamilyTree $tree) => app(FamilyTreeActivityLogger::class)->log(
             $tree,

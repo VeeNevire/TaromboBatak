@@ -5,15 +5,37 @@ namespace App\Services;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeNode;
 use App\Models\Person;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
 class FamilyTreeDescendantSyncService
 {
     /**
-     * Propagate a newly appended person to this owner's trees that contain
-     * one of the person's paternal ancestors, plus the tree they edited.
+     * Propagate a newly appended person to every tree (whoever owns it) that
+     * contains one of the person's paternal ancestors, plus the tree they
+     * edited. The marga trees read people globally, so an account tree owned by
+     * somebody else must still receive the new descendant.
      */
     public function syncTreesForNewDescendant(FamilyTree $sourceTree, Person $person): void
+    {
+        $trees = $this->treesContainingAncestorsOf($person);
+        $trees->push($sourceTree);
+        $trees->unique('id')->each(fn (FamilyTree $tree) => $this->syncTreeAndDescendantVersions($tree));
+    }
+
+    /**
+     * Add a person to every tree that contains one of their paternal ancestors.
+     */
+    public function syncTreesForPerson(Person $person): void
+    {
+        $this->treesContainingAncestorsOf($person)
+            ->each(fn (FamilyTree $tree) => $this->syncTreeAndDescendantVersions($tree));
+    }
+
+    /**
+     * @return Collection<int, FamilyTree>
+     */
+    private function treesContainingAncestorsOf(Person $person): Collection
     {
         $ancestorIds = [];
         $seen = [];
@@ -27,17 +49,13 @@ class FamilyTreeDescendantSyncService
                 : Person::query()->find($current->father_id);
         }
 
-        $trees = FamilyTree::query()
-            ->where('user_id', $sourceTree->user_id)
+        return FamilyTree::query()
             ->where(function ($query) use ($ancestorIds): void {
                 $query->whereIn('root_person_id', $ancestorIds)
                     ->orWhereHas('people', fn ($people) => $people->whereIn('people.id', $ancestorIds))
                     ->orWhereHas('nodes', fn ($nodes) => $nodes->whereIn('person_id', $ancestorIds));
             })
             ->get();
-
-        $trees->push($sourceTree);
-        $trees->unique('id')->each(fn (FamilyTree $tree) => $this->syncTreeAndDescendantVersions($tree));
     }
 
     /**
