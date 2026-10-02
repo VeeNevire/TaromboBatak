@@ -180,6 +180,20 @@ export default function AccountForm({
         );
     }, [managedMargaOptions, margaSearch]);
 
+    const selectedManagedMargas = useMemo(() => {
+        const namesById = new Map(
+            [...margas, ...managedMargaOptions].map((marga) => [
+                marga.id,
+                marga.name,
+            ]),
+        );
+
+        return data.managed_marga_ids.map((id) => ({
+            id,
+            name: namesById.get(id) ?? `Marga #${id}`,
+        }));
+    }, [data.managed_marga_ids, margas, managedMargaOptions]);
+
     const toggleManagedMarga = (margaId: number, checked: boolean) => {
         setData(
             'managed_marga_ids',
@@ -570,7 +584,7 @@ export default function AccountForm({
                 </form>
             </div>
             <Dialog open={managementOpen} onOpenChange={setManagementOpen}>
-                <DialogContent className="sm:max-w-lg">
+                <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
                     <DialogHeader>
                         <DialogTitle>Daftar Manajemen Marga</DialogTitle>
                         <DialogDescription>
@@ -578,6 +592,37 @@ export default function AccountForm({
                             Silsilah Bawah dan dapat dikelola akun ini.
                         </DialogDescription>
                     </DialogHeader>
+                    <section
+                        aria-labelledby="selected-managed-margas-title"
+                        className="grid gap-2 rounded-lg border border-tb-outline-variant bg-tb-surface-container p-3"
+                    >
+                        <h3
+                            id="selected-managed-margas-title"
+                            className="text-sm font-medium text-tb-on-surface"
+                        >
+                            Marga yang dipilih ({selectedManagedMargas.length})
+                        </h3>
+                        {selectedManagedMargas.length > 0 ? (
+                            <ul className="flex max-h-32 flex-wrap gap-2 overflow-y-auto">
+                                {selectedManagedMargas.map((marga) => (
+                                    <li
+                                        key={marga.id}
+                                        className="max-w-full rounded-md bg-tb-primary/10 px-2.5 py-1 text-sm break-words text-tb-primary"
+                                    >
+                                        {marga.name}
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <p className="text-sm text-tb-on-surface-variant">
+                                Belum ada marga yang dipilih.
+                            </p>
+                        )}
+                        <p className="text-xs text-tb-on-surface-variant">
+                            Pilihan akan disimpan saat menekan Simpan Perubahan
+                            atau Tambah Akun pada formulir.
+                        </p>
+                    </section>
                     <Input
                         value={margaSearch}
                         onChange={(event) => setMargaSearch(event.target.value)}

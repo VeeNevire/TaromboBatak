@@ -22,11 +22,6 @@ export default function QrResult({
                                 {snapshot.title}
                             </h1>
                         </div>
-                        <Button asChild>
-                            <a href={snapshot.download_url}>
-                                <Download className="size-4" /> Unduh gambar
-                            </a>
-                        </Button>
                     </header>
                     <p className="text-sm text-tb-on-surface-variant">
                         Gunakan tombol +/−, scroll, atau ketuk dua kali untuk
