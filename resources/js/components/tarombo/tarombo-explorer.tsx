@@ -23,6 +23,7 @@ import { TaromboDiagram } from '@/components/landing/tarombo-diagram';
 import { DescendantsTree } from '@/components/people/descendants-tree';
 import type { DescendantsAlternativeTree } from '@/components/people/descendants-tree';
 import { PersonTreePickerDialog } from '@/components/tarombo/person-tree-picker-dialog';
+import { TouchTreeViewport } from '@/components/tarombo/touch-tree-viewport';
 import {
     DEFAULT_TREE_SETTINGS,
     TreeSettingsDialog,
@@ -99,6 +100,7 @@ type Props = {
         margaName: string;
         identityPersonId: string | null;
         direction: 'upper' | 'lower';
+        descendantGenerations?: number | null;
         canReorderSiblings: boolean;
     } | null;
 };
@@ -772,7 +774,7 @@ export function TaromboExplorer({
     const treeZoomControls = (
         <div
             className={cn(
-                'flex flex-col overflow-hidden rounded-lg border border-tb-outline-variant bg-tb-surface-bright/95 shadow-md backdrop-blur',
+                'inline-flex shrink-0 items-center overflow-hidden rounded-lg border border-tb-outline-variant bg-tb-surface-bright shadow-sm',
                 snapshotMode && 'invisible',
             )}
         >
@@ -785,7 +787,7 @@ export function TaromboExplorer({
             >
                 <Plus className="size-4" />
             </button>
-            <span className="flex h-6 w-9 items-center justify-center border-y border-tb-outline-variant text-[11px] font-medium text-tb-on-surface-variant">
+            <span className="flex h-9 min-w-12 items-center justify-center border-x border-tb-outline-variant px-2 text-xs font-medium text-tb-on-surface-variant">
                 {Math.round(treeZoom * 100)}%
             </span>
             <button
@@ -1107,7 +1109,7 @@ export function TaromboExplorer({
     const verticalTreeTitle = familyNameHeading
         ? familyNameHeading
         : margaTree
-          ? `Pohon Silsilah ${margaTree.direction === 'upper' ? 'Atas' : 'Bawah'}`
+          ? `Pohon Silsilah ${margaTree.direction === 'upper' ? 'Atas' : 'Bawah'}${margaTree.descendantGenerations ? ' (5 Generasi Turunan)' : ''}`
           : selectedAccountTree
             ? `Pohon Silsilah ${selectedAccountTree.name}`
             : 'Silsilah Keturunan';
@@ -1767,7 +1769,7 @@ export function TaromboExplorer({
                     margas={margas}
                     context="descendants"
                     maxDepth={DIAGRAM_MAX_DEPTH}
-                    allowPan={fullscreen}
+                    allowPan={fullscreen || !isDesktop}
                     showScrollbars={fullscreen}
                     initialScrollable={fullscreen}
                 />
@@ -1821,14 +1823,14 @@ export function TaromboExplorer({
             >
                 <div
                     ref={fullscreen ? snapshotContentRef : undefined}
-                    className="w-max min-w-full"
+                    className="w-full min-w-0"
                 >
                     <div className="relative mb-4 border-b border-tb-outline-variant pb-3">
                         {fullscreen ? (
                             <Link
                                 href={tarombo.index()}
                                 className={cn(
-                                    'absolute top-0 left-0 inline-flex w-fit items-center gap-1.5 rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:bg-tb-surface-container',
+                                    'mb-3 inline-flex w-fit items-center gap-1.5 rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 py-2 text-xs font-semibold text-tb-on-surface transition-colors hover:bg-tb-surface-container sm:absolute sm:top-0 sm:left-0 sm:mb-0',
                                     snapshotMode && 'invisible',
                                 )}
                             >
@@ -1837,8 +1839,8 @@ export function TaromboExplorer({
                         ) : (
                             <span />
                         )}
-                        <div className="min-w-0 px-20 text-center">
-                            <h3 className="font-display text-lg font-bold text-tb-on-surface">
+                        <div className="min-w-0 px-2 text-center sm:px-20">
+                            <h3 className="font-display text-lg font-bold break-words text-tb-on-surface">
                                 {verticalTreeTitle}
                             </h3>
                             {verticalTreeDescription && (
@@ -1861,72 +1863,82 @@ export function TaromboExplorer({
                                 branchArrowToggle}
                         </div>
                     </div>
-                    <div
-                        data-transparent-node-fill={
-                            snapshotMode && snapshotTransparentNodes
-                                ? // A transparent image keeps the usual
-                                  // ink for placing on light paper.
-                                  snapshotTransparent
-                                    ? 'plain'
-                                    : 'contrast'
-                                : undefined
-                        }
-                        style={{
-                            // Saved images are always drawn at 100%.
-                            zoom: snapshotMode ? 1 : treeZoom,
-                            ...(fullscreen && canCustomizeTree && styleSettings
-                                ? treeSettingsStyle(styleSettings)
-                                : {}),
-                        }}
-                    >
-                        <DescendantsTree
-                            key={`${renderedTreeCenterId}-${margaTree?.direction ?? ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
-                            people={displayPeople}
-                            centerId={renderedTreeCenterId}
-                            onSelect={
-                                margaTree ? undefined : handlePersonSelect
+                    <TouchTreeViewport zoom={treeZoom} onZoom={setTreeZoom}>
+                        <div
+                            className="w-max min-w-full"
+                            data-transparent-node-fill={
+                                snapshotMode && snapshotTransparentNodes
+                                    ? // A transparent image keeps the usual
+                                      // ink for placing on light paper.
+                                      snapshotTransparent
+                                        ? 'plain'
+                                        : 'contrast'
+                                    : undefined
                             }
-                            onMakeTop={handleMakeTop}
-                            highlightId={renderedHighlightId}
-                            editNodes={!margaTree}
-                            selectOnClick={!margaTree}
-                            showProfileOnName
-                            readOnly={Boolean(margaTree)}
-                            alternativeTrees={descendantAlternativeTrees}
-                            lineagePath={treeLineagePath}
-                            connectionPaths={connection?.paths}
-                            markFemaleLineage={
-                                margaTree ? false : showFemaleLineage
-                            }
-                            collapseDepth={verticalTreeCollapseDepth}
-                            scrollToLineageEnd={searchedId !== null}
-                            foldedId={searchedId}
-                            detachedPeople={displayedDetachedRoots}
-                            showNodeAvatar={showNodeCircles}
-                            showBranchToggles={showBranchToggles}
-                            showSpouseNames={showSpouseNames}
-                            showSpouseMargas={margaTree?.direction === 'lower'}
-                            siblingOrderMargaId={margaTree?.margaId}
-                            canReorderSiblings={
-                                margaTree
-                                    ? margaTree.direction === 'lower' &&
-                                      margaTree.canReorderSiblings
-                                    : selectedAccountTree?.canManage === true
-                            }
-                            allowBranchEntry={margaTree?.direction === 'lower'}
-                            compactTerminalBranches={
-                                margaTree?.direction === 'lower'
-                            }
-                            packCollapsed={compactTree}
-                            versionTreeId={selectedFamilyTreeId}
-                            compact={fullscreen}
-                            nodeIdPrefix={
-                                fullscreen
-                                    ? FULLSCREEN_TREE_NODE_PREFIX
-                                    : 'tarombo-desktop-tree-node'
-                            }
-                        />
-                    </div>
+                            style={{
+                                // Saved images are always drawn at 100%.
+                                zoom: snapshotMode ? 1 : treeZoom,
+                                ...(fullscreen &&
+                                canCustomizeTree &&
+                                styleSettings
+                                    ? treeSettingsStyle(styleSettings)
+                                    : {}),
+                            }}
+                        >
+                            <DescendantsTree
+                                key={`${renderedTreeCenterId}-${margaTree?.direction ?? ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
+                                people={displayPeople}
+                                centerId={renderedTreeCenterId}
+                                onSelect={
+                                    margaTree ? undefined : handlePersonSelect
+                                }
+                                onMakeTop={handleMakeTop}
+                                highlightId={renderedHighlightId}
+                                editNodes={!margaTree}
+                                selectOnClick={!margaTree}
+                                showProfileOnName
+                                readOnly={Boolean(margaTree)}
+                                alternativeTrees={descendantAlternativeTrees}
+                                lineagePath={treeLineagePath}
+                                connectionPaths={connection?.paths}
+                                markFemaleLineage={
+                                    margaTree ? false : showFemaleLineage
+                                }
+                                collapseDepth={verticalTreeCollapseDepth}
+                                scrollToLineageEnd={searchedId !== null}
+                                foldedId={searchedId}
+                                detachedPeople={displayedDetachedRoots}
+                                showNodeAvatar={showNodeCircles}
+                                showBranchToggles={showBranchToggles}
+                                showSpouseNames={showSpouseNames}
+                                showSpouseMargas={
+                                    margaTree?.direction === 'lower'
+                                }
+                                siblingOrderMargaId={margaTree?.margaId}
+                                canReorderSiblings={
+                                    margaTree
+                                        ? margaTree.direction === 'lower' &&
+                                          margaTree.canReorderSiblings
+                                        : selectedAccountTree?.canManage ===
+                                          true
+                                }
+                                allowBranchEntry={
+                                    margaTree?.direction === 'lower'
+                                }
+                                compactTerminalBranches={
+                                    margaTree?.direction === 'lower'
+                                }
+                                packCollapsed={compactTree}
+                                versionTreeId={selectedFamilyTreeId}
+                                compact={fullscreen}
+                                nodeIdPrefix={
+                                    fullscreen
+                                        ? FULLSCREEN_TREE_NODE_PREFIX
+                                        : 'tarombo-desktop-tree-node'
+                                }
+                            />
+                        </div>
+                    </TouchTreeViewport>
                 </div>
                 {!margaTree &&
                     !treeHasChildren &&
@@ -1934,7 +1946,12 @@ export function TaromboExplorer({
                     noChildrenNotice}
             </div>
             {treeHasChildren && (
-                <div className="absolute bottom-3 left-3 z-10">
+                <div
+                    className={cn(
+                        'relative z-20 flex shrink-0 justify-start border-t border-tb-outline-variant bg-tb-surface-bright px-4 py-3',
+                        snapshotMode && 'hidden',
+                    )}
+                >
                     {treeZoomControls}
                 </div>
             )}
@@ -1972,7 +1989,7 @@ export function TaromboExplorer({
                     <div>
                         <h1 className="font-display text-2xl font-bold text-tb-on-surface md:text-3xl">
                             {margaTree
-                                ? `Pohon Silsilah ${margaTree.direction === 'upper' ? 'Atas' : 'Bawah'}`
+                                ? `Pohon Silsilah ${margaTree.direction === 'upper' ? 'Atas' : 'Bawah'}${margaTree.descendantGenerations ? ' (5 Generasi Turunan)' : ''}`
                                 : 'Pohon Tarombo'}
                         </h1>
                         <p className="mt-1 text-sm text-tb-on-surface-variant">
@@ -1983,9 +2000,9 @@ export function TaromboExplorer({
                     </div>
                 </div>
                 {fullscreen && (
-                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                    <div className="flex min-w-0 flex-wrap items-center justify-start gap-2 sm:justify-end">
                         {canCustomizeTree && (
-                            <div className="flex flex-col items-end gap-2">
+                            <div className="flex w-full min-w-0 flex-wrap items-start gap-2 sm:w-auto sm:flex-col sm:items-end">
                                 {nodeCircleToggle}
                                 {branchArrowToggle}
                             </div>
@@ -2328,6 +2345,7 @@ export function TaromboExplorer({
                             <TabsContent value="diagram">
                                 <div className="rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-4">
                                     <TaromboDiagram
+                                        allowPan
                                         onSelect={handleDiagramSelect}
                                         onPaneClick={() => setSelectedId(null)}
                                         onBack={handleBack}
@@ -2366,83 +2384,102 @@ export function TaromboExplorer({
                                                 branchArrowToggle}
                                         </div>
                                     </div>
-                                    <div style={{ zoom: treeZoom }}>
-                                        <DescendantsTree
-                                            key={`${renderedTreeCenterId}-${margaTree?.direction ?? ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
-                                            people={displayPeople}
-                                            centerId={renderedTreeCenterId}
-                                            onSelect={
-                                                margaTree
-                                                    ? undefined
-                                                    : handlePersonSelect
-                                            }
-                                            onMakeTop={handleMakeTop}
-                                            highlightId={renderedHighlightId}
-                                            editNodes={!margaTree}
-                                            selectOnClick={!margaTree}
-                                            showProfileOnName={
-                                                !margaTree ||
-                                                (margaTree.direction ===
-                                                    'lower' &&
-                                                    margaTree.canReorderSiblings)
-                                            }
-                                            readOnly={Boolean(margaTree)}
-                                            alternativeTrees={
-                                                descendantAlternativeTrees
-                                            }
-                                            lineagePath={treeLineagePath}
-                                            connectionPaths={connection?.paths}
-                                            markFemaleLineage={
-                                                showFemaleLineage
-                                            }
-                                            collapseDepth={
-                                                verticalTreeCollapseDepth
-                                            }
-                                            detachedPeople={
-                                                displayedDetachedRoots
-                                            }
-                                            showNodeAvatar={showNodeCircles}
-                                            showBranchToggles={
-                                                showBranchToggles
-                                            }
-                                            showSpouseNames={showSpouseNames}
-                                            showSpouseMargas={
-                                                margaTree?.direction === 'lower'
-                                            }
-                                            siblingOrderMargaId={
-                                                margaTree?.margaId
-                                            }
-                                            canReorderSiblings={
-                                                margaTree
-                                                    ? margaTree.direction ===
-                                                          'lower' &&
-                                                      margaTree.canReorderSiblings
-                                                    : selectedAccountTree?.canManage ===
-                                                      true
-                                            }
-                                            allowBranchEntry={
-                                                margaTree?.direction === 'lower'
-                                            }
-                                            compactTerminalBranches={
-                                                margaTree?.direction === 'lower'
-                                            }
-                                            packCollapsed={compactTree}
-                                            scrollToLineageEnd={
-                                                searchedId !== null
-                                            }
-                                            foldedId={searchedId}
-                                            nodeIdPrefix="tarombo-mobile-tree-node"
-                                            currentUserId={
-                                                identity?.currentUserId
-                                            }
-                                            versionTreeId={selectedFamilyTreeId}
-                                        />
-                                    </div>
+                                    <TouchTreeViewport
+                                        zoom={treeZoom}
+                                        onZoom={setTreeZoom}
+                                    >
+                                        <div
+                                            style={{ zoom: treeZoom }}
+                                            className="w-max min-w-full"
+                                        >
+                                            <DescendantsTree
+                                                key={`${renderedTreeCenterId}-${margaTree?.direction ?? ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
+                                                people={displayPeople}
+                                                centerId={renderedTreeCenterId}
+                                                onSelect={
+                                                    margaTree
+                                                        ? undefined
+                                                        : handlePersonSelect
+                                                }
+                                                onMakeTop={handleMakeTop}
+                                                highlightId={
+                                                    renderedHighlightId
+                                                }
+                                                editNodes={!margaTree}
+                                                selectOnClick={!margaTree}
+                                                showProfileOnName={
+                                                    !margaTree ||
+                                                    (margaTree.direction ===
+                                                        'lower' &&
+                                                        margaTree.canReorderSiblings)
+                                                }
+                                                readOnly={Boolean(margaTree)}
+                                                alternativeTrees={
+                                                    descendantAlternativeTrees
+                                                }
+                                                lineagePath={treeLineagePath}
+                                                connectionPaths={
+                                                    connection?.paths
+                                                }
+                                                markFemaleLineage={
+                                                    showFemaleLineage
+                                                }
+                                                collapseDepth={
+                                                    verticalTreeCollapseDepth
+                                                }
+                                                detachedPeople={
+                                                    displayedDetachedRoots
+                                                }
+                                                showNodeAvatar={showNodeCircles}
+                                                showBranchToggles={
+                                                    showBranchToggles
+                                                }
+                                                showSpouseNames={
+                                                    showSpouseNames
+                                                }
+                                                showSpouseMargas={
+                                                    margaTree?.direction ===
+                                                    'lower'
+                                                }
+                                                siblingOrderMargaId={
+                                                    margaTree?.margaId
+                                                }
+                                                canReorderSiblings={
+                                                    margaTree
+                                                        ? margaTree.direction ===
+                                                              'lower' &&
+                                                          margaTree.canReorderSiblings
+                                                        : selectedAccountTree?.canManage ===
+                                                          true
+                                                }
+                                                allowBranchEntry={
+                                                    margaTree?.direction ===
+                                                    'lower'
+                                                }
+                                                compactTerminalBranches={
+                                                    margaTree?.direction ===
+                                                    'lower'
+                                                }
+                                                packCollapsed={compactTree}
+                                                scrollToLineageEnd={
+                                                    searchedId !== null
+                                                }
+                                                foldedId={searchedId}
+                                                nodeIdPrefix="tarombo-mobile-tree-node"
+                                                currentUserId={
+                                                    identity?.currentUserId
+                                                }
+                                                versionTreeId={
+                                                    selectedFamilyTreeId
+                                                }
+                                            />
+                                        </div>
+                                    </TouchTreeViewport>
                                     {!treeHasChildren &&
                                         !ancestorFocusId &&
                                         noChildrenNotice}
                                     {treeHasChildren && (
-                                        <div className="absolute bottom-3 left-3 z-10">
+                                        <div className="mt-4 flex justify-start border-t border-tb-outline-variant pt-3">
                                             {treeZoomControls}
                                         </div>
                                     )}

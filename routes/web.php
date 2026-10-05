@@ -26,6 +26,7 @@ use App\Http\Controllers\KomunitasController;
 use App\Http\Controllers\MargaBranchEntryController;
 use App\Http\Controllers\MargaChatController;
 use App\Http\Controllers\MargaController;
+use App\Http\Controllers\MargaDocumentController;
 use App\Http\Controllers\MargaNewsAutomationController;
 use App\Http\Controllers\MargaNewsController;
 use App\Http\Controllers\MargaNewsSourceController;
@@ -40,6 +41,7 @@ use App\Http\Controllers\SharedFamilyTreePersonController;
 use App\Http\Controllers\StatusController;
 use App\Http\Controllers\StoryController;
 use App\Http\Controllers\SubAdminController;
+use App\Http\Controllers\TaromboAiController;
 use App\Http\Controllers\TaromboCompileDraftController;
 use App\Http\Controllers\TaromboController;
 use App\Http\Controllers\TaromboFrameController;
@@ -139,6 +141,19 @@ Route::middleware(['auth'])->group(function () {
     Route::post('dashboard/marga/{marga}/messages', [MargaChatController::class, 'store'])
         ->middleware('throttle:20,1')
         ->name('marga.messages.store');
+    Route::get('dashboard/marga/{marga}/dokumen', [MargaDocumentController::class, 'index'])
+        ->name('marga.documents.index');
+    Route::post('dashboard/marga/{marga}/dokumen', [MargaDocumentController::class, 'store'])
+        ->name('marga.documents.store');
+    Route::get('dashboard/marga/{marga}/dokumen/{document}/download', [MargaDocumentController::class, 'download'])
+        ->name('marga.documents.download');
+    Route::delete('dashboard/marga/{marga}/dokumen/{document}', [MargaDocumentController::class, 'destroy'])
+        ->name('marga.documents.destroy');
+    Route::get('dashboard/marga/{marga}/tanya-tarombo', [TaromboAiController::class, 'show'])
+        ->name('marga.ai.show');
+    Route::post('dashboard/marga/{marga}/tanya-tarombo', [TaromboAiController::class, 'ask'])
+        ->middleware('throttle:20,1')
+        ->name('marga.ai.ask');
     Route::get('dashboard/log-pohon-besar', [TreeActivityLogController::class, 'index'])
         ->name('tree-activity-logs.index');
     Route::post('dashboard/log-pohon-besar/perubahan/{treeChangeRequest}/setujui', [TreeActivityLogController::class, 'approve'])
@@ -399,3 +414,6 @@ Route::middleware('auth')->post(
 require __DIR__.'/settings.php';
 
 Route::fallback(fn () => abort(404));
+Route::middleware('auth')->get('/dashboard/dokumen-marga', [MargaDocumentController::class, 'select'])->name('marga.documents.select');
+Route::middleware('auth')->post('dashboard/news-feed/items/{feedType}/{feedId}/hide', [NewsFeedController::class, 'hide'])->whereNumber('feedId')->name('news-feed.items.hide');
+Route::middleware('auth')->get('/dashboard/tanya-ito-tarombo', [TaromboAiController::class, 'select'])->name('marga.ai.select');

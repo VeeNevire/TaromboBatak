@@ -14,6 +14,7 @@ export type TreeNode = {
     image?: string | null;
     pending?: boolean;
     claimed?: boolean;
+    isMargaIdentity?: boolean;
     spouses?: string[];
     spouseMargas?: string[];
 };
@@ -171,7 +172,13 @@ export function NodeCard({
                 aria-label={
                     onNameClick ? `Lihat ringkasan ${node.name}` : undefined
                 }
-                title={onNameClick ? 'Lihat ringkasan anggota' : undefined}
+                title={
+                    node.isMargaIdentity
+                        ? 'Tokoh identitas marga'
+                        : onNameClick
+                          ? 'Lihat ringkasan anggota'
+                          : undefined
+                }
                 data-node-fill
                 onClick={onNameClick}
                 onKeyDown={(event) => {
@@ -194,26 +201,33 @@ export function NodeCard({
                               narrow ? 'w-full px-1' : 'px-2',
                               'rounded-md border py-1 text-center text-[length:var(--tb-name-size,11px)] leading-snug font-semibold',
                           ),
-                    node.claimed &&
+                    !node.isMargaIdentity &&
+                        node.claimed &&
                         'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300',
                     dashed && 'border-dashed',
                     onNameClick &&
                         'cursor-pointer hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#B8934A] focus-visible:outline-none',
                 )}
                 style={{
-                    backgroundColor: node.claimed
-                        ? undefined
-                        : 'var(--tb-name-bg, #ffffff)',
+                    backgroundColor: node.isMargaIdentity
+                        ? '#BAE6FD'
+                        : node.claimed
+                          ? undefined
+                          : 'var(--tb-name-bg, #ffffff)',
                     borderColor: highlighted
                         ? GOLD
+                        : node.isMargaIdentity
+                          ? '#7DD3FC'
+                          : node.claimed
+                            ? '#6ee7b7'
+                            : 'var(--tb-name-border, #E3DFD2)',
+                    color: node.isMargaIdentity
+                        ? '#0C4A6E'
                         : node.claimed
-                          ? '#6ee7b7'
-                          : 'var(--tb-name-border, #E3DFD2)',
-                    color: node.claimed
-                        ? '#166534'
-                        : highlighted
-                          ? FOREST
-                          : `var(--tb-name-color, ${INK})`,
+                          ? '#166534'
+                          : highlighted
+                            ? FOREST
+                            : `var(--tb-name-color, ${INK})`,
                     fontFamily: 'var(--tb-name-font, inherit)',
                     fontWeight: 'var(--tb-name-weight, 600)',
                 }}

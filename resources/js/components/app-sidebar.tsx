@@ -4,6 +4,7 @@ import {
     BookOpen,
     BarChart3,
     BellRing,
+    FileText,
     CalendarDays,
     History,
     Globe,
@@ -155,6 +156,16 @@ export function AppSidebar() {
                               title: 'Data Anggota',
                               href: people.index(),
                               icon: Users,
+                          },
+                          {
+                              title: 'Dokumen Marga',
+                              href: marga.documents.select(),
+                              icon: FileText,
+                          },
+                          {
+                              title: 'Tanya Ito Tarombo',
+                              href: marga.ai.select(),
+                              icon: Bot,
                           },
                           {
                               title: 'Log Aktivitas',

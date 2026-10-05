@@ -178,6 +178,18 @@ export function PersonSummaryDialog({
                             </h3>
                             <dl className="grid gap-3">
                                 <div className="flex items-start justify-between gap-4">
+                                    <dt className="text-tb-on-surface-variant">
+                                        {person.lastEditedBy
+                                            ? 'Editor Terakhir'
+                                            : 'Input oleh'}
+                                    </dt>
+                                    <dd className="text-right font-medium text-tb-on-surface">
+                                        {person.lastEditedBy ||
+                                            person.createdBy ||
+                                            'Belum tercatat'}
+                                    </dd>
+                                </div>
+                                <div className="flex items-start justify-between gap-4">
                                     <dt className="flex items-center gap-1.5 text-tb-on-surface-variant">
                                         <CalendarDays className="size-3.5" />
                                         Tahun lahir
@@ -502,12 +514,22 @@ export function PersonSummaryDialog({
                     </div>
 
                     <p className="text-xs text-tb-on-surface-variant">
-                        Kontributor:{' '}
+                        {person.lastEditedBy ? 'Editor Terakhir' : 'Input oleh'}
+                        :{' '}
                         <span className="font-medium text-tb-on-surface">
-                            {person.createdBy || 'Belum dicatat'}
+                            {person.lastEditedBy ||
+                                person.createdBy ||
+                                'Belum tercatat'}
                         </span>
-                        {person.createdAt && (
-                            <span className="ml-1">· {person.createdAt}</span>
+                        {(person.lastEditedBy
+                            ? person.lastEditedAt
+                            : person.createdAt) && (
+                            <span className="ml-1">
+                                ·{' '}
+                                {person.lastEditedBy
+                                    ? person.lastEditedAt
+                                    : person.createdAt}
+                            </span>
                         )}
                     </p>
 

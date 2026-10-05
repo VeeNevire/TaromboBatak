@@ -3,6 +3,20 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        @php($preview = app(\App\Services\SharePreviewService::class)->forPage($page))
+        <meta name="description" content="{{ $preview['description'] }}">
+        <meta property="og:site_name" content="Tarombo Batak">
+        <meta property="og:locale" content="id_ID">
+        <meta property="og:type" content="article">
+        <meta property="og:title" content="{{ $preview['title'] }}">
+        <meta property="og:description" content="{{ $preview['description'] }}">
+        <meta property="og:image" content="{{ $preview['image'] }}">
+        <meta property="og:image:alt" content="{{ $preview['title'] }}">
+        <meta property="og:url" content="{{ $preview['url'] }}">
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:title" content="{{ $preview['title'] }}">
+        <meta name="twitter:description" content="{{ $preview['description'] }}">
+        <meta name="twitter:image" content="{{ $preview['image'] }}">
 
         {{-- Inline script to detect system dark mode preference and apply it immediately --}}
         <script>

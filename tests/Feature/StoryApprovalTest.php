@@ -152,9 +152,9 @@ test('story lists and management permissions follow ownership and role', functio
     Story::factory()->create(['classification' => 'marga', 'marga_id' => $otherMarga->id]);
 
     $this->actingAs($user)->get(route('stories.index'))
-        ->assertInertia(fn (Assert $page) => $page->has('stories.data', 1));
+        ->assertInertia(fn (Assert $page) => $page->has('stories.data', 3));
     $this->actingAs($contributor)->get(route('stories.index'))
-        ->assertInertia(fn (Assert $page) => $page->has('stories.data', 2));
+        ->assertInertia(fn (Assert $page) => $page->has('stories.data', 3));
     $this->actingAs($admin)->get(route('stories.index'))
         ->assertInertia(fn (Assert $page) => $page->has('stories.data', 3));
 
@@ -193,7 +193,7 @@ test('pending stories cannot appear on public story surfaces', function () {
     $this->get(route('cerita.index'))
         ->assertInertia(fn (Assert $page) => $page->has('stories.data', 0));
     $this->get(route('home'))
-        ->assertInertia(fn (Assert $page) => $page->has('stories', 0));
+        ->assertInertia(fn (Assert $page) => $page->has('items', 0));
     $this->get(route('cerita.show', $story))->assertNotFound();
 });
 

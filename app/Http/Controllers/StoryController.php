@@ -27,11 +27,12 @@ class StoryController extends Controller
         $user = $request->user();
         $stories = Story::query()
             ->with(['creator', 'marga', 'reviewer'])
-            ->when(! $user->isStaff() && ! $user->isContributor(), fn ($query) => $query->where('created_by', $user->id))
+            ->when(! $user->isStaff() && ! $user->isContributor(), fn ($query) => $query->where(fn ($visible) => $visible->where('created_by', $user->id)->orWhere(fn ($public) => $public->publiclyVisible())))
             ->when($user->isContributor(), fn ($query) => $query->where(fn ($query) => $query
                 ->where('classification', Story::CLASSIFICATION_GENERAL)
                 ->orWhereIn('marga_id', $user->accessibleMargaIds())
-                ->orWhere('created_by', $user->id)))
+                ->orWhere('created_by', $user->id)
+                ->orWhere(fn ($public) => $public->publiclyVisible())))
             ->when($request->filled('search'), function ($query) use ($request) {
                 $query->where('title', 'like', '%'.$request->string('search').'%');
             })
@@ -138,33 +139,34 @@ class StoryController extends Controller
         $user = $request->user();
         Gate::authorize('create', Story::class);
         $requiresApproval = ! $user->isStaff() && ! $user->isContributor();
+        $saveDraft = $request->boolean('save_draft');
         $classification = $request->string('classification')->toString();
         $margaId = $classification === Story::CLASSIFICATION_MARGA
             ? ($user->isStaff() ? $request->integer('marga_id') : $user->marga_id)
             : null;
         abort_if($classification === Story::CLASSIFICATION_MARGA && ! $margaId, 403, 'Marga cerita belum ditentukan.');
 
-        DB::transaction(function () use ($request, $user, $margaId, $requiresApproval) {
+        DB::transaction(function () use ($request, $user, $margaId, $requiresApproval, $saveDraft) {
             $story = Story::create([
-                ...$request->safe()->except('related_marga_ids'),
+                ...$request->safe()->except(['related_marga_ids', 'save_draft']),
                 'created_by' => $user->id,
                 'marga_id' => $margaId,
-                'status' => $requiresApproval ? Story::STATUS_PENDING : Story::STATUS_APPROVED,
-                'published' => $requiresApproval ? false : $request->boolean('published'),
+                'status' => $saveDraft ? Story::STATUS_DRAFT : ($requiresApproval ? Story::STATUS_PENDING : Story::STATUS_APPROVED),
+                'published' => $saveDraft || $requiresApproval ? false : $request->boolean('published'),
             ]);
 
             $story->relatedMargas()->sync($request->validated('related_marga_ids', []));
 
-            if ($requiresApproval) {
+            if ($requiresApproval && ! $saveDraft) {
                 $this->notifyContributors($story);
             }
         });
 
         Inertia::flash('toast', [
             'type' => 'success',
-            'message' => $requiresApproval
+            'message' => $saveDraft ? 'Draf cerita berhasil disimpan.' : ($requiresApproval
                 ? 'Cerita disimpan dan menunggu persetujuan kontributor.'
-                : __('Cerita berhasil ditambahkan.'),
+                : __('Cerita berhasil ditambahkan.')),
         ]);
 
         return to_route('stories.index');
@@ -216,7 +218,7 @@ class StoryController extends Controller
             abort_if($classification === Story::CLASSIFICATION_MARGA && ! $margaId, 403, 'Marga cerita belum ditentukan.');
             $nextStatus = $requiresApproval
                 ? Story::STATUS_PENDING
-                : ($canApproveDirectly ? Story::STATUS_APPROVED : $story->status);
+                : ($canApproveDirectly || $story->status === Story::STATUS_DRAFT ? Story::STATUS_APPROVED : $story->status);
             $scopeChanged = $story->classification !== $classification || $story->marga_id !== $margaId;
             $notifyReviewers = $requiresApproval || ($story->status === Story::STATUS_PENDING && $scopeChanged);
             $updates = [

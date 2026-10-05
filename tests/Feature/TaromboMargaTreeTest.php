@@ -33,6 +33,9 @@ test('staff can open an upper or lower marga tree for its identity person', func
                 ->where('margaTree.margaName', $marga->name)
                 ->where('margaTree.identityPersonId', (string) $identity->id)
                 ->where('margaTree.direction', $direction)
+                ->where('people.'.($direction === 'upper' ? 1 : 0).'.isMargaIdentity', true)
+                ->when($direction === 'upper', fn (Assert $page) => $page
+                    ->where('people.0.isMargaIdentity', false))
                 ->where(
                     'people.0.shareCode',
                     app(PersonShareCode::class)->for($direction === 'upper' ? $root : $identity),
@@ -77,6 +80,8 @@ test('a dashboard lower marga tree shows descendants deeper than the public dept
     $people = $response->viewData('page')['props']['people'];
 
     expect(collect($people)->pluck('id'))->toContain((string) $deepest->id);
+    expect(collect($people)->firstWhere('id', (string) $identity->id)['isMargaIdentity'])->toBeTrue();
+    expect(collect($people)->firstWhere('id', (string) $deepest->id)['isMargaIdentity'])->toBeFalse();
 });
 
 test('marga tree without an identity falls back to every marga member for staff', function () {

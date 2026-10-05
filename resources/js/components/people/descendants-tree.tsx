@@ -138,6 +138,7 @@ function toNode(person: TaromboPerson, displayNumber?: number): TreeNode {
         displayNumber,
         image: person.image,
         pending: person.pending,
+        isMargaIdentity: person.isMargaIdentity,
         claimed: (person.claimedAccounts?.length ?? 0) > 0,
         spouses: person.spouses?.map((spouse) => spouse.name),
         spouseMargas: person.spouses
@@ -417,7 +418,10 @@ function TreeBranch({
             narrow={isTerminalBranch}
             highlighted={isCenter || isHighlighted}
             onAvatarClick={
-                showProfileOnName ? () => onSelect?.(person.id) : undefined
+                showProfileOnName
+                    ? () =>
+                          onSelect ? onSelect(person.id) : onOpenProfile(person)
+                    : undefined
             }
             onAvatarDoubleClick={
                 onMakeTop ? () => onMakeTop(person.id) : undefined

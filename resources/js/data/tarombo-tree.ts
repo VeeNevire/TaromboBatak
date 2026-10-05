@@ -9,6 +9,7 @@ export type TaromboPersonRow = {
     alias?: string;
     marga: string;
     hasMarga?: boolean;
+    isMargaIdentity?: boolean;
     parentId: string | null;
     birthYear?: string;
     birthOrder?: number | null;
@@ -18,6 +19,8 @@ export type TaromboPersonRow = {
     image?: string | null;
     bio?: string;
     createdBy?: string | null;
+    lastEditedBy?: string | null;
+    lastEditedAt?: string | null;
     createdAt?: string | null;
     canEdit?: boolean;
     canCopyCode?: boolean;
@@ -56,6 +59,7 @@ export type TaromboPerson = {
     alias?: string;
     marga: string;
     hasMarga?: boolean;
+    isMargaIdentity?: boolean;
     generation: number;
     parentId?: string | null;
     birthYear?: string;
@@ -66,6 +70,8 @@ export type TaromboPerson = {
     image?: string | null;
     bio?: string;
     createdBy?: string | null;
+    lastEditedBy?: string | null;
+    lastEditedAt?: string | null;
     createdAt?: string | null;
     canEdit?: boolean;
     canCopyCode?: boolean;

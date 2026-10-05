@@ -32,6 +32,7 @@ type Props = {
         margaName: string;
         identityPersonId: string | null;
         direction: 'upper' | 'lower';
+        descendantGenerations?: number | null;
         canReorderSiblings: boolean;
     } | null;
 };

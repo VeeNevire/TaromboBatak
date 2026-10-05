@@ -1,5 +1,13 @@
-import { Head } from '@inertiajs/react';
-import { History } from 'lucide-react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
+import {
+    ChevronLeft,
+    ChevronRight,
+    Filter,
+    History,
+    RotateCcw,
+} from 'lucide-react';
+import type { FormEvent } from 'react';
+import { Button } from '@/components/ui/button';
 import {
     Card,
     CardContent,
@@ -7,12 +15,14 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { dashboard } from '@/routes';
 import familyTreeActivities from '@/routes/family-tree-activities';
 
 type Activity = {
-    id: number;
-    tree_name: string;
+    id: string;
+    tree_name: string | null;
     father_name: string | null;
     member_name: string | null;
     action: string;
@@ -23,11 +33,27 @@ type Activity = {
 
 export default function FamilyTreeActivitiesIndex({
     activities,
+    accounts,
+    filters,
+    pagination,
 }: {
     activities: Activity[];
+    accounts: { id: number; name: string }[];
+    filters: { account_id: number | null; date: string; order: string };
+    pagination: { current_page: number; last_page: number; total: number };
 }) {
+    const form = useForm({
+        account_id: filters.account_id ? String(filters.account_id) : '',
+        date: filters.date,
+        order: filters.order,
+    });
+    const applyFilters = (event: FormEvent) => {
+        event.preventDefault();
+        form.get(familyTreeActivities.index().url, { preserveScroll: true });
+    };
     const actionLabel = (action: string) =>
         ({
+            account_created: 'Pembuatan akun',
             added: 'Tambah',
             created: 'Tambah',
             updated: 'Edit',
@@ -46,11 +72,112 @@ export default function FamilyTreeActivitiesIndex({
                             Aktivitas Silsilah
                         </CardTitle>
                         <CardDescription>
-                            Riwayat penambahan, perubahan, dan penghapusan pada
-                            silsilah milik akun.
+                            Riwayat sejak akun dibuat dan seluruh aktivitas
+                            silsilah yang tercatat.
                         </CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="space-y-5">
+                        <form
+                            onSubmit={applyFilters}
+                            className="grid gap-4 rounded-xl border border-tb-outline-variant bg-tb-surface-container/40 p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]"
+                        >
+                            <div className="min-w-0 space-y-2 sm:col-span-2 lg:col-span-1">
+                                <Label htmlFor="activity-account">
+                                    Pilih akun pelaku
+                                </Label>
+                                <select
+                                    id="activity-account"
+                                    value={form.data.account_id}
+                                    onChange={(event) =>
+                                        form.setData(
+                                            'account_id',
+                                            event.target.value,
+                                        )
+                                    }
+                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                >
+                                    <option value="">Semua akun</option>
+                                    {accounts.map((account) => (
+                                        <option
+                                            key={account.id}
+                                            value={account.id}
+                                        >
+                                            {account.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                {form.errors.account_id && (
+                                    <p className="text-sm text-destructive">
+                                        {form.errors.account_id}
+                                    </p>
+                                )}
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="activity-date">
+                                    Pilih tanggal (WIB)
+                                </Label>
+                                <Input
+                                    id="activity-date"
+                                    type="date"
+                                    value={form.data.date}
+                                    onChange={(event) =>
+                                        form.setData('date', event.target.value)
+                                    }
+                                />
+                                {form.errors.date && (
+                                    <p className="text-sm text-destructive">
+                                        {form.errors.date}
+                                    </p>
+                                )}
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="activity-order">Urutan</Label>
+                                <select
+                                    id="activity-order"
+                                    value={form.data.order}
+                                    onChange={(event) =>
+                                        form.setData(
+                                            'order',
+                                            event.target.value,
+                                        )
+                                    }
+                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                >
+                                    <option value="newest">
+                                        Terbaru dahulu
+                                    </option>
+                                    <option value="oldest">
+                                        Dari awal akun
+                                    </option>
+                                </select>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 border-t border-tb-outline-variant pt-3 sm:col-span-2 sm:flex sm:justify-end lg:col-span-3">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="h-9 gap-2 sm:min-w-28"
+                                    disabled={form.processing}
+                                    onClick={() =>
+                                        router.get(
+                                            familyTreeActivities.index().url,
+                                        )
+                                    }
+                                >
+                                    <RotateCcw className="size-4" /> Reset
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    className="h-9 gap-2 sm:min-w-36"
+                                    disabled={form.processing}
+                                >
+                                    <Filter className="size-4" /> Terapkan
+                                    filter
+                                </Button>
+                            </div>
+                        </form>
+                        <p className="text-xs text-tb-on-surface-variant">
+                            {pagination.total} aktivitas tercatat
+                        </p>
                         {activities.length === 0 ? (
                             <p className="py-10 text-center text-sm text-tb-on-surface-variant">
                                 Belum ada aktivitas silsilah tercatat.
@@ -68,12 +195,17 @@ export default function FamilyTreeActivitiesIndex({
                                                     {activity.description}
                                                 </p>
                                                 <p className="mt-1 text-xs text-tb-on-surface-variant">
-                                                    Nama Keluarga:{' '}
-                                                    {activity.tree_name} · Nama
-                                                    Anggota:{' '}
-                                                    {activity.member_name ??
-                                                        '-'}{' '}
-                                                    · Aksi:{' '}
+                                                    {activity.tree_name && (
+                                                        <>
+                                                            Nama Keluarga:{' '}
+                                                            {activity.tree_name}{' '}
+                                                            · Nama Anggota:{' '}
+                                                            {activity.member_name ??
+                                                                '-'}{' '}
+                                                            ·{' '}
+                                                        </>
+                                                    )}
+                                                    Aksi:{' '}
                                                     {actionLabel(
                                                         activity.action,
                                                     )}{' '}
@@ -85,6 +217,83 @@ export default function FamilyTreeActivitiesIndex({
                                             </time>
                                         </div>
                                     ))}
+                                </div>
+                            </div>
+                        )}
+                        {pagination.last_page > 1 && (
+                            <div className="flex flex-col gap-3 border-t border-tb-outline-variant pt-4 sm:flex-row sm:items-center sm:justify-between">
+                                <p className="text-sm text-tb-on-surface-variant">
+                                    Halaman {pagination.current_page} dari{' '}
+                                    {pagination.last_page}
+                                </p>
+                                <div className="grid grid-cols-2 gap-2 sm:flex">
+                                    {pagination.current_page > 1 ? (
+                                        <Button
+                                            variant="outline"
+                                            className="h-9 gap-1.5 sm:min-w-32"
+                                            asChild
+                                        >
+                                            <Link
+                                                href={familyTreeActivities.index(
+                                                    {
+                                                        query: {
+                                                            ...filters,
+                                                            page:
+                                                                pagination.current_page -
+                                                                1,
+                                                        },
+                                                    },
+                                                )}
+                                                preserveScroll
+                                            >
+                                                <ChevronLeft className="size-4" />{' '}
+                                                Sebelumnya
+                                            </Link>
+                                        </Button>
+                                    ) : (
+                                        <Button
+                                            variant="outline"
+                                            className="h-9 gap-1.5 sm:min-w-32"
+                                            disabled
+                                        >
+                                            <ChevronLeft className="size-4" />{' '}
+                                            Sebelumnya
+                                        </Button>
+                                    )}
+                                    {pagination.current_page <
+                                    pagination.last_page ? (
+                                        <Button
+                                            variant="outline"
+                                            className="h-9 gap-1.5 sm:min-w-32"
+                                            asChild
+                                        >
+                                            <Link
+                                                href={familyTreeActivities.index(
+                                                    {
+                                                        query: {
+                                                            ...filters,
+                                                            page:
+                                                                pagination.current_page +
+                                                                1,
+                                                        },
+                                                    },
+                                                )}
+                                                preserveScroll
+                                            >
+                                                Berikutnya{' '}
+                                                <ChevronRight className="size-4" />
+                                            </Link>
+                                        </Button>
+                                    ) : (
+                                        <Button
+                                            variant="outline"
+                                            className="h-9 gap-1.5 sm:min-w-32"
+                                            disabled
+                                        >
+                                            Berikutnya{' '}
+                                            <ChevronRight className="size-4" />
+                                        </Button>
+                                    )}
                                 </div>
                             </div>
                         )}

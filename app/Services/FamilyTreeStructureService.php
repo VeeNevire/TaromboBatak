@@ -81,7 +81,16 @@ class FamilyTreeStructureService
                     $attributes['structure_overrides'] = $overrides;
                 }
 
-                $node->update($attributes);
+                $node->fill($attributes);
+                $editedFields = array_intersect_key($node->getDirty(), array_flip(['father_node_id', 'birth_order', 'pending_father']));
+                $node->save();
+                if ($editedFields !== [] && auth()->user()) {
+                    $person = $node->person;
+                    $person->forceFill(['updated_by' => auth()->id()])->saveQuietly();
+                    $labels = ['father_node_id' => 'Ayah (node ID)', 'birth_order' => 'Urutan lahir', 'pending_father' => 'Status ayah'];
+                    $details = collect($editedFields)->map(fn ($value, $field) => $labels[$field].': '.($value === null ? 'kosong' : (string) $value))->join('; ');
+                    app(FamilyTreeActivityLogger::class)->log($tree, auth()->user(), 'updated', 'Mengedit struktur '.$person->name.'. '.$details, $person->name);
+                }
             }
 
             app(FamilyTreeChainNumberingService::class)->recompute($tree);

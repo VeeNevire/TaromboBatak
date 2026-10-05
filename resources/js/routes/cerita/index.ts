@@ -1,7 +1,7 @@
 import { queryParams, type RouteQueryOptions, type RouteDefinition, type RouteFormDefinition, applyUrlDefaults } from './../../wayfinder'
 /**
 * @see \App\Http\Controllers\StoryController::index
-* @see app/Http/Controllers/StoryController.php:70
+* @see app/Http/Controllers/StoryController.php:71
 * @route '/cerita'
 */
 export const index = (options?: RouteQueryOptions): RouteDefinition<'get'> => ({
@@ -16,7 +16,7 @@ index.definition = {
 
 /**
 * @see \App\Http\Controllers\StoryController::index
-* @see app/Http/Controllers/StoryController.php:70
+* @see app/Http/Controllers/StoryController.php:71
 * @route '/cerita'
 */
 index.url = (options?: RouteQueryOptions) => {
@@ -25,7 +25,7 @@ index.url = (options?: RouteQueryOptions) => {
 
 /**
 * @see \App\Http\Controllers\StoryController::index
-* @see app/Http/Controllers/StoryController.php:70
+* @see app/Http/Controllers/StoryController.php:71
 * @route '/cerita'
 */
 index.get = (options?: RouteQueryOptions): RouteDefinition<'get'> => ({
@@ -35,7 +35,7 @@ index.get = (options?: RouteQueryOptions): RouteDefinition<'get'> => ({
 
 /**
 * @see \App\Http\Controllers\StoryController::index
-* @see app/Http/Controllers/StoryController.php:70
+* @see app/Http/Controllers/StoryController.php:71
 * @route '/cerita'
 */
 index.head = (options?: RouteQueryOptions): RouteDefinition<'head'> => ({
@@ -45,7 +45,7 @@ index.head = (options?: RouteQueryOptions): RouteDefinition<'head'> => ({
 
 /**
 * @see \App\Http\Controllers\StoryController::index
-* @see app/Http/Controllers/StoryController.php:70
+* @see app/Http/Controllers/StoryController.php:71
 * @route '/cerita'
 */
 const indexForm = (options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -55,7 +55,7 @@ const indexForm = (options?: RouteQueryOptions): RouteFormDefinition<'get'> => (
 
 /**
 * @see \App\Http\Controllers\StoryController::index
-* @see app/Http/Controllers/StoryController.php:70
+* @see app/Http/Controllers/StoryController.php:71
 * @route '/cerita'
 */
 indexForm.get = (options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -65,7 +65,7 @@ indexForm.get = (options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
 
 /**
 * @see \App\Http\Controllers\StoryController::index
-* @see app/Http/Controllers/StoryController.php:70
+* @see app/Http/Controllers/StoryController.php:71
 * @route '/cerita'
 */
 indexForm.head = (options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -82,7 +82,7 @@ index.form = indexForm
 
 /**
 * @see \App\Http\Controllers\StoryController::show
-* @see app/Http/Controllers/StoryController.php:101
+* @see app/Http/Controllers/StoryController.php:102
 * @route '/cerita/{story}'
 */
 export const show = (args: { story: number | { id: number } } | [story: number | { id: number } ] | number | { id: number }, options?: RouteQueryOptions): RouteDefinition<'get'> => ({
@@ -97,7 +97,7 @@ show.definition = {
 
 /**
 * @see \App\Http\Controllers\StoryController::show
-* @see app/Http/Controllers/StoryController.php:101
+* @see app/Http/Controllers/StoryController.php:102
 * @route '/cerita/{story}'
 */
 show.url = (args: { story: number | { id: number } } | [story: number | { id: number } ] | number | { id: number }, options?: RouteQueryOptions) => {
@@ -130,7 +130,7 @@ show.url = (args: { story: number | { id: number } } | [story: number | { id: nu
 
 /**
 * @see \App\Http\Controllers\StoryController::show
-* @see app/Http/Controllers/StoryController.php:101
+* @see app/Http/Controllers/StoryController.php:102
 * @route '/cerita/{story}'
 */
 show.get = (args: { story: number | { id: number } } | [story: number | { id: number } ] | number | { id: number }, options?: RouteQueryOptions): RouteDefinition<'get'> => ({
@@ -140,7 +140,7 @@ show.get = (args: { story: number | { id: number } } | [story: number | { id: nu
 
 /**
 * @see \App\Http\Controllers\StoryController::show
-* @see app/Http/Controllers/StoryController.php:101
+* @see app/Http/Controllers/StoryController.php:102
 * @route '/cerita/{story}'
 */
 show.head = (args: { story: number | { id: number } } | [story: number | { id: number } ] | number | { id: number }, options?: RouteQueryOptions): RouteDefinition<'head'> => ({
@@ -150,7 +150,7 @@ show.head = (args: { story: number | { id: number } } | [story: number | { id: n
 
 /**
 * @see \App\Http\Controllers\StoryController::show
-* @see app/Http/Controllers/StoryController.php:101
+* @see app/Http/Controllers/StoryController.php:102
 * @route '/cerita/{story}'
 */
 const showForm = (args: { story: number | { id: number } } | [story: number | { id: number } ] | number | { id: number }, options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -160,7 +160,7 @@ const showForm = (args: { story: number | { id: number } } | [story: number | { 
 
 /**
 * @see \App\Http\Controllers\StoryController::show
-* @see app/Http/Controllers/StoryController.php:101
+* @see app/Http/Controllers/StoryController.php:102
 * @route '/cerita/{story}'
 */
 showForm.get = (args: { story: number | { id: number } } | [story: number | { id: number } ] | number | { id: number }, options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -170,7 +170,7 @@ showForm.get = (args: { story: number | { id: number } } | [story: number | { id
 
 /**
 * @see \App\Http\Controllers\StoryController::show
-* @see app/Http/Controllers/StoryController.php:101
+* @see app/Http/Controllers/StoryController.php:102
 * @route '/cerita/{story}'
 */
 showForm.head = (args: { story: number | { id: number } } | [story: number | { id: number } ] | number | { id: number }, options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({

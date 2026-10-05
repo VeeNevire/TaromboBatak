@@ -54,6 +54,11 @@ use Illuminate\Support\Collection as SupportCollection;
 #[Fillable(['name', 'gender', 'alias', 'marga_id', 'province_code', 'regency_code', 'district_code', 'village_code', 'created_by', 'father_id', 'mother_id', 'birth_order', 'sibling_count', 'chain', 'birth_year', 'death_year', 'image', 'bio', 'related_stories', 'spouse', 'spouse_marga', 'pending_father', 'is_public'])]
 class Person extends Model
 {
+    public function lastEditor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
+    }
+
     /** @use HasFactory<PersonFactory> */
     use HasFactory;
 
@@ -63,6 +68,14 @@ class Person extends Model
     public function marga(): BelongsTo
     {
         return $this->belongsTo(Marga::class);
+    }
+
+    /**
+     * @return HasMany<Marga, $this>
+     */
+    public function identityMargas(): HasMany
+    {
+        return $this->hasMany(Marga::class, 'identity_person_id');
     }
 
     /**

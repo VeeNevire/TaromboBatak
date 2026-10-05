@@ -3,6 +3,7 @@ import {
     BookOpen,
     CalendarDays,
     ExternalLink,
+    EyeOff,
     Heart,
     Link2,
     Megaphone,
@@ -139,6 +140,11 @@ export function FeedCard({ item }: { item: FeedItem }) {
     const [draft, setDraft] = useState(item.body);
     const [saving, setSaving] = useState(false);
     const [confirmingDelete, setConfirmingDelete] = useState(false);
+    const [confirmingHide, setConfirmingHide] = useState(false);
+    const [hiding, setHiding] = useState(false);
+    const [hidden, setHidden] = useState(false);
+    const canHide =
+        auth.user?.role === 'admin' || auth.user?.role === 'subadmin';
 
     const toggleLike = () => {
         const next = !liked;
@@ -158,9 +164,17 @@ export function FeedCard({ item }: { item: FeedItem }) {
 
         if (next) {
             if (isStatus) {
-                router.post(newsFeed.posts.likes.store(item.id).url, {}, options);
+                router.post(
+                    newsFeed.posts.likes.store(item.id).url,
+                    {},
+                    options,
+                );
             } else {
-                router.post(newsFeed.items.likes.store([item.type, item.id]).url, {}, options);
+                router.post(
+                    newsFeed.items.likes.store([item.type, item.id]).url,
+                    {},
+                    options,
+                );
             }
 
             return;
@@ -169,7 +183,10 @@ export function FeedCard({ item }: { item: FeedItem }) {
         if (isStatus) {
             router.delete(newsFeed.posts.likes.destroy(item.id).url, options);
         } else {
-            router.delete(newsFeed.items.likes.destroy([item.type, item.id]).url, options);
+            router.delete(
+                newsFeed.items.likes.destroy([item.type, item.id]).url,
+                options,
+            );
         }
     };
 
@@ -211,6 +228,10 @@ export function FeedCard({ item }: { item: FeedItem }) {
         );
     };
 
+    if (hidden) {
+        return null;
+    }
+
     return (
         <Card className="overflow-hidden rounded-xl border-tb-outline-variant bg-tb-surface-bright shadow-sm">
             <CardHeader className="flex-row items-center gap-3 space-y-0 px-4 py-3">
@@ -235,6 +256,15 @@ export function FeedCard({ item }: { item: FeedItem }) {
                             ` · ${item.audience_label}`}
                     </p>
                 </div>
+                {canHide && (
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setConfirmingHide(true)}
+                    >
+                        <EyeOff className="size-4" /> Hide
+                    </Button>
+                )}
                 {(item.can?.update || item.can?.delete) && (
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -382,7 +412,9 @@ export function FeedCard({ item }: { item: FeedItem }) {
                         <Link href={login()} aria-label="Masuk untuk menyukai">
                             <Heart className="size-5" />
                             {likes > 0 && (
-                                <span className="text-xs font-medium">{likes}</span>
+                                <span className="text-xs font-medium">
+                                    {likes}
+                                </span>
                             )}
                         </Link>
                     </Button>
@@ -418,22 +450,73 @@ export function FeedCard({ item }: { item: FeedItem }) {
                 comments={item.comments}
                 inputRef={commentInputRef}
             />
-            {!isStatus &&
-                item.url && (
-                    <CardFooter className="border-t border-tb-outline-variant px-4 pt-3 pb-4">
-                        <Button asChild variant="outline" size="sm">
-                            <a
-                                href={item.url}
-                                target="_blank"
-                                rel="noreferrer noopener"
-                            >
-                                Lihat selengkapnya
-                                <ExternalLink className="size-3.5" />
-                            </a>
-                        </Button>
-                    </CardFooter>
-                )}
+            {!isStatus && item.url && (
+                <CardFooter className="border-t border-tb-outline-variant px-4 pt-3 pb-4">
+                    <Button asChild variant="outline" size="sm">
+                        <a
+                            href={item.url}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                        >
+                            Lihat selengkapnya
+                            <ExternalLink className="size-3.5" />
+                        </a>
+                    </Button>
+                </CardFooter>
+            )}
 
+            <Dialog
+                open={confirmingHide}
+                onOpenChange={(open) => {
+                    if (!hiding) {
+                        setConfirmingHide(open);
+                    }
+                }}
+            >
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Sembunyikan news feed?</DialogTitle>
+                        <DialogDescription>
+                            Item ini akan disembunyikan dari news feed semua
+                            pengguna. Konten aslinya tetap tersimpan.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            disabled={hiding}
+                            onClick={() => setConfirmingHide(false)}
+                        >
+                            Batal
+                        </Button>
+                        <Button
+                            disabled={hiding}
+                            onClick={() => {
+                                setHiding(true);
+                                router.post(
+                                    newsFeed.items.hide([item.type, item.id])
+                                        .url,
+                                    {},
+                                    {
+                                        preserveScroll: true,
+                                        onSuccess: () => {
+                                            setHidden(true);
+                                            setConfirmingHide(false);
+                                        },
+                                        onError: () =>
+                                            toast.error(
+                                                'News feed belum berhasil disembunyikan.',
+                                            ),
+                                        onFinish: () => setHiding(false),
+                                    },
+                                );
+                            }}
+                        >
+                            {hiding ? 'Menyembunyikan…' : 'Ya, Hide'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
             <Dialog
                 open={confirmingDelete}
                 onOpenChange={(open) => !open && setConfirmingDelete(false)}
@@ -490,15 +573,16 @@ function FeedComments({
     const [showAll, setShowAll] = useState(false);
     const hidden = Math.max(0, comments.length - VISIBLE_COMMENTS);
     const visible = showAll ? comments : comments.slice(-VISIBLE_COMMENTS);
-    const commentForm = feedType === 'status'
-        ? {
-            action: newsFeed.posts.comments.store(feedId).url,
-            method: 'post' as const,
-        }
-        : {
-            action: newsFeed.items.comments.store([feedType, feedId]).url,
-            method: 'post' as const,
-        };
+    const commentForm =
+        feedType === 'status'
+            ? {
+                  action: newsFeed.posts.comments.store(feedId).url,
+                  method: 'post' as const,
+              }
+            : {
+                  action: newsFeed.items.comments.store([feedType, feedId]).url,
+                  method: 'post' as const,
+              };
 
     return (
         <CardFooter className="grid gap-3 border-t border-tb-outline-variant bg-tb-surface-container/20 px-4 pt-3 pb-4">

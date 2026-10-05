@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use App\Contracts\TelegramBot;
+use App\Models\Person;
+use App\Observers\PersonObserver;
 use App\Services\TelegramBotApi;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
@@ -26,6 +28,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        Person::observe(PersonObserver::class);
     }
 
     /**

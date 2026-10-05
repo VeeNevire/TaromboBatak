@@ -59,6 +59,8 @@ class Story extends Model
 
     public const STATUS_PENDING = 'pending';
 
+    public const STATUS_DRAFT = 'draft';
+
     public const STATUS_APPROVED = 'approved';
 
     public const STATUS_REJECTED = 'rejected';

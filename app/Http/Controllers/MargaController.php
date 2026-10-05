@@ -39,7 +39,12 @@ class MargaController extends Controller
             ->with('identityPerson:id,name')
             ->withCount('people')
             ->orderBy('name')
-            ->get()
+            ->get();
+        $descendantCounts = app(TaromboStatisticsService::class)->descendantCounts(
+            $margas->pluck('identity_person_id')->filter()->all(),
+        );
+
+        $margas = $margas
             // Marga with unread chat messages float to the top; the stable sort
             // keeps the name order within each group.
             ->sortBy(fn (Marga $marga) => $unreadByMarga->get($marga->id, 0) > 0 ? 0 : 1)
@@ -53,6 +58,7 @@ class MargaController extends Controller
                 'identity_person_id' => $marga->identity_person_id,
                 'identity_person_name' => $marga->identityPerson?->name,
                 'people_count' => $marga->people_count,
+                'descendants_count' => $descendantCounts[$marga->identity_person_id] ?? 0,
                 'is_public' => $marga->is_public,
                 'unread_count' => (int) ($unreadByMarga->get($marga->id) ?? 0),
                 'can_chat' => $canChat,
@@ -71,12 +77,14 @@ class MargaController extends Controller
     /**
      * Show a public marga's upper or lower silsilah tree. Open to guests.
      */
-    public function tree(Marga $marga, string $direction): Response
+    public function tree(Request $request, Marga $marga, string $direction): Response
     {
         abort_unless($marga->is_public, 404);
 
         $service = app(TaromboTreeService::class);
-        $rows = $service->rowsForMarga($marga, $direction);
+        $request->validate(['marga_depth' => ['sometimes', 'integer', 'in:5']]);
+        $descendantGenerations = $direction === 'lower' && $request->has('marga_depth') ? 5 : null;
+        $rows = $service->rowsForMarga($marga, $direction, descendantGenerations: $descendantGenerations);
 
         return Inertia::render('tarombo/fullscreen', [
             'people' => $rows,
@@ -99,6 +107,7 @@ class MargaController extends Controller
                     ? (string) $marga->identity_person_id
                     : null,
                 'direction' => $direction,
+                'descendantGenerations' => $descendantGenerations,
             ],
         ]);
     }
@@ -170,6 +179,7 @@ class MargaController extends Controller
     public function public(): Response
     {
         $margas = Marga::query()
+            ->where('is_public', true)
             ->withCount('people')
             ->orderByDesc('people_count')
             ->orderBy('name')
@@ -184,7 +194,7 @@ class MargaController extends Controller
         return Inertia::render('marga/public', [
             'margas' => $margas,
             'stats' => [
-                'totalMargas' => Marga::count(),
+                'totalMargas' => Marga::query()->where('is_public', true)->count(),
                 'totalPeople' => Person::query()->public()->count(),
                 'totalGenerations' => app(TaromboStatisticsService::class)
                     ->maxGenerationDepth(Person::query()->public()),
