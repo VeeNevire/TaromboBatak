@@ -6,6 +6,8 @@ import {
     ChevronsUpDown,
     ImagePlus,
     MessageCircle,
+    Bot,
+    FileText,
     Pencil,
     Plus,
     Search,
@@ -45,6 +47,7 @@ type MargaItem = {
     image: string | null;
     image_url: string | null;
     people_count: number;
+    descendants_count: number;
     identity_person_id: number | null;
     identity_person_name: string | null;
     is_public: boolean;
@@ -96,7 +99,11 @@ function MargaAvatar({ m, className }: { m: MargaItem; className?: string }) {
             <img
                 src={m.image_url}
                 alt={m.name}
-                className={cn('object-cover', className)}
+                className={cn(
+                    'object-cover',
+                    className,
+                    'shrink-0 rounded-full',
+                )}
             />
         );
     }
@@ -104,8 +111,9 @@ function MargaAvatar({ m, className }: { m: MargaItem; className?: string }) {
     return (
         <div
             className={cn(
-                'flex items-center justify-center rounded-xl text-sm font-bold text-white',
+                'flex items-center justify-center text-sm font-bold text-white',
                 className,
+                'shrink-0 rounded-full',
             )}
             style={{ backgroundColor: m.color ?? 'var(--color-tb-primary)' }}
         >
@@ -240,15 +248,20 @@ export default function MargaIndex({
     const openMargaTree = (
         margaItem: MargaItem,
         direction: 'upper' | 'lower',
+        descendantGenerations?: number,
     ) => {
         const url = canManage
             ? tarombo.fullscreen('tree', {
                   query: {
                       marga_id: margaItem.id,
                       marga_direction: direction,
+                      marga_depth: descendantGenerations,
                   },
               }).url
-            : marga.publicTree({ marga: margaItem.id, direction }).url;
+            : marga.publicTree(
+                  { marga: margaItem.id, direction },
+                  { query: { marga_depth: descendantGenerations } },
+              ).url;
 
         window.open(url, '_blank', 'noopener,noreferrer');
     };
@@ -331,7 +344,7 @@ export default function MargaIndex({
                 />
             )}
 
-            <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
+            <div className="flex h-full min-w-0 flex-1 flex-col gap-6 p-4 md:p-6">
                 <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                     <div>
                         <h1 className="font-display text-2xl font-bold text-tb-on-surface md:text-3xl">
@@ -413,22 +426,15 @@ export default function MargaIndex({
                                             setDetailMarga(m);
                                         }
                                     }}
-                                    className="group h-full cursor-pointer border-tb-outline-variant bg-tb-surface-bright transition-shadow hover:shadow-md"
+                                    className="group h-full min-w-0 cursor-pointer border-tb-outline-variant bg-tb-surface-bright transition-shadow hover:shadow-md"
                                 >
-                                    <CardContent className="gap-4 py-5">
-                                        <div className="flex items-start justify-between">
+                                    <CardContent className="min-w-0 gap-4 px-4 py-5 sm:px-5">
+                                        <div className="mb-3 flex flex-col items-start gap-3">
                                             <MargaAvatar
                                                 m={m}
-                                                className="h-11 w-11 rounded-xl"
+                                                className="h-11 w-11"
                                             />
-                                            <div
-                                                className={cn(
-                                                    'flex gap-1 transition-opacity',
-                                                    canManage
-                                                        ? 'opacity-0 group-hover:opacity-100'
-                                                        : 'opacity-100',
-                                                )}
-                                            >
+                                            <div className="flex w-full min-w-0 flex-wrap items-center gap-1 [&>button]:min-h-10 [&>button]:min-w-10 [&>button]:shrink-0">
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
@@ -450,8 +456,68 @@ export default function MargaIndex({
                                                 >
                                                     <ArrowUp className="size-4" />
                                                 </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-8 gap-1 px-1.5 text-emerald-700 hover:text-emerald-800"
+                                                    disabled={
+                                                        m.identity_person_id ===
+                                                        null
+                                                    }
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        openMargaTree(
+                                                            m,
+                                                            'lower',
+                                                            5,
+                                                        );
+                                                    }}
+                                                    aria-label={`Panah Bawah 5 ${m.name}`}
+                                                    title="Pohon Silsilah Bawah sampai 5 generasi turunan"
+                                                >
+                                                    <ArrowDown className="size-4" />
+                                                    <span>5</span>
+                                                </Button>
                                                 {canManage && (
                                                     <>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="size-8 text-sky-700 hover:text-sky-800"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                window.open(
+                                                                    marga.documents.index(
+                                                                        m.id,
+                                                                    ).url,
+                                                                    '_blank',
+                                                                    'noopener,noreferrer',
+                                                                );
+                                                            }}
+                                                            aria-label={`Dokumen ${m.name}`}
+                                                            title="Dokumen Marga"
+                                                        >
+                                                            <FileText className="size-4" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="size-8 text-violet-700 hover:text-violet-800"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                window.open(
+                                                                    marga.ai.show(
+                                                                        m.id,
+                                                                    ).url,
+                                                                    '_blank',
+                                                                    'noopener,noreferrer',
+                                                                );
+                                                            }}
+                                                            aria-label={`Tanya Ito Tarombo ${m.name}`}
+                                                            title="Tanya Ito Tarombo"
+                                                        >
+                                                            <Bot className="size-4" />
+                                                        </Button>
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
@@ -500,7 +566,7 @@ export default function MargaIndex({
                                             </div>
                                         </div>
                                         <div>
-                                            <h3 className="font-display text-lg font-bold text-tb-on-surface">
+                                            <h3 className="font-display text-lg font-bold break-words text-tb-on-surface">
                                                 {m.name}
                                                 {m.identity_person_name && (
                                                     <span className="text-emerald-700 dark:text-emerald-300">
@@ -518,7 +584,8 @@ export default function MargaIndex({
                                             )}
                                         </div>
                                         <p className="text-xs font-medium text-tb-primary">
-                                            {m.people_count} anggota
+                                            {m.people_count} anggota ·{' '}
+                                            {m.descendants_count} ranting
                                         </p>
                                         <div className="flex flex-wrap gap-1.5">
                                             <span
@@ -550,7 +617,7 @@ export default function MargaIndex({
                                             )}
                                         </div>
                                         {m.can_chat && (
-                                            <div className="mt-1 flex items-center gap-2">
+                                            <div className="mt-1 flex flex-wrap items-center gap-2">
                                                 <Button
                                                     asChild
                                                     variant="outline"

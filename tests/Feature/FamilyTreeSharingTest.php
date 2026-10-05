@@ -211,9 +211,10 @@ test('an accepted recipient submits a new member for the owner to approve', func
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->component('family-tree-activities/index')
-            ->has('activities', 1)
-            ->where('activities.0.tree_name', $tree->name)
-            ->where('activities.0.member_name', 'Anak Tambahan'));
+            ->has('activities', 2)
+            ->where('activities', fn ($activities) => collect($activities)->contains(
+                fn ($activity) => $activity['tree_name'] === $tree->name && $activity['member_name'] === 'Anak Tambahan',
+            )));
 });
 
 test('family tree activity times are shown in Jakarta time', function () {
@@ -230,7 +231,7 @@ test('family tree activity times are shown in Jakarta time', function () {
     $activity->save();
 
     $this->actingAs($owner)
-        ->get(route('family-tree-activities.index'))
+        ->get(route('family-tree-activities.index', ['date' => '2026-01-02']))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->where('activities.0.created_at', '02 Jan 2026, 10:04 WIB'));

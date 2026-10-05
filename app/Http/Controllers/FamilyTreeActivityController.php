@@ -2,43 +2,31 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\FamilyTreeActivity;
-use App\Models\FamilyTreeShare;
-use Illuminate\Http\Request;
+use App\Http\Requests\FilterFamilyTreeActivitiesRequest;
+use App\Services\FamilyTreeActivityHistory;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class FamilyTreeActivityController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(FilterFamilyTreeActivitiesRequest $request, FamilyTreeActivityHistory $history): Response
     {
-        $user = $request->user();
-
-        $activities = FamilyTreeActivity::query()
-            ->with(['actor:id,name', 'familyTree.rootPerson:id,name'])
-            ->when(! $user->isStaff(), fn ($query) => $query->where(fn ($access) => $access
-                ->where('owner_id', $user->id)
-                ->orWhereHas('familyTree.shares', fn ($shares) => $shares
-                    ->whereBelongsTo($user, 'recipient')
-                    ->where('status', FamilyTreeShare::STATUS_ACCEPTED))))
-            ->latest()
-            ->limit(100)
-            ->get()
-            ->map(fn (FamilyTreeActivity $activity) => [
-                'id' => $activity->id,
-                'tree_name' => $activity->tree_name,
-                'father_name' => $activity->familyTree?->rootPerson?->name,
-                'member_name' => $activity->member_name,
-                'action' => $activity->action,
-                'description' => $activity->description,
-                'actor' => $activity->actor?->name ?? 'Sistem',
-                'created_at' => $activity->created_at
-                    ? $activity->created_at->setTimezone('Asia/Jakarta')->translatedFormat('d M Y, H:i').' WIB'
-                    : null,
-            ]);
+        $filters = $request->validated();
+        $activities = $history->paginate($request->user(), $filters);
 
         return Inertia::render('family-tree-activities/index', [
-            'activities' => $activities,
+            'activities' => $activities->items(),
+            'pagination' => [
+                'current_page' => $activities->currentPage(),
+                'last_page' => $activities->lastPage(),
+                'total' => $activities->total(),
+            ],
+            'accounts' => $history->accounts($request->user()),
+            'filters' => [
+                'account_id' => $filters['account_id'] ?? null,
+                'date' => $filters['date'] ?? '',
+                'order' => $filters['order'] ?? 'newest',
+            ],
         ]);
     }
 }

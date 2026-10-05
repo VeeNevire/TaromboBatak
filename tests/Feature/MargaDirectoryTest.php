@@ -98,3 +98,44 @@ test('a non-public marga silsilah tree returns not found', function () {
 
     $this->get(route('marga.public-tree', [$marga, 'lower']))->assertNotFound();
 });
+
+test('marga directory counts all descendant generations across margas without counting the identity', function () {
+    $marga = Marga::factory()->public()->create(['name' => 'A']);
+    $other = Marga::factory()->public()->create(['name' => 'B']);
+    $identity = Person::factory()->create(['marga_id' => $other->id, 'father_id' => null]);
+    $marga->update(['identity_person_id' => $identity->id]);
+    $child = Person::factory()->create(['marga_id' => $other->id, 'father_id' => $identity->id]);
+    Person::factory()->create(['marga_id' => $other->id, 'father_id' => $child->id]);
+    Person::factory()->create(['marga_id' => $marga->id, 'father_id' => null]);
+
+    $this->get(route('marga.index'))->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('margas.0.descendants_count', 2)
+            ->where('margas.1.descendants_count', 0));
+});
+
+test('lower five tree includes five descendant generations and excludes deeper or detached members', function (bool $staff) {
+    $marga = Marga::factory()->public()->create();
+    $identity = Person::factory()->create(['marga_id' => $marga->id, 'father_id' => null, 'gender' => 'L']);
+    $marga->update(['identity_person_id' => $identity->id]);
+    $current = $identity;
+    $includedIds = [(string) $identity->id];
+    for ($generation = 1; $generation <= 6; $generation++) {
+        $current = Person::factory()->create(['marga_id' => $marga->id, 'father_id' => $current->id, 'gender' => 'L']);
+        if ($generation <= 5) {
+            $includedIds[] = (string) $current->id;
+        }
+    }
+    Person::factory()->create(['marga_id' => $marga->id, 'father_id' => null, 'gender' => 'L']);
+
+    if ($staff) {
+        $this->actingAs(User::factory()->asAdmin()->create());
+    }
+    $url = $staff
+        ? route('tarombo.fullscreen', ['view' => 'tree', 'marga_id' => $marga->id, 'marga_direction' => 'lower', 'marga_depth' => 5])
+        : route('marga.public-tree', ['marga' => $marga->id, 'direction' => 'lower', 'marga_depth' => 5]);
+
+    $response = $this->get($url)->assertOk();
+    expect(collect($response->viewData('page')['props']['people'])->pluck('id')->all())->toBe($includedIds);
+    expect($response->viewData('page')['props']['margaTree']['descendantGenerations'])->toBe(5);
+})->with([true, false]);

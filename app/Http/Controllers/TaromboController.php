@@ -234,7 +234,9 @@ class TaromboController extends Controller
             }
         }
 
+        $request->validate(['marga_depth' => ['sometimes', 'integer', 'in:5']]);
         $direction = $request->string('marga_direction', 'lower')->toString();
+        $descendantGenerations = $direction === 'lower' && $request->has('marga_depth') ? 5 : null;
         abort_if(
             $selectedMarga !== null && ! in_array($direction, ['upper', 'lower'], true),
             404,
@@ -249,6 +251,7 @@ class TaromboController extends Controller
                 $direction,
                 maxDepth: (int) config('tarombo.dashboard_max_depth'),
                 maxNodes: (int) config('tarombo.dashboard_max_nodes'),
+                descendantGenerations: $descendantGenerations,
             ),
             default => [],
         }, $user);
@@ -280,6 +283,7 @@ class TaromboController extends Controller
                 ? (string) $selectedMarga->identity_person_id
                 : null,
             'direction' => $direction,
+            'descendantGenerations' => $descendantGenerations,
             'canReorderSiblings' => $user->isStaff()
                 || ($user->isContributor() && $user->accessibleMargaIds()->contains($selectedMarga->id)),
         ] : null;

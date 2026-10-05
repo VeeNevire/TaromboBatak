@@ -1145,6 +1145,7 @@ class PersonController extends Controller
                 app(FamilyEntryService::class)->updatePublication($person, $validated);
 
                 app(FamilyTreeStructureService::class)->updateFromFamilyForm($familyTree, $person, $validated, $user->id);
+                $person->forceFill(['updated_by' => $user->id])->saveQuietly();
 
                 return true;
             });
@@ -1202,6 +1203,11 @@ class PersonController extends Controller
         if ($result === null) {
             return to_route('people.edit', $person);
         }
+
+        // Relationship-only edits (wives, children and tree placement) may
+        // leave the person's own attributes unchanged. A successful form
+        // save still belongs to the editor of this family entry.
+        $person->forceFill(['updated_by' => $user->id])->saveQuietly();
 
         $result['familyTrees']->each(
             fn (FamilyTree $tree) => app(FamilyTreeDescendantSyncService::class)

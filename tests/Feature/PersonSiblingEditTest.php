@@ -76,5 +76,6 @@ test('a marga owner can see the father and save a new sibling without errors', f
     $created = Person::query()->where('name', 'Saudara Baru')->firstOrFail();
 
     expect($created->father_id)->toBe($father->id)
-        ->and($created->marga_id)->toBe($marga->id);
+        ->and($created->marga_id)->toBe($marga->id)
+        ->and($focus->fresh()->lastEditor?->id)->toBe($user->id);
 });

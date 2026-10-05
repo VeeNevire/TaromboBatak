@@ -21,11 +21,12 @@ type StoryItem = {
     title: string;
     description: string;
     image: string | null;
+    content_url: string | null;
     published: boolean;
     classification: 'umum' | 'marga';
     marga: string | null;
     creator: string | null;
-    status: 'pending' | 'approved' | 'rejected';
+    status: 'draft' | 'pending' | 'approved' | 'rejected';
     rejection_reason: string | null;
     can_edit: boolean;
     can_delete: boolean;
@@ -54,6 +55,7 @@ export default function StoriesIndex({
     filters,
     canCreate,
 }: Props) {
+    const [selectedStory, setSelectedStory] = useState<StoryItem | null>(null);
     const [search, setSearch] = useState(filters.search ?? '');
     const [toDelete, setToDelete] = useState<StoryItem | null>(null);
     const deleteForm = useForm({});
@@ -148,7 +150,8 @@ export default function StoriesIndex({
                                 {page.data.map((story) => (
                                     <tr
                                         key={story.id}
-                                        className="hover:bg-tb-surface-container/40"
+                                        onClick={() => setSelectedStory(story)}
+                                        className="cursor-pointer hover:bg-tb-surface-container/40"
                                     >
                                         <td className="px-3 py-3">
                                             <div className="flex items-center gap-3">
@@ -164,9 +167,18 @@ export default function StoriesIndex({
                                                     )}
                                                 </div>
                                                 <div className="min-w-0">
-                                                    <p className="font-medium text-tb-on-surface">
+                                                    <button
+                                                        type="button"
+                                                        onClick={(event) => {
+                                                            event.stopPropagation();
+                                                            setSelectedStory(
+                                                                story,
+                                                            );
+                                                        }}
+                                                        className="text-left font-medium text-tb-on-surface hover:text-tb-primary"
+                                                    >
                                                         {story.title}
-                                                    </p>
+                                                    </button>
                                                     <p className="line-clamp-1 text-xs text-tb-on-surface-variant">
                                                         {story.description}
                                                     </p>
@@ -189,7 +201,11 @@ export default function StoriesIndex({
                                             </Badge>
                                         </td>
                                         <td className="px-3 py-3">
-                                            {story.status === 'approved' ? (
+                                            {story.status === 'draft' ? (
+                                                <Badge variant="outline">
+                                                    Draf
+                                                </Badge>
+                                            ) : story.status === 'approved' ? (
                                                 <Badge className="bg-[#3e6b48] text-white">
                                                     Disetujui
                                                 </Badge>
@@ -218,7 +234,12 @@ export default function StoriesIndex({
                                                 {story.created_at ?? '-'}
                                             </p>
                                         </td>
-                                        <td className="px-3 py-3">
+                                        <td
+                                            className="px-3 py-3"
+                                            onClick={(event) =>
+                                                event.stopPropagation()
+                                            }
+                                        >
                                             <div className="flex justify-end gap-1">
                                                 {story.can_edit && (
                                                     <Button
@@ -268,6 +289,47 @@ export default function StoriesIndex({
                 </Card>
 
                 <Pagination page={page} />
+                <Dialog
+                    open={selectedStory !== null}
+                    onOpenChange={(open) => {
+                        if (!open) {
+                            setSelectedStory(null);
+                        }
+                    }}
+                >
+                    <DialogContent className="max-h-[85dvh] overflow-y-auto border-tb-outline-variant bg-tb-surface-bright sm:max-w-2xl">
+                        <DialogHeader>
+                            <DialogTitle className="font-display text-xl">
+                                {selectedStory?.title}
+                            </DialogTitle>
+                            <DialogDescription>
+                                {selectedStory?.creator ?? 'Tarombo Batak'} ·{' '}
+                                {selectedStory?.created_at}
+                            </DialogDescription>
+                        </DialogHeader>
+                        {selectedStory?.image && (
+                            <img
+                                src={selectedStory.image}
+                                alt={selectedStory.title}
+                                className="max-h-80 w-full rounded-xl object-contain"
+                            />
+                        )}
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap text-tb-on-surface">
+                            {selectedStory?.description}
+                        </p>
+                        {selectedStory?.content_url && (
+                            <Button asChild variant="outline">
+                                <a
+                                    href={selectedStory.content_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    Buka sumber cerita
+                                </a>
+                            </Button>
+                        )}
+                    </DialogContent>
+                </Dialog>
 
                 <Dialog
                     open={toDelete !== null}

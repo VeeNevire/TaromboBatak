@@ -5,8 +5,10 @@ import {
     SidebarGroupLabel,
     SidebarMenu,
     SidebarMenuButton,
+    useSidebar,
 } from '@/components/ui/sidebar';
 import { useCurrentUrl } from '@/hooks/use-current-url';
+import { toUrl } from '@/lib/utils';
 import type { NavGroup } from '@/types';
 
 const itemVariants = {
@@ -33,7 +35,31 @@ const iconVariants = {
 };
 
 export function NavMain({ groups = [] }: { groups?: NavGroup[] }) {
-    const { isCurrentUrl } = useCurrentUrl();
+    const { currentUrl } = useCurrentUrl();
+    const { isMobile, setOpenMobile } = useSidebar();
+    const pathFor = (href: NavGroup['items'][number]['href']) =>
+        new URL(toUrl(href), 'http://localhost').pathname.replace(/\/$/, '') ||
+        '/';
+    // Detail pages keep their owning menu active even when their routes live
+    // under the marga resource rather than the sidebar entry's path.
+    const menuPath = /\/dashboard\/marga\/[^/]+\/dokumen(?:\/|$)/.test(
+        currentUrl,
+    )
+        ? '/dashboard/dokumen-marga'
+        : /\/dashboard\/marga\/[^/]+\/tanya-tarombo(?:\/|$)/.test(currentUrl)
+          ? '/dashboard/tanya-ito-tarombo'
+          : currentUrl.replace(/\/$/, '') || '/';
+    const activePath = groups
+        .flatMap((group) => group.items)
+        .map((item) => pathFor(item.href))
+        .filter(
+            (path) =>
+                menuPath === path ||
+                (path !== '/' &&
+                    path !== '/dashboard' &&
+                    menuPath.startsWith(`${path}/`)),
+        )
+        .sort((a, b) => b.length - a.length)[0];
 
     return (
         <>
@@ -49,7 +75,7 @@ export function NavMain({ groups = [] }: { groups?: NavGroup[] }) {
                     )}
                     <SidebarMenu>
                         {group.items.map((item, itemIndex) => {
-                            const isActive = isCurrentUrl(item.href);
+                            const isActive = pathFor(item.href) === activePath;
                             const delay =
                                 0.08 + groupIndex * 0.1 + itemIndex * 0.06;
 
@@ -76,7 +102,15 @@ export function NavMain({ groups = [] }: { groups?: NavGroup[] }) {
                                                 : 'relative'
                                         }
                                     >
-                                        <Link href={item.href} prefetch>
+                                        <Link
+                                            href={item.href}
+                                            prefetch
+                                            onClick={() => {
+                                                if (isMobile) {
+                                                    setOpenMobile(false);
+                                                }
+                                            }}
+                                        >
                                             {isActive && (
                                                 <motion.span
                                                     layoutId="sidebar-active-pill"

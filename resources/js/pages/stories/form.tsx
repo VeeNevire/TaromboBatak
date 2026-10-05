@@ -34,7 +34,7 @@ type StoryFormValue = {
     classification: 'umum' | 'marga';
     marga_id: number | null;
     related_marga_ids: number[];
-    status: 'pending' | 'approved' | 'rejected';
+    status: 'draft' | 'pending' | 'approved' | 'rejected';
     rejection_reason: string | null;
 };
 
@@ -65,19 +65,22 @@ export default function StoryForm({
             .includes(margaSearch.trim().toLocaleLowerCase()),
     );
 
-    const { data, setData, post, put, processing, errors } = useForm({
-        title: story?.title ?? '',
-        description: story?.description ?? '',
-        image: story?.image ?? '',
-        content_url: story?.content_url ?? '',
-        published: story?.published ?? canPublish,
-        classification: story?.classification ?? 'umum',
-        marga_id: story?.marga_id ? String(story.marga_id) : '',
-        related_marga_ids: story?.related_marga_ids ?? ([] as number[]),
-    });
+    const { data, setData, post, put, processing, errors, transform } = useForm(
+        {
+            title: story?.title ?? '',
+            description: story?.description ?? '',
+            image: story?.image ?? '',
+            content_url: story?.content_url ?? '',
+            published: story?.published ?? canPublish,
+            classification: story?.classification ?? 'umum',
+            marga_id: story?.marga_id ? String(story.marga_id) : '',
+            related_marga_ids: story?.related_marga_ids ?? ([] as number[]),
+        },
+    );
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
+        transform((values) => ({ ...values, save_draft: false }));
 
         if (isEdit && story) {
             put(stories.update(story.id).url, {
@@ -479,7 +482,28 @@ export default function StoryForm({
                         </CardContent>
                     </Card>
 
-                    <div className="flex items-center gap-3 pb-6">
+                    <div className="flex flex-wrap items-center gap-3 pb-6">
+                        {!isEdit && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                disabled={processing}
+                                onClick={() => {
+                                    transform((values) => ({
+                                        ...values,
+                                        save_draft: true,
+                                    }));
+                                    post(stories.store().url, {
+                                        onError: () =>
+                                            toast.error(
+                                                'Periksa kembali data cerita.',
+                                            ),
+                                    });
+                                }}
+                            >
+                                {processing ? 'Menyimpan...' : 'Simpan'}
+                            </Button>
+                        )}
                         <Button
                             type="submit"
                             disabled={processing}

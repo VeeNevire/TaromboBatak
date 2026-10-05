@@ -65,6 +65,8 @@ class TaromboTreeService
     {
         $nodes = app(FamilyTreeInheritanceService::class)->nodesFor($familyTree);
         $people = Person::query()
+            ->withExists('identityMargas')
+            ->with('identityMargas:id,color,identity_person_id')
             ->whereIn('id', $nodes->pluck('person_id'))
             ->when($margaId !== null, fn (Builder $query) => $margaId instanceof Collection
                 ? $query->whereIn('marga_id', $margaId)
@@ -78,6 +80,7 @@ class TaromboTreeService
                 'husbands.marga:id,name',
                 'husbands.father.marga',
                 'creator:id,name,role',
+                'lastEditor:id,name',
                 'claimingUsers:id,name,role,current_person_id',
                 'childrenAsMother',
             ])
@@ -121,7 +124,10 @@ class TaromboTreeService
                 'name' => $person->name,
                 'alias' => $person->alias,
                 'marga' => $person->marga->name ?? 'Batak',
+                'margaColor' => $person->marga?->color,
                 'hasMarga' => $person->marga_id !== null,
+                'isMargaIdentity' => (bool) $person->identity_margas_exists,
+                'identityMargaColor' => $person->identityMargas->first()?->color,
                 'parentId' => $node['pending_father']
                     || $node['father_person_id'] === null
                     || ! $includedPersonIds->has($node['father_person_id'])
@@ -137,6 +143,8 @@ class TaromboTreeService
                 'image' => $person->image,
                 'bio' => $person->bio,
                 'createdBy' => $person->creator?->name,
+                'lastEditedBy' => $person->lastEditor?->name,
+                'lastEditedAt' => $person->updated_by ? $person->updated_at?->copy()->setTimezone('Asia/Jakarta')->translatedFormat('d M Y H:i') : null,
                 'createdAt' => $person->created_at?->copy()->setTimezone('Asia/Jakarta')->translatedFormat('d M Y H:i WIB'),
                 'canEdit' => $this->canEdit($person, $hasFather),
                 'canCopyCode' => $this->canCopyCode($person),
@@ -169,6 +177,8 @@ class TaromboTreeService
         $shareCodes = app(PersonShareCode::class);
 
         return $query
+            ->withExists('identityMargas')
+            ->with('identityMargas:id,color,identity_person_id')
             ->with([
                 'marga',
                 'father:id,name,marga_id',
@@ -178,6 +188,7 @@ class TaromboTreeService
                 'husbands.marga:id,name',
                 'husbands.father.marga',
                 'creator:id,name,role',
+                'lastEditor:id,name',
                 'claimingUsers:id,name,role,current_person_id',
                 'children' => fn ($query) => $query
                     ->when($familyTreeId !== null, fn ($query) => $query
@@ -199,7 +210,10 @@ class TaromboTreeService
                     'name' => $person->name,
                     'alias' => $person->alias,
                     'marga' => $person->marga->name ?? 'Batak',
+                    'margaColor' => $person->marga?->color,
                     'hasMarga' => $person->marga_id !== null,
+                    'isMargaIdentity' => (bool) $person->identity_margas_exists,
+                    'identityMargaColor' => $person->identityMargas->first()?->color,
                     'parentId' => $hasFather ? (string) $person->father_id : null,
                     'birthYear' => $person->birth_year,
                     'birthOrder' => $person->birth_order,
@@ -211,6 +225,8 @@ class TaromboTreeService
                     'image' => $person->image,
                     'bio' => $person->bio,
                     'createdBy' => $person->creator?->name,
+                    'lastEditedBy' => $person->lastEditor?->name,
+                    'lastEditedAt' => $person->updated_by ? $person->updated_at?->copy()->setTimezone('Asia/Jakarta')->translatedFormat('d M Y H:i') : null,
                     'createdAt' => $person->created_at?->copy()->setTimezone('Asia/Jakarta')->translatedFormat('d M Y H:i WIB'),
                     'canEdit' => $this->canEdit($person, $hasFather),
                     'canCopyCode' => $this->canCopyCode($person),
@@ -267,6 +283,8 @@ class TaromboTreeService
             ->public()
             ->whereNull('father_id')
             ->with('marga')
+            ->withExists('identityMargas')
+            ->with('identityMargas:id,color,identity_person_id')
             ->orderBy('id')
             ->limit($maxNodes + 1)
             ->get();
@@ -291,6 +309,8 @@ class TaromboTreeService
                 ->public()
                 ->whereIn('father_id', $frontier)
                 ->with('marga')
+                ->withExists('identityMargas')
+                ->with('identityMargas:id,color,identity_person_id')
                 ->orderBy('father_id')
                 ->orderBy('birth_order')
                 ->orderBy('id')
@@ -317,7 +337,10 @@ class TaromboTreeService
                     'name' => $person->name,
                     'alias' => $person->alias,
                     'marga' => $person->marga->name ?? 'Batak',
+                    'margaColor' => $person->marga?->color,
                     'hasMarga' => $person->marga_id !== null,
+                    'isMargaIdentity' => (bool) $person->identity_margas_exists,
+                    'identityMargaColor' => $person->identityMargas->first()?->color,
                     'parentId' => $person->father_id !== null ? (string) $person->father_id : null,
                     'birthOrder' => $person->birth_order,
                     'chain' => $person->chain,
@@ -435,11 +458,15 @@ class TaromboTreeService
      *
      * @return array<int, array<string, mixed>>
      */
-    public function rowsForMarga(Marga $marga, string $direction, ?int $maxDepth = null, ?int $maxNodes = null): array
+    public function rowsForMarga(Marga $marga, string $direction, ?int $maxDepth = null, ?int $maxNodes = null, ?int $descendantGenerations = null): array
     {
         $identity = $marga->identityPerson;
 
         if ($identity === null) {
+            if ($descendantGenerations !== null) {
+                return [];
+            }
+
             return $this->rows(
                 Person::query()
                     ->where('marga_id', $marga->id)
@@ -452,13 +479,13 @@ class TaromboTreeService
                 ? $this->rowsForPersonWithAncestors($identity)
                 : $this->rowsForPerson(
                     $identity,
-                    maxDepth: $maxDepth ?? (int) config('tarombo.public_max_depth'),
+                    maxDepth: $descendantGenerations !== null ? $descendantGenerations + 1 : ($maxDepth ?? (int) config('tarombo.public_max_depth')),
                     maxNodes: $maxNodes ?? (int) config('tarombo.public_max_nodes'),
                 ),
         );
 
         return $identityRows
-            ->when($direction === 'lower', fn (Collection $rows) => $rows->merge(
+            ->when($direction === 'lower' && $descendantGenerations === null, fn (Collection $rows) => $rows->merge(
                 $this->rows(
                     Person::query()
                         ->where('marga_id', $marga->id)

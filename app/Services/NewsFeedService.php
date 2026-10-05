@@ -12,6 +12,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class NewsFeedService
 {
@@ -32,17 +33,17 @@ class NewsFeedService
             ->whereNull('created_by')
             ->orWhere('created_by', '!=', $user->id);
 
-        return FeedPost::query()
+        return $this->excludeHidden(FeedPost::query())
             ->visibleTo($user)
             ->where('user_id', '!=', $user->id)
             ->where('created_at', '>', $lastReadAt)
             ->count()
-            + Story::query()
+            + $this->excludeHidden(Story::query())
                 ->publiclyVisible()
                 ->where($notCreatedByUser)
                 ->where('created_at', '>', $lastReadAt)
                 ->count()
-            + Event::query()
+            + $this->excludeHidden(Event::query())
                 ->publiclyVisible()
                 ->where($notCreatedByUser)
                 ->where('created_at', '>', $lastReadAt)
@@ -180,6 +181,7 @@ class NewsFeedService
      */
     private function seek(Builder $query, ?string $cursor, int $perPage): Builder
     {
+        $this->excludeHidden($query);
         if ($cursor !== null && str_contains($cursor, '|')) {
             [$timestamp, $id] = explode('|', $cursor, 2);
             // The cursor travels as ISO 8601; the driver needs a real date so
@@ -194,6 +196,17 @@ class NewsFeedService
         }
 
         return $query->latest()->latest('id')->limit($perPage);
+    }
+
+    private function excludeHidden(Builder $query): Builder
+    {
+        $type = match ($query->getModel()::class) {
+            FeedPost::class => 'status',
+            Story::class => 'story',
+            Event::class => 'announcement',
+        };
+
+        return $query->whereNotIn($query->getModel()->qualifyColumn('id'), DB::table('hidden_feed_items')->select('feed_id')->where('feed_type', $type));
     }
 
     /** @return Collection<int, array<string, mixed>> */
