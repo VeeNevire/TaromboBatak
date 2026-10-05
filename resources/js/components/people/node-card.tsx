@@ -15,6 +15,7 @@ export type TreeNode = {
     pending?: boolean;
     claimed?: boolean;
     isMargaIdentity?: boolean;
+    identityMargaColor?: string | null;
     spouses?: string[];
     spouseMargas?: string[];
 };
@@ -34,6 +35,25 @@ function pastelFor(id: string): string {
     }
 
     return PASTELS[hash % PASTELS.length];
+}
+
+/** Dark or light text, whichever reads better on the given hex background. */
+function readableTextOn(hex: string): string {
+    const value = hex.replace('#', '');
+    const full =
+        value.length === 3
+            ? value
+                  .split('')
+                  .map((char) => char + char)
+                  .join('')
+            : value;
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16));
+
+    if ([r, g, b].some(Number.isNaN)) {
+        return INK;
+    }
+
+    return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? INK : '#ffffff';
 }
 
 export function NodeCard({
@@ -64,6 +84,12 @@ export function NodeCard({
     showSpouseMargas?: boolean;
 }) {
     const clickTimer = useRef<number | null>(null);
+    // Identity cards take the colour of the marga they found; everyone else
+    // takes the colour of their own marga from Daftar Marga.
+    const fillColor =
+        (node.isMargaIdentity ? node.identityMargaColor : null) ??
+        node.margaColor ??
+        null;
 
     useEffect(
         () => () => {
@@ -149,7 +175,7 @@ export function NodeCard({
                             'cursor-pointer hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#B8934A] focus-visible:outline-none',
                     )}
                     style={{
-                        background: node.margaColor ?? pastelFor(node.id),
+                        background: pastelFor(node.id),
                         borderColor: highlighted
                             ? GOLD
                             : 'var(--tb-ring, #E3DFD2)',
@@ -201,7 +227,8 @@ export function NodeCard({
                               narrow ? 'w-full px-1' : 'px-2',
                               'rounded-md border py-1 text-center text-[length:var(--tb-name-size,11px)] leading-snug font-semibold',
                           ),
-                    !node.isMargaIdentity &&
+                    !fillColor &&
+                        !node.isMargaIdentity &&
                         node.claimed &&
                         'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300',
                     dashed && 'border-dashed',
@@ -209,25 +236,31 @@ export function NodeCard({
                         'cursor-pointer hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#B8934A] focus-visible:outline-none',
                 )}
                 style={{
-                    backgroundColor: node.isMargaIdentity
-                        ? '#BAE6FD'
-                        : node.claimed
-                          ? undefined
-                          : 'var(--tb-name-bg, #ffffff)',
+                    backgroundColor: fillColor
+                        ? fillColor
+                        : node.isMargaIdentity
+                          ? '#BAE6FD'
+                          : node.claimed
+                            ? undefined
+                            : 'var(--tb-name-bg, #ffffff)',
                     borderColor: highlighted
                         ? GOLD
+                        : node.claimed && !node.isMargaIdentity
+                          ? '#6ee7b7'
+                          : fillColor
+                            ? fillColor
+                            : node.isMargaIdentity
+                              ? '#7DD3FC'
+                              : 'var(--tb-name-border, #E3DFD2)',
+                    color: fillColor
+                        ? readableTextOn(fillColor)
                         : node.isMargaIdentity
-                          ? '#7DD3FC'
+                          ? '#0C4A6E'
                           : node.claimed
-                            ? '#6ee7b7'
-                            : 'var(--tb-name-border, #E3DFD2)',
-                    color: node.isMargaIdentity
-                        ? '#0C4A6E'
-                        : node.claimed
-                          ? '#166534'
-                          : highlighted
-                            ? FOREST
-                            : `var(--tb-name-color, ${INK})`,
+                            ? '#166534'
+                            : highlighted
+                              ? FOREST
+                              : `var(--tb-name-color, ${INK})`,
                     fontFamily: 'var(--tb-name-font, inherit)',
                     fontWeight: 'var(--tb-name-weight, 600)',
                 }}
@@ -271,7 +304,12 @@ export function NodeCard({
                     ((showSpouseMargas
                         ? node.spouseMargas?.length
                         : node.spouses?.length) ?? 0) > 0 && (
-                        <span className="mt-0.5 block border-t border-current/15 pt-0.5 text-[9px] leading-tight font-medium text-tb-primary">
+                        <span
+                            className={cn(
+                                'mt-0.5 block border-t border-current/15 pt-0.5 text-[9px] leading-tight font-medium',
+                                !fillColor && 'text-tb-primary',
+                            )}
+                        >
                             {(showSpouseMargas
                                 ? node.spouseMargas
                                 : node.spouses

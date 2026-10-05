@@ -13,13 +13,13 @@ use Symfony\Component\HttpFoundation\Response;
 
 class MargaDocumentController extends Controller
 {
-    public function select(): \Inertia\Response
+    public function select(): InertiaResponse
     {
         abort_unless(request()->user()?->isStaff(), 403);
 
         return Inertia::render('marga/select', [
             'feature' => 'documents',
-            'margas' => Marga::query()->orderBy('name')->get(['id', 'name']),
+            'margas' => Marga::query()->withCount('documents')->orderBy('name')->get(['id', 'name', 'color']),
         ]);
     }
 

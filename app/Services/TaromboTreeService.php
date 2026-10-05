@@ -66,6 +66,7 @@ class TaromboTreeService
         $nodes = app(FamilyTreeInheritanceService::class)->nodesFor($familyTree);
         $people = Person::query()
             ->withExists('identityMargas')
+            ->with('identityMargas:id,color,identity_person_id')
             ->whereIn('id', $nodes->pluck('person_id'))
             ->when($margaId !== null, fn (Builder $query) => $margaId instanceof Collection
                 ? $query->whereIn('marga_id', $margaId)
@@ -123,8 +124,10 @@ class TaromboTreeService
                 'name' => $person->name,
                 'alias' => $person->alias,
                 'marga' => $person->marga->name ?? 'Batak',
+                'margaColor' => $person->marga?->color,
                 'hasMarga' => $person->marga_id !== null,
                 'isMargaIdentity' => (bool) $person->identity_margas_exists,
+                'identityMargaColor' => $person->identityMargas->first()?->color,
                 'parentId' => $node['pending_father']
                     || $node['father_person_id'] === null
                     || ! $includedPersonIds->has($node['father_person_id'])
@@ -175,6 +178,7 @@ class TaromboTreeService
 
         return $query
             ->withExists('identityMargas')
+            ->with('identityMargas:id,color,identity_person_id')
             ->with([
                 'marga',
                 'father:id,name,marga_id',
@@ -206,8 +210,10 @@ class TaromboTreeService
                     'name' => $person->name,
                     'alias' => $person->alias,
                     'marga' => $person->marga->name ?? 'Batak',
+                    'margaColor' => $person->marga?->color,
                     'hasMarga' => $person->marga_id !== null,
                     'isMargaIdentity' => (bool) $person->identity_margas_exists,
+                    'identityMargaColor' => $person->identityMargas->first()?->color,
                     'parentId' => $hasFather ? (string) $person->father_id : null,
                     'birthYear' => $person->birth_year,
                     'birthOrder' => $person->birth_order,
@@ -278,6 +284,7 @@ class TaromboTreeService
             ->whereNull('father_id')
             ->with('marga')
             ->withExists('identityMargas')
+            ->with('identityMargas:id,color,identity_person_id')
             ->orderBy('id')
             ->limit($maxNodes + 1)
             ->get();
@@ -303,6 +310,7 @@ class TaromboTreeService
                 ->whereIn('father_id', $frontier)
                 ->with('marga')
                 ->withExists('identityMargas')
+                ->with('identityMargas:id,color,identity_person_id')
                 ->orderBy('father_id')
                 ->orderBy('birth_order')
                 ->orderBy('id')
@@ -329,8 +337,10 @@ class TaromboTreeService
                     'name' => $person->name,
                     'alias' => $person->alias,
                     'marga' => $person->marga->name ?? 'Batak',
+                    'margaColor' => $person->marga?->color,
                     'hasMarga' => $person->marga_id !== null,
                     'isMargaIdentity' => (bool) $person->identity_margas_exists,
+                    'identityMargaColor' => $person->identityMargas->first()?->color,
                     'parentId' => $person->father_id !== null ? (string) $person->father_id : null,
                     'birthOrder' => $person->birth_order,
                     'chain' => $person->chain,

@@ -139,6 +139,8 @@ function toNode(person: TaromboPerson, displayNumber?: number): TreeNode {
         image: person.image,
         pending: person.pending,
         isMargaIdentity: person.isMargaIdentity,
+        identityMargaColor: person.identityMargaColor,
+        margaColor: person.margaColor,
         claimed: (person.claimedAccounts?.length ?? 0) > 0,
         spouses: person.spouses?.map((spouse) => spouse.name),
         spouseMargas: person.spouses

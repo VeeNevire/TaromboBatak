@@ -101,7 +101,7 @@ export default function TanyaTarombo({
                             {messages.map((message, index) => (
                                 <div
                                     key={`${message.role}-${index}`}
-                                    className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${message.role === 'user' ? 'ml-auto bg-tb-primary text-white' : 'bg-tb-surface-bright text-tb-on-surface'}`}
+                                    className={`w-fit max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${message.role === 'user' ? 'ml-auto bg-tb-primary text-white' : 'bg-tb-surface-bright text-tb-on-surface'}`}
                                 >
                                     {message.text}
                                 </div>
