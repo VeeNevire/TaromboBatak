@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { createContext, useContext, useEffect, useRef } from 'react';
 import { PersonImage } from '@/components/people/person-image';
 import { cn } from '@/lib/utils';
 
@@ -19,6 +19,12 @@ export type TreeNode = {
     spouses?: string[];
     spouseMargas?: string[];
 };
+
+/**
+ * When on, name cards take their marga's colour from Daftar Marga. When off,
+ * cards stay plain and only marga identity figures are drawn sky blue.
+ */
+export const MargaColorContext = createContext(false);
 
 const PASTELS = ['#DCE7DE', '#EFE2C9', '#E6D6E3', '#D6E1EC', '#F0DAD0'];
 export const FOREST = '#2F4538';
@@ -84,12 +90,14 @@ export function NodeCard({
     showSpouseMargas?: boolean;
 }) {
     const clickTimer = useRef<number | null>(null);
+    const showMargaColors = useContext(MargaColorContext);
     // Identity cards take the colour of the marga they found; everyone else
     // takes the colour of their own marga from Daftar Marga.
-    const fillColor =
-        (node.isMargaIdentity ? node.identityMargaColor : null) ??
-        node.margaColor ??
-        null;
+    const fillColor = showMargaColors
+        ? ((node.isMargaIdentity ? node.identityMargaColor : null) ??
+          node.margaColor ??
+          null)
+        : null;
 
     useEffect(
         () => () => {

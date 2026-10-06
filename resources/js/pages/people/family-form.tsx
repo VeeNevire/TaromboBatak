@@ -222,7 +222,6 @@ export type PendingTreeShare = {
 };
 
 const VALUE_NONE = 'none';
-const NEW_MARGA_VALUE = '__new__';
 const SPOUSE_OTHER_VALUE = '__other__';
 
 const normalizeNameForMatch = (value: string): string =>
@@ -1126,9 +1125,7 @@ function soleMotherIndex(mothers: ParentEntry[]): number | null {
 
 function MargaField({
     value,
-    newMarga,
     onValue,
-    onNewMarga,
     margas,
     disabled = false,
     placeholder = 'Pilih marga',
@@ -1141,8 +1138,6 @@ function MargaField({
     disabled?: boolean;
     placeholder?: string;
 }) {
-    const [creating, setCreating] = useState(false);
-
     if (disabled) {
         return (
             <div className="flex min-h-9 items-center rounded-md border border-tb-outline-variant bg-tb-surface-container px-3 text-sm text-tb-on-surface">
@@ -1151,43 +1146,12 @@ function MargaField({
         );
     }
 
-    if (creating) {
-        return (
-            <div className="flex gap-2">
-                <Input
-                    autoFocus
-                    value={newMarga}
-                    onChange={(e) => onNewMarga(e.target.value)}
-                    placeholder="Nama marga baru"
-                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
-                />
-                <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                        setCreating(false);
-                        onNewMarga('');
-                        onValue(null);
-                    }}
-                >
-                    Batal
-                </Button>
-            </div>
-        );
-    }
-
     return (
         <Select
             value={value ? String(value) : VALUE_NONE}
-            onValueChange={(selected) => {
-                if (selected === NEW_MARGA_VALUE) {
-                    setCreating(true);
-                    onValue(null);
-                } else {
-                    onValue(selected === VALUE_NONE ? null : Number(selected));
-                }
-            }}
+            onValueChange={(selected) =>
+                onValue(selected === VALUE_NONE ? null : Number(selected))
+            }
         >
             <SelectTrigger className="w-full border-tb-outline-variant bg-tb-surface-bright">
                 <SelectValue placeholder={placeholder} />
@@ -1199,9 +1163,6 @@ function MargaField({
                         {marga.name}
                     </SelectItem>
                 ))}
-                <SelectItem value={NEW_MARGA_VALUE}>
-                    ＋ Buat marga baru…
-                </SelectItem>
             </SelectContent>
         </Select>
     );

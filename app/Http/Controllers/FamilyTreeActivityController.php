@@ -23,6 +23,7 @@ class FamilyTreeActivityController extends Controller
             ],
             'accounts' => $history->accounts($request->user()),
             'filters' => [
+                'search' => trim($filters['search'] ?? ''),
                 'account_id' => $filters['account_id'] ?? null,
                 'date' => $filters['date'] ?? '',
                 'order' => $filters['order'] ?? 'newest',

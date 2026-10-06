@@ -179,14 +179,10 @@ export function PersonSummaryDialog({
                             <dl className="grid gap-3">
                                 <div className="flex items-start justify-between gap-4">
                                     <dt className="text-tb-on-surface-variant">
-                                        {person.lastEditedBy
-                                            ? 'Editor Terakhir'
-                                            : 'Input oleh'}
+                                        Input oleh
                                     </dt>
                                     <dd className="text-right font-medium text-tb-on-surface">
-                                        {person.lastEditedBy ||
-                                            person.createdBy ||
-                                            'Belum tercatat'}
+                                        {person.createdBy || 'Belum tercatat'}
                                     </dd>
                                 </div>
                                 <div className="flex items-start justify-between gap-4">
@@ -513,25 +509,30 @@ export function PersonSummaryDialog({
                         </section>
                     </div>
 
-                    <p className="text-xs text-tb-on-surface-variant">
-                        {person.lastEditedBy ? 'Editor Terakhir' : 'Input oleh'}
-                        :{' '}
-                        <span className="font-medium text-tb-on-surface">
-                            {person.lastEditedBy ||
-                                person.createdBy ||
-                                'Belum tercatat'}
-                        </span>
-                        {(person.lastEditedBy
-                            ? person.lastEditedAt
-                            : person.createdAt) && (
-                            <span className="ml-1">
-                                ·{' '}
-                                {person.lastEditedBy
-                                    ? person.lastEditedAt
-                                    : person.createdAt}
+                    <div className="space-y-1 text-xs text-tb-on-surface-variant">
+                        <p>
+                            Input oleh:{' '}
+                            <span className="font-medium text-tb-on-surface">
+                                {person.createdBy || 'Belum tercatat'}
                             </span>
-                        )}
-                    </p>
+                            {person.createdAt && (
+                                <span className="ml-1">
+                                    · {person.createdAt}
+                                </span>
+                            )}
+                        </p>
+                        <p>
+                            Editor terakhir:{' '}
+                            <span className="font-medium text-tb-on-surface">
+                                {person.lastEditedBy || 'Belum tercatat'}
+                            </span>
+                            {person.lastEditedBy && person.lastEditedAt && (
+                                <span className="ml-1">
+                                    · {person.lastEditedAt}
+                                </span>
+                            )}
+                        </p>
+                    </div>
 
                     <DialogFooter className="gap-2 sm:justify-between">
                         <DialogClose asChild>

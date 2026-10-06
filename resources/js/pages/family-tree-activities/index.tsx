@@ -5,7 +5,9 @@ import {
     Filter,
     History,
     RotateCcw,
+    Search,
 } from 'lucide-react';
+import { useEffect } from 'react';
 import type { FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -39,14 +41,36 @@ export default function FamilyTreeActivitiesIndex({
 }: {
     activities: Activity[];
     accounts: { id: number; name: string }[];
-    filters: { account_id: number | null; date: string; order: string };
+    filters: {
+        search: string;
+        account_id: number | null;
+        date: string;
+        order: string;
+    };
     pagination: { current_page: number; last_page: number; total: number };
 }) {
     const form = useForm({
+        search: filters.search,
         account_id: filters.account_id ? String(filters.account_id) : '',
         date: filters.date,
         order: filters.order,
     });
+    const { search, account_id, date, order } = form.data;
+    useEffect(() => {
+        if (search === filters.search) {
+            return;
+        }
+
+        const timer = window.setTimeout(() => {
+            router.get(
+                familyTreeActivities.index().url,
+                { search, account_id, date, order },
+                { preserveState: true, preserveScroll: true, replace: true },
+            );
+        }, 350);
+
+        return () => window.clearTimeout(timer);
+    }, [search, account_id, date, order, filters.search]);
     const applyFilters = (event: FormEvent) => {
         event.preventDefault();
         form.get(familyTreeActivities.index().url, { preserveScroll: true });
@@ -81,6 +105,33 @@ export default function FamilyTreeActivitiesIndex({
                             onSubmit={applyFilters}
                             className="grid gap-4 rounded-xl border border-tb-outline-variant bg-tb-surface-container/40 p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]"
                         >
+                            <div className="space-y-2 sm:col-span-2 lg:col-span-3">
+                                <Label htmlFor="activity-search">
+                                    Cari aktivitas
+                                </Label>
+                                <div className="relative">
+                                    <Search className="pointer-events-none absolute top-2.5 left-3 size-4 text-tb-on-surface-variant" />
+                                    <Input
+                                        id="activity-search"
+                                        type="search"
+                                        value={form.data.search}
+                                        onChange={(event) =>
+                                            form.setData(
+                                                'search',
+                                                event.target.value,
+                                            )
+                                        }
+                                        placeholder="Cari nama anggota, keluarga, pelaku, atau isi aktivitas…"
+                                        maxLength={255}
+                                        className="pl-9"
+                                    />
+                                </div>
+                                {form.errors.search && (
+                                    <p className="text-sm text-destructive">
+                                        {form.errors.search}
+                                    </p>
+                                )}
+                            </div>
                             <div className="min-w-0 space-y-2 sm:col-span-2 lg:col-span-1">
                                 <Label htmlFor="activity-account">
                                     Pilih akun pelaku
@@ -180,7 +231,9 @@ export default function FamilyTreeActivitiesIndex({
                         </p>
                         {activities.length === 0 ? (
                             <p className="py-10 text-center text-sm text-tb-on-surface-variant">
-                                Belum ada aktivitas silsilah tercatat.
+                                {filters.search
+                                    ? 'Tidak ada aktivitas yang cocok dengan pencarian.'
+                                    : 'Belum ada aktivitas silsilah tercatat.'}
                             </p>
                         ) : (
                             <div className="overflow-hidden rounded-xl border border-tb-outline-variant">

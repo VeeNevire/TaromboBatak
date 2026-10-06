@@ -205,12 +205,14 @@ class StoryController extends Controller
         $user = $request->user();
         Gate::authorize('update', $story);
 
-        $requiresApproval = DB::transaction(function () use ($request, $user, $story) {
+        $result = DB::transaction(function () use ($request, $user, $story) {
             $story = Story::query()->lockForUpdate()->findOrFail($story->id);
             Gate::authorize('update', $story);
 
             $requiresApproval = ! $user->isStaff() && ! $user->isContributor();
             $canApproveDirectly = $user->isAdmin() || $user->isContributor();
+            $isDraft = $story->status === Story::STATUS_DRAFT;
+            $submitDraft = $isDraft && $request->boolean('submit_for_publication');
             $classification = $request->string('classification')->toString();
             $margaId = $classification === Story::CLASSIFICATION_MARGA
                 ? ($user->isStaff() ? $request->integer('marga_id') : $user->marga_id)
@@ -218,11 +220,15 @@ class StoryController extends Controller
             abort_if($classification === Story::CLASSIFICATION_MARGA && ! $margaId, 403, 'Marga cerita belum ditentukan.');
             $nextStatus = $requiresApproval
                 ? Story::STATUS_PENDING
-                : ($canApproveDirectly || $story->status === Story::STATUS_DRAFT ? Story::STATUS_APPROVED : $story->status);
+                : ($canApproveDirectly ? Story::STATUS_APPROVED : $story->status);
+            if ($isDraft) {
+                $nextStatus = $submitDraft ? Story::STATUS_PENDING : Story::STATUS_DRAFT;
+            }
             $scopeChanged = $story->classification !== $classification || $story->marga_id !== $margaId;
-            $notifyReviewers = $requiresApproval || ($story->status === Story::STATUS_PENDING && $scopeChanged);
+            $notifyReviewers = $nextStatus === Story::STATUS_PENDING
+                && ($submitDraft || $requiresApproval || $scopeChanged);
             $updates = [
-                ...$request->safe()->except('related_marga_ids'),
+                ...$request->safe()->except(['related_marga_ids', 'submit_for_publication']),
                 'classification' => $classification,
                 'marga_id' => $margaId,
                 'status' => $nextStatus,
@@ -230,7 +236,7 @@ class StoryController extends Controller
                 'review_version' => $story->review_version + 1,
             ];
 
-            if ($requiresApproval || $canApproveDirectly) {
+            if ($isDraft || $requiresApproval || $canApproveDirectly) {
                 $updates = [
                     ...$updates,
                     'reviewed_by' => null,
@@ -250,14 +256,21 @@ class StoryController extends Controller
                 $this->notifyContributors($story);
             }
 
-            return $requiresApproval;
+            return [
+                'requiresApproval' => $requiresApproval,
+                'savedDraft' => $isDraft && ! $submitDraft,
+                'submittedDraft' => $submitDraft,
+            ];
         });
 
         Inertia::flash('toast', [
             'type' => 'success',
-            'message' => $requiresApproval
-                ? 'Perubahan cerita disimpan dan menunggu persetujuan ulang.'
-                : __('Cerita berhasil diperbarui.'),
+            'message' => match (true) {
+                $result['savedDraft'] => 'Perubahan draf cerita berhasil disimpan.',
+                $result['submittedDraft'] => 'Cerita berhasil diajukan untuk publikasi dan menunggu persetujuan.',
+                $result['requiresApproval'] => 'Perubahan cerita disimpan dan menunggu persetujuan ulang.',
+                default => __('Cerita berhasil diperbarui.'),
+            },
         ]);
 
         return to_route('stories.index');

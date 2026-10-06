@@ -1425,6 +1425,7 @@ class PersonController extends Controller
      */
     protected function familyPayload(Person $person, int|\Illuminate\Support\Collection|null $margaId = null): array
     {
+        $person->loadMissing(['marga', 'father.marga', 'mother.father.marga', 'wives.marga']);
         $margaIds = $margaId instanceof \Illuminate\Support\Collection
             ? $margaId
             : ($margaId !== null ? collect([$margaId]) : null);
@@ -1440,7 +1441,7 @@ class PersonController extends Controller
                     ->where(fn ($query) => $query
                         ->where('pending_father', false)
                         ->orWhere('id', $person->id))
-                    ->with(['mother.marga', 'mother.father.marga', 'wives.marga'])
+                    ->with(['marga', 'mother.marga', 'mother.father.marga', 'wives.marga'])
                     ->orderBy('birth_order')
                     ->get()
                 : collect([$person]);
@@ -1465,6 +1466,7 @@ class PersonController extends Controller
                     ->where(fn ($childQuery) => $childQuery
                         ->where('gender', 'L')
                         ->orWhereNull('gender'))
+                    ->with('marga')
                     ->orderBy('birth_order'),
             ])
             ->get()
@@ -1473,7 +1475,7 @@ class PersonController extends Controller
 
         $ownChildrenRows = $person->children()
             ->when($margaIds !== null, fn ($query) => $query->whereIn('marga_id', $margaIds))
-            ->with('wives.marga')
+            ->with(['marga', 'wives.marga'])
             ->orderBy('birth_order')
             ->get();
 
@@ -1502,6 +1504,15 @@ class PersonController extends Controller
         $publicDescendants = $this->descendantsOf($person)
             ->where('is_public', true)
             ->values();
+
+        $user = auth()->user();
+        $policy = app(PersonPolicy::class);
+        if ($user !== null) {
+            $policy->prepareUpdates(
+                $user,
+                new Collection($lineage->concat($lineage->flatMap(fn (Person $row) => $row->children))->unique('id')->values()->all()),
+            );
+        }
 
         return [
             'id' => $person->id,
@@ -1567,7 +1578,7 @@ class PersonController extends Controller
                     'marga' => $row->marga?->name,
                     'chain' => $row->chain,
                     'is_self' => $row->id === $person->id,
-                    'editable' => Gate::allows('update', $row),
+                    'editable' => $user !== null && $policy->update($user, $row),
                     'children' => $row->children
                         ->map(fn (Person $child) => [
                             'id' => $child->id,
@@ -1576,7 +1587,7 @@ class PersonController extends Controller
                             'marga' => $child->marga?->name,
                             'chain' => $child->chain,
                             'birth_order' => $child->birth_order,
-                            'editable' => Gate::allows('update', $child),
+                            'editable' => $user !== null && $policy->update($user, $child),
                         ])
                         ->values()
                         ->all(),
@@ -1653,7 +1664,7 @@ class PersonController extends Controller
     protected function familyPayloadForVersion(Person $person, int $treeId, int|\Illuminate\Support\Collection|null $margaId = null): array
     {
         $payload = $this->familyPayload($person, $margaId);
-        $tree = FamilyTree::query()->with(['nodes.person.marga'])->findOrFail($treeId);
+        $tree = FamilyTree::query()->with(['nodes.person.marga', 'nodes.fatherNode.person.marga'])->findOrFail($treeId);
         $nodes = $tree->nodes->keyBy('person_id');
         $focusNode = $nodes->get($person->id);
 
@@ -1703,9 +1714,9 @@ class PersonController extends Controller
             ];
         }
 
-        $siblingNodes = $fatherNode?->children()->where('is_removed', false)->with('person.marga')->orderBy('birth_order')->orderBy('id')->get()
+        $siblingNodes = $fatherNode?->children()->where('is_removed', false)->with(['person.marga', 'motherNode'])->orderBy('birth_order')->orderBy('id')->get()
             ?? collect([$focusNode]);
-        $childNodes = $focusNode->children()->where('is_removed', false)->with('person.marga')->orderBy('birth_order')->orderBy('id')->get();
+        $childNodes = $focusNode->children()->where('is_removed', false)->with(['person.marga', 'motherNode'])->orderBy('birth_order')->orderBy('id')->get();
 
         $payload['children'] = $siblingNodes
             ->map(fn (FamilyTreeNode $node) => $rowFor($node, $baseChildren->get($node->person_id, [])))
@@ -1845,6 +1856,7 @@ class PersonController extends Controller
     protected function nameSuggestions(int|\Illuminate\Support\Collection|null $margaId = null): array
     {
         return Person::query()
+            ->select(['id', 'name', 'alias', 'gender', 'spouse', 'spouse_marga', 'marga_id', 'father_id', 'chain'])
             ->with(['father:id,name', 'marga:id,name'])
             ->when($margaId instanceof \Illuminate\Support\Collection, fn ($query) => $query->whereIn('marga_id', $margaId))
             ->when(is_int($margaId), fn ($query) => $query->where('marga_id', $margaId))
@@ -1865,7 +1877,7 @@ class PersonController extends Controller
                 'marga' => $person->marga?->name,
                 'father_id' => $person->father_id,
                 'father_name' => $person->father_id !== null
-                    ? $person->father->name
+                    ? $person->father?->name
                     : null,
                 'chain' => $person->chain,
             ])
