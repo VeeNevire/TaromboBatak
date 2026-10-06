@@ -14,7 +14,7 @@ use Throwable;
 
 class TaromboAiController extends Controller
 {
-    public function select(): \Inertia\Response
+    public function select(): Response
     {
         abort_unless(request()->user()?->isStaff() || request()->user()?->isContributor(), 403);
 
@@ -52,8 +52,8 @@ class TaromboAiController extends Controller
                         ->map(fn (array $row) => collect($row)->only([
                             'id', 'name', 'parentId', 'marga', 'gender', 'birthYear',
                         ])->all())->values()->all(),
-                    'instructions' => 'Jawab dalam bahasa Indonesia dengan sopan. Gunakan hanya informasi yang tersedia. Jika data tidak cukup, katakan terus terang. Jangan mengarang silsilah.',
                 ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                'instructions' => 'Kamu adalah Ito Tarombo, asisten tanya jawab tarombo. Jawab pertanyaan pada input dalam bahasa Indonesia dengan sopan. Gunakan hanya informasi marga dan tree_rows yang tersedia. Jika data tidak cukup, katakan terus terang. Jangan mengarang silsilah. Kembalikan jawaban sebagai teks biasa, bukan daftar berita atau object JSON.',
             ]);
             $answer = $run['output'] ?? $run['result'] ?? $run['response'] ?? null;
             $answer = is_array($answer) ? ($answer['answer'] ?? $answer['text'] ?? json_encode($answer, JSON_UNESCAPED_UNICODE)) : (string) $answer;

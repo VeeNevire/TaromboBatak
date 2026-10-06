@@ -30,3 +30,25 @@ test('syncing cascades into an alternative version owned by a different user', f
     expect($source->nodes()->where('person_id', $child->id)->exists())->toBeTrue()
         ->and($alternative->nodes()->where('person_id', $child->id)->exists())->toBeTrue();
 });
+
+test('new descendant synchronization processes overlapping versions only once', function () {
+    $owner = User::factory()->create();
+    $father = Person::factory()->create();
+    $source = FamilyTree::create(['user_id' => $owner->id, 'root_person_id' => $father->id]);
+    $alternative = FamilyTree::create(['user_id' => $owner->id, 'root_person_id' => $father->id, 'based_on_id' => $source->id]);
+    $child = Person::factory()->create(['father_id' => $father->id]);
+    $service = new class extends FamilyTreeDescendantSyncService
+    {
+        public array $synced = [];
+
+        public function sync(FamilyTree $tree): int
+        {
+            $this->synced[] = $tree->id;
+
+            return 0;
+        }
+    };
+
+    $service->syncTreesForNewDescendant($source, $child);
+    expect($service->synced)->toBe([$source->id, $alternative->id]);
+});

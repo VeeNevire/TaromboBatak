@@ -39,6 +39,14 @@ Buka **Administrasi → Otomatisasi Berita Marga** untuk mengisi prompt Hermes, 
 
 Topik dan kata kunci tetap diatur melalui menu **Topik Berita Marga**. Website sumber diatur admin melalui menu **Sumber Website Berita**. Admin memasukkan URL website langsung, tanpa RSS. Sumber dapat dipakai untuk semua topik atau dibatasi ke beberapa topik. Hermes hanya boleh membaca website pada daftar sumber untuk topik yang sedang dikerjakan. Semua berita baru yang lolos validasi langsung disetujui dan terbit. Daftar berita diurutkan berdasarkan waktu pembaruan terbaru.
 
+Untuk pengembangan lokal melalui SSH, arahkan tunnel ke port Hermes aktif di server:
+
+```bash
+ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -N -L 18642:127.0.0.1:8642 root@76.13.22.54
+```
+
+Biarkan proses tunnel berjalan selama aplikasi lokal dipakai. Tanya Ito Tarombo menggunakan konfigurasi `services.hermes` yang sama dengan berita, termasuk URL, token, endpoint run, dan polling. Keduanya mengirim konteks sebagai `input` dan prompt terpisah sebagai `instructions`.
+
 ## Cara kerja API Hermes
 
 Setiap siklus untuk topik aktif mengirim `POST {HERMES_BASE_URL}{HERMES_RUNS_ENDPOINT}`. `input` berupa pesan user berbentuk JSON string dengan konteks topik dan sumber website yang diizinkan, sedangkan prompt admin dikirim terpisah sebagai `instructions`:

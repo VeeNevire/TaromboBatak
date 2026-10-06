@@ -34,15 +34,10 @@ export default function TanyaTarombo({
         form.post(margaRoutes.ai.ask(marga.id).url, {
             preserveScroll: true,
             onSuccess: (page) => {
-                const flash =
-                    (
-                        page.props as unknown as {
-                            flash?: {
-                                tarombo_answer?: string;
-                                tarombo_error?: string;
-                            };
-                        }
-                    ).flash ?? {};
+                const flash = page.flash as {
+                    tarombo_answer?: string;
+                    tarombo_error?: string;
+                };
                 setMessages((current) => [
                     ...current,
                     {

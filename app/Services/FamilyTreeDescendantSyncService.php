@@ -21,7 +21,11 @@ class FamilyTreeDescendantSyncService
     {
         $trees = $this->treesContainingAncestorsOf($person, $sourceTree->user_id);
         $trees->push($sourceTree);
-        $trees->unique('id')->each(fn (FamilyTree $tree) => $this->syncTreeAndDescendantVersions($tree));
+        // Share traversal state: an alternative may also appear in $trees.
+        $processedTreeIds = [];
+        foreach ($trees->unique('id') as $tree) {
+            $this->syncVersions($tree, $processedTreeIds);
+        }
 
         $this->syncTreesForPerson($person);
     }
@@ -148,8 +152,14 @@ class FamilyTreeDescendantSyncService
      */
     public function syncTreeAndDescendantVersions(FamilyTree $tree): void
     {
-        $pendingTreeIds = [$tree->id];
         $processedTreeIds = [];
+        $this->syncVersions($tree, $processedTreeIds);
+    }
+
+    /** @param array<int, true> $processedTreeIds */
+    private function syncVersions(FamilyTree $tree, array &$processedTreeIds): void
+    {
+        $pendingTreeIds = [$tree->id];
 
         while ($pendingTreeIds !== []) {
             $treeId = array_shift($pendingTreeIds);
