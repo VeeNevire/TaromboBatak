@@ -58,6 +58,7 @@ export default function StoryForm({
     canCreateMarga,
 }: Props) {
     const isEdit = story !== null;
+    const isDraft = story?.status === 'draft';
     const [margaSearch, setMargaSearch] = useState('');
     const filteredMargas = relatedMargaOptions.filter((marga) =>
         marga.name
@@ -80,7 +81,11 @@ export default function StoryForm({
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
-        transform((values) => ({ ...values, save_draft: false }));
+        transform((values) => ({
+            ...values,
+            save_draft: false,
+            submit_for_publication: false,
+        }));
 
         if (isEdit && story) {
             put(stories.update(story.id).url, {
@@ -120,9 +125,11 @@ export default function StoryForm({
                             {isEdit ? 'Ubah Cerita' : 'Tambah Cerita'}
                         </h1>
                         <p className="mt-1 text-sm text-tb-on-surface-variant">
-                            {canPublish
-                                ? 'Cerita yang disetujui dapat ditampilkan di halaman publik.'
-                                : 'Cerita akan ditinjau Kontributor sebelum tampil ke publik.'}
+                            {isDraft
+                                ? 'Simpan perubahan untuk melanjutkan draf. Klik Ajukan saat cerita siap ditinjau untuk publikasi.'
+                                : canPublish
+                                  ? 'Cerita yang disetujui dapat ditampilkan di halaman publik.'
+                                  : 'Cerita akan ditinjau Kontributor sebelum tampil ke publik.'}
                         </p>
                     </div>
                 </div>
@@ -458,7 +465,7 @@ export default function StoryForm({
                                 </p>
                             </div>
 
-                            {canPublish && (
+                            {canPublish && !isDraft && (
                                 <div className="flex items-center gap-3">
                                     <Checkbox
                                         id="published"
@@ -517,6 +524,27 @@ export default function StoryForm({
                                     ? 'Tambah Cerita'
                                     : 'Ajukan Cerita'}
                         </Button>
+                        {isDraft && story && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                disabled={processing}
+                                onClick={() => {
+                                    transform((values) => ({
+                                        ...values,
+                                        submit_for_publication: true,
+                                    }));
+                                    put(stories.update(story.id).url, {
+                                        onError: () =>
+                                            toast.error(
+                                                'Cerita belum diajukan. Periksa kembali field yang ditandai.',
+                                            ),
+                                    });
+                                }}
+                            >
+                                Ajukan
+                            </Button>
+                        )}
                         <Button
                             asChild
                             variant="ghost"

@@ -151,6 +151,7 @@ Route::middleware(['auth'])->group(function () {
         ->name('marga.documents.destroy');
     Route::get('dashboard/marga/{marga}/tanya-tarombo', [TaromboAiController::class, 'show'])
         ->name('marga.ai.show');
+    Route::post('dashboard/marga/{marga}/tanya-tarombo/new', [TaromboAiController::class, 'newConversation'])->name('marga.ai.new-conversation');
     Route::post('dashboard/marga/{marga}/tanya-tarombo', [TaromboAiController::class, 'ask'])
         ->middleware('throttle:20,1')
         ->name('marga.ai.ask');
@@ -417,3 +418,6 @@ Route::fallback(fn () => abort(404));
 Route::middleware('auth')->get('/dashboard/dokumen-marga', [MargaDocumentController::class, 'select'])->name('marga.documents.select');
 Route::middleware('auth')->post('dashboard/news-feed/items/{feedType}/{feedId}/hide', [NewsFeedController::class, 'hide'])->whereNumber('feedId')->name('news-feed.items.hide');
 Route::middleware('auth')->get('/dashboard/tanya-ito-tarombo', [TaromboAiController::class, 'select'])->name('marga.ai.select');
+
+Route::middleware(['auth', 'throttle:20,1'])->post('/dashboard/tanya-ito-tarombo', [TaromboAiController::class, 'askAll'])->name('marga.ai.ask-all');
+Route::middleware('auth')->post('/dashboard/tanya-ito-tarombo/new', [TaromboAiController::class, 'newGeneralConversation'])->name('marga.ai.new-general-conversation');

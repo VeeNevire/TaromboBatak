@@ -56,6 +56,17 @@ class FamilyTreeActivityHistory
         $query = DB::query()->fromSub($treeLogs->toBase()->unionAll($accounts->toBase()), 'history')
             ->when(! empty($filters['account_id']), fn ($query) => $query->where('actor_id', $filters['account_id']));
 
+        $search = trim($filters['search'] ?? '');
+        if ($search !== '') {
+            $pattern = '%'.$search.'%';
+            $query->where(fn ($matches) => $matches
+                ->where('tree_name', 'like', $pattern)
+                ->orWhere('member_name', 'like', $pattern)
+                ->orWhere('description', 'like', $pattern)
+                ->orWhere('action', 'like', $pattern)
+                ->orWhereIn('actor_id', User::query()->select('id')->where('name', 'like', $pattern)));
+        }
+
         if (! empty($filters['date'])) {
             $start = CarbonImmutable::createFromFormat('!Y-m-d', $filters['date'], 'Asia/Jakarta');
             $query->where('created_at', '>=', $start->utc())

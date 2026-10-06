@@ -91,4 +91,35 @@ test('invalid activity filters are rejected', function (array $filter, string $f
     [['date' => '2026-02-30'], 'date'],
     [['account_id' => -1], 'account_id'],
     [['order' => 'unknown'], 'order'],
+    [['search' => str_repeat('x', 256)], 'search'],
+    [['search' => ['invalid']], 'search'],
 ]);
+
+test('activity search matches member family description and actor while keeping filters', function (string $term) {
+    $admin = User::factory()->asAdmin()->create();
+    $actor = User::factory()->create(['name' => 'Petugas Marbun', 'created_at' => '2025-01-01']);
+    $match = historicalActivity($actor, '2026-01-02 05:00:00');
+    $match->update(['tree_name' => 'Keluarga Sihombing', 'member_name' => 'Tuan Samosir', 'description' => 'Memperbarui tahun kelahiran.']);
+    historicalActivity($admin, '2026-01-02 05:00:00');
+    historicalActivity($actor, '2026-01-03 05:00:00');
+
+    $this->actingAs($admin)->get(route('family-tree-activities.index', [
+        'search' => $term, 'account_id' => $actor->id, 'date' => '2026-01-02',
+    ]))->assertOk()->assertInertia(fn (Assert $page) => $page
+        ->where('filters.search', trim($term))
+        ->where('pagination.total', 1)
+        ->has('activities', 1)
+        ->where('activities.0.id', 'tree-'.$match->id));
+})->with(['member' => 'Samosir', 'family' => 'Sihombing', 'description' => 'kelahiran', 'actor' => 'Marbun', 'trimmed search' => '  Samosir  ']);
+
+test('search cannot expose private activity and finds account creation by actor name', function () {
+    $viewer = User::factory()->create(['name' => 'Viewer Search']);
+    $other = User::factory()->create();
+    $private = historicalActivity($other, '2026-01-02 05:00:00');
+    $private->update(['description' => 'Rahasia Samosir']);
+    $this->actingAs($viewer)->get(route('family-tree-activities.index', ['search' => 'Samosir']))
+        ->assertOk()->assertInertia(fn (Assert $page) => $page->has('activities', 0));
+    $this->get(route('family-tree-activities.index', ['search' => 'Viewer Search']))
+        ->assertOk()->assertInertia(fn (Assert $page) => $page
+        ->has('activities', 1)->where('activities.0.action', 'account_created'));
+});
