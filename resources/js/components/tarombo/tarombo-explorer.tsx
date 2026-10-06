@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { TaromboDiagram } from '@/components/landing/tarombo-diagram';
 import { DescendantsTree } from '@/components/people/descendants-tree';
 import type { DescendantsAlternativeTree } from '@/components/people/descendants-tree';
+import { MargaColorContext } from '@/components/people/node-card';
 import { PersonTreePickerDialog } from '@/components/tarombo/person-tree-picker-dialog';
 import { TouchTreeViewport } from '@/components/tarombo/touch-tree-viewport';
 import {
@@ -541,6 +542,7 @@ export function TaromboExplorer({
     const selectedAccountTree = familyTreeOptions.find(
         (tree) => tree.id === selectedFamilyTreeId && tree.group === 'account',
     );
+    const [showFemaleLineage, setShowFemaleLineage] = useState(false);
     const margaIdentity = margaTree
         ? people.find((person) => person.id === margaTree.identityPersonId)
         : undefined;
@@ -568,12 +570,16 @@ export function TaromboExplorer({
         }
 
         if (margaTree.direction === 'lower') {
-            return descendantSubtree(people, margaIdentity.id).filter(
-                (person) =>
-                    person.id === margaIdentity.id ||
-                    person.gender === 'L' ||
-                    !person.gender,
-            );
+            const subtree = descendantSubtree(people, margaIdentity.id);
+
+            return showFemaleLineage
+                ? subtree
+                : subtree.filter(
+                      (person) =>
+                          person.id === margaIdentity.id ||
+                          person.gender === 'L' ||
+                          !person.gender,
+                  );
         }
 
         const lineageIds = new Set(margaLineagePath.map((person) => person.id));
@@ -583,7 +589,8 @@ export function TaromboExplorer({
             for (const sibling of people) {
                 if (
                     sibling.parentId === person.parentId &&
-                    !lineageIds.has(sibling.id)
+                    !lineageIds.has(sibling.id) &&
+                    (showFemaleLineage || sibling.gender !== 'P')
                 ) {
                     siblingIds.add(sibling.id);
                 }
@@ -594,7 +601,7 @@ export function TaromboExplorer({
             ...margaLineagePath,
             ...people.filter((person) => siblingIds.has(person.id)),
         ];
-    }, [margaIdentity, margaLineagePath, margaTree, people]);
+    }, [margaIdentity, margaLineagePath, margaTree, people, showFemaleLineage]);
     const accountTreePersonIdSet = useMemo(
         () => new Set(accountTreePersonIds),
         [accountTreePersonIds],
@@ -727,9 +734,10 @@ export function TaromboExplorer({
     const [history, setHistory] = useState<string[]>([]);
     const [expanded, setExpanded] = useState<'diagram' | 'tree' | null>(null);
     const [treeZoom, setTreeZoom] = useState(1);
-    const [showFemaleLineage, setShowFemaleLineage] = useState(false);
     const [showSpouseNames, setShowSpouseNames] = useState(false);
     const [compactTree, setCompactTree] = useState(false);
+    // Off: plain cards with marga identity figures in sky blue.
+    const [showMargaColors, setShowMargaColors] = useState(false);
     const [showNodeCircles, setShowNodeCircles] = useState(true);
     const [showBranchToggles, setShowBranchToggles] = useState(true);
     // Person double-clicked to sit at the top of the vertical tree.
@@ -852,6 +860,23 @@ export function TaromboExplorer({
                 className="size-4 rounded border-emerald-600 text-emerald-600 accent-emerald-600 focus:ring-2 focus:ring-emerald-500/30"
             />
             Rapat
+        </label>
+    );
+
+    const margaColorsToggle = (
+        <label
+            className={cn(
+                'flex cursor-pointer items-center justify-end gap-2 text-xs font-semibold text-emerald-700 select-none dark:text-emerald-300',
+                snapshotMode && 'invisible',
+            )}
+        >
+            <input
+                type="checkbox"
+                checked={showMargaColors}
+                onChange={(event) => setShowMargaColors(event.target.checked)}
+                className="size-4 rounded border-emerald-600 text-emerald-600 accent-emerald-600 focus:ring-2 focus:ring-emerald-500/30"
+            />
+            Warna Marga
         </label>
     );
 
@@ -1851,9 +1876,10 @@ export function TaromboExplorer({
                         </div>
                         <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
                             {(!margaTree || !fullscreen) && familyTreeSelector}
-                            {!margaTree && femaleLineageToggle}
+                            {femaleLineageToggle}
                             {spouseNamesToggle}
                             {compactTreeToggle}
+                            {margaColorsToggle}
                             {treeTopResetButton}
                             {!fullscreen &&
                                 canCustomizeTree &&
@@ -1885,58 +1911,62 @@ export function TaromboExplorer({
                                     : {}),
                             }}
                         >
-                            <DescendantsTree
-                                key={`${renderedTreeCenterId}-${margaTree?.direction ?? ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
-                                people={displayPeople}
-                                centerId={renderedTreeCenterId}
-                                onSelect={
-                                    margaTree ? undefined : handlePersonSelect
-                                }
-                                onMakeTop={handleMakeTop}
-                                highlightId={renderedHighlightId}
-                                editNodes={!margaTree}
-                                selectOnClick={!margaTree}
-                                showProfileOnName
-                                readOnly={Boolean(margaTree)}
-                                alternativeTrees={descendantAlternativeTrees}
-                                lineagePath={treeLineagePath}
-                                connectionPaths={connection?.paths}
-                                markFemaleLineage={
-                                    margaTree ? false : showFemaleLineage
-                                }
-                                collapseDepth={verticalTreeCollapseDepth}
-                                scrollToLineageEnd={searchedId !== null}
-                                foldedId={searchedId}
-                                detachedPeople={displayedDetachedRoots}
-                                showNodeAvatar={showNodeCircles}
-                                showBranchToggles={showBranchToggles}
-                                showSpouseNames={showSpouseNames}
-                                showSpouseMargas={
-                                    margaTree?.direction === 'lower'
-                                }
-                                siblingOrderMargaId={margaTree?.margaId}
-                                canReorderSiblings={
-                                    margaTree
-                                        ? margaTree.direction === 'lower' &&
-                                          margaTree.canReorderSiblings
-                                        : selectedAccountTree?.canManage ===
-                                          true
-                                }
-                                allowBranchEntry={
-                                    margaTree?.direction === 'lower'
-                                }
-                                compactTerminalBranches={
-                                    margaTree?.direction === 'lower'
-                                }
-                                packCollapsed={compactTree}
-                                versionTreeId={selectedFamilyTreeId}
-                                compact={fullscreen}
-                                nodeIdPrefix={
-                                    fullscreen
-                                        ? FULLSCREEN_TREE_NODE_PREFIX
-                                        : 'tarombo-desktop-tree-node'
-                                }
-                            />
+                            <MargaColorContext.Provider value={showMargaColors}>
+                                <DescendantsTree
+                                    key={`${renderedTreeCenterId}-${margaTree?.direction ?? ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
+                                    people={displayPeople}
+                                    centerId={renderedTreeCenterId}
+                                    onSelect={
+                                        margaTree
+                                            ? undefined
+                                            : handlePersonSelect
+                                    }
+                                    onMakeTop={handleMakeTop}
+                                    highlightId={renderedHighlightId}
+                                    editNodes={!margaTree}
+                                    selectOnClick={!margaTree}
+                                    showProfileOnName
+                                    readOnly={Boolean(margaTree)}
+                                    alternativeTrees={
+                                        descendantAlternativeTrees
+                                    }
+                                    lineagePath={treeLineagePath}
+                                    connectionPaths={connection?.paths}
+                                    markFemaleLineage={showFemaleLineage}
+                                    collapseDepth={verticalTreeCollapseDepth}
+                                    scrollToLineageEnd={searchedId !== null}
+                                    foldedId={searchedId}
+                                    detachedPeople={displayedDetachedRoots}
+                                    showNodeAvatar={showNodeCircles}
+                                    showBranchToggles={showBranchToggles}
+                                    showSpouseNames={showSpouseNames}
+                                    showSpouseMargas={
+                                        margaTree?.direction === 'lower'
+                                    }
+                                    siblingOrderMargaId={margaTree?.margaId}
+                                    canReorderSiblings={
+                                        margaTree
+                                            ? margaTree.direction === 'lower' &&
+                                              margaTree.canReorderSiblings
+                                            : selectedAccountTree?.canManage ===
+                                              true
+                                    }
+                                    allowBranchEntry={
+                                        margaTree?.direction === 'lower'
+                                    }
+                                    compactTerminalBranches={
+                                        margaTree?.direction === 'lower'
+                                    }
+                                    packCollapsed={compactTree}
+                                    versionTreeId={selectedFamilyTreeId}
+                                    compact={fullscreen}
+                                    nodeIdPrefix={
+                                        fullscreen
+                                            ? FULLSCREEN_TREE_NODE_PREFIX
+                                            : 'tarombo-desktop-tree-node'
+                                    }
+                                />
+                            </MargaColorContext.Provider>
                         </div>
                     </TouchTreeViewport>
                 </div>
@@ -2374,9 +2404,10 @@ export function TaromboExplorer({
                                         )}
                                         <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
                                             {familyTreeSelector}
-                                            {!margaTree && femaleLineageToggle}
+                                            {femaleLineageToggle}
                                             {spouseNamesToggle}
                                             {compactTreeToggle}
+                                            {margaColorsToggle}
                                             {treeTopResetButton}
                                             {canCustomizeTree &&
                                                 nodeCircleToggle}
@@ -2392,87 +2423,99 @@ export function TaromboExplorer({
                                             style={{ zoom: treeZoom }}
                                             className="w-max min-w-full"
                                         >
-                                            <DescendantsTree
-                                                key={`${renderedTreeCenterId}-${margaTree?.direction ?? ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
-                                                people={displayPeople}
-                                                centerId={renderedTreeCenterId}
-                                                onSelect={
-                                                    margaTree
-                                                        ? undefined
-                                                        : handlePersonSelect
-                                                }
-                                                onMakeTop={handleMakeTop}
-                                                highlightId={
-                                                    renderedHighlightId
-                                                }
-                                                editNodes={!margaTree}
-                                                selectOnClick={!margaTree}
-                                                showProfileOnName={
-                                                    !margaTree ||
-                                                    (margaTree.direction ===
-                                                        'lower' &&
-                                                        margaTree.canReorderSiblings)
-                                                }
-                                                readOnly={Boolean(margaTree)}
-                                                alternativeTrees={
-                                                    descendantAlternativeTrees
-                                                }
-                                                lineagePath={treeLineagePath}
-                                                connectionPaths={
-                                                    connection?.paths
-                                                }
-                                                markFemaleLineage={
-                                                    showFemaleLineage
-                                                }
-                                                collapseDepth={
-                                                    verticalTreeCollapseDepth
-                                                }
-                                                detachedPeople={
-                                                    displayedDetachedRoots
-                                                }
-                                                showNodeAvatar={showNodeCircles}
-                                                showBranchToggles={
-                                                    showBranchToggles
-                                                }
-                                                showSpouseNames={
-                                                    showSpouseNames
-                                                }
-                                                showSpouseMargas={
-                                                    margaTree?.direction ===
-                                                    'lower'
-                                                }
-                                                siblingOrderMargaId={
-                                                    margaTree?.margaId
-                                                }
-                                                canReorderSiblings={
-                                                    margaTree
-                                                        ? margaTree.direction ===
-                                                              'lower' &&
-                                                          margaTree.canReorderSiblings
-                                                        : selectedAccountTree?.canManage ===
-                                                          true
-                                                }
-                                                allowBranchEntry={
-                                                    margaTree?.direction ===
-                                                    'lower'
-                                                }
-                                                compactTerminalBranches={
-                                                    margaTree?.direction ===
-                                                    'lower'
-                                                }
-                                                packCollapsed={compactTree}
-                                                scrollToLineageEnd={
-                                                    searchedId !== null
-                                                }
-                                                foldedId={searchedId}
-                                                nodeIdPrefix="tarombo-mobile-tree-node"
-                                                currentUserId={
-                                                    identity?.currentUserId
-                                                }
-                                                versionTreeId={
-                                                    selectedFamilyTreeId
-                                                }
-                                            />
+                                            <MargaColorContext.Provider
+                                                value={showMargaColors}
+                                            >
+                                                <DescendantsTree
+                                                    key={`${renderedTreeCenterId}-${margaTree?.direction ?? ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
+                                                    people={displayPeople}
+                                                    centerId={
+                                                        renderedTreeCenterId
+                                                    }
+                                                    onSelect={
+                                                        margaTree
+                                                            ? undefined
+                                                            : handlePersonSelect
+                                                    }
+                                                    onMakeTop={handleMakeTop}
+                                                    highlightId={
+                                                        renderedHighlightId
+                                                    }
+                                                    editNodes={!margaTree}
+                                                    selectOnClick={!margaTree}
+                                                    showProfileOnName={
+                                                        !margaTree ||
+                                                        (margaTree.direction ===
+                                                            'lower' &&
+                                                            margaTree.canReorderSiblings)
+                                                    }
+                                                    readOnly={Boolean(
+                                                        margaTree,
+                                                    )}
+                                                    alternativeTrees={
+                                                        descendantAlternativeTrees
+                                                    }
+                                                    lineagePath={
+                                                        treeLineagePath
+                                                    }
+                                                    connectionPaths={
+                                                        connection?.paths
+                                                    }
+                                                    markFemaleLineage={
+                                                        showFemaleLineage
+                                                    }
+                                                    collapseDepth={
+                                                        verticalTreeCollapseDepth
+                                                    }
+                                                    detachedPeople={
+                                                        displayedDetachedRoots
+                                                    }
+                                                    showNodeAvatar={
+                                                        showNodeCircles
+                                                    }
+                                                    showBranchToggles={
+                                                        showBranchToggles
+                                                    }
+                                                    showSpouseNames={
+                                                        showSpouseNames
+                                                    }
+                                                    showSpouseMargas={
+                                                        margaTree?.direction ===
+                                                        'lower'
+                                                    }
+                                                    siblingOrderMargaId={
+                                                        margaTree?.margaId
+                                                    }
+                                                    canReorderSiblings={
+                                                        margaTree
+                                                            ? margaTree.direction ===
+                                                                  'lower' &&
+                                                              margaTree.canReorderSiblings
+                                                            : selectedAccountTree?.canManage ===
+                                                              true
+                                                    }
+                                                    allowBranchEntry={
+                                                        margaTree?.direction ===
+                                                        'lower'
+                                                    }
+                                                    compactTerminalBranches={
+                                                        margaTree?.direction ===
+                                                        'lower'
+                                                    }
+                                                    packCollapsed={compactTree}
+                                                    scrollToLineageEnd={
+                                                        searchedId !== null
+                                                    }
+                                                    foldedId={searchedId}
+                                                    nodeIdPrefix="tarombo-mobile-tree-node"
+                                                    currentUserId={
+                                                        identity?.currentUserId
+                                                    }
+                                                    versionTreeId={
+                                                        selectedFamilyTreeId
+                                                    }
+                                                />
+                                            </MargaColorContext.Provider>
                                         </div>
                                     </TouchTreeViewport>
                                     {!treeHasChildren &&
