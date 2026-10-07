@@ -1889,7 +1889,11 @@ export function TaromboExplorer({
                                 branchArrowToggle}
                         </div>
                     </div>
-                    <TouchTreeViewport zoom={treeZoom} onZoom={setTreeZoom}>
+                    <TouchTreeViewport
+                        zoom={treeZoom}
+                        onZoom={setTreeZoom}
+                        capture={snapshotMode}
+                    >
                         <div
                             className="w-max min-w-full"
                             data-transparent-node-fill={
