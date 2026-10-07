@@ -4,6 +4,8 @@ import { useRef } from 'react';
 import InputError from '@/components/input-error';
 import { ExtraWivesInput } from '@/components/people/extra-wives-input';
 import type { WifeEntry } from '@/components/people/extra-wives-input';
+import { SpouseMargaSelect } from '@/components/people/spouse-marga-select';
+import type { MargaOption } from '@/components/people/spouse-marga-select';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -38,6 +40,7 @@ type Props = {
     motherOptionsByFather: Record<string, NodeOption[]>;
     initialFatherNodeId: number | null;
     initialBranchFather: { id: number; name: string } | null;
+    margas: MargaOption[];
 };
 
 const MAX_EXTRA_ROWS = 20;
@@ -91,6 +94,7 @@ export default function SharedTreePersonForm({
     motherOptionsByFather,
     initialFatherNodeId,
     initialBranchFather,
+    margas,
 }: Props) {
     const submitLockRef = useRef(false);
     const { data, setData, post, transform, processing, errors } = useForm({
@@ -354,13 +358,13 @@ export default function SharedTreePersonForm({
                     >
                         Marga Pasangan
                     </Label>
-                    <Input
+                    <SpouseMargaSelect
                         id={`${kind}-${index}-spouse_marga`}
                         value={row.spouse_marga}
-                        onChange={(e) =>
-                            setRow(kind, index, 'spouse_marga', e.target.value)
+                        margas={margas}
+                        onChange={(next) =>
+                            setRow(kind, index, 'spouse_marga', next)
                         }
-                        className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                     />
                     <InputError
                         message={errors[`${kind}.${index}.spouse_marga`]}
@@ -369,6 +373,7 @@ export default function SharedTreePersonForm({
                 <ExtraWivesInput
                     value={row.extra_wives}
                     onChange={(next) => setRowWives(kind, index, next)}
+                    margas={margas}
                 />
             </div>
         </div>
@@ -613,21 +618,21 @@ export default function SharedTreePersonForm({
                                                         }
                                                     />
                                                 </div>
-                                                <Input
-                                                    aria-label={
+                                                <SpouseMargaSelect
+                                                    ariaLabel={
                                                         'Marga istri ' +
                                                         (index + 1)
                                                     }
-                                                    placeholder="Marga istri"
+                                                    placeholder="Pilih marga istri"
                                                     value={wife.marga}
-                                                    onChange={(e) =>
+                                                    margas={margas}
+                                                    onChange={(next) =>
                                                         setWife(
                                                             index,
                                                             'marga',
-                                                            e.target.value,
+                                                            next,
                                                         )
                                                     }
-                                                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
                                                 />
                                                 <Button
                                                     type="button"

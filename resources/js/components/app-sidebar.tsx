@@ -14,6 +14,7 @@ import {
     MessagesSquare,
     Megaphone,
     Newspaper,
+    QrCode,
     Shapes,
     ShieldCheck,
     Tags,
@@ -51,6 +52,7 @@ import margaNewsTopics from '@/routes/marga-news-topics';
 import messageLogs from '@/routes/message-logs';
 import newsFeed from '@/routes/news-feed';
 import people from '@/routes/people';
+import qris from '@/routes/qris';
 import stories from '@/routes/stories';
 import subAdmins from '@/routes/sub-admins';
 import tarombo from '@/routes/tarombo';
@@ -292,6 +294,16 @@ export function AppSidebar() {
                   } satisfies NavGroup,
               ]
             : []),
+        {
+            label: 'Dukungan',
+            items: [
+                {
+                    title: 'QRIS Payment',
+                    href: qris.index(),
+                    icon: QrCode,
+                },
+            ],
+        },
     ];
 
     return (

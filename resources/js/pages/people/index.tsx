@@ -1,6 +1,16 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { NotebookPen, Pencil, Plus, Route, Search, Trash2 } from 'lucide-react';
+import {
+    ArrowDown,
+    ArrowUp,
+    ArrowUpDown,
+    NotebookPen,
+    Pencil,
+    Plus,
+    Route,
+    Search,
+    Trash2,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { AppAvatar } from '@/components/app-avatar';
@@ -38,6 +48,9 @@ type PersonItem = {
     chain: string | null;
     pending: boolean;
     created_at: string | null;
+    creator: string | null;
+    editor: string | null;
+    edited_at: string | null;
     editable: boolean;
     version_tree_id: number | null;
 };
@@ -53,9 +66,71 @@ type Paginated = {
 
 type MargaOption = { id: number; name: string };
 
+type SortKey =
+    | 'name'
+    | 'marga'
+    | 'parent'
+    | 'birth_year'
+    | 'creator'
+    | 'created_at'
+    | 'editor'
+    | 'edited_at';
+
+type SortDirection = 'asc' | 'desc';
+
+function SortHeader({
+    label,
+    column,
+    sort,
+    direction,
+    onSort,
+}: {
+    label: string;
+    column: SortKey;
+    sort: SortKey;
+    direction: SortDirection;
+    onSort: (column: SortKey) => void;
+}) {
+    const active = sort === column;
+    const Icon = !active
+        ? ArrowUpDown
+        : direction === 'asc'
+          ? ArrowUp
+          : ArrowDown;
+
+    return (
+        <th
+            className="px-3 py-3 font-medium"
+            aria-sort={
+                active
+                    ? direction === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                    : 'none'
+            }
+        >
+            <button
+                type="button"
+                onClick={() => onSort(column)}
+                className={`inline-flex items-center gap-1 whitespace-nowrap hover:text-tb-on-surface ${active ? 'text-tb-on-surface' : ''}`}
+            >
+                {label}
+                <Icon
+                    className={`size-3.5 ${active ? 'text-tb-primary' : 'opacity-40'}`}
+                />
+            </button>
+        </th>
+    );
+}
+
 type Props = {
     people: Paginated;
-    filters: { search: string; marga_id: string | null };
+    filters: {
+        search: string;
+        marga_id: string | null;
+        sort: SortKey;
+        direction: SortDirection;
+    };
     margas: MargaOption[];
     canManage: boolean;
     hasMarga: boolean;
@@ -90,13 +165,44 @@ export default function PeopleIndex({
                 {
                     search,
                     ...(margaFilter !== 'all' ? { marga_id: margaFilter } : {}),
+                    sort: filters.sort,
+                    direction: filters.direction,
                 },
                 { preserveState: true, preserveScroll: true, replace: true },
             );
         }, 300);
 
         return () => window.clearTimeout(timer);
-    }, [search, margaFilter, filters.search, filters.marga_id]);
+    }, [
+        search,
+        margaFilter,
+        filters.search,
+        filters.marga_id,
+        filters.sort,
+        filters.direction,
+    ]);
+
+    const sortBy = (column: SortKey) => {
+        router.get(
+            people.index.url(),
+            {
+                ...(filters.search ? { search: filters.search } : {}),
+                ...(filters.marga_id ? { marga_id: filters.marga_id } : {}),
+                sort: column,
+                direction:
+                    filters.sort === column && filters.direction === 'asc'
+                        ? 'desc'
+                        : 'asc',
+            },
+            { preserveState: true, preserveScroll: true, replace: true },
+        );
+    };
+
+    const sortProps = {
+        sort: filters.sort,
+        direction: filters.direction,
+        onSort: sortBy,
+    };
 
     const showActions =
         !isGuest && (canManage || page.data.some((person) => person.editable));
@@ -205,21 +311,53 @@ export default function PeopleIndex({
 
                 <Card className="border-tb-outline-variant bg-tb-surface-bright">
                     <CardContent className="overflow-x-auto py-0">
-                        <table className="w-full min-w-[640px] text-sm">
+                        <table className="w-full min-w-[640px] text-sm lg:min-w-[1100px]">
                             <thead>
                                 <tr className="border-b border-tb-outline-variant text-left text-xs text-tb-on-surface-variant">
-                                    <th className="px-3 py-3 font-medium">
-                                        Anggota
-                                    </th>
-                                    <th className="px-3 py-3 font-medium">
-                                        Marga
-                                    </th>
-                                    <th className="px-3 py-3 font-medium">
-                                        Orang Tua
-                                    </th>
-                                    <th className="px-3 py-3 font-medium">
-                                        Lahir
-                                    </th>
+                                    <SortHeader
+                                        label="Anggota"
+                                        column="name"
+                                        {...sortProps}
+                                    />
+                                    <SortHeader
+                                        label="Marga"
+                                        column="marga"
+                                        {...sortProps}
+                                    />
+                                    <SortHeader
+                                        label="Orang Tua"
+                                        column="parent"
+                                        {...sortProps}
+                                    />
+                                    <SortHeader
+                                        label="Lahir"
+                                        column="birth_year"
+                                        {...sortProps}
+                                    />
+                                    {!isGuest && (
+                                        <>
+                                            <SortHeader
+                                                label="Kontributor"
+                                                column="creator"
+                                                {...sortProps}
+                                            />
+                                            <SortHeader
+                                                label="Created Date"
+                                                column="created_at"
+                                                {...sortProps}
+                                            />
+                                            <SortHeader
+                                                label="Editor"
+                                                column="editor"
+                                                {...sortProps}
+                                            />
+                                            <SortHeader
+                                                label="Edited Date"
+                                                column="edited_at"
+                                                {...sortProps}
+                                            />
+                                        </>
+                                    )}
                                     {showActions && (
                                         <th className="px-3 py-3 text-right font-medium">
                                             Aksi
@@ -301,6 +439,24 @@ export default function PeopleIndex({
                                             <td className="px-3 py-3 text-tb-on-surface-variant">
                                                 {person.birth_year ?? '-'}
                                             </td>
+                                            {!isGuest && (
+                                                <>
+                                                    <td className="px-3 py-3 text-tb-on-surface-variant">
+                                                        {person.creator ?? '-'}
+                                                    </td>
+                                                    <td className="px-3 py-3 whitespace-nowrap text-tb-on-surface-variant">
+                                                        {person.created_at ??
+                                                            '-'}
+                                                    </td>
+                                                    <td className="px-3 py-3 text-tb-on-surface-variant">
+                                                        {person.editor ?? '-'}
+                                                    </td>
+                                                    <td className="px-3 py-3 whitespace-nowrap text-tb-on-surface-variant">
+                                                        {person.edited_at ??
+                                                            '-'}
+                                                    </td>
+                                                </>
+                                            )}
                                             {showActions && (
                                                 <td className="px-3 py-3">
                                                     <div className="flex justify-end gap-1">
@@ -412,7 +568,10 @@ export default function PeopleIndex({
                                 {page.data.length === 0 && (
                                     <tr>
                                         <td
-                                            colSpan={showActions ? 5 : 4}
+                                            colSpan={
+                                                (showActions ? 5 : 4) +
+                                                (isGuest ? 0 : 4)
+                                            }
                                             className="px-3 py-10 text-center text-tb-on-surface-variant"
                                         >
                                             Tidak ada anggota yang cocok.

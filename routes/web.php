@@ -37,11 +37,13 @@ use App\Http\Controllers\MessageController;
 use App\Http\Controllers\MessageLogController;
 use App\Http\Controllers\NewsFeedController;
 use App\Http\Controllers\PersonController;
+use App\Http\Controllers\QrisPaymentController;
 use App\Http\Controllers\SharedFamilyTreePersonController;
 use App\Http\Controllers\StatusController;
 use App\Http\Controllers\StoryController;
 use App\Http\Controllers\SubAdminController;
 use App\Http\Controllers\TaromboAiController;
+use App\Http\Controllers\TaromboAiLessonController;
 use App\Http\Controllers\TaromboCompileDraftController;
 use App\Http\Controllers\TaromboController;
 use App\Http\Controllers\TaromboFrameController;
@@ -130,6 +132,12 @@ Route::get('tarombo/view/{token}/image', [TaromboQrController::class, 'image'])-
 Route::get('tarombo/view/{token}/download', [TaromboQrController::class, 'download'])->whereUuid('token')->middleware('throttle:30,1')->name('tarombo.qr.download');
 
 Route::middleware(['auth'])->group(function () {
+    Route::get('dashboard/qris-payment', [QrisPaymentController::class, 'index'])->name('qris.index');
+    Route::get('dashboard/qris-payment/image', [QrisPaymentController::class, 'image'])->name('qris.image');
+    Route::post('dashboard/qris-payment', [QrisPaymentController::class, 'store'])
+        ->middleware('throttle:5,1')
+        ->name('qris.store');
+    Route::get('dashboard/qris-payment/{payment}/proof', [QrisPaymentController::class, 'proof'])->name('qris.proof');
     Route::post('marga-branch-entries/{person}', [MargaBranchEntryController::class, 'store'])
         ->name('marga-branch-entries.store');
     Route::post('margas/{marga}/sibling-order', [MargaSiblingOrderController::class, 'update'])
@@ -353,6 +361,19 @@ Route::get('monitor-traffic', [TrafficMonitorController::class, 'publicReport'])
     ->name('traffic-monitor.public');
 
 Route::middleware(['auth', 'role.admin'])->group(function () {
+    Route::post('dashboard/tanya-ito-tarombo/pustaka', [TaromboAiLessonController::class, 'store'])
+        ->middleware('throttle:20,1')
+        ->name('marga.ai.lessons.store');
+    Route::patch('dashboard/tanya-ito-tarombo/pustaka/{lesson}', [TaromboAiLessonController::class, 'update'])
+        ->middleware('throttle:20,1')
+        ->name('marga.ai.lessons.update');
+    Route::delete('dashboard/tanya-ito-tarombo/pustaka/{lesson}', [TaromboAiLessonController::class, 'destroy'])
+        ->name('marga.ai.lessons.destroy');
+    Route::post('dashboard/qris-payment/configuration', [QrisPaymentController::class, 'updateConfiguration'])
+        ->name('qris.configuration.update');
+    Route::post('dashboard/qris-payment/{payment}/review', [QrisPaymentController::class, 'review'])
+        ->middleware('throttle:30,1')
+        ->name('qris.review');
     Route::get('dashboard/tarombo/snapshots/{taromboSnapshot}/qr', [TaromboQrController::class, 'create'])->name('tarombo.qr.create');
     Route::post('dashboard/tarombo/snapshots/{taromboSnapshot}/qr', [TaromboQrController::class, 'store'])->middleware('throttle:10,1')->name('tarombo.qr.store');
     Route::get('dashboard/tarombo/qr-code/{token}', [TaromboQrController::class, 'code'])->name('tarombo.qr.code');
