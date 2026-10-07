@@ -4,6 +4,8 @@ import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SpouseMargaSelect } from './spouse-marga-select';
+import type { MargaOption } from './spouse-marga-select';
 
 export type WifeEntry = { name: string; marga: string };
 
@@ -23,6 +25,7 @@ export function ExtraWivesInput({
     errors,
     errorPrefix,
     renderMarga,
+    margas,
 }: {
     value: WifeEntry[];
     onChange: (next: WifeEntry[]) => void;
@@ -34,6 +37,7 @@ export function ExtraWivesInput({
         marga: string,
         onChange: (marga: string) => void,
     ) => ReactNode;
+    margas?: MargaOption[];
 }) {
     const update = (index: number, patch: Partial<WifeEntry>) =>
         onChange(
@@ -74,6 +78,13 @@ export function ExtraWivesInput({
                         renderMarga(entry.marga, (marga) =>
                             update(index, { marga }),
                         )
+                    ) : margas ? (
+                        <SpouseMargaSelect
+                            value={entry.marga}
+                            margas={margas}
+                            ariaLabel={`Marga pasangan tambahan ${index + 1}`}
+                            onChange={(marga) => update(index, { marga })}
+                        />
                     ) : (
                         <Input
                             aria-label={`Marga pasangan tambahan ${index + 1}`}

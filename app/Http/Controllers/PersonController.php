@@ -75,10 +75,14 @@ class PersonController extends Controller
         $user = $request->user();
         $isGuest = $user === null;
         $isStaff = $user?->isStaff() ?? false;
+        $sort = $request->string('sort')->toString();
+        $sort = in_array($sort, self::INDEX_SORTS, true) ? $sort : 'name';
+        $direction = $request->string('direction')->lower()->toString() === 'desc' ? 'desc' : 'asc';
 
         $people = Person::query()
             ->with([
                 'marga',
+                ...($isGuest ? [] : ['creator:id,name', 'lastEditor:id,name']),
                 'father' => fn ($query) => $query->when($isGuest, fn ($father) => $father->public()),
                 'familyTrees' => fn ($query) => $query
                     ->when($isGuest, fn ($trees) => $trees->whereRaw('1 = 0'))
@@ -112,7 +116,7 @@ class PersonController extends Controller
                 });
             })
             ->when($request->filled('marga_id'), fn ($query) => $query->where('marga_id', $request->integer('marga_id')))
-            ->orderBy('name')
+            ->tap(fn ($query) => $this->applyIndexSort($query, $sort, $direction))
             ->orderBy('id');
 
         $policy = app(PersonPolicy::class);
@@ -134,6 +138,9 @@ class PersonController extends Controller
             'chain' => $person->chain,
             'pending' => (bool) $person->pending_father,
             'created_at' => $person->created_at?->format('d M Y'),
+            'creator' => $isGuest ? null : $person->creator?->name,
+            'editor' => $isGuest ? null : $person->lastEditor?->name,
+            'edited_at' => $person->updated_by !== null ? $person->updated_at?->format('d M Y') : null,
             'editable' => $user !== null && $policy->update($user, $person),
             'version_tree_id' => $person->familyTrees->first()?->id,
         ];
@@ -156,12 +163,49 @@ class PersonController extends Controller
             'filters' => [
                 'search' => $request->string('search')->toString(),
                 'marga_id' => $request->input('marga_id'),
+                'sort' => $sort,
+                'direction' => $direction,
             ],
             'margas' => $margas,
             'canManage' => $isStaff,
             'hasMarga' => ! $isGuest && ($isStaff || $user->accessibleMargaIds()->isNotEmpty()),
             'isGuest' => $isGuest,
         ]);
+    }
+
+    /**
+     * Sortable columns of the people index, keyed by the `sort` query value.
+     */
+    private const INDEX_SORTS = ['name', 'marga', 'parent', 'birth_year', 'creator', 'created_at', 'editor', 'edited_at'];
+
+    /**
+     * @param  Builder<Person>  $query
+     */
+    protected function applyIndexSort(Builder $query, string $sort, string $direction): void
+    {
+        match ($sort) {
+            'marga' => $query->orderBy(
+                Marga::query()->select('name')->whereColumn('margas.id', 'people.marga_id'),
+                $direction,
+            ),
+            'parent' => $query->orderBy(
+                Person::query()->from('people as fathers')->select('fathers.name')->whereColumn('fathers.id', 'people.father_id'),
+                $direction,
+            ),
+            'creator' => $query->orderBy(
+                User::query()->select('name')->whereColumn('users.id', 'people.created_by'),
+                $direction,
+            ),
+            'editor' => $query->orderBy(
+                User::query()->select('name')->whereColumn('users.id', 'people.updated_by'),
+                $direction,
+            ),
+            // Unedited rows show no edit date, so keep them after edited rows.
+            'edited_at' => $query->orderByRaw('people.updated_by is null')->orderBy('people.updated_at', $direction),
+            'birth_year' => $query->orderBy('people.birth_year', $direction),
+            'created_at' => $query->orderBy('people.created_at', $direction),
+            default => $query->orderBy('people.name', $direction),
+        };
     }
 
     public function publicPreview(): RedirectResponse

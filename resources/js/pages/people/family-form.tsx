@@ -27,6 +27,7 @@ import type {
     ApprovedMargaTreeEntry,
     FamilyTreeHistoryEntry,
 } from '@/components/people/family-tree-history-card';
+import { SpouseMargaSelect } from '@/components/people/spouse-marga-select';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -222,7 +223,6 @@ export type PendingTreeShare = {
 };
 
 const VALUE_NONE = 'none';
-const SPOUSE_OTHER_VALUE = '__other__';
 
 const normalizeNameForMatch = (value: string): string =>
     value.trim().replace(/\s+/g, ' ').toLocaleUpperCase();
@@ -1165,71 +1165,6 @@ function MargaField({
                 ))}
             </SelectContent>
         </Select>
-    );
-}
-
-function SpouseMargaSelect({
-    value,
-    margas,
-    onChange,
-}: {
-    value: string;
-    margas: MargaOption[];
-    onChange: (value: string) => void;
-}) {
-    const matched = margas.find((marga) => marga.name === value);
-    const isOther = value.trim() !== '' && !matched;
-    const selected = matched
-        ? String(matched.id)
-        : isOther
-          ? SPOUSE_OTHER_VALUE
-          : VALUE_NONE;
-
-    return (
-        <div className="grid gap-1.5">
-            <Select
-                value={selected}
-                onValueChange={(next) => {
-                    if (next === VALUE_NONE) {
-                        onChange('');
-
-                        return;
-                    }
-
-                    if (next === SPOUSE_OTHER_VALUE) {
-                        onChange(value);
-
-                        return;
-                    }
-
-                    onChange(
-                        margas.find((marga) => String(marga.id) === next)
-                            ?.name ?? '',
-                    );
-                }}
-            >
-                <SelectTrigger className="w-full border-tb-outline-variant bg-tb-surface-bright">
-                    <SelectValue placeholder="Pilih marga pasangan" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value={VALUE_NONE}>— Tidak ada —</SelectItem>
-                    {margas.map((marga) => (
-                        <SelectItem key={marga.id} value={String(marga.id)}>
-                            {marga.name}
-                        </SelectItem>
-                    ))}
-                    <SelectItem value={SPOUSE_OTHER_VALUE}>Lainnya…</SelectItem>
-                </SelectContent>
-            </Select>
-            {isOther && (
-                <Input
-                    value={value}
-                    onChange={(e) => onChange(e.target.value)}
-                    placeholder="Nama marga pasangan"
-                    className="border-tb-outline-variant bg-tb-surface-bright focus:border-tb-primary focus:ring-tb-primary/20"
-                />
-            )}
-        </div>
     );
 }
 

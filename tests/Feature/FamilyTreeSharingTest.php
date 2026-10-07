@@ -149,7 +149,8 @@ test('a pending recipient must accept before opening the shared tree', function 
     $this->actingAs($recipient)->get(route('family-trees.people.create', $tree))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
-            ->component('people/shared-tree-person-form')->where('familyTree.id', $tree->id));
+            ->component('people/shared-tree-person-form')->where('familyTree.id', $tree->id)
+            ->has('margas'));
 
     $this->actingAs($recipient)->get(route('people.create'))
         ->assertSuccessful()

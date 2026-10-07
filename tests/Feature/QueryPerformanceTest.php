@@ -58,6 +58,38 @@ test('authenticated people are paginated and search includes subsequent pages', 
         ->assertInertia(fn (Assert $page) => $page->has('people.data', 1)->where('people.data.0.id', $target->id));
 });
 
+test('people index shows contributor and editor columns and sorts by them', function () {
+    $admin = User::factory()->asAdmin()->create(['name' => 'Admin']);
+    $budi = User::factory()->create(['name' => 'Budi']);
+    $ani = User::factory()->create(['name' => 'Ani']);
+    $marga = Marga::factory()->create();
+    $first = Person::factory()->create(['marga_id' => $marga->id, 'name' => 'Alpha', 'created_by' => $budi->id]);
+    $second = Person::factory()->create(['marga_id' => $marga->id, 'name' => 'Beta', 'created_by' => $ani->id]);
+
+    $this->actingAs($ani);
+    $second->update(['alias' => 'Edited']);
+
+    $this->actingAs($admin)->get(route('people.index', ['sort' => 'creator', 'direction' => 'asc']))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('filters.sort', 'creator')
+            ->where('people.data.0.id', $second->id)
+            ->where('people.data.0.creator', 'Ani')
+            ->where('people.data.0.editor', 'Ani')
+            ->whereNot('people.data.0.edited_at', null)
+            ->where('people.data.1.creator', 'Budi')
+            ->where('people.data.1.edited_at', null));
+
+    $this->get(route('people.index', ['sort' => 'edited_at', 'direction' => 'desc']))
+        ->assertInertia(fn (Assert $page) => $page->where('people.data.0.id', $second->id));
+
+    $this->get(route('people.index', ['sort' => 'name', 'direction' => 'desc']))
+        ->assertInertia(fn (Assert $page) => $page->where('people.data.0.id', $second->id)->where('people.data.1.id', $first->id));
+
+    $this->get(route('people.index', ['sort' => 'drop table', 'direction' => 'sideways']))
+        ->assertInertia(fn (Assert $page) => $page->where('filters.sort', 'name')->where('filters.direction', 'asc'));
+});
+
 test('shared tree append permissions use loaded shares without extra queries', function () {
     $owner = User::factory()->create();
     $recipient = User::factory()->create();

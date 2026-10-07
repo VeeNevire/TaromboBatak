@@ -6,6 +6,7 @@ use App\Http\Requests\StoreSharedFamilyTreePersonRequest;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeAppendRequest;
 use App\Models\FamilyTreeNode;
+use App\Models\Marga;
 use App\Models\Person;
 use App\Notifications\FamilyTreeAppendSubmitted;
 use App\Services\FamilyTreeActivityLogger;
@@ -82,6 +83,9 @@ class SharedFamilyTreePersonController extends Controller
             ],
             'initialFatherNodeId' => $initialFatherNode?->id,
             'initialBranchFather' => $initialBranchFather,
+            'margas' => Marga::query()->orderBy('name')->get(['id', 'name'])
+                ->map(fn (Marga $marga) => ['id' => $marga->id, 'name' => $marga->name])
+                ->all(),
             'fatherOptions' => $fatherOptionNodes
                 ->map(fn (FamilyTreeNode $node) => [
                     'id' => $node->id,
