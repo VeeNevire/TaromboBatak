@@ -215,6 +215,7 @@ class TaromboTreeService
                     'isMargaIdentity' => (bool) $person->identity_margas_exists,
                     'identityMargaColor' => $person->identityMargas->first()?->color,
                     'parentId' => $hasFather ? (string) $person->father_id : null,
+                    'motherId' => $person->mother_id === null ? null : (string) $person->mother_id,
                     'birthYear' => $person->birth_year,
                     'birthOrder' => $person->birth_order,
                     'chain' => $person->chain,
