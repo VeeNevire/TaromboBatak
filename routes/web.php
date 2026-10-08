@@ -37,6 +37,7 @@ use App\Http\Controllers\MessageController;
 use App\Http\Controllers\MessageLogController;
 use App\Http\Controllers\NewsFeedController;
 use App\Http\Controllers\PersonController;
+use App\Http\Controllers\PersonMargaController;
 use App\Http\Controllers\QrisPaymentController;
 use App\Http\Controllers\SharedFamilyTreePersonController;
 use App\Http\Controllers\StatusController;
@@ -138,6 +139,8 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('throttle:5,1')
         ->name('qris.store');
     Route::get('dashboard/qris-payment/{payment}/proof', [QrisPaymentController::class, 'proof'])->name('qris.proof');
+    Route::get('people/{person}/marga-options', [PersonMargaController::class, 'index'])->name('people.marga-options');
+    Route::patch('people/{person}/marga', [PersonMargaController::class, 'update'])->name('people.marga.update');
     Route::post('marga-branch-entries/{person}', [MargaBranchEntryController::class, 'store'])
         ->name('marga-branch-entries.store');
     Route::post('margas/{marga}/sibling-order', [MargaSiblingOrderController::class, 'update'])

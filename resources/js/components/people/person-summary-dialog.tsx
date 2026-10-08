@@ -1,4 +1,4 @@
-import { Link, router } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import {
     BookOpen,
     CalendarDays,
@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { ChangeMargaDialog } from '@/components/people/change-marga-dialog';
 import { FamilyBranchDialog } from '@/components/people/family-branch-dialog';
 import { MargaSiblingOrderDialog } from '@/components/people/marga-sibling-order-dialog';
 import { PersonImage } from '@/components/people/person-image';
@@ -60,9 +61,12 @@ export function PersonSummaryDialog({
     margaId?: number;
     canReorderSiblings?: boolean;
 }) {
+    const { auth } = usePage().props;
+    const signedInUserId = currentUserId ?? auth.user?.id;
     const [connectingAccountId, setConnectingAccountId] = useState<
         number | null
     >(null);
+    const [changeMargaOpen, setChangeMargaOpen] = useState(false);
     const [branchDialogOpen, setBranchDialogOpen] = useState(false);
     const [siblingOrderDialogOpen, setSiblingOrderDialogOpen] = useState(false);
     const father = person?.parentId
@@ -146,6 +150,7 @@ export function PersonSummaryDialog({
             open={person !== null}
             onOpenChange={(open) => {
                 if (!open) {
+                    setChangeMargaOpen(false);
                     onClose();
                 }
             }}
@@ -198,8 +203,25 @@ export function PersonSummaryDialog({
                                     <dt className="text-tb-on-surface-variant">
                                         Marga
                                     </dt>
-                                    <dd className="text-right font-medium text-tb-on-surface">
-                                        {person.marga || 'Belum dicatat'}
+                                    <dd className="flex min-w-0 flex-wrap items-center justify-end gap-2 text-right font-medium text-tb-on-surface">
+                                        <span>
+                                            {person.marga || 'Belum dicatat'}
+                                        </span>
+                                        {signedInUserId &&
+                                            canEdit &&
+                                            Number(person.id) > 0 && (
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() =>
+                                                        setChangeMargaOpen(true)
+                                                    }
+                                                >
+                                                    <Pencil className="size-3.5" />
+                                                    Ganti Marga
+                                                </Button>
+                                            )}
                                     </dd>
                                 </div>
                                 {person.alias && (
@@ -651,6 +673,17 @@ export function PersonSummaryDialog({
                         </div>
                     </DialogFooter>
                 </DialogContent>
+            )}
+            {person && changeMargaOpen && (
+                <ChangeMargaDialog
+                    key={person.id}
+                    person={person}
+                    onClose={() => setChangeMargaOpen(false)}
+                    onSaved={() => {
+                        setChangeMargaOpen(false);
+                        onClose();
+                    }}
+                />
             )}
             {person && canAddBranch && (
                 <FamilyBranchDialog

@@ -17,13 +17,14 @@ import {
     UserSearch,
     X,
 } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { TaromboDiagram } from '@/components/landing/tarombo-diagram';
 import { DescendantsTree } from '@/components/people/descendants-tree';
 import type { DescendantsAlternativeTree } from '@/components/people/descendants-tree';
 import { MargaColorContext } from '@/components/people/node-card';
 import { PersonTreePickerDialog } from '@/components/tarombo/person-tree-picker-dialog';
+import { SnapshotPreview } from '@/components/tarombo/snapshot-preview';
 import { TouchTreeViewport } from '@/components/tarombo/touch-tree-viewport';
 import {
     DEFAULT_TREE_SETTINGS,
@@ -408,14 +409,14 @@ function snapshotContentBox(
 
     // Room for label borders, pills and branch lines around the text.
     const padding = 32;
-    const x = Math.max(0, Math.floor(left - padding));
-    const y = Math.max(0, Math.floor(top - padding));
+    const x = Math.floor(left - padding);
+    const y = Math.floor(top - padding);
 
     return {
         x,
         y,
-        width: Math.min(fullWidth, Math.ceil(right + padding)) - x,
-        height: Math.min(fullHeight, Math.ceil(bottom + padding)) - y,
+        width: Math.ceil(right + padding) - x,
+        height: Math.ceil(bottom + padding) - y,
     };
 }
 
@@ -431,6 +432,7 @@ async function renderSnapshot(
     options: {
         paper: { width: number; height: number } | null;
         pixelRatio?: number;
+        treeScale?: number;
         backgroundColor?: string;
         transparent: boolean;
     },
@@ -443,10 +445,11 @@ async function renderSnapshot(
         const { width, height } = options.paper;
         const margin = Math.round(Math.min(width, height) * 0.04);
 
-        pixelRatio = Math.min(
-            (width - margin * 2) / box.width,
-            (height - margin * 2) / box.height,
-        );
+        pixelRatio =
+            Math.min(
+                (width - margin * 2) / box.width,
+                (height - margin * 2) / box.height,
+            ) * (options.treeScale ?? 1);
         viewWidth = width / pixelRatio;
         viewHeight = height / pixelRatio;
     } else {
@@ -488,6 +491,8 @@ async function renderSnapshot(
             width: `${content.scrollWidth}px`,
             height: `${content.scrollHeight}px`,
             margin: '0',
+            overflow: 'visible',
+            maxHeight: 'none',
             transform: `translate(${offsetX}px, ${offsetY}px)`,
             transformOrigin: 'top left',
         },
@@ -760,6 +765,25 @@ export function TaromboExplorer({
     const [treeFamilyName, setTreeFamilyName] = useState(familyName ?? '');
     const [snapshotResolution, setSnapshotResolution] = useState(1080);
     const [snapshotPaper, setSnapshotPaper] = useState('A4');
+    const [snapshotTreeScale, setSnapshotTreeScale] = useState(1);
+    const lastPreviewAttempt = useRef<string | null>(null);
+    const [snapshotPreviewErrorKey, setSnapshotPreviewErrorKey] = useState<
+        string | null
+    >(null);
+    const [snapshotPreview, setSnapshotPreview] = useState<{
+        blob: Blob;
+        url: string;
+        settingsKey: string;
+    } | null>(null);
+    useEffect(() => {
+        const url = snapshotPreview?.url;
+
+        return () => {
+            if (url) {
+                URL.revokeObjectURL(url);
+            }
+        };
+    }, [snapshotPreview?.url]);
     const [snapshotOrientation, setSnapshotOrientation] =
         useState<PaperOrientation>('portrait');
     const [snapshotTransparent, setSnapshotTransparent] = useState(false);
@@ -1392,47 +1416,91 @@ export function TaromboExplorer({
         );
     };
 
-    // `quick` is the one-click save of accounts without the save dialog: the
-    // tree as shown, without title, paper or branch choices.
-    const handleCreateSnapshot = async ({ quick = false } = {}) => {
+    const snapshotSettingsKey = JSON.stringify([
+        snapshotResolution,
+        snapshotPaper,
+        snapshotOrientation,
+        snapshotTransparent,
+        snapshotTransparentNodes,
+        snapshotTreeScale,
+        excludedBranchIds,
+        treeFamilyName,
+        renderedTreeCenterId,
+        fullscreenView,
+        showSpouseNames,
+        showNodeCircles,
+        showBranchToggles,
+        showMargaColors,
+        compactTree,
+        showFemaleLineage,
+        styleSettings,
+    ]);
+    const previewIsCurrent =
+        snapshotPreview?.settingsKey === snapshotSettingsKey;
+
+    const handleCreateSnapshot = async ({
+        quick = false,
+        previewOnly = false,
+    } = {}) => {
         const cardNode = snapshotRef.current;
 
         if (!cardNode || savingSnapshot) {
             return;
         }
 
-        const transparent = !quick && snapshotTransparent;
+        if (!quick && !previewOnly && !previewIsCurrent) {
+            return;
+        }
 
+        const transparent = !quick && snapshotTransparent;
         setSavingSnapshot(true);
-        setSnapshotMode(true);
 
         try {
-            await new Promise<void>((resolve) =>
-                requestAnimationFrame(() =>
-                    requestAnimationFrame(() => resolve()),
-                ),
-            );
-            await document.fonts.ready;
+            let blob: Blob;
 
-            const contentNode = snapshotContentRef.current ?? cardNode;
-            const box = snapshotContentBox(
-                contentNode,
-                snapshotContentRef.current
-                    ? `[id^="${FULLSCREEN_TREE_NODE_PREFIX}-"]`
-                    : null,
-            );
-            const blob = await renderSnapshot(contentNode, box, {
-                paper: quick
-                    ? null
-                    : paperPixelSize(
-                          snapshotPaper,
-                          snapshotResolution,
-                          snapshotOrientation,
-                      ),
-                backgroundColor:
-                    window.getComputedStyle(cardNode).backgroundColor,
-                transparent,
-            });
+            if (!quick && !previewOnly && snapshotPreview) {
+                blob = snapshotPreview.blob;
+            } else {
+                setSnapshotMode(true);
+                await document.fonts.ready;
+                await new Promise<void>((resolve) =>
+                    requestAnimationFrame(() =>
+                        requestAnimationFrame(() => resolve()),
+                    ),
+                );
+                const contentNode = snapshotContentRef.current ?? cardNode;
+                const box = snapshotContentBox(
+                    contentNode,
+                    snapshotContentRef.current
+                        ? `[id^="${FULLSCREEN_TREE_NODE_PREFIX}-"]`
+                        : null,
+                );
+                blob = await renderSnapshot(contentNode, box, {
+                    paper: quick
+                        ? null
+                        : paperPixelSize(
+                              snapshotPaper,
+                              snapshotResolution,
+                              snapshotOrientation,
+                          ),
+                    treeScale: snapshotTreeScale,
+                    backgroundColor:
+                        window.getComputedStyle(cardNode).backgroundColor,
+                    transparent,
+                });
+            }
+
+            if (previewOnly) {
+                setSnapshotPreview({
+                    blob,
+                    url: URL.createObjectURL(blob),
+                    settingsKey: snapshotSettingsKey,
+                });
+                setSavingSnapshot(false);
+
+                return;
+            }
+
             const file = new File(
                 [blob],
                 snapshotFileName(fullscreenView, transparent ? 'png' : 'jpg'),
@@ -1465,12 +1533,19 @@ export function TaromboExplorer({
                 {
                     forceFormData: true,
                     preserveScroll: true,
-                    onSuccess: () => setSaveModalOpen(false),
+                    onSuccess: () => {
+                        setSaveModalOpen(false);
+                        setSnapshotPreview(null);
+                    },
                     onError: () => toast.error('Gambar pohon gagal disimpan.'),
                     onFinish: () => setSavingSnapshot(false),
                 },
             );
         } catch (error) {
+            if (previewOnly) {
+                setSnapshotPreviewErrorKey(snapshotSettingsKey);
+            }
+
             setSavingSnapshot(false);
             toast.error(
                 error instanceof SnapshotTooLargeError
@@ -1481,6 +1556,34 @@ export function TaromboExplorer({
             setSnapshotMode(false);
         }
     };
+
+    const generateLivePreview = useEffectEvent(() => {
+        void handleCreateSnapshot({ previewOnly: true });
+    });
+
+    useEffect(() => {
+        if (!saveModalOpen) {
+            lastPreviewAttempt.current = null;
+
+            return;
+        }
+
+        if (
+            savingSnapshot ||
+            previewIsCurrent ||
+            lastPreviewAttempt.current === snapshotSettingsKey
+        ) {
+            return;
+        }
+
+        // Wait briefly for typing or slider movement, then render the latest choices.
+        const timer = window.setTimeout(() => {
+            lastPreviewAttempt.current = snapshotSettingsKey;
+            generateLivePreview();
+        }, 400);
+
+        return () => window.clearTimeout(timer);
+    }, [saveModalOpen, savingSnapshot, previewIsCurrent, snapshotSettingsKey]);
 
     const handleSaveClick = () => {
         if (canCustomizeTree) {
@@ -1938,7 +2041,10 @@ export function TaromboExplorer({
                                     connectionPaths={connection?.paths}
                                     markFemaleLineage={showFemaleLineage}
                                     collapseDepth={verticalTreeCollapseDepth}
-                                    scrollToLineageEnd={searchedId !== null}
+                                    expandAll={snapshotMode}
+                                    scrollToLineageEnd={
+                                        !snapshotMode && searchedId !== null
+                                    }
                                     foldedId={searchedId}
                                     detachedPeople={displayedDetachedRoots}
                                     showNodeAvatar={showNodeCircles}
@@ -2558,10 +2664,11 @@ export function TaromboExplorer({
 
                         if (!open) {
                             setExcludedBranchIds([]);
+                            setSnapshotPreview(null);
                         }
                     }}
                 >
-                    <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+                    <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
                         <DialogHeader>
                             <DialogTitle>Simpan Pohon Tarombo</DialogTitle>
                             <DialogDescription>
@@ -2569,7 +2676,44 @@ export function TaromboExplorer({
                                 ditampilkan sebelum menyimpan gambar.
                             </DialogDescription>
                         </DialogHeader>
-                        <div className="grid gap-4">
+                        <fieldset
+                            disabled={savingSnapshot && !snapshotMode}
+                            className="grid min-w-0 gap-4"
+                        >
+                            <div className="grid gap-2">
+                                <Label htmlFor="snapshot-tree-scale">
+                                    Ukuran pohon pada kertas:{' '}
+                                    {Math.round(snapshotTreeScale * 100)}%
+                                </Label>
+                                <input
+                                    id="snapshot-tree-scale"
+                                    type="range"
+                                    min="25"
+                                    max="100"
+                                    step="5"
+                                    value={snapshotTreeScale * 100}
+                                    onChange={(event) =>
+                                        setSnapshotTreeScale(
+                                            Number(event.target.value) / 100,
+                                        )
+                                    }
+                                    className="w-full accent-tb-primary"
+                                />
+                                <p className="text-xs text-tb-on-surface-variant">
+                                    Perkecil untuk menambah ruang di sekitar
+                                    pohon pada gambar yang disimpan.
+                                </p>
+                            </div>
+                            <SnapshotPreview
+                                url={snapshotPreview?.url}
+                                busy={
+                                    savingSnapshot ||
+                                    (!previewIsCurrent &&
+                                        snapshotPreviewErrorKey !==
+                                            snapshotSettingsKey)
+                                }
+                                current={previewIsCurrent}
+                            />
                             <div className="grid gap-1.5">
                                 <Label htmlFor="snapshot-title">Judul</Label>
                                 <Input
@@ -2804,15 +2948,38 @@ export function TaromboExplorer({
                                     </div>
                                 )}
                             </div>
-                            <Button
-                                type="button"
-                                onClick={() => handleCreateSnapshot()}
-                                disabled={savingSnapshot}
-                                className="text-tb-on-primary bg-tb-primary hover:bg-tb-primary-light"
-                            >
-                                {savingSnapshot ? 'Membuat...' : 'Buat'}
-                            </Button>
-                        </div>
+                            <div className="flex flex-wrap justify-end gap-2">
+                                {!previewIsCurrent &&
+                                    !savingSnapshot &&
+                                    snapshotPreviewErrorKey ===
+                                        snapshotSettingsKey && (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() =>
+                                                handleCreateSnapshot({
+                                                    previewOnly: true,
+                                                })
+                                            }
+                                            disabled={savingSnapshot}
+                                        >
+                                            {savingSnapshot
+                                                ? 'Memproses...'
+                                                : 'Coba Lagi Preview'}
+                                        </Button>
+                                    )}
+                                <Button
+                                    type="button"
+                                    onClick={() => handleCreateSnapshot()}
+                                    disabled={
+                                        savingSnapshot || !previewIsCurrent
+                                    }
+                                    className="text-tb-on-primary bg-tb-primary hover:bg-tb-primary-light"
+                                >
+                                    Simpan Gambar
+                                </Button>
+                            </div>
+                        </fieldset>
                     </DialogContent>
                 </Dialog>
             )}
