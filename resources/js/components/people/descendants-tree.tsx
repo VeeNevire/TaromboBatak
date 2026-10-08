@@ -26,6 +26,8 @@ type Props = {
     readOnly?: boolean;
     markFemaleLineage?: boolean;
     collapseDepth?: number;
+    /** Render every branch for export while preserving the interactive folds. */
+    expandAll?: boolean;
     compact?: boolean;
     detachedPeople?: TaromboPerson[];
     currentUserId?: number;
@@ -59,6 +61,7 @@ type LineageLine = {
 
 const EMPTY_LINEAGE_PATH: readonly string[] = [];
 const EMPTY_CONNECTION_PATHS: readonly (readonly string[])[] = [];
+const EMPTY_COLLAPSED_IDS = new Set<string>();
 const EMPTY_MARKED_IDS: ReadonlySet<string> = new Set();
 const EMPTY_LEAF_SIBLINGS: TaromboPerson[] = [];
 
@@ -696,6 +699,7 @@ export function DescendantsTree({
     lineagePath = EMPTY_LINEAGE_PATH,
     markFemaleLineage = false,
     collapseDepth,
+    expandAll = false,
     compact = false,
     detachedPeople = [],
     currentUserId,
@@ -802,7 +806,7 @@ export function DescendantsTree({
         return numbers;
     }, [childrenOf, root]);
 
-    const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    const [storedCollapsed, setCollapsed] = useState<Set<string>>(() => {
         const initial = new Set<string>();
         const visited = new Set<string>();
 
@@ -833,6 +837,8 @@ export function DescendantsTree({
 
         return initial;
     });
+
+    const collapsed = expandAll ? EMPTY_COLLAPSED_IDS : storedCollapsed;
 
     const handleToggle = (id: string) => {
         setCollapsed((prev) => {

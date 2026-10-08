@@ -5,10 +5,12 @@ export function TouchTreeViewport({
     children,
     zoom,
     onZoom,
+    capture = false,
 }: {
     children: ReactNode;
     zoom: number;
     onZoom: (zoom: number) => void;
+    capture?: boolean;
 }) {
     const gesture = useRef<{ distance: number; zoom: number } | null>(null);
     const viewport = useRef<HTMLDivElement>(null);
@@ -34,7 +36,11 @@ export function TouchTreeViewport({
     return (
         <div
             ref={viewport}
-            className="max-h-[70dvh] w-full min-w-0 overflow-auto overscroll-contain"
+            className={
+                capture
+                    ? 'max-h-none w-full min-w-0 overflow-visible overscroll-contain'
+                    : 'max-h-[70dvh] w-full min-w-0 overflow-auto overscroll-contain'
+            }
             style={{ touchAction: 'pan-x pan-y' }}
             onTouchStart={(event) => {
                 if (event.touches.length === 2) {
