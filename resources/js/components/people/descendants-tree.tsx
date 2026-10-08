@@ -42,6 +42,7 @@ type Props = {
     compactTerminalBranches?: boolean;
     packCollapsed?: boolean;
     scrollToLineageEnd?: boolean;
+    suppressAutoScroll?: boolean;
     /**
      * A searched person drawn as the lowest one of the lineage: their own
      * children start folded, to be opened with the branch toggle.
@@ -714,6 +715,7 @@ export function DescendantsTree({
     compactTerminalBranches = false,
     packCollapsed = false,
     scrollToLineageEnd = false,
+    suppressAutoScroll = false,
     foldedId = null,
     connectionPaths = EMPTY_CONNECTION_PATHS,
 }: Props) {
@@ -954,7 +956,7 @@ export function DescendantsTree({
               : null;
 
     useEffect(() => {
-        if (!focusTargetId) {
+        if (suppressAutoScroll || !focusTargetId) {
             return;
         }
 
@@ -969,7 +971,7 @@ export function DescendantsTree({
         });
 
         return () => window.cancelAnimationFrame(frame);
-    }, [focusTargetId, nodeIdPrefix]);
+    }, [focusTargetId, nodeIdPrefix, suppressAutoScroll]);
 
     if (!center) {
         return null;

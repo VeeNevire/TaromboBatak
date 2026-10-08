@@ -15,6 +15,7 @@ type Props = {
     preview: Preview | null;
     paper: { width: number; height: number };
     treeScale: number;
+    readingScale?: number;
     transparent: boolean;
     busy: boolean;
     current: boolean;
@@ -58,6 +59,7 @@ function SnapshotPreviewContent({
     preview,
     paper,
     treeScale,
+    readingScale = 1,
     transparent,
     busy,
     current,
@@ -66,6 +68,7 @@ function SnapshotPreviewContent({
     const content = useRef<HTMLDivElement>(null);
     const [viewportWidth, setViewportWidth] = useState(600);
     const [zoom, setZoom] = useState(1);
+    const [readable, setReadable] = useState(true);
 
     useEffect(() => {
         const element = viewport.current;
@@ -110,13 +113,6 @@ function SnapshotPreviewContent({
         return () => host.replaceChildren();
     }, [preview]);
 
-    const screenScale =
-        Math.min(
-            Math.max(1, viewportWidth - 32) / paper.width,
-            288 / paper.height,
-        ) * zoom;
-    const width = paper.width * screenScale;
-    const height = paper.height * screenScale;
     const margin = Math.round(Math.min(paper.width, paper.height) * 0.04);
     const scale = preview
         ? Math.min(
@@ -124,6 +120,15 @@ function SnapshotPreviewContent({
               (paper.height - margin * 2) / preview.box.height,
           ) * treeScale
         : 1;
+    const fitScale = Math.min(
+        Math.max(1, viewportWidth - 32) / paper.width,
+        288 / paper.height,
+    );
+    const screenScale =
+        (readable && preview ? readingScale / scale : fitScale) * zoom;
+    const width = paper.width * screenScale;
+    const height = paper.height * screenScale;
+
     const offsetX = preview
         ? (paper.width - preview.box.width * scale) / 2 - preview.box.x * scale
         : 0;
@@ -131,6 +136,26 @@ function SnapshotPreviewContent({
         ? (paper.height - preview.box.height * scale) / 2 -
           preview.box.y * scale
         : 0;
+
+    useEffect(() => {
+        const element = viewport.current;
+
+        if (!element || !preview) {
+            return;
+        }
+
+        const frame = requestAnimationFrame(() => {
+            element.scrollLeft = Math.max(
+                0,
+                (element.scrollWidth - element.clientWidth) / 2,
+            );
+            element.scrollTop = readable
+                ? Math.max(0, offsetY * screenScale - 16)
+                : 0;
+        });
+
+        return () => cancelAnimationFrame(frame);
+    }, [preview, readable, width, height, offsetY, screenScale]);
 
     return (
         <section className="grid gap-2" aria-label="Preview gambar pohon">
@@ -169,10 +194,25 @@ function SnapshotPreviewContent({
                         variant="outline"
                         size="sm"
                         disabled={!preview}
-                        onClick={() => setZoom(1)}
+                        onClick={() => {
+                            setReadable(false);
+                            setZoom(1);
+                        }}
                     >
                         <Maximize2 className="size-4" />
-                        Pas ke layar
+                        Seluruh pohon
+                    </Button>
+                    <Button
+                        type="button"
+                        variant={readable ? 'default' : 'outline'}
+                        size="sm"
+                        disabled={!preview}
+                        onClick={() => {
+                            setReadable(true);
+                            setZoom(1);
+                        }}
+                    >
+                        Ukuran baca
                     </Button>
                 </div>
             </div>
@@ -234,7 +274,9 @@ function SnapshotPreviewContent({
             </div>
             <p className="text-xs text-tb-on-surface-variant">
                 {current
-                    ? 'Preview mengikuti tata letak gambar yang akan disimpan. Zoom hanya mengubah tampilan pemeriksaan.'
+                    ? readable
+                        ? 'Ukuran baca: geser preview untuk melihat ranting lainnya. Gambar yang disimpan tetap memuat seluruh pohon.'
+                        : 'Seluruh pohon ditampilkan. Gunakan Ukuran baca untuk membaca nama anggota.'
                     : 'Preview diperbarui otomatis mengikuti pilihan pohon dan pengaturan.'}
             </p>
         </section>
