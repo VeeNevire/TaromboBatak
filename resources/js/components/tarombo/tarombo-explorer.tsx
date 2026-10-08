@@ -17,7 +17,7 @@ import {
     UserSearch,
     X,
 } from 'lucide-react';
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { TaromboDiagram } from '@/components/landing/tarombo-diagram';
 import { DescendantsTree } from '@/components/people/descendants-tree';
@@ -316,8 +316,9 @@ const SNAPSHOT_RESOLUTIONS = [
 type PaperOrientation = 'portrait' | 'landscape';
 
 // Browsers refuse (or silently blank) canvases beyond these sizes.
-const MAX_CANVAS_SIDE = 32767;
-const MAX_CANVAS_AREA = 250_000_000;
+const MAX_CANVAS_SIDE = 16384;
+// Keep bitmap memory bounded on phones and lower-memory browsers.
+const MAX_CANVAS_AREA = 32_000_000;
 
 class SnapshotTooLargeError extends Error {}
 
@@ -483,7 +484,15 @@ async function renderSnapshot(
         height: viewHeight,
         pixelRatio,
         skipAutoScale: true,
-        cacheBust: true,
+        cacheBust: false,
+        preferredFontFormat: 'woff2',
+        fetchRequestInit: {
+            cache: 'force-cache',
+            signal:
+                typeof AbortSignal.timeout === 'function'
+                    ? AbortSignal.timeout(15000)
+                    : undefined,
+        },
         backgroundColor: options.transparent
             ? undefined
             : options.backgroundColor,
@@ -751,7 +760,10 @@ export function TaromboExplorer({
     const [familyTreeSelectorOpen, setFamilyTreeSelectorOpen] = useState(false);
     const familyTreeBlurTimer = useRef<number | null>(null);
     const [savingSnapshot, setSavingSnapshot] = useState(false);
-    const [snapshotMode, setSnapshotMode] = useState(false);
+    const [capturingSnapshot, setSnapshotMode] = useState(false);
+    const [generatingPreview, setGeneratingPreview] = useState(false);
+    const previewGenerator = useRef<() => void>(() => {});
+    const previewRequest = useRef(0);
     const snapshotRef = useRef<HTMLDivElement>(null);
     // Heading and tree only, captured without the card's scroll viewport.
     const snapshotContentRef = useRef<HTMLDivElement>(null);
@@ -759,6 +771,7 @@ export function TaromboExplorer({
         initialFocusId,
     );
     const [saveModalOpen, setSaveModalOpen] = useState(false);
+    const snapshotMode = capturingSnapshot || saveModalOpen;
     const [snapshotTitle, setSnapshotTitle] = useState('');
     // "Nama Keluarga" heading the tree on screen and in saved images: the
     // account tree's own family name, or what was typed on the save form.
@@ -771,19 +784,19 @@ export function TaromboExplorer({
         string | null
     >(null);
     const [snapshotPreview, setSnapshotPreview] = useState<{
-        blob: Blob;
-        url: string;
+        node: HTMLElement;
+        box: { x: number; y: number; width: number; height: number };
+        contentWidth: number;
+        contentHeight: number;
+        backgroundColor: string;
         settingsKey: string;
     } | null>(null);
-    useEffect(() => {
-        const url = snapshotPreview?.url;
-
-        return () => {
-            if (url) {
-                URL.revokeObjectURL(url);
-            }
-        };
-    }, [snapshotPreview?.url]);
+    useEffect(
+        () => () => {
+            previewRequest.current += 1;
+        },
+        [],
+    );
     const [snapshotOrientation, setSnapshotOrientation] =
         useState<PaperOrientation>('portrait');
     const [snapshotTransparent, setSnapshotTransparent] = useState(false);
@@ -1417,12 +1430,8 @@ export function TaromboExplorer({
     };
 
     const snapshotSettingsKey = JSON.stringify([
-        snapshotResolution,
-        snapshotPaper,
-        snapshotOrientation,
         snapshotTransparent,
         snapshotTransparentNodes,
-        snapshotTreeScale,
         excludedBranchIds,
         treeFamilyName,
         renderedTreeCenterId,
@@ -1444,7 +1453,7 @@ export function TaromboExplorer({
     } = {}) => {
         const cardNode = snapshotRef.current;
 
-        if (!cardNode || savingSnapshot) {
+        if (!cardNode || savingSnapshot || generatingPreview) {
             return;
         }
 
@@ -1453,53 +1462,74 @@ export function TaromboExplorer({
         }
 
         const transparent = !quick && snapshotTransparent;
-        setSavingSnapshot(true);
+
+        if (previewOnly) {
+            setGeneratingPreview(true);
+        } else {
+            setSavingSnapshot(true);
+        }
+
+        const requestId = ++previewRequest.current;
 
         try {
-            let blob: Blob;
+            setSnapshotMode(true);
+            await new Promise<void>((resolve) =>
+                requestAnimationFrame(() =>
+                    requestAnimationFrame(() => resolve()),
+                ),
+            );
 
-            if (!quick && !previewOnly && snapshotPreview) {
-                blob = snapshotPreview.blob;
-            } else {
-                setSnapshotMode(true);
-                await document.fonts.ready;
-                await new Promise<void>((resolve) =>
-                    requestAnimationFrame(() =>
-                        requestAnimationFrame(() => resolve()),
-                    ),
-                );
-                const contentNode = snapshotContentRef.current ?? cardNode;
-                const box = snapshotContentBox(
-                    contentNode,
-                    snapshotContentRef.current
-                        ? `[id^="${FULLSCREEN_TREE_NODE_PREFIX}-"]`
-                        : null,
-                );
-                blob = await renderSnapshot(contentNode, box, {
-                    paper: quick
-                        ? null
-                        : paperPixelSize(
-                              snapshotPaper,
-                              snapshotResolution,
-                              snapshotOrientation,
-                          ),
-                    treeScale: snapshotTreeScale,
-                    backgroundColor:
-                        window.getComputedStyle(cardNode).backgroundColor,
-                    transparent,
-                });
+            if (previewOnly && requestId !== previewRequest.current) {
+                return;
             }
 
+            const contentNode = snapshotContentRef.current ?? cardNode;
+            const box = snapshotContentBox(
+                contentNode,
+                snapshotContentRef.current
+                    ? `[id^="${FULLSCREEN_TREE_NODE_PREFIX}-"]`
+                    : null,
+            );
+            const backgroundColor =
+                window.getComputedStyle(cardNode).backgroundColor;
+
             if (previewOnly) {
+                // Native DOM cloning uses the already loaded page styles and fonts.
+                // No bitmap allocation, CSS serialization or remote font fetching.
+                const node = contentNode.cloneNode(true) as HTMLElement;
+
+                for (const element of [
+                    node,
+                    ...node.querySelectorAll<HTMLElement>('[id]'),
+                ]) {
+                    element.removeAttribute('id');
+                }
+
                 setSnapshotPreview({
-                    blob,
-                    url: URL.createObjectURL(blob),
+                    node,
+                    box,
+                    contentWidth: contentNode.scrollWidth,
+                    contentHeight: contentNode.scrollHeight,
+                    backgroundColor,
                     settingsKey: snapshotSettingsKey,
                 });
-                setSavingSnapshot(false);
+                setSnapshotPreviewErrorKey(null);
 
                 return;
             }
+
+            const blob = await renderSnapshot(contentNode, box, {
+                paper: quick
+                    ? null
+                    : paperPixelSize(
+                          snapshotPaper,
+                          snapshotResolution,
+                          snapshotOrientation,
+                      ),
+                treeScale: snapshotTreeScale,
+                backgroundColor,
+                transparent,
+            });
 
             const file = new File(
                 [blob],
@@ -1553,12 +1583,15 @@ export function TaromboExplorer({
                     : 'Tampilan pohon gagal dibuat menjadi gambar. Coba kembali.',
             );
         } finally {
+            setGeneratingPreview(false);
             setSnapshotMode(false);
         }
     };
 
-    const generateLivePreview = useEffectEvent(() => {
-        void handleCreateSnapshot({ previewOnly: true });
+    useEffect(() => {
+        previewGenerator.current = () => {
+            void handleCreateSnapshot({ previewOnly: true });
+        };
     });
 
     useEffect(() => {
@@ -1570,6 +1603,7 @@ export function TaromboExplorer({
 
         if (
             savingSnapshot ||
+            generatingPreview ||
             previewIsCurrent ||
             lastPreviewAttempt.current === snapshotSettingsKey
         ) {
@@ -1579,11 +1613,17 @@ export function TaromboExplorer({
         // Wait briefly for typing or slider movement, then render the latest choices.
         const timer = window.setTimeout(() => {
             lastPreviewAttempt.current = snapshotSettingsKey;
-            generateLivePreview();
-        }, 400);
+            previewGenerator.current();
+        }, 250);
 
         return () => window.clearTimeout(timer);
-    }, [saveModalOpen, savingSnapshot, previewIsCurrent, snapshotSettingsKey]);
+    }, [
+        saveModalOpen,
+        savingSnapshot,
+        generatingPreview,
+        previewIsCurrent,
+        snapshotSettingsKey,
+    ]);
 
     const handleSaveClick = () => {
         if (canCustomizeTree) {
@@ -2664,6 +2704,7 @@ export function TaromboExplorer({
 
                         if (!open) {
                             setExcludedBranchIds([]);
+                            previewRequest.current += 1;
                             setSnapshotPreview(null);
                         }
                     }}
@@ -2677,7 +2718,7 @@ export function TaromboExplorer({
                             </DialogDescription>
                         </DialogHeader>
                         <fieldset
-                            disabled={savingSnapshot && !snapshotMode}
+                            disabled={savingSnapshot}
                             className="grid min-w-0 gap-4"
                         >
                             <div className="grid gap-2">
@@ -2705,9 +2746,16 @@ export function TaromboExplorer({
                                 </p>
                             </div>
                             <SnapshotPreview
-                                url={snapshotPreview?.url}
+                                preview={snapshotPreview}
+                                paper={paperPixelSize(
+                                    snapshotPaper,
+                                    snapshotResolution,
+                                    snapshotOrientation,
+                                )}
+                                treeScale={snapshotTreeScale}
+                                transparent={snapshotTransparent}
                                 busy={
-                                    savingSnapshot ||
+                                    generatingPreview ||
                                     (!previewIsCurrent &&
                                         snapshotPreviewErrorKey !==
                                             snapshotSettingsKey)
@@ -2951,6 +2999,7 @@ export function TaromboExplorer({
                             <div className="flex flex-wrap justify-end gap-2">
                                 {!previewIsCurrent &&
                                     !savingSnapshot &&
+                                    !generatingPreview &&
                                     snapshotPreviewErrorKey ===
                                         snapshotSettingsKey && (
                                         <Button
@@ -2972,11 +3021,15 @@ export function TaromboExplorer({
                                     type="button"
                                     onClick={() => handleCreateSnapshot()}
                                     disabled={
-                                        savingSnapshot || !previewIsCurrent
+                                        savingSnapshot ||
+                                        generatingPreview ||
+                                        !previewIsCurrent
                                     }
                                     className="text-tb-on-primary bg-tb-primary hover:bg-tb-primary-light"
                                 >
-                                    Simpan Gambar
+                                    {savingSnapshot
+                                        ? 'Menyimpan...'
+                                        : 'Simpan Gambar'}
                                 </Button>
                             </div>
                         </fieldset>
