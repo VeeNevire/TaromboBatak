@@ -67,8 +67,9 @@ function SnapshotPreviewContent({
     const viewport = useRef<HTMLDivElement>(null);
     const content = useRef<HTMLDivElement>(null);
     const [viewportWidth, setViewportWidth] = useState(600);
+    const [viewportHeight, setViewportHeight] = useState(400);
     const [zoom, setZoom] = useState(1);
-    const [readable, setReadable] = useState(true);
+    const [readable, setReadable] = useState(false);
 
     useEffect(() => {
         const element = viewport.current;
@@ -77,7 +78,10 @@ function SnapshotPreviewContent({
             return;
         }
 
-        const update = () => setViewportWidth(element.clientWidth);
+        const update = () => {
+            setViewportWidth(element.clientWidth);
+            setViewportHeight(element.clientHeight);
+        };
         update();
 
         if (typeof ResizeObserver === 'undefined') {
@@ -122,7 +126,7 @@ function SnapshotPreviewContent({
         : 1;
     const fitScale = Math.min(
         Math.max(1, viewportWidth - 32) / paper.width,
-        288 / paper.height,
+        Math.max(1, viewportHeight - 32) / paper.height,
     );
     const screenScale =
         (readable && preview ? readingScale / scale : fitScale) * zoom;
@@ -161,7 +165,7 @@ function SnapshotPreviewContent({
         <section className="grid gap-2" aria-label="Preview gambar pohon">
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="text-sm font-medium">Preview gambar</h3>
-                <div className="flex items-center gap-1">
+                <div className="flex flex-wrap items-center gap-1">
                     <Button
                         type="button"
                         variant="outline"
@@ -191,8 +195,9 @@ function SnapshotPreviewContent({
                     </Button>
                     <Button
                         type="button"
-                        variant="outline"
+                        variant={!readable ? 'default' : 'outline'}
                         size="sm"
+                        aria-pressed={!readable}
                         disabled={!preview}
                         onClick={() => {
                             setReadable(false);
@@ -206,6 +211,7 @@ function SnapshotPreviewContent({
                         type="button"
                         variant={readable ? 'default' : 'outline'}
                         size="sm"
+                        aria-pressed={readable}
                         disabled={!preview}
                         onClick={() => {
                             setReadable(true);
@@ -218,14 +224,14 @@ function SnapshotPreviewContent({
             </div>
             <div
                 ref={viewport}
-                className="relative h-80 overflow-auto rounded-lg border border-tb-outline-variant bg-tb-surface-container"
+                className="relative h-[min(50dvh,32rem)] min-h-64 overflow-auto rounded-lg border border-tb-outline-variant bg-tb-surface-container"
                 aria-busy={busy}
             >
                 <div
                     className="grid place-items-center p-4"
                     style={{
                         width: Math.max(viewportWidth, width + 32),
-                        minHeight: Math.max(318, height + 32),
+                        minHeight: Math.max(viewportHeight, height + 32),
                     }}
                 >
                     <div
