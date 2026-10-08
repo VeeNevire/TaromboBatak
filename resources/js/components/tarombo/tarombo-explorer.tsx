@@ -338,7 +338,18 @@ function paperPixelSize(
     paper: string,
     resolution: number,
     orientation: PaperOrientation,
+    contentBox?: { width: number; height: number },
 ): { width: number; height: number } {
+    if (paper === 'auto' && contentBox) {
+        const ratio =
+            resolution / Math.max(contentBox.width, contentBox.height);
+
+        return {
+            width: Math.max(1, Math.round(contentBox.width * ratio)),
+            height: Math.max(1, Math.round(contentBox.height * ratio)),
+        };
+    }
+
     const base = PAPER_SIZES[paper] ?? PAPER_SIZES.A4;
     const shortEdge = Math.round(resolution * (base.width / base.height));
 
@@ -764,6 +775,8 @@ export function TaromboExplorer({
     const [generatingPreview, setGeneratingPreview] = useState(false);
     const previewGenerator = useRef<() => void>(() => {});
     const previewRequest = useRef(0);
+    const previewSourceRef = useRef<HTMLDivElement>(null);
+    const [previewSourceWidth, setPreviewSourceWidth] = useState(800);
     const snapshotRef = useRef<HTMLDivElement>(null);
     // Heading and tree only, captured without the card's scroll viewport.
     const snapshotContentRef = useRef<HTMLDivElement>(null);
@@ -771,13 +784,13 @@ export function TaromboExplorer({
         initialFocusId,
     );
     const [saveModalOpen, setSaveModalOpen] = useState(false);
-    const snapshotMode = capturingSnapshot || saveModalOpen;
+    const snapshotMode = capturingSnapshot;
     const [snapshotTitle, setSnapshotTitle] = useState('');
     // "Nama Keluarga" heading the tree on screen and in saved images: the
     // account tree's own family name, or what was typed on the save form.
     const [treeFamilyName, setTreeFamilyName] = useState(familyName ?? '');
-    const [snapshotResolution, setSnapshotResolution] = useState(1080);
-    const [snapshotPaper, setSnapshotPaper] = useState('A4');
+    const [snapshotResolution, setSnapshotResolution] = useState(2160);
+    const [snapshotPaper, setSnapshotPaper] = useState('auto');
     const [snapshotTreeScale, setSnapshotTreeScale] = useState(1);
     const lastPreviewAttempt = useRef<string | null>(null);
     const [snapshotPreviewErrorKey, setSnapshotPreviewErrorKey] = useState<
@@ -1434,6 +1447,9 @@ export function TaromboExplorer({
         snapshotTransparentNodes,
         excludedBranchIds,
         treeFamilyName,
+        verticalTreeTitle,
+        verticalTreeDescription,
+        selectedFamilyTreeId,
         renderedTreeCenterId,
         fullscreenView,
         showSpouseNames,
@@ -1472,7 +1488,18 @@ export function TaromboExplorer({
         const requestId = ++previewRequest.current;
 
         try {
-            setSnapshotMode(true);
+            const savedPreview =
+                !quick && fullscreenView === 'tree' ? snapshotPreview : null;
+
+            if (previewOnly && fullscreenView === 'tree') {
+                setPreviewSourceWidth(
+                    snapshotContentRef.current?.clientWidth ??
+                        cardNode.clientWidth,
+                );
+            } else if (!savedPreview) {
+                setSnapshotMode(true);
+            }
+
             await new Promise<void>((resolve) =>
                 requestAnimationFrame(() =>
                     requestAnimationFrame(() => resolve()),
@@ -1483,13 +1510,22 @@ export function TaromboExplorer({
                 return;
             }
 
-            const contentNode = snapshotContentRef.current ?? cardNode;
-            const box = snapshotContentBox(
-                contentNode,
-                snapshotContentRef.current
-                    ? `[id^="${FULLSCREEN_TREE_NODE_PREFIX}-"]`
-                    : null,
-            );
+            const contentNode =
+                savedPreview?.node ??
+                (previewOnly && fullscreenView === 'tree'
+                    ? previewSourceRef.current
+                    : snapshotContentRef.current) ??
+                cardNode;
+            const box =
+                savedPreview?.box ??
+                snapshotContentBox(
+                    contentNode,
+                    previewOnly && fullscreenView === 'tree'
+                        ? '[id^="tarombo-export-tree-node-"]'
+                        : snapshotContentRef.current
+                          ? `[id^="${FULLSCREEN_TREE_NODE_PREFIX}-"]`
+                          : null,
+                );
             const backgroundColor =
                 window.getComputedStyle(cardNode).backgroundColor;
 
@@ -1525,6 +1561,7 @@ export function TaromboExplorer({
                           snapshotPaper,
                           snapshotResolution,
                           snapshotOrientation,
+                          box,
                       ),
                 treeScale: snapshotTreeScale,
                 backgroundColor,
@@ -1556,8 +1593,12 @@ export function TaromboExplorer({
                               Number(renderedTreeCenterId) || null,
                           title: snapshotTitle.trim() || null,
                           resolution: snapshotResolution,
-                          paper_size: snapshotPaper,
-                          orientation: snapshotOrientation,
+                          paper_size:
+                              snapshotPaper === 'auto' ? null : snapshotPaper,
+                          orientation:
+                              snapshotPaper === 'auto'
+                                  ? null
+                                  : snapshotOrientation,
                           included_person_ids: includedIds,
                       },
                 {
@@ -1969,6 +2010,57 @@ export function TaromboExplorer({
         </div>
     );
 
+    const renderSnapshotTree = (
+        capture: boolean,
+        nodePrefix = fullscreen
+            ? FULLSCREEN_TREE_NODE_PREFIX
+            : 'tarombo-desktop-tree-node',
+    ) => (
+        <MargaColorContext.Provider value={showMargaColors}>
+            <DescendantsTree
+                key={`${renderedTreeCenterId}-${margaTree?.direction ?? ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
+                people={displayPeople}
+                centerId={renderedTreeCenterId}
+                onSelect={margaTree ? undefined : handlePersonSelect}
+                onMakeTop={handleMakeTop}
+                highlightId={renderedHighlightId}
+                editNodes={!margaTree}
+                selectOnClick={!margaTree}
+                showProfileOnName
+                readOnly={Boolean(margaTree)}
+                alternativeTrees={descendantAlternativeTrees}
+                lineagePath={treeLineagePath}
+                connectionPaths={connection?.paths}
+                markFemaleLineage={showFemaleLineage}
+                collapseDepth={verticalTreeCollapseDepth}
+                expandAll={capture}
+                suppressAutoScroll={capture}
+                scrollToLineageEnd={
+                    !capture && !snapshotMode && searchedId !== null
+                }
+                foldedId={searchedId}
+                detachedPeople={displayedDetachedRoots}
+                showNodeAvatar={showNodeCircles}
+                showBranchToggles={showBranchToggles}
+                showSpouseNames={showSpouseNames}
+                showSpouseMargas={margaTree?.direction === 'lower'}
+                siblingOrderMargaId={margaTree?.margaId}
+                canReorderSiblings={
+                    margaTree
+                        ? margaTree.direction === 'lower' &&
+                          margaTree.canReorderSiblings
+                        : selectedAccountTree?.canManage === true
+                }
+                allowBranchEntry={margaTree?.direction === 'lower'}
+                compactTerminalBranches={margaTree?.direction === 'lower'}
+                packCollapsed={compactTree}
+                versionTreeId={selectedFamilyTreeId}
+                compact={fullscreen}
+                nodeIdPrefix={nodePrefix}
+            />
+        </MargaColorContext.Provider>
+    );
+
     const renderTreeCard = (isExpanded: boolean) => (
         <div
             ref={fullscreen ? snapshotRef : undefined}
@@ -2058,65 +2150,7 @@ export function TaromboExplorer({
                                     : {}),
                             }}
                         >
-                            <MargaColorContext.Provider value={showMargaColors}>
-                                <DescendantsTree
-                                    key={`${renderedTreeCenterId}-${margaTree?.direction ?? ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
-                                    people={displayPeople}
-                                    centerId={renderedTreeCenterId}
-                                    onSelect={
-                                        margaTree
-                                            ? undefined
-                                            : handlePersonSelect
-                                    }
-                                    onMakeTop={handleMakeTop}
-                                    highlightId={renderedHighlightId}
-                                    editNodes={!margaTree}
-                                    selectOnClick={!margaTree}
-                                    showProfileOnName
-                                    readOnly={Boolean(margaTree)}
-                                    alternativeTrees={
-                                        descendantAlternativeTrees
-                                    }
-                                    lineagePath={treeLineagePath}
-                                    connectionPaths={connection?.paths}
-                                    markFemaleLineage={showFemaleLineage}
-                                    collapseDepth={verticalTreeCollapseDepth}
-                                    expandAll={snapshotMode}
-                                    scrollToLineageEnd={
-                                        !snapshotMode && searchedId !== null
-                                    }
-                                    foldedId={searchedId}
-                                    detachedPeople={displayedDetachedRoots}
-                                    showNodeAvatar={showNodeCircles}
-                                    showBranchToggles={showBranchToggles}
-                                    showSpouseNames={showSpouseNames}
-                                    showSpouseMargas={
-                                        margaTree?.direction === 'lower'
-                                    }
-                                    siblingOrderMargaId={margaTree?.margaId}
-                                    canReorderSiblings={
-                                        margaTree
-                                            ? margaTree.direction === 'lower' &&
-                                              margaTree.canReorderSiblings
-                                            : selectedAccountTree?.canManage ===
-                                              true
-                                    }
-                                    allowBranchEntry={
-                                        margaTree?.direction === 'lower'
-                                    }
-                                    compactTerminalBranches={
-                                        margaTree?.direction === 'lower'
-                                    }
-                                    packCollapsed={compactTree}
-                                    versionTreeId={selectedFamilyTreeId}
-                                    compact={fullscreen}
-                                    nodeIdPrefix={
-                                        fullscreen
-                                            ? FULLSCREEN_TREE_NODE_PREFIX
-                                            : 'tarombo-desktop-tree-node'
-                                    }
-                                />
-                            </MargaColorContext.Provider>
+                            {renderSnapshotTree(snapshotMode)}
                         </div>
                     </TouchTreeViewport>
                 </div>
@@ -2683,6 +2717,55 @@ export function TaromboExplorer({
                 )}
             </div>
 
+            {generatingPreview && fullscreenView === 'tree' && (
+                <div
+                    aria-hidden="true"
+                    className="pointer-events-none fixed top-0"
+                    style={{
+                        left: '-100000px',
+                        opacity: 0,
+                        width: previewSourceWidth,
+                        contain: 'layout style',
+                    }}
+                >
+                    <div ref={previewSourceRef} className="w-full min-w-0">
+                        <div className="relative mb-4 border-b border-tb-outline-variant pb-3">
+                            <div className="min-w-0 px-2 text-center sm:px-20">
+                                <h3 className="font-display text-lg font-bold break-words text-tb-on-surface">
+                                    {verticalTreeTitle}
+                                </h3>
+                                {verticalTreeDescription && (
+                                    <p className="mt-1 max-w-64 truncate text-xs text-tb-on-surface-variant">
+                                        {verticalTreeDescription}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                        <div
+                            className="w-max min-w-full"
+                            data-transparent-node-fill={
+                                snapshotTransparentNodes
+                                    ? snapshotTransparent
+                                        ? 'plain'
+                                        : 'contrast'
+                                    : undefined
+                            }
+                            style={{
+                                zoom: 1,
+                                ...(styleSettings
+                                    ? treeSettingsStyle(styleSettings)
+                                    : {}),
+                            }}
+                        >
+                            {renderSnapshotTree(
+                                true,
+                                'tarombo-export-tree-node',
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <PersonTreePickerDialog
                 open={pickerOpen}
                 onOpenChange={setPickerOpen}
@@ -2745,14 +2828,25 @@ export function TaromboExplorer({
                                     pohon pada gambar yang disimpan.
                                 </p>
                             </div>
+                            <p className="text-xs text-tb-on-surface-variant">
+                                Ukuran otomatis mengikuti bentuk pohon. Untuk
+                                membaca pohon besar, gunakan Ukuran baca atau
+                                pilih ranting tertentu. A4 akan mengecilkan
+                                seluruh pohon agar muat.
+                            </p>
                             <SnapshotPreview
                                 preview={snapshotPreview}
                                 paper={paperPixelSize(
                                     snapshotPaper,
                                     snapshotResolution,
                                     snapshotOrientation,
+                                    snapshotPreview?.box,
                                 )}
                                 treeScale={snapshotTreeScale}
+                                readingScale={Math.max(
+                                    1,
+                                    16 / (styleSettings?.font_size ?? 8),
+                                )}
                                 transparent={snapshotTransparent}
                                 busy={
                                     generatingPreview ||
@@ -2827,10 +2921,13 @@ export function TaromboExplorer({
                                             value={snapshotPaper}
                                             onValueChange={setSnapshotPaper}
                                         >
-                                            <SelectTrigger className="w-20 shrink-0">
+                                            <SelectTrigger className="w-36 shrink-0">
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
+                                                <SelectItem value="auto">
+                                                    Otomatis (pohon utuh)
+                                                </SelectItem>
                                                 {Object.keys(PAPER_SIZES).map(
                                                     (paper) => (
                                                         <SelectItem
@@ -2857,6 +2954,9 @@ export function TaromboExplorer({
                                                 <button
                                                     key={value}
                                                     type="button"
+                                                    disabled={
+                                                        snapshotPaper === 'auto'
+                                                    }
                                                     onClick={() =>
                                                         setSnapshotOrientation(
                                                             value,
