@@ -761,6 +761,9 @@ export function TaromboExplorer({
     const [treeZoom, setTreeZoom] = useState(1);
     const [showSpouseNames, setShowSpouseNames] = useState(false);
     const [compactTree, setCompactTree] = useState(false);
+    const [snapshotTreeCollapsedIds, setSnapshotTreeCollapsedIds] = useState<
+        Set<string>
+    >(new Set());
     // Off: plain cards with marga identity figures in sky blue.
     const [showMargaColors, setShowMargaColors] = useState(false);
     const [showNodeCircles, setShowNodeCircles] = useState(true);
@@ -1457,6 +1460,7 @@ export function TaromboExplorer({
         showBranchToggles,
         showMargaColors,
         compactTree,
+        [...snapshotTreeCollapsedIds].sort(),
         showFemaleLineage,
         styleSettings,
     ]);
@@ -2033,7 +2037,10 @@ export function TaromboExplorer({
                 connectionPaths={connection?.paths}
                 markFemaleLineage={showFemaleLineage}
                 collapseDepth={verticalTreeCollapseDepth}
-                expandAll={capture}
+                collapsedIds={capture ? snapshotTreeCollapsedIds : undefined}
+                onCollapsedChange={
+                    capture ? undefined : setSnapshotTreeCollapsedIds
+                }
                 suppressAutoScroll={capture}
                 scrollToLineageEnd={
                     !capture && !snapshotMode && searchedId !== null

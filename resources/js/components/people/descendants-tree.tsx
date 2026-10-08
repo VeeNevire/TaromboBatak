@@ -28,6 +28,9 @@ type Props = {
     collapseDepth?: number;
     /** Render every branch for export while preserving the interactive folds. */
     expandAll?: boolean;
+    /** Reuse the visible tree's folds when rendering a snapshot. */
+    collapsedIds?: Set<string>;
+    onCollapsedChange?: (ids: Set<string>) => void;
     compact?: boolean;
     detachedPeople?: TaromboPerson[];
     currentUserId?: number;
@@ -701,6 +704,8 @@ export function DescendantsTree({
     markFemaleLineage = false,
     collapseDepth,
     expandAll = false,
+    collapsedIds,
+    onCollapsedChange,
     compact = false,
     detachedPeople = [],
     currentUserId,
@@ -840,7 +845,12 @@ export function DescendantsTree({
         return initial;
     });
 
-    const collapsed = expandAll ? EMPTY_COLLAPSED_IDS : storedCollapsed;
+    const collapsed =
+        collapsedIds ?? (expandAll ? EMPTY_COLLAPSED_IDS : storedCollapsed);
+
+    useEffect(() => {
+        onCollapsedChange?.(storedCollapsed);
+    }, [onCollapsedChange, storedCollapsed]);
 
     const handleToggle = (id: string) => {
         setCollapsed((prev) => {
