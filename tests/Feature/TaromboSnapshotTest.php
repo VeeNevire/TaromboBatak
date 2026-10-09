@@ -341,3 +341,20 @@ test('gallery rejects malformed search parameters', function () {
     $this->actingAs(User::factory()->create())->get(route('tarombo.snapshots.index', ['q' => ['invalid']]))->assertSessionHasErrors('q');
     $this->get(route('tarombo.snapshots.index', ['display' => 'invalid']))->assertSessionHasErrors('display');
 });
+
+test('any authenticated role can delete another accounts snapshot', function (string $role) {
+    Storage::fake('local');
+    $snapshot = TaromboSnapshot::factory()->create();
+    Storage::disk('local')->put($snapshot->path, 'image');
+    $actor = User::factory()->create(['role' => $role]);
+
+    $this->actingAs($actor)->delete(route('tarombo.snapshots.destroy', $snapshot))->assertRedirect();
+    $this->assertModelMissing($snapshot);
+    Storage::disk('local')->assertMissing($snapshot->path);
+})->with(['user', 'contributor_main', 'contributor_member', 'admin', 'subadmin']);
+
+test('guests cannot delete snapshots', function () {
+    $snapshot = TaromboSnapshot::factory()->create();
+    $this->delete(route('tarombo.snapshots.destroy', $snapshot))->assertRedirect(route('login'));
+    $this->assertModelExists($snapshot);
+});

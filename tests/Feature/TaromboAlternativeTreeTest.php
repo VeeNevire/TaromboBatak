@@ -8,6 +8,7 @@ use App\Models\Marga;
 use App\Models\MargaAccessRequest;
 use App\Models\Person;
 use App\Models\User;
+use App\Services\TaromboTreeService;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('tarombo defaults to the signed in accounts primary family tree', function () {
@@ -47,14 +48,20 @@ test('tarombo defaults to the signed in accounts primary family tree', function 
             ->has('people', 1));
 });
 
-test('tarombo modal payload includes the father of a linked wife', function () {
+test('tarombo modal payload includes both parents and their margas for a linked wife', function () {
     $owner = User::factory()->asAdmin()->create();
     $root = Person::factory()->create(['name' => 'Ompu Sitorus', 'gender' => 'L']);
-    $wifeFather = Person::factory()->create(['name' => 'Ompu Panjaitan', 'gender' => 'L']);
+    $fatherMarga = Marga::factory()->create();
+    $motherMarga = Marga::factory()->create();
+    $wifeFather = Person::factory()->create(['name' => 'Ompu Panjaitan', 'gender' => 'L', 'marga_id' => $fatherMarga->id]);
+    $wifeMother = Person::factory()->create(['name' => 'Ibu Boru Panjaitan', 'gender' => 'P', 'marga_id' => $motherMarga->id]);
     $wife = Person::factory()->create([
         'name' => 'Boru Panjaitan',
+        'birth_order' => 2,
         'gender' => 'P',
+        'marga_id' => $fatherMarga->id,
         'father_id' => $wifeFather->id,
+        'mother_id' => $wifeMother->id,
     ]);
     $root->wives()->attach($wife, ['position' => 1]);
     $tree = FamilyTree::create([
@@ -76,7 +83,16 @@ test('tarombo modal payload includes the father of a linked wife', function () {
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->where('people.0.spouses.0.name', $wife->name)
-            ->where('people.0.spouses.0.fatherName', $wifeFather->name));
+            ->where('people.0.spouses.0.birthOrder', 2)
+            ->where('people.0.spouses.0.marga', $fatherMarga->name)
+            ->where('people.0.spouses.0.fatherName', $wifeFather->name)
+            ->where('people.0.spouses.0.fatherMarga', $fatherMarga->name)
+            ->where('people.0.spouses.0.motherName', $wifeMother->name)
+            ->where('people.0.spouses.0.motherMarga', $motherMarga->name));
+
+    $row = app(TaromboTreeService::class)->rows(Person::query()->whereKey($root->id))[0];
+    expect($row['spouses'][0]['motherName'])->toBe($wifeMother->name)
+        ->and($row['spouses'][0]['motherMarga'])->toBe($motherMarga->name);
 });
 
 test('a linked wife opens a close family tree with her father, siblings, and children', function () {

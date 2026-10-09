@@ -358,6 +358,24 @@ function paperPixelSize(
         : { width: shortEdge, height: resolution };
 }
 
+function supportsSnapshotResolution(
+    paper: string,
+    resolution: number,
+): boolean {
+    if (resolution > MAX_CANVAS_SIDE) {
+        return false;
+    }
+
+    // Automatic paper depends on the tree's proportions; export checks its area.
+    if (paper === 'auto') {
+        return true;
+    }
+
+    const size = paperPixelSize(paper, resolution, 'portrait');
+
+    return size.width * size.height <= MAX_CANVAS_AREA;
+}
+
 /**
  * The part of the snapshot content that is actually drawn (every visible
  * text plus the tree's node circles), relative to the content element, so
@@ -1624,7 +1642,7 @@ export function TaromboExplorer({
             setSavingSnapshot(false);
             toast.error(
                 error instanceof SnapshotTooLargeError
-                    ? 'Resolusi terlalu besar untuk perangkat ini. Pilih resolusi yang lebih kecil.'
+                    ? 'Resolusi yang dipilih melebihi batas ekspor aplikasi. Pilih resolusi yang lebih kecil.'
                     : 'Tampilan pohon gagal dibuat menjadi gambar. Coba kembali.',
             );
         } finally {
@@ -1972,6 +1990,7 @@ export function TaromboExplorer({
                 )}
             >
                 <TaromboDiagram
+                    bubbleTrigger="hover"
                     onSelect={handleDiagramSelect}
                     onPaneClick={() => setSelectedId(null)}
                     onBack={handleBack}
@@ -2566,6 +2585,7 @@ export function TaromboExplorer({
                             <TabsContent value="diagram">
                                 <div className="rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-4">
                                     <TaromboDiagram
+                                        bubbleTrigger="hover"
                                         allowPan
                                         onSelect={handleDiagramSelect}
                                         onPaneClick={() => setSelectedId(null)}
@@ -2911,6 +2931,12 @@ export function TaromboExplorer({
                                                     <SelectItem
                                                         key={level}
                                                         value={String(level)}
+                                                        disabled={
+                                                            !supportsSnapshotResolution(
+                                                                snapshotPaper,
+                                                                level,
+                                                            )
+                                                        }
                                                     >
                                                         {snapshotResolutionLabel(
                                                             level,
@@ -2926,7 +2952,30 @@ export function TaromboExplorer({
                                     <div className="flex gap-2">
                                         <Select
                                             value={snapshotPaper}
-                                            onValueChange={setSnapshotPaper}
+                                            onValueChange={(paper) => {
+                                                setSnapshotPaper(paper);
+
+                                                if (
+                                                    !supportsSnapshotResolution(
+                                                        paper,
+                                                        snapshotResolution,
+                                                    )
+                                                ) {
+                                                    setSnapshotResolution(
+                                                        Math.max(
+                                                            ...SNAPSHOT_RESOLUTIONS.filter(
+                                                                (level) =>
+                                                                    level <=
+                                                                        snapshotResolution &&
+                                                                    supportsSnapshotResolution(
+                                                                        paper,
+                                                                        level,
+                                                                    ),
+                                                            ),
+                                                        ),
+                                                    );
+                                                }
+                                            }}
                                         >
                                             <SelectTrigger className="w-36 shrink-0">
                                                 <SelectValue />

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ValidatesAccountInIndonesian;
 use App\Models\User;
 use App\Support\IndonesiaRegions;
 use Closure;
@@ -12,6 +13,8 @@ use Illuminate\Validation\Rules\Password;
 
 class UpdateAccountRequest extends FormRequest
 {
+    use ValidatesAccountInIndonesian;
+
     /** @return array<string, ValidationRule|array<mixed>|string> */
     public function rules(): array
     {

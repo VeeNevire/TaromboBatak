@@ -139,3 +139,44 @@ test('lower five tree includes five descendant generations and excludes deeper o
     expect(collect($response->viewData('page')['props']['people'])->pluck('id')->all())->toBe($includedIds);
     expect($response->viewData('page')['props']['margaTree']['descendantGenerations'])->toBe(5);
 })->with([true, false]);
+
+test('marga name directory filters members by marga and search with pagination', function () {
+    $marga = Marga::factory()->public()->create();
+    Person::factory()->count(26)->create(['marga_id' => $marga->id, 'name' => 'Anggota Silaban']);
+    Person::factory()->create(['name' => 'Nama dari marga lain']);
+
+    $this->actingAs(User::factory()->create())
+        ->get(route('marga.names', $marga))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('marga/names')
+            ->where('marga.id', $marga->id)
+            ->where('people.total', 26)
+            ->has('people.data', 25)
+            ->where('people.data.0.name', 'Anggota Silaban'));
+
+    $this->get(route('marga.names', ['marga' => $marga, 'search' => 'tidak cocok']))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('people.total', 0)
+            ->where('filters.search', 'tidak cocok'));
+});
+
+test('guests only see public people in the marga name directory', function () {
+    $marga = Marga::factory()->public()->create();
+    $visible = Person::factory()->create(['marga_id' => $marga->id, 'is_public' => true]);
+    Person::factory()->create(['marga_id' => $marga->id, 'is_public' => false]);
+
+    $this->get(route('marga.names', $marga))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('people.total', 1)
+            ->where('people.data.0.id', $visible->id));
+});
+
+test('only staff can open a private marga name directory', function () {
+    $marga = Marga::factory()->create(['is_public' => false]);
+    $this->get(route('marga.names', $marga))->assertNotFound();
+    $this->actingAs(User::factory()->create())->get(route('marga.names', $marga))->assertNotFound();
+    $this->actingAs(User::factory()->asAdmin()->create())->get(route('marga.names', $marga))->assertSuccessful();
+});

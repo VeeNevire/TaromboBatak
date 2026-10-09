@@ -2,9 +2,14 @@
 
 use App\Models\ActivityLog;
 use App\Models\FamilyTree;
+use App\Models\FamilyTreeActivity;
 use App\Models\Marga;
 use App\Models\Person;
+use App\Models\TaromboSnapshot;
+use App\Models\TreeActivityLog;
 use App\Models\User;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rules\Password;
 use Inertia\Testing\AssertableInertia as Assert;
 
 function margaWithLowerTree(string $name): Marga
@@ -302,4 +307,93 @@ test('account domicile rejects a district or village outside its parent region',
             'password_confirmation' => 'password',
         ])
         ->assertSessionHasErrors(['district_code', 'village_code']);
+});
+
+test('account creation reports all missing requirements in Indonesian at once', function () {
+    $this->actingAs(User::factory()->asAdmin()->create())
+        ->post(route('accounts.store'), [])
+        ->assertSessionHasErrors([
+            'name' => 'Nama wajib diisi.',
+            'email' => 'Email wajib diisi.',
+            'role' => 'Peran wajib diisi.',
+            'password' => 'Kata sandi wajib diisi.',
+        ]);
+});
+
+test('account creation includes every failed password requirement in one message', function () {
+    $original = Password::$defaultCallback;
+    Password::defaults(fn () => Password::min(12)->mixedCase()->letters()->numbers()->symbols());
+
+    try {
+        $this->actingAs(User::factory()->asAdmin()->create())
+            ->post(route('accounts.store'), [
+                'name' => '',
+                'email' => 'bukan-email',
+                'role' => 'user',
+                'password' => 'abc',
+                'password_confirmation' => 'beda',
+            ])
+            ->assertSessionHasErrors(['name', 'email', 'password']);
+
+        $message = session('errors')->first('password');
+        expect($message)
+            ->toContain('Konfirmasi kata sandi tidak sama dengan kata sandi.')
+            ->toContain('Kata sandi minimal 12 karakter.')
+            ->toContain('Kata sandi harus mengandung huruf besar dan huruf kecil.')
+            ->toContain('Kata sandi harus mengandung setidaknya satu angka.')
+            ->toContain('Kata sandi harus mengandung setidaknya satu simbol.')
+            ->not->toContain('The password');
+    } finally {
+        Password::defaults($original);
+    }
+});
+
+test('account activity combines actions as actor and historical family and tree logs', function () {
+    $admin = User::factory()->asAdmin()->create();
+    $account = User::factory()->create();
+    $other = User::factory()->create();
+    $person = Person::factory()->create();
+    ActivityLog::forceCreate([
+        'account_id' => $other->id, 'actor_id' => $account->id,
+        'account_name' => $other->name, 'account_email' => $other->email,
+        'action' => 'updated', 'description' => 'Mengubah akun lain.',
+        'created_at' => now()->subHours(3),
+    ]);
+    FamilyTreeActivity::forceCreate([
+        'owner_id' => $other->id, 'actor_id' => $account->id,
+        'tree_name' => 'Keluarga Lama', 'member_name' => 'Anggota Lama',
+        'action' => 'updated', 'description' => 'Mengubah keluarga lama.',
+        'created_at' => now()->subHours(2),
+    ]);
+    TreeActivityLog::forceCreate([
+        'actor_id' => $account->id, 'person_id' => $person->id,
+        'action' => 'updated', 'summary' => 'Mengubah pohon besar.',
+        'created_at' => now()->subHour(),
+    ]);
+    ActivityLog::forceCreate([
+        'account_id' => $other->id, 'actor_id' => $other->id,
+        'account_name' => $other->name, 'account_email' => $other->email,
+        'action' => 'updated', 'description' => 'Aktivitas akun lain.',
+    ]);
+
+    $this->actingAs($admin)->getJson(route('accounts.activity-log', $account))
+        ->assertSuccessful()->assertJsonCount(3, 'logs')
+        ->assertJsonPath('logs.0.description', 'Mengubah pohon besar.')
+        ->assertJsonPath('logs.1.context.family_tree_name', 'Keluarga Lama')
+        ->assertJsonPath('logs.2.action', 'updated');
+});
+
+test('successful changes are logged for every account role', function (string $role) {
+    Storage::fake('local');
+    $actor = User::factory()->create(['role' => $role]);
+    $snapshot = TaromboSnapshot::factory()->for($actor)->create();
+
+    $this->actingAs($actor)->delete(route('tarombo.snapshots.destroy', $snapshot))->assertRedirect();
+    expect(ActivityLog::where('account_id', $actor->id)->where('action', 'tarombo.snapshots.destroy')->count())->toBe(1);
+})->with(['user', 'contributor_main', 'contributor_member', 'admin', 'subadmin']);
+
+test('a rejected account change does not create an activity log', function () {
+    $actor = User::factory()->create();
+    $this->actingAs($actor)->post(route('tarombo.snapshots.store'), [])->assertSessionHasErrors();
+    expect(ActivityLog::where('actor_id', $actor->id)->exists())->toBeFalse();
 });

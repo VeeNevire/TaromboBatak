@@ -244,7 +244,34 @@ export default function AccountForm({
                     </div>
                 </div>
 
-                <form onSubmit={submit} className="grid max-w-3xl gap-6">
+                <form
+                    noValidate
+                    onSubmit={submit}
+                    className="grid max-w-3xl gap-6"
+                >
+                    {Object.keys(errors).length > 0 && (
+                        <div
+                            role="alert"
+                            className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
+                        >
+                            <p className="font-semibold">
+                                Akun belum dapat disimpan. Lengkapi semua
+                                persyaratan berikut:
+                            </p>
+                            <ul className="mt-2 list-disc space-y-1 pl-5">
+                                {[
+                                    ...new Set(
+                                        Object.values(errors).flatMap(
+                                            (message) =>
+                                                message?.split('\n') ?? [],
+                                        ),
+                                    ),
+                                ].map((message) => (
+                                    <li key={message}>{message}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
                     <Card className="border-tb-outline-variant bg-tb-surface-bright">
                         <CardHeader>
                             <CardTitle className="font-display text-lg text-tb-on-surface">
@@ -521,7 +548,7 @@ export default function AccountForm({
                                 </Field>
                             )}
                             <Field
-                                label={`Password${isEdit ? '' : ' *'}`}
+                                label={`Kata Sandi${isEdit ? '' : ' *'}`}
                                 id="password"
                                 error={errors.password}
                             >
@@ -536,12 +563,12 @@ export default function AccountForm({
                                     placeholder={
                                         isEdit
                                             ? 'Kosongkan bila tidak diubah'
-                                            : 'Password akun'
+                                            : 'Kata sandi akun'
                                     }
                                 />
                             </Field>
                             <Field
-                                label="Konfirmasi Password"
+                                label="Konfirmasi Kata Sandi"
                                 id="password_confirmation"
                                 error={errors.password_confirmation}
                             >
@@ -556,7 +583,7 @@ export default function AccountForm({
                                             e.target.value,
                                         )
                                     }
-                                    placeholder="Ulangi password"
+                                    placeholder="Ulangi kata sandi"
                                 />
                             </Field>
                         </CardContent>
@@ -705,7 +732,7 @@ function Field({
                 ) : null}
             </Label>
             {children}
-            <InputError message={error} />
+            <InputError className="whitespace-pre-line" message={error} />
         </div>
     );
 }

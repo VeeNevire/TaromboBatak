@@ -135,8 +135,6 @@ class TaromboCompileDraftController extends Controller
 
     public function destroy(Request $request, TaromboCompileDraft $taromboCompileDraft): RedirectResponse
     {
-        $this->authorizeOwner($request, $taromboCompileDraft);
-
         Storage::disk('local')->delete($taromboCompileDraft->previewPath());
         $taromboCompileDraft->delete();
         $this->deleteUnusedImages($taromboCompileDraft->user_id, $taromboCompileDraft->tarombo_snapshot_id);

@@ -52,7 +52,7 @@ class TaromboSnapshotPolicy
      */
     public function delete(User $user, TaromboSnapshot $taromboSnapshot): bool
     {
-        return $taromboSnapshot->user_id === $user->id;
+        return true;
     }
 
     /**

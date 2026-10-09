@@ -89,7 +89,7 @@ class StoreSharedFamilyTreePersonRequest extends FormRequest
             $fatherNode = null;
             if ($familyTree instanceof FamilyTree && $this->filled('father_node_id')) {
                 $fatherNode = $familyTree->nodes()
-                    ->with('person:id,gender')
+                    ->with('person:id,gender,marga_id')
                     ->find($this->integer('father_node_id'));
 
                 if ($fatherNode === null) {
@@ -97,6 +97,8 @@ class StoreSharedFamilyTreePersonRequest extends FormRequest
                         'father_node_id',
                         'Ayah harus berasal dari silsilah yang dibagikan ini.',
                     );
+                } elseif (! $this->user()->can('appendBranch', $fatherNode->person)) {
+                    $validator->errors()->add('father_node_id', 'Anda hanya dapat menambah anggota ranting pada marga akun Anda.');
                 } elseif ($fatherNode->person->gender === 'P') {
                     $validator->errors()->add(
                         'father_node_id',
@@ -107,8 +109,12 @@ class StoreSharedFamilyTreePersonRequest extends FormRequest
 
             if ($familyTree instanceof FamilyTree && $this->filled('branch_father_person_id')) {
                 $branchFather = Person::query()
-                    ->select('id', 'gender')
+                    ->select('id', 'gender', 'marga_id')
                     ->find($this->integer('branch_father_person_id'));
+
+                if ($branchFather !== null && ! $this->user()->can('appendBranch', $branchFather)) {
+                    $validator->errors()->add('branch_father_person_id', 'Anda hanya dapat menambah anggota ranting pada marga akun Anda.');
+                }
 
                 if ($branchFather === null || $branchFather->gender === 'P') {
                     $validator->errors()->add(

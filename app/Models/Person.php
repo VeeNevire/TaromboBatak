@@ -245,13 +245,27 @@ class Person extends Model
      */
     public function lineage(): SupportCollection
     {
+        if ($this->father_id === null) {
+            return collect();
+        }
+
+        // UNION deduplicates ancestor edges, so malformed cycles terminate.
+        // Read the ancestor graph in one query instead of lazy-loading each father.
+        $table = $this->getConnection()->getQueryGrammar()->wrapTable($this->getTable());
+        $ancestors = $this->newQuery()->fromQuery("WITH RECURSIVE ancestor_edges AS (
+            SELECT id, father_id FROM {$table} WHERE id = ?
+            UNION
+            SELECT parent.id, parent.father_id FROM {$table} AS parent
+            INNER JOIN ancestor_edges ON parent.id = ancestor_edges.father_id
+        ) SELECT person.* FROM {$table} AS person
+          INNER JOIN ancestor_edges ON person.id = ancestor_edges.id", [$this->father_id])->keyBy('id');
         $chain = collect();
         $current = $this;
         $seen = [];
 
         while ($current->father_id !== null && ! isset($seen[$current->id])) {
             $seen[$current->id] = true;
-            $father = $current->father;
+            $father = $ancestors->get($current->father_id);
 
             if ($father === null) {
                 break;
@@ -285,24 +299,14 @@ class Person extends Model
             );
         }
 
-        $queue = [$this->id];
-        $seen = [$this->id => true];
-
-        while ($queue !== []) {
-            $children = self::query()
-                ->whereIn('father_id', $queue)
-                ->pluck('id')
-                ->reject(fn (int $id) => isset($seen[$id]))
-                ->values()
-                ->all();
-
-            foreach ($children as $childId) {
-                $seen[$childId] = true;
-            }
-
-            $ids = array_merge($ids, $children);
-            $queue = $children;
-        }
+        $table = $this->getConnection()->getQueryGrammar()->wrapTable($this->getTable());
+        $descendants = $this->getConnection()->select("WITH RECURSIVE descendant_ids AS (
+            SELECT id FROM {$table} WHERE id = ?
+            UNION
+            SELECT child.id FROM {$table} AS child
+            INNER JOIN descendant_ids ON child.father_id = descendant_ids.id
+        ) SELECT id FROM descendant_ids", [$this->id]);
+        $ids = array_merge($ids, array_map(fn (object $row): int => (int) $row->id, $descendants));
 
         return array_values(array_unique($ids));
     }

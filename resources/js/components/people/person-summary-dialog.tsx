@@ -34,6 +34,110 @@ import contacts from '@/routes/contacts';
 import margaBranchEntries from '@/routes/marga-branch-entries';
 import peopleRoutes from '@/routes/people';
 
+function SpouseInformation({
+    person,
+    showParents = false,
+}: {
+    person: TaromboPerson;
+    showParents?: boolean;
+}) {
+    return (
+        <dl className="grid gap-3 text-sm">
+            <div className="grid gap-2">
+                <dt className="text-tb-on-surface-variant">Pasangan</dt>
+                <dd className="grid gap-2 font-medium text-tb-on-surface">
+                    {(person.spouses ?? []).length > 0 ? (
+                        person.spouses?.map((spouse) => (
+                            <details
+                                key={`${person.id}-${spouse.id}`}
+                                open={showParents}
+                                className="rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 py-2"
+                            >
+                                <summary className="cursor-pointer text-tb-primary underline decoration-tb-primary/40 underline-offset-2 hover:text-tb-primary-light">
+                                    {spouse.name}
+                                </summary>
+                                <dl className="mt-3 grid gap-2 text-sm">
+                                    <div>
+                                        <dt className="text-tb-on-surface-variant">
+                                            Anak ke
+                                        </dt>
+                                        <dd>
+                                            {spouse.birthOrder &&
+                                            spouse.birthOrder > 0
+                                                ? spouse.birthOrder
+                                                : 'Belum dicatat'}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-tb-on-surface-variant">
+                                            Ayah
+                                        </dt>
+                                        <dd>
+                                            {spouse.fatherName ||
+                                                'Belum dicatat'}
+                                            {spouse.fatherMarga
+                                                ? ` (${spouse.fatherMarga})`
+                                                : ''}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-tb-on-surface-variant">
+                                            Ibu
+                                        </dt>
+                                        <dd>
+                                            {spouse.motherName ||
+                                                'Belum dicatat'}
+                                            {spouse.motherMarga
+                                                ? ` (${spouse.motherMarga})`
+                                                : ''}
+                                        </dd>
+                                    </div>
+                                </dl>
+                            </details>
+                        ))
+                    ) : person.spouse ? (
+                        <details
+                            key={person.id}
+                            open={showParents}
+                            className="rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 py-2"
+                        >
+                            <summary className="cursor-pointer text-tb-primary underline underline-offset-2">
+                                {person.spouse}
+                            </summary>
+                            <p className="mt-2 text-tb-on-surface-variant">
+                                Anak ke: Belum dicatat
+                            </p>
+                            <p className="mt-2 text-tb-on-surface-variant">
+                                Ayah: Belum dicatat
+                            </p>
+                            <p className="mt-1 text-tb-on-surface-variant">
+                                Ibu: Belum dicatat
+                            </p>
+                        </details>
+                    ) : (
+                        'Belum dicatat'
+                    )}
+                </dd>
+            </div>
+            <div className="flex items-start justify-between gap-4">
+                <dt className="text-tb-on-surface-variant">Marga pasangan</dt>
+                <dd className="grid gap-1 text-right font-medium text-tb-on-surface">
+                    {(person.spouses ?? []).length > 0
+                        ? person.spouses?.map((spouse) => (
+                              <span key={spouse.id}>
+                                  {(person.spouses?.length ?? 0) > 1
+                                      ? `${spouse.name}: `
+                                      : ''}
+                                  {spouse.marga || 'Belum dicatat'}
+                              </span>
+                          ))
+                        : person.spouseMarga || 'Belum dicatat'}
+                </dd>
+            </div>
+        </dl>
+    );
+}
+
 function yearOnly(value?: string | null): string {
     if (!value) {
         return 'Belum dicatat';
@@ -84,17 +188,6 @@ export function PersonSummaryDialog({
         : [];
     const fatherName = father?.name ?? person?.fatherName ?? null;
     const fatherMarga = father?.marga ?? person?.fatherMarga ?? null;
-    const childCandidates = person
-        ? people.filter((candidate) => candidate.parentId === person.id)
-        : [];
-    const isDaughter = (candidate: TaromboPerson) =>
-        candidate.gender?.toUpperCase() === 'P';
-    const sons =
-        person?.sonsNames ??
-        childCandidates.filter((c) => !isDaughter(c)).map((c) => c.name);
-    const daughters =
-        person?.daughtersNames ??
-        childCandidates.filter(isDaughter).map((c) => c.name);
     const connectableAccounts = (person?.claimedAccounts ?? []).filter(
         (account) =>
             account.id !== currentUserId &&
@@ -104,6 +197,7 @@ export function PersonSummaryDialog({
     const canAddBranch =
         person !== null &&
         person.gender !== 'P' &&
+        person.canAppendBranch === true &&
         versionTreeId != null &&
         person.treeNodeId != null &&
         (person.childrenNames?.length ?? 0) === 0;
@@ -223,6 +317,18 @@ export function PersonSummaryDialog({
                                                 </Button>
                                             )}
                                     </dd>
+                                </div>
+                                <div>
+                                    <details key={person.id} className="group">
+                                        <summary className="cursor-pointer font-medium text-tb-primary underline decoration-tb-primary/40 underline-offset-2 hover:text-tb-primary-light">
+                                            Data Pasangan
+                                        </summary>
+                                        <div className="mt-3 rounded-lg border border-tb-outline-variant bg-tb-surface-bright p-3">
+                                            <SpouseInformation
+                                                person={person}
+                                            />
+                                        </div>
+                                    </details>
                                 </div>
                                 {person.alias && (
                                     <div className="flex items-start justify-between gap-4">
@@ -381,80 +487,11 @@ export function PersonSummaryDialog({
                                             : 'Belum dicatat'}
                                     </dd>
                                 </div>
-                                <div className="flex items-start justify-between gap-4">
-                                    <dt className="text-tb-on-surface-variant">
-                                        Pasangan
-                                    </dt>
-                                    <dd className="flex flex-col items-end gap-1 text-right font-medium">
-                                        {(person.spouses ?? []).length > 0 ? (
-                                            person.spouses?.map((spouse) => (
-                                                <Link
-                                                    key={spouse.id}
-                                                    href={peopleRoutes.silsilah(
-                                                        {
-                                                            person: Number(
-                                                                spouse.id,
-                                                            ),
-                                                        },
-                                                        {
-                                                            query: {
-                                                                context:
-                                                                    'close',
-                                                            },
-                                                        },
-                                                    )}
-                                                    className="text-tb-primary underline decoration-tb-primary/40 underline-offset-2 transition-colors hover:text-tb-primary-light"
-                                                >
-                                                    {spouse.name}
-                                                </Link>
-                                            ))
-                                        ) : (
-                                            <span className="text-tb-on-surface">
-                                                {person.spouse ||
-                                                    'Belum dicatat'}
-                                            </span>
-                                        )}
-                                    </dd>
-                                </div>
-                                {(person.spouses ?? []).map((spouse) => (
-                                    <div
-                                        key={spouse.id}
-                                        className="grid gap-1 rounded-lg border border-tb-outline-variant bg-tb-surface-bright px-3 py-2"
-                                    >
-                                        <dt className="text-tb-on-surface-variant">
-                                            {person.gender?.toUpperCase() ===
-                                            'P'
-                                                ? `Ayah dari ${spouse.name}`
-                                                : `Ayah dari Ibu ${spouse.name}`}
-                                        </dt>
-                                        <dd className="font-medium text-tb-on-surface">
-                                            {spouse.fatherName ??
-                                                'Belum dicatat'}
-                                            {spouse.fatherMarga
-                                                ? ` (${spouse.fatherMarga})`
-                                                : ''}
-                                        </dd>
-                                    </div>
-                                ))}
-                                <div className="grid gap-1">
-                                    <dt className="text-tb-on-surface-variant">
-                                        Anak Laki-laki
-                                    </dt>
-                                    <dd className="leading-relaxed font-medium text-tb-on-surface">
-                                        {sons.length > 0
-                                            ? sons.join(', ')
-                                            : 'Belum dicatat'}
-                                    </dd>
-                                </div>
-                                <div className="grid gap-1">
-                                    <dt className="text-tb-on-surface-variant">
-                                        Anak Perempuan
-                                    </dt>
-                                    <dd className="leading-relaxed font-medium text-tb-on-surface">
-                                        {daughters.length > 0
-                                            ? daughters.join(', ')
-                                            : 'Belum dicatat'}
-                                    </dd>
+                                <div>
+                                    <SpouseInformation
+                                        person={person}
+                                        showParents
+                                    />
                                 </div>
                             </dl>
                         </section>
@@ -623,22 +660,24 @@ export function PersonSummaryDialog({
                                     Lihat Detail
                                 </Link>
                             </Button>
-                            {allowBranchEntry && person.gender !== 'P' && (
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() =>
-                                        router.post(
-                                            margaBranchEntries.store({
-                                                person: Number(person.id),
-                                            }).url,
-                                        )
-                                    }
-                                >
-                                    <UserPlus className="size-4" />
-                                    Tambah Anggota Ranting
-                                </Button>
-                            )}
+                            {allowBranchEntry &&
+                                person.canAppendBranch === true &&
+                                person.gender !== 'P' && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() =>
+                                            router.post(
+                                                margaBranchEntries.store({
+                                                    person: Number(person.id),
+                                                }).url,
+                                            )
+                                        }
+                                    >
+                                        <UserPlus className="size-4" />
+                                        Tambah Anggota Ranting
+                                    </Button>
+                                )}
                             {canEdit ? (
                                 <Button asChild>
                                     <Link

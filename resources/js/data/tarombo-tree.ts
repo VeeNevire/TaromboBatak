@@ -17,6 +17,7 @@ export type TaromboPersonRow = {
     birthOrder?: number | null;
     gender?: string | null;
     spouse?: string | null;
+    spouseMarga?: string | null;
     spouses?: TaromboSpouse[];
     image?: string | null;
     bio?: string;
@@ -25,6 +26,7 @@ export type TaromboPersonRow = {
     lastEditedAt?: string | null;
     createdAt?: string | null;
     canEdit?: boolean;
+    canAppendBranch?: boolean;
     canCopyCode?: boolean;
     fatherName?: string | null;
     fatherMarga?: string | null;
@@ -46,11 +48,14 @@ export type ClaimedAccount = {
 };
 
 export type TaromboSpouse = {
+    birthOrder?: number | null;
     id: string;
     name: string;
     marga?: string | null;
     fatherName?: string | null;
     fatherMarga?: string | null;
+    motherName?: string | null;
+    motherMarga?: string | null;
 };
 
 export type TaromboPerson = {
@@ -70,6 +75,7 @@ export type TaromboPerson = {
     birthOrder?: number | null;
     gender?: string | null;
     spouse?: string | null;
+    spouseMarga?: string | null;
     spouses?: TaromboSpouse[];
     image?: string | null;
     bio?: string;
@@ -78,6 +84,7 @@ export type TaromboPerson = {
     lastEditedAt?: string | null;
     createdAt?: string | null;
     canEdit?: boolean;
+    canAppendBranch?: boolean;
     canCopyCode?: boolean;
     fatherName?: string | null;
     fatherMarga?: string | null;

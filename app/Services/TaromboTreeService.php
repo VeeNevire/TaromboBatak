@@ -77,8 +77,10 @@ class TaromboTreeService
                 'father.marga:id,name',
                 'wives.marga:id,name',
                 'wives.father.marga',
+                'wives.mother.marga',
                 'husbands.marga:id,name',
                 'husbands.father.marga',
+                'husbands.mother.marga',
                 'creator:id,name,role',
                 'lastEditor:id,name',
                 'claimingUsers:id,name,role,current_person_id',
@@ -139,6 +141,7 @@ class TaromboTreeService
                 'pending' => $node['pending_father'],
                 'gender' => $person->gender,
                 'spouse' => $person->spouse,
+                'spouseMarga' => $person->spouse_marga,
                 'spouses' => $this->spousesFor($person),
                 'image' => $person->image,
                 'bio' => $person->bio,
@@ -147,6 +150,7 @@ class TaromboTreeService
                 'lastEditedAt' => $person->updated_by ? $person->updated_at?->copy()->setTimezone('Asia/Jakarta')->translatedFormat('d M Y H:i') : null,
                 'createdAt' => $person->created_at?->copy()->setTimezone('Asia/Jakarta')->translatedFormat('d M Y H:i WIB'),
                 'canEdit' => $this->canEdit($person, $hasFather),
+                'canAppendBranch' => Auth::user()?->can('appendBranch', $person) ?? false,
                 'canCopyCode' => $this->canCopyCode($person),
                 'fatherName' => $fatherPerson?->name,
                 'fatherMarga' => $fatherPerson?->marga?->name,
@@ -185,8 +189,10 @@ class TaromboTreeService
                 'father.marga:id,name',
                 'wives.marga:id,name',
                 'wives.father.marga',
+                'wives.mother.marga',
                 'husbands.marga:id,name',
                 'husbands.father.marga',
+                'husbands.mother.marga',
                 'creator:id,name,role',
                 'lastEditor:id,name',
                 'claimingUsers:id,name,role,current_person_id',
@@ -222,6 +228,7 @@ class TaromboTreeService
                     'pending' => (bool) $person->pending_father,
                     'gender' => $person->gender,
                     'spouse' => $person->spouse,
+                    'spouseMarga' => $person->spouse_marga,
                     'spouses' => $this->spousesFor($person),
                     'image' => $person->image,
                     'bio' => $person->bio,
@@ -230,6 +237,7 @@ class TaromboTreeService
                     'lastEditedAt' => $person->updated_by ? $person->updated_at?->copy()->setTimezone('Asia/Jakarta')->translatedFormat('d M Y H:i') : null,
                     'createdAt' => $person->created_at?->copy()->setTimezone('Asia/Jakarta')->translatedFormat('d M Y H:i WIB'),
                     'canEdit' => $this->canEdit($person, $hasFather),
+                    'canAppendBranch' => Auth::user()?->can('appendBranch', $person) ?? false,
                     'canCopyCode' => $this->canCopyCode($person),
                     'fatherName' => $person->father?->name,
                     'fatherMarga' => $person->father?->marga?->name,
@@ -251,7 +259,7 @@ class TaromboTreeService
     }
 
     /**
-     * @return array<int, array{id: string, name: string, marga: string|null, fatherName: string|null, fatherMarga: string|null}>
+     * @return array<int, array{id: string, name: string, marga: string|null, fatherName: string|null, fatherMarga: string|null, motherName: string|null, motherMarga: string|null, birthOrder: int|null}>
      */
     protected function spousesFor(Person $person): array
     {
@@ -261,9 +269,12 @@ class TaromboTreeService
             ->map(fn (Person $spouse): array => [
                 'id' => (string) $spouse->id,
                 'name' => $spouse->name,
+                'birthOrder' => $spouse->birth_order,
                 'marga' => $spouse->marga?->name,
                 'fatherName' => $spouse->father?->name,
                 'fatherMarga' => $spouse->father?->marga?->name,
+                'motherName' => $spouse->mother?->name,
+                'motherMarga' => $spouse->mother?->marga?->name,
             ])
             ->all();
     }

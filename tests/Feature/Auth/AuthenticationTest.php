@@ -21,6 +21,7 @@ test('users can authenticate using the login screen', function () {
 
     $this->assertAuthenticated();
     $response->assertRedirect(route('dashboard', absolute: false));
+    expect($user->fresh()->last_active_at)->not->toBeNull();
 });
 
 test('login requires a valid Turnstile token when configured', function () {

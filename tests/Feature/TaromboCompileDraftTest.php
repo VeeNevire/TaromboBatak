@@ -529,3 +529,19 @@ test('saved compile search uses its displayed name and stays private', function 
     $this->get(route('tarombo.snapshots.index', ['filter' => 'saved', 'q' => 'silaban']))
         ->assertInertia(fn (Assert $page) => $page->has('snapshots.data', 1)->where('snapshots.data.0.draft_id', $fallback->id));
 });
+
+test('any authenticated role can delete another accounts saved compile', function (string $role) {
+    Storage::fake('local');
+    $owner = User::factory()->create();
+    $draft = TaromboCompileDraft::query()->create([
+        'user_id' => $owner->id,
+        'tarombo_snapshot_id' => TaromboSnapshot::factory()->for($owner)->create()->id,
+        'state' => json_decode(compileState(), true),
+    ]);
+    Storage::disk('local')->put($draft->previewPath(), 'preview');
+    $actor = User::factory()->create(['role' => $role]);
+
+    $this->actingAs($actor)->delete(route('tarombo.compile-drafts.destroy', $draft))->assertRedirect();
+    $this->assertModelMissing($draft);
+    Storage::disk('local')->assertMissing($draft->previewPath());
+})->with(['user', 'contributor_main', 'contributor_member', 'admin', 'subadmin']);

@@ -40,7 +40,8 @@ class SharedFamilyTreePersonController extends Controller
             ->orderBy('id')
             ->get();
         $fatherNodes = $nodes->filter(
-            fn (FamilyTreeNode $node) => $node->person->gender !== 'P',
+            fn (FamilyTreeNode $node) => $node->person->gender !== 'P'
+                && $request->user()->can('appendBranch', $node->person),
         );
         // Only fathers without descendants in this tree can take a new member.
         $parentNodeIds = $nodes->pluck('father_node_id')->filter()->unique();
@@ -52,11 +53,14 @@ class SharedFamilyTreePersonController extends Controller
             ? $nodes->first(fn (FamilyTreeNode $node) => $node->person_id === $fatherPersonId
                 && $node->person->gender !== 'P')
             : null;
+        if ($initialFatherNode !== null) {
+            Gate::authorize('appendBranch', $initialFatherNode->person);
+        }
         $initialBranchFather = null;
 
         if ($fatherPersonId > 0 && $initialFatherNode === null) {
             $branchFather = Person::query()
-                ->select('id', 'name', 'gender', 'father_id')
+                ->select('id', 'name', 'gender', 'father_id', 'marga_id')
                 ->find($fatherPersonId);
 
             if ($branchFather === null) {
@@ -65,6 +69,7 @@ class SharedFamilyTreePersonController extends Controller
                 ]);
             }
 
+            Gate::authorize('appendBranch', $branchFather);
             $appendService->validateBranchFather($familyTree, $branchFather);
             $initialBranchFather = [
                 'id' => $branchFather->id,

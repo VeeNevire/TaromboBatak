@@ -99,6 +99,7 @@ Route::get('tarombo/full', [TaromboController::class, 'publicFullscreen'])
 Route::get('marga', [MargaController::class, 'public'])->name('marga.view');
 
 Route::get('dashboard/marga', [MargaController::class, 'index'])->name('marga.index');
+Route::get('dashboard/marga/{marga}/daftar-nama', [MargaController::class, 'names'])->name('marga.names');
 Route::get('dashboard/marga/{marga}/related-content', [MargaController::class, 'relatedContent'])
     ->name('marga.related-content');
 Route::get('dashboard/marga/{marga}/silsilah/{direction}', [MargaController::class, 'tree'])

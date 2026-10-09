@@ -152,3 +152,31 @@ test('regular accounts cannot open or start general AI conversations', function 
     $this->postJson(route('marga.ai.new-general-conversation'))->assertForbidden();
     $this->assertDatabaseCount('tarombo_ai_conversations', 0);
 });
+
+test('AI receives parent names and margas even when the parents are outside the selected marga', function (bool $general) {
+    fakePersistedTaromboChat();
+    $marga = Marga::factory()->create();
+    $fatherMarga = Marga::factory()->create();
+    $motherMarga = Marga::factory()->create();
+    $father = Person::factory()->create(['name' => 'Ayah Di Luar Konteks', 'marga_id' => $fatherMarga->id]);
+    $mother = Person::factory()->create(['name' => 'Ibu Di Luar Konteks', 'marga_id' => $motherMarga->id]);
+    $child = Person::factory()->create(['name' => 'Anak Dalam Konteks', 'marga_id' => $marga->id, 'father_id' => $father->id, 'mother_id' => $mother->id]);
+    $unrecorded = Person::factory()->create(['marga_id' => $marga->id, 'father_id' => null, 'mother_id' => null]);
+    $actor = User::factory()->asMainContributor()->withMarga($marga->id)->create();
+
+    $this->actingAs($actor)->post($general ? route('marga.ai.ask-all') : route('marga.ai.ask', $marga), ['question' => 'Siapa ayah dan ibunya?'])->assertRedirect();
+
+    Http::assertSent(function (Request $request) use ($child, $unrecorded, $father, $mother, $fatherMarga, $motherMarga) {
+        $rows = collect(json_decode($request['input'], true)['tree_rows'])->keyBy('id');
+        $row = $rows[(string) $child->id];
+
+        return count($rows) === 2
+            && $row['parentId'] === (string) $father->id && $row['motherId'] === (string) $mother->id
+            && $row['fatherName'] === $father->name && $row['fatherMarga'] === $fatherMarga->name
+            && $row['motherName'] === $mother->name && $row['motherMarga'] === $motherMarga->name
+            && $rows[(string) $unrecorded->id]['parentId'] === null
+            && $rows[(string) $unrecorded->id]['fatherName'] === null
+            && str_contains($request['instructions'], 'data ayah belum tercatat')
+            && str_contains($request['instructions'], 'jangan hanya menampilkan ID');
+    });
+})->with([true, false]);

@@ -6,8 +6,10 @@ use App\Http\Requests\StoreAccountRequest;
 use App\Http\Requests\UpdateAccountRequest;
 use App\Models\ActivityLog;
 use App\Models\FamilyTree;
+use App\Models\FamilyTreeActivity;
 use App\Models\Marga;
 use App\Models\Person;
+use App\Models\TreeActivityLog;
 use App\Models\User;
 use App\Services\AccountActivityLogger;
 use App\Support\IndonesiaRegions;
@@ -21,7 +23,7 @@ use Inertia\Response;
 class AccountController extends Controller
 {
     /** Columns the account table can be ordered by. */
-    private const SORTABLE = ['name', 'email', 'role', 'current_person', 'marga', 'created_at'];
+    private const SORTABLE = ['name', 'email', 'role', 'current_person', 'marga', 'created_at', 'last_active_at'];
 
     public function index(Request $request): Response
     {
@@ -73,20 +75,53 @@ class AccountController extends Controller
     {
         $legacyFamilyTreeName = $this->primaryFamilyTreeName($account);
 
+        $logs = ActivityLog::query()
+            ->where(fn ($query) => $query->where('account_id', $account->id)->orWhere('actor_id', $account->id))
+            ->with('actor:id,name')->latest()->orderByDesc('id')->limit(100)->get()
+            ->map(fn (ActivityLog $log) => [
+                ...$this->activityLogPayload($log, $legacyFamilyTreeName),
+                'sort_at' => $log->created_at?->getTimestamp() ?? 0,
+            ]);
+        $familyLogs = FamilyTreeActivity::query()
+            ->where(fn ($query) => $query->where('owner_id', $account->id)->orWhere('actor_id', $account->id))
+            ->with('actor:id,name')->latest()->orderByDesc('id')->limit(100)->get()
+            ->map(fn (FamilyTreeActivity $log) => [
+                'id' => 'family-'.$log->id,
+                'action' => $log->action,
+                'description' => $log->description,
+                'actor' => $log->actor?->name ?? 'Sistem',
+                'created_at' => $log->created_at?->copy()->setTimezone('Asia/Jakarta')->format('d M Y H:i'),
+                'sort_at' => $log->created_at?->getTimestamp() ?? 0,
+                'context' => [
+                    'person_name' => $log->member_name,
+                    'father_name' => null,
+                    'family_tree_name' => $log->tree_name,
+                    'is_legacy' => false,
+                ],
+            ]);
+        $treeLogs = TreeActivityLog::query()->where('actor_id', $account->id)
+            ->with(['actor:id,name', 'person:id,name,father_id', 'person.father:id,name', 'familyTree:id,name'])
+            ->latest()->orderByDesc('id')->limit(100)->get()
+            ->map(fn (TreeActivityLog $log) => [
+                'id' => 'tree-'.$log->id,
+                'action' => $log->action,
+                'description' => $log->summary,
+                'actor' => $log->actor?->name ?? 'Sistem',
+                'created_at' => $log->created_at?->copy()->setTimezone('Asia/Jakarta')->format('d M Y H:i'),
+                'sort_at' => $log->created_at?->getTimestamp() ?? 0,
+                'context' => [
+                    'person_name' => $log->person?->name,
+                    'father_name' => $log->person?->father?->name,
+                    'family_tree_name' => $log->familyTree?->name,
+                    'is_legacy' => false,
+                ],
+            ]);
+
         return response()->json([
-            'account' => [
-                'id' => $account->id,
-                'name' => $account->name,
-                'email' => $account->email,
-            ],
-            'logs' => ActivityLog::query()
-                ->where('account_id', $account->id)
-                ->with('actor:id,name')
-                ->latest()
-                ->limit(100)
-                ->get()
-                ->map(fn (ActivityLog $log) => $this->activityLogPayload($log, $legacyFamilyTreeName))
-                ->values(),
+            'account' => $account->only(['id', 'name', 'email']),
+            'logs' => $logs->concat($familyLogs)->concat($treeLogs)
+                ->sortByDesc('sort_at')->take(100)
+                ->map(fn (array $log) => collect($log)->except('sort_at')->all())->values(),
         ]);
     }
 
@@ -104,7 +139,7 @@ class AccountController extends Controller
             'action' => $log->action,
             'description' => $log->description,
             'actor' => $log->actor?->name ?? 'Sistem',
-            'created_at' => $log->created_at?->format('d M Y H:i'),
+            'created_at' => $log->created_at?->copy()->setTimezone('Asia/Jakarta')->format('d M Y H:i'),
             'context' => $isPersonActivity ? [
                 'person_name' => $personName,
                 'father_name' => data_get($metadata, 'father.name'),
@@ -278,6 +313,7 @@ class AccountController extends Controller
             'managed_margas' => $account->managedMargas->pluck('name')->values()->all(),
             'current_person' => $account->currentPerson?->name,
             'created_at' => $account->created_at?->format('d M Y'),
+            'last_active_at' => $account->last_active_at?->copy()->setTimezone('Asia/Jakarta')->format('d M Y H:i \W\I\B'),
         ];
     }
 
