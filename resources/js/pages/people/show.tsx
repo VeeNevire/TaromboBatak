@@ -72,6 +72,7 @@ export default function PersonShow({
     const [branchDialogOpen, setBranchDialogOpen] = useState(false);
     const activeMargaName =
         margas.find((marga) => marga.id === person.marga_id)?.name ?? null;
+
     return (
         <>
             <Head title={`Jejak Keluarga ${person.name}`} />

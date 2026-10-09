@@ -1,6 +1,4 @@
 import { Head } from '@inertiajs/react';
-import { Download } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { ZoomableImage } from '@/components/zoomable-image';
 
 export default function QrResult({

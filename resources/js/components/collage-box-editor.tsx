@@ -1,5 +1,6 @@
 import { ImagePlus, LoaderCircle, X } from 'lucide-react';
-import { type RefObject, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { RefObject } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -7,12 +8,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import {
-    CANVAS_HEIGHT,
-    CANVAS_WIDTH,
-    type CollageFormat,
-    renderCollage,
-} from '@/lib/collage';
+import { CANVAS_HEIGHT, CANVAS_WIDTH, renderCollage } from '@/lib/collage';
+import type { CollageFormat } from '@/lib/collage';
 
 type FrameOption = {
     id: number;
@@ -40,11 +37,13 @@ export function CollageBoxEditor({
 
     useEffect(() => {
         const canvas = canvasRef.current;
+
         if (!canvas) {
             return;
         }
 
         const ctx = canvas.getContext('2d');
+
         if (!ctx) {
             return;
         }

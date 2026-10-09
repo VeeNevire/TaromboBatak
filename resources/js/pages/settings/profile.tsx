@@ -54,8 +54,20 @@ export default function Profile({
     telegramBotConfigured,
 }: Props) {
     const { auth } = usePage<PageProps>().props;
-    const [name, setName] = useState(auth.user.name);
-    const [email, setEmail] = useState(auth.user.email);
+    const [nameDraft, setNameDraft] = useState<{
+        source: string;
+        value: string;
+    } | null>(null);
+    const [emailDraft, setEmailDraft] = useState<{
+        source: string;
+        value: string;
+    } | null>(null);
+    const name =
+        nameDraft?.source === auth.user.name ? nameDraft.value : auth.user.name;
+    const email =
+        emailDraft?.source === auth.user.email
+            ? emailDraft.value
+            : auth.user.email;
     const [margaId, setMargaId] = useState(
         auth.user.marga_id ? String(auth.user.marga_id) : '',
     );
@@ -81,11 +93,6 @@ export default function Profile({
     );
     const regencies =
         regions.find((region) => region.code === provinceCode)?.regencies ?? [];
-
-    useEffect(() => {
-        setName(auth.user.name);
-        setEmail(auth.user.email);
-    }, [auth.user.email, auth.user.name]);
 
     const selectProvince = (code: string) => {
         const nextCode = code === EMPTY_VALUE ? '' : code;
@@ -215,7 +222,10 @@ export default function Profile({
                                     className="mt-1 block w-full"
                                     value={name}
                                     onChange={(event) =>
-                                        setName(event.target.value)
+                                        setNameDraft({
+                                            source: auth.user.name,
+                                            value: event.target.value,
+                                        })
                                     }
                                     name="name"
                                     required
@@ -238,7 +248,10 @@ export default function Profile({
                                     className="mt-1 block w-full"
                                     value={email}
                                     onChange={(event) =>
-                                        setEmail(event.target.value)
+                                        setEmailDraft({
+                                            source: auth.user.email,
+                                            value: event.target.value,
+                                        })
                                     }
                                     name="email"
                                     required

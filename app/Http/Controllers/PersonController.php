@@ -584,7 +584,7 @@ class PersonController extends Controller
         } else {
             Gate::authorize('update', $person);
         }
-        $familyTrees = $this->familyTrees($user);
+        $familyTrees = $this->familyTrees($user, $person);
         $versionTreeIds = FamilyTreeNode::query()
             ->where('person_id', $person->id)
             ->whereIn('family_tree_id', array_column($familyTrees, 'id'))
@@ -1719,9 +1719,9 @@ class PersonController extends Controller
     protected function familyPayloadForVersion(Person $person, int $treeId, int|\Illuminate\Support\Collection|null $margaId = null): array
     {
         $payload = $this->familyPayload($person, $margaId);
-        $tree = FamilyTree::query()->with(['nodes.person.marga', 'nodes.fatherNode.person.marga'])->findOrFail($treeId);
-        $nodes = $tree->nodes->keyBy('person_id');
-        $focusNode = $nodes->get($person->id);
+        $tree = FamilyTree::query()->findOrFail($treeId);
+        $focusNode = $tree->nodes()->where('person_id', $person->id)
+            ->with(['person.marga', 'fatherNode.person.marga'])->first();
 
         if ($focusNode === null) {
             return $payload;
@@ -2021,7 +2021,23 @@ class PersonController extends Controller
             ->filter(fn (FamilyTree $tree) => $tree->rootPerson !== null)
             ->each(fn (FamilyTree $tree) => $tree->setAttribute('approval_access_user_id', $user->id))
             ->values();
-        $summaries = $this->familyTreeSummaries($trees);
+        $memberFilter = null;
+        if ($focus !== null) {
+            // History actions only need membership for rows visible on this form.
+            $focusNodes = FamilyTreeNode::query()->whereIn('family_tree_id', $trees->modelKeys())
+                ->where('person_id', $focus->id)->get(['id', 'father_node_id']);
+            $parentIds = $focusNodes->pluck('father_node_id')->filter();
+            $relatedIds = FamilyTreeNode::query()->whereIn('family_tree_id', $trees->modelKeys())
+                ->whereIn('father_node_id', $focusNodes->pluck('id')->merge($parentIds))
+                ->pluck('person_id');
+            $identityIds = Marga::query()->whereNotNull('identity_person_id')->pluck('identity_person_id');
+            $identityChildIds = Person::query()->whereIn('father_id', $identityIds)->pluck('id');
+            $memberFilter = $trees->pluck('root_person_id')->merge($relatedIds)
+                ->merge(FamilyTreeNode::query()->whereKey($parentIds)->pluck('person_id'))
+                ->merge($focus->lineage()->pluck('id'))->merge($identityIds)->merge($identityChildIds)
+                ->push($focus->id)->filter()->unique()->values()->all();
+        }
+        $summaries = $this->familyTreeSummaries($trees, $memberFilter);
 
         return $trees
             ->map(fn (FamilyTree $tree): array => $this->familyTreeHistoryEntry($tree, $user, $summaries[$tree->id]))
@@ -2207,52 +2223,63 @@ class PersonController extends Controller
      * @param  Collection<int, FamilyTree>  $trees  with rootPerson loaded
      * @return array<int, array{member_person_ids: array<int, int>, root_name: string|null}>
      */
-    protected function familyTreeSummaries(Collection $trees): array
+    protected function familyTreeSummaries(Collection $trees, ?array $memberFilter = null): array
     {
-        $nodesByTree = FamilyTreeNode::query()
-            ->whereIn('family_tree_id', $trees->modelKeys())
-            ->toBase()
-            ->get(['id', 'family_tree_id', 'person_id', 'father_node_id'])
-            ->groupBy('family_tree_id');
-        $topPersonIds = [];
+        $roots = $trees->pluck('root_person_id', 'id');
+        $memberIds = [];
+        $currentNodes = [];
 
-        foreach ($trees as $tree) {
-            $nodes = $nodesByTree->get($tree->id, collect());
-            $nodesById = $nodes->keyBy('id');
-            $node = $nodes->firstWhere('person_id', $tree->root_person_id);
-            $visited = [];
-
-            while ($node !== null && $node->father_node_id !== null && ! isset($visited[$node->id])) {
-                $visited[$node->id] = true;
-                $father = $nodesById->get($node->father_node_id);
-
-                if ($father === null) {
-                    break;
-                }
-
-                $node = $father;
+        // Read bounded batches instead of retaining every node of every version.
+        foreach (FamilyTreeNode::query()->whereIn('family_tree_id', $trees->modelKeys())
+            ->when($memberFilter !== null, fn ($query) => $query->whereIn('person_id', $memberFilter))
+            ->toBase()->select(['id', 'family_tree_id', 'person_id', 'father_node_id'])
+            ->lazyById(2000) as $node) {
+            $memberIds[$node->family_tree_id][] = (int) $node->person_id;
+            if ((int) $roots->get($node->family_tree_id) === (int) $node->person_id) {
+                $currentNodes[$node->family_tree_id] ??= $node;
             }
-
-            $topPersonIds[$tree->id] = $node?->person_id;
         }
 
-        $names = Person::query()->whereKey(array_filter($topPersonIds))->pluck('name', 'id');
+        $topPersonIds = [];
+        $visited = [];
+        while ($currentNodes !== []) {
+            $parentIds = [];
+            foreach ($currentNodes as $treeId => $node) {
+                if ($node->father_node_id === null || isset($visited[$treeId][$node->id])) {
+                    $topPersonIds[$treeId] = $node->person_id;
+                    unset($currentNodes[$treeId]);
+                } else {
+                    $visited[$treeId][$node->id] = true;
+                    $parentIds[] = $node->father_node_id;
+                }
+            }
+            if ($currentNodes === []) {
+                break;
+            }
+
+            $parents = FamilyTreeNode::query()->whereIn('id', array_unique($parentIds))
+                ->toBase()->get(['id', 'family_tree_id', 'person_id', 'father_node_id'])->keyBy('id');
+            foreach ($currentNodes as $treeId => $node) {
+                $father = $parents->get($node->father_node_id);
+                if ($father === null || (int) $father->family_tree_id !== (int) $treeId) {
+                    $topPersonIds[$treeId] = $node->person_id;
+                    unset($currentNodes[$treeId]);
+                } else {
+                    $currentNodes[$treeId] = $father;
+                }
+            }
+        }
+
+        $names = Person::query()->whereKey(array_values($topPersonIds))->pluck('name', 'id');
         $summaries = [];
-
         foreach ($trees as $tree) {
-            $topPersonId = $topPersonIds[$tree->id];
-            $topName = $topPersonId !== null ? $names->get($topPersonId) : null;
-
+            $topPersonId = $topPersonIds[$tree->id] ?? null;
             $summaries[$tree->id] = [
-                'member_person_ids' => $nodesByTree->get($tree->id, collect())
-                    ->pluck('person_id')
-                    ->push($tree->root_person_id)
-                    ->map(fn ($personId) => (int) $personId)
-                    ->unique()
-                    ->values()
-                    ->all(),
+                'member_person_ids' => array_values(array_unique([
+                    ...($memberIds[$tree->id] ?? []), (int) $tree->root_person_id,
+                ])),
                 'root_name' => $tree->root_person_id !== null
-                    ? ($topName ?? $tree->rootPerson?->name)
+                    ? ($names->get($topPersonId) ?? $tree->rootPerson?->name)
                     : null,
             ];
         }
