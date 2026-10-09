@@ -1,5 +1,5 @@
 import { Link, router, usePage } from '@inertiajs/react';
-import { toCanvas } from 'html-to-image';
+import { toCanvas, toSvg } from 'html-to-image';
 import {
     ArrowLeft,
     Check,
@@ -358,22 +358,157 @@ function paperPixelSize(
         : { width: shortEdge, height: resolution };
 }
 
-function supportsSnapshotResolution(
-    paper: string,
-    resolution: number,
-): boolean {
-    if (resolution > MAX_CANVAS_SIDE) {
-        return false;
+// Tiled export: canvas pieces this size are drawn one after another and
+// streamed into a PNG, so the full bitmap never exists in memory at once.
+const TILE_WIDTH = 4096;
+const TILE_HEIGHT = 1024;
+
+const CRC_TABLE = (() => {
+    const table = new Uint32Array(256);
+
+    for (let n = 0; n < 256; n++) {
+        let c = n;
+
+        for (let k = 0; k < 8; k++) {
+            c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+        }
+
+        table[n] = c >>> 0;
     }
 
-    // Automatic paper depends on the tree's proportions; export checks its area.
-    if (paper === 'auto') {
-        return true;
+    return table;
+})();
+
+function pngChunk(type: string, data: Uint8Array) {
+    const chunk = new Uint8Array(12 + data.length);
+    const view = new DataView(chunk.buffer);
+
+    view.setUint32(0, data.length);
+
+    for (let i = 0; i < 4; i++) {
+        chunk[4 + i] = type.charCodeAt(i);
     }
 
-    const size = paperPixelSize(paper, resolution, 'portrait');
+    chunk.set(data, 8);
 
-    return size.width * size.height <= MAX_CANVAS_AREA;
+    let crc = 0xffffffff;
+
+    for (let i = 4; i < 8 + data.length; i++) {
+        crc = CRC_TABLE[(crc ^ chunk[i]) & 0xff] ^ (crc >>> 8);
+    }
+
+    view.setUint32(8 + data.length, (crc ^ 0xffffffff) >>> 0);
+
+    return chunk;
+}
+
+/**
+ * Rasterises the serialised tree tile by tile into an RGBA PNG. Used for
+ * outputs beyond the browser's canvas limits (e.g. 32K).
+ */
+async function renderTiledPng(
+    svgUrl: string,
+    width: number,
+    height: number,
+    pixelRatio: number,
+    backgroundColor: string | undefined,
+): Promise<Blob> {
+    const image = new Image();
+
+    image.src = svgUrl;
+    await image.decode();
+
+    const ihdr = new Uint8Array(13);
+    const ihdrView = new DataView(ihdr.buffer);
+
+    ihdrView.setUint32(0, width);
+    ihdrView.setUint32(4, height);
+    ihdr[8] = 8; // bit depth
+    ihdr[9] = 6; // RGBA
+
+    const parts: BlobPart[] = [
+        new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
+        pngChunk('IHDR', ihdr),
+    ];
+    const deflate = new CompressionStream('deflate');
+    const writer = deflate.writable.getWriter();
+    const collected = (async () => {
+        const reader = deflate.readable.getReader();
+
+        for (let r = await reader.read(); !r.done; r = await reader.read()) {
+            parts.push(pngChunk('IDAT', r.value));
+        }
+    })();
+
+    const tile = document.createElement('canvas');
+
+    tile.width = Math.min(TILE_WIDTH, width);
+    tile.height = Math.min(TILE_HEIGHT, height);
+
+    const context = tile.getContext('2d', { willReadFrequently: true });
+
+    if (!context) {
+        throw new SnapshotTooLargeError();
+    }
+
+    const stride = width * 4 + 1;
+
+    try {
+        for (let y = 0; y < height; y += TILE_HEIGHT) {
+            const rows = Math.min(TILE_HEIGHT, height - y);
+            // Filter byte 0 (none) leads each row; the array starts zeroed.
+            const band = new Uint8Array(rows * stride);
+
+            for (let x = 0; x < width; x += TILE_WIDTH) {
+                const columns = Math.min(TILE_WIDTH, width - x);
+
+                context.clearRect(0, 0, tile.width, tile.height);
+
+                if (backgroundColor) {
+                    context.fillStyle = backgroundColor;
+                    context.fillRect(0, 0, columns, rows);
+                }
+
+                context.drawImage(
+                    image,
+                    x / pixelRatio,
+                    y / pixelRatio,
+                    columns / pixelRatio,
+                    rows / pixelRatio,
+                    0,
+                    0,
+                    columns,
+                    rows,
+                );
+
+                const pixels = context.getImageData(0, 0, columns, rows).data;
+
+                for (let row = 0; row < rows; row++) {
+                    band.set(
+                        pixels.subarray(
+                            row * columns * 4,
+                            (row + 1) * columns * 4,
+                        ),
+                        row * stride + 1 + x * 4,
+                    );
+                }
+            }
+
+            await writer.write(band);
+            // Let the page breathe between bands.
+            await new Promise((resolve) => setTimeout(resolve));
+        }
+
+        await writer.close();
+        await collected;
+    } finally {
+        tile.width = 0;
+        tile.height = 0;
+    }
+
+    parts.push(pngChunk('IEND', new Uint8Array()));
+
+    return new Blob(parts, { type: 'image/png' });
 }
 
 /**
@@ -497,26 +632,15 @@ async function renderSnapshot(
 
     const outputWidth = viewWidth * pixelRatio;
     const outputHeight = viewHeight * pixelRatio;
-
-    if (
-        outputWidth > MAX_CANVAS_SIDE ||
-        outputHeight > MAX_CANVAS_SIDE ||
-        outputWidth * outputHeight > MAX_CANVAS_AREA
-    ) {
-        throw new SnapshotTooLargeError();
-    }
-
     const offsetX = (viewWidth - box.width) / 2 - box.x;
     const offsetY = (viewHeight - box.height) / 2 - box.y;
-    const canvas = await toCanvas(content, {
+    const renderOptions = {
         width: viewWidth,
         height: viewHeight,
-        pixelRatio,
-        skipAutoScale: true,
         cacheBust: false,
         preferredFontFormat: 'woff2',
         fetchRequestInit: {
-            cache: 'force-cache',
+            cache: 'force-cache' as const,
             signal:
                 typeof AbortSignal.timeout === 'function'
                     ? AbortSignal.timeout(15000)
@@ -534,6 +658,27 @@ async function renderSnapshot(
             transform: `translate(${offsetX}px, ${offsetY}px)`,
             transformOrigin: 'top left',
         },
+    };
+
+    // Too big for one canvas (e.g. 32K): draw it in tiles into a PNG.
+    if (
+        outputWidth > MAX_CANVAS_SIDE ||
+        outputHeight > MAX_CANVAS_SIDE ||
+        outputWidth * outputHeight > MAX_CANVAS_AREA
+    ) {
+        return renderTiledPng(
+            await toSvg(content, renderOptions),
+            Math.round(outputWidth),
+            Math.round(outputHeight),
+            pixelRatio,
+            options.transparent ? undefined : options.backgroundColor,
+        );
+    }
+
+    const canvas = await toCanvas(content, {
+        ...renderOptions,
+        pixelRatio,
+        skipAutoScale: true,
     });
 
     try {
@@ -1592,8 +1737,11 @@ export function TaromboExplorer({
 
             const file = new File(
                 [blob],
-                snapshotFileName(fullscreenView, transparent ? 'png' : 'jpg'),
-                { type: transparent ? 'image/png' : 'image/jpeg' },
+                snapshotFileName(
+                    fullscreenView,
+                    blob.type === 'image/png' ? 'png' : 'jpg',
+                ),
+                { type: blob.type },
             );
             const includedIds = [...snapshotBranches, ...snapshotDetachedTrees]
                 .filter((branch) => !excludedBranchIds.includes(branch.id))
@@ -2931,12 +3079,6 @@ export function TaromboExplorer({
                                                     <SelectItem
                                                         key={level}
                                                         value={String(level)}
-                                                        disabled={
-                                                            !supportsSnapshotResolution(
-                                                                snapshotPaper,
-                                                                level,
-                                                            )
-                                                        }
                                                     >
                                                         {snapshotResolutionLabel(
                                                             level,
@@ -2952,30 +3094,7 @@ export function TaromboExplorer({
                                     <div className="flex gap-2">
                                         <Select
                                             value={snapshotPaper}
-                                            onValueChange={(paper) => {
-                                                setSnapshotPaper(paper);
-
-                                                if (
-                                                    !supportsSnapshotResolution(
-                                                        paper,
-                                                        snapshotResolution,
-                                                    )
-                                                ) {
-                                                    setSnapshotResolution(
-                                                        Math.max(
-                                                            ...SNAPSHOT_RESOLUTIONS.filter(
-                                                                (level) =>
-                                                                    level <=
-                                                                        snapshotResolution &&
-                                                                    supportsSnapshotResolution(
-                                                                        paper,
-                                                                        level,
-                                                                    ),
-                                                            ),
-                                                        ),
-                                                    );
-                                                }
-                                            }}
+                                            onValueChange={setSnapshotPaper}
                                         >
                                             <SelectTrigger className="w-36 shrink-0">
                                                 <SelectValue />

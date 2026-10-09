@@ -29,8 +29,17 @@ class TrackAccountAccess
     private function record(User $user): void
     {
         $accessedAt = now();
-        // Access tracking must not alter the account's last profile edit timestamp.
-        $user->newModelQuery()->whereKey($user->id)->toBase()->update(['last_active_at' => $accessedAt]);
+
+        try {
+            // Access tracking must not alter the account's last profile edit timestamp.
+            $user->newModelQuery()->whereKey($user->id)->toBase()->update(['last_active_at' => $accessedAt]);
+        } catch (\Throwable $e) {
+            // Tracking is best-effort; never fail the page because of it.
+            report($e);
+
+            return;
+        }
+
         $user->setAttribute('last_active_at', $accessedAt);
     }
 }
