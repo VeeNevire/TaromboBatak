@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 export type TreeNode = {
     id: string;
     name: string;
+    gender?: string | null;
     alias?: string | null;
     marga: string;
     margaColor?: string | null;
@@ -186,7 +187,17 @@ export function NodeCard({
                         background: pastelFor(node.id),
                         borderColor: highlighted
                             ? GOLD
-                            : 'var(--tb-ring, #E3DFD2)',
+                            : node.gender?.toUpperCase() === 'P'
+                              ? 'var(--tb-female-ring, var(--tb-ring, #E3DFD2))'
+                              : 'var(--tb-male-ring, var(--tb-ring, #E3DFD2))',
+                        borderWidth:
+                            node.gender?.toUpperCase() === 'P'
+                                ? 'var(--tb-female-ring-width, 1px)'
+                                : 'var(--tb-male-ring-width, 1px)',
+                        borderRadius:
+                            node.gender?.toUpperCase() === 'P'
+                                ? `var(--tb-female-ring-radius, ${highlighted ? '12px' : '50%'})`
+                                : `var(--tb-male-ring-radius, ${highlighted ? '12px' : '50%'})`,
                         boxShadow: highlighted
                             ? '0 3px 10px rgba(184,147,74,0.3)'
                             : '0 2px 6px rgba(36,50,43,0.06)',

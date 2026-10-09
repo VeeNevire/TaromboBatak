@@ -138,6 +138,7 @@ function toNode(person: TaromboPerson, displayNumber?: number): TreeNode {
     return {
         id: person.id,
         name: person.name,
+        gender: person.gender,
         alias: person.alias,
         marga: person.marga,
         birthYear: person.birthYear,
