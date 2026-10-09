@@ -50,20 +50,26 @@ class PersonController extends Controller
 
     protected function loadDescendantChildren(array $ids): void
     {
-        $queue = array_values(array_unique($ids));
-        while ($queue !== []) {
-            $queue = array_values(array_filter($queue, fn ($id) => ! array_key_exists($id, $this->descendantChildren)));
-            if ($queue === []) {
-                break;
-            }
-            $children = Person::query()->whereIn('father_id', $queue)
-                ->orderBy('birth_order')->orderBy('id')
-                ->get(['id', 'father_id', 'name', 'birth_order', 'is_public']);
-            $groups = $children->groupBy('father_id');
-            foreach ($queue as $id) {
-                $this->descendantChildren[$id] = $groups->get($id, collect());
-            }
-            $queue = $children->pluck('id')->all();
+        $ids = array_values(array_filter(array_unique($ids), fn ($id) => ! array_key_exists($id, $this->descendantChildren)));
+        if ($ids === []) {
+            return;
+        }
+
+        $model = new Person;
+        $table = $model->getConnection()->getQueryGrammar()->wrapTable($model->getTable());
+        $placeholders = implode(', ', array_fill(0, count($ids), '?'));
+        $children = $model->newQuery()->fromQuery("WITH RECURSIVE subtree_ids AS (
+            SELECT id FROM {$table} WHERE id IN ({$placeholders})
+            UNION
+            SELECT child.id FROM {$table} AS child
+            INNER JOIN subtree_ids ON child.father_id = subtree_ids.id
+        ) SELECT id, father_id, name, birth_order, is_public FROM {$table}
+          WHERE father_id IN (SELECT id FROM subtree_ids)
+          ORDER BY birth_order, id", $ids);
+        $groups = $children->groupBy('father_id');
+
+        foreach (array_unique(array_merge($ids, $children->modelKeys())) as $id) {
+            $this->descendantChildren[$id] = $groups->get($id, collect());
         }
     }
 
@@ -578,8 +584,12 @@ class PersonController extends Controller
         } else {
             Gate::authorize('update', $person);
         }
-        $versionTrees = $this->familyTrees($user, $person);
         $familyTrees = $this->familyTrees($user);
+        $versionTreeIds = FamilyTreeNode::query()
+            ->where('person_id', $person->id)
+            ->whereIn('family_tree_id', array_column($familyTrees, 'id'))
+            ->pluck('family_tree_id');
+        $versionTrees = collect($familyTrees)->whereIn('id', $versionTreeIds)->values()->all();
         $selectedVersionName = data_get(
             collect($versionTrees)->firstWhere('id', $request->integer('version_tree')),
             'name',
@@ -630,12 +640,13 @@ class PersonController extends Controller
                 $person->id,
             )
             : null;
+        $spouseMargas = $this->margaOptions();
 
         return Inertia::render('people/form', [
             'person' => $this->familyPayloadVisibleToUser($familyPayload, $user),
             'regions' => IndonesiaRegions::all(),
-            'margas' => $isStaff ? $this->margaOptions() : $this->margaOptionsForUser($user),
-            'spouseMargas' => $this->margaOptions(),
+            'margas' => $isStaff ? $spouseMargas : $this->margaOptionsForUser($user),
+            'spouseMargas' => $spouseMargas,
             'nameSuggestions' => $this->nameSuggestions(
                 $isStaff ? null : ($user->isContributor() ? $user->accessibleMargaIds() : $user->marga_id),
             ),
@@ -1937,27 +1948,23 @@ class PersonController extends Controller
     protected function fatherSuggestions(?Person $person = null, int|\Illuminate\Support\Collection|null $margaId = null): array
     {
         return Person::query()
-            ->select(['id', 'name', 'gender', 'marga_id', 'father_id'])
-            ->with(['father:id,name', 'marga:id,name'])
-            ->when($margaId instanceof \Illuminate\Support\Collection, fn ($query) => $query->whereIn('marga_id', $margaId))
-            ->when(is_int($margaId), fn ($query) => $query->where('marga_id', $margaId))
-            ->where('gender', 'L')
-            ->when($person !== null, fn ($query) => $query->whereNotIn('id', $person->ineligibleFatherIds()))
-            ->whereNotNull('name')
-            ->where('name', '!=', 'N/A')
-            ->orderBy('name')
-            ->orderBy('father_id')
-            ->get()
-            ->map(fn (Person $father) => [
-                'id' => $father->id,
-                'name' => $father->name,
-                'gender' => $father->gender,
-                'marga_id' => $father->marga_id,
-                'marga' => $father->marga?->name,
-                'father_id' => $father->father_id,
-                'father_name' => $father->father?->name,
-                'chain' => $father->chain,
+            ->leftJoin('people as fathers', 'fathers.id', '=', 'people.father_id')
+            ->leftJoin('margas', 'margas.id', '=', 'people.marga_id')
+            ->select([
+                'people.id', 'people.name', 'people.gender', 'people.marga_id', 'people.father_id',
+                'margas.name as marga', 'fathers.name as father_name', 'people.chain',
             ])
+            ->when($margaId instanceof \Illuminate\Support\Collection, fn ($query) => $query->whereIn('people.marga_id', $margaId))
+            ->when(is_int($margaId), fn ($query) => $query->where('people.marga_id', $margaId))
+            ->where('people.gender', 'L')
+            ->when($person !== null, fn ($query) => $query->whereNotIn('people.id', $person->ineligibleFatherIds()))
+            ->whereNotNull('people.name')
+            ->where('people.name', '!=', 'N/A')
+            ->orderBy('people.name')
+            ->orderBy('people.father_id')
+            ->toBase()
+            ->get()
+            ->map(fn (object $father): array => (array) $father)
             ->all();
     }
 

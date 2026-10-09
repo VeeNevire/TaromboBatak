@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ValidatesAccountInIndonesian;
 use App\Support\IndonesiaRegions;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -11,6 +12,8 @@ use Illuminate\Validation\Rules\Password;
 
 class StoreAccountRequest extends FormRequest
 {
+    use ValidatesAccountInIndonesian;
+
     /** @return array<string, ValidationRule|array<mixed>|string> */
     public function rules(): array
     {

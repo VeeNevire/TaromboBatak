@@ -70,3 +70,22 @@ test('saved tree display settings are only sent to admin and sub-admin', functio
     'user' => [null, false],
     'contributor' => ['asMainContributor', false],
 ]);
+
+test('staff can save separate initial colors thickness and shapes for each gender', function () {
+    $user = User::factory()->asAdmin()->create();
+    $settings = [...treeSettingsPayload(),
+        'male_initial_ring' => '#123456', 'male_initial_width' => 3, 'male_initial_radius' => 0,
+        'female_initial_ring' => '#abcdef', 'female_initial_width' => 1.5, 'female_initial_radius' => 25,
+    ];
+    $this->actingAs($user)->put(route('tarombo.settings.update'), $settings)->assertSessionHasNoErrors()->assertRedirect();
+    expect($user->fresh()->tarombo_tree_settings)->toEqual($settings);
+});
+
+test('initial shape and thickness settings reject invalid values', function () {
+    $user = User::factory()->asAdmin()->create();
+    $this->actingAs($user)->put(route('tarombo.settings.update'), [...treeSettingsPayload(),
+        'male_initial_ring' => 'red', 'male_initial_width' => -1, 'male_initial_radius' => 51,
+        'female_initial_ring' => 'invalid', 'female_initial_width' => 7, 'female_initial_radius' => -1,
+    ])->assertSessionHasErrors(['male_initial_ring', 'male_initial_width', 'male_initial_radius', 'female_initial_ring', 'female_initial_width', 'female_initial_radius']);
+    expect($user->fresh()->tarombo_tree_settings)->toBeNull();
+});

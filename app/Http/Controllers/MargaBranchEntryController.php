@@ -14,6 +14,8 @@ class MargaBranchEntryController extends Controller
 {
     public function store(Request $request, Person $person): RedirectResponse
     {
+        Gate::authorize('appendBranch', $person);
+
         abort_if($person->gender === 'P', 422, 'Ranting tidak dapat ditambahkan melalui anggota perempuan.');
 
         $familyTree = DB::transaction(function () use ($request, $person): FamilyTree {

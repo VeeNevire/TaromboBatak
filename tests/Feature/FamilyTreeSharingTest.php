@@ -9,6 +9,7 @@ use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
 use App\Notifications\FamilyTreeAppendSubmitted;
+use App\Services\TaromboTreeService;
 use Illuminate\Support\Facades\Notification;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -621,3 +622,39 @@ test('a recipient cannot attach a node from another tree', function () {
 
     expect(Person::query()->where('name', 'Tidak Boleh Masuk')->exists())->toBeFalse();
 });
+
+test('nonstaff cannot start a branch in another marga even if they own the tree', function (string $role) {
+    $marga = Marga::factory()->create();
+    $otherMarga = Marga::factory()->create();
+    $owner = User::factory()->create(['role' => $role, 'marga_id' => $marga->id]);
+    ['tree' => $tree, 'root' => $father] = sharingTree($owner, $otherMarga);
+    $node = $tree->nodes()->where('person_id', $father->id)->firstOrFail();
+
+    $this->actingAs($owner)
+        ->postJson(route('marga-branch-entries.store', $father))
+        ->assertForbidden();
+    $this->getJson(route('family-trees.people.create', ['familyTree' => $tree, 'father_person_id' => $father->id]))->assertForbidden();
+    $this->post(route('family-trees.people.store', $tree), [
+        'name' => 'Ranting Terlarang', 'gender' => 'L', 'father_node_id' => $node->id,
+    ])->assertSessionHasErrors('father_node_id');
+    $this->post(route('family-trees.people.store', $tree), [
+        'name' => 'Ranting Terlarang', 'gender' => 'L', 'branch_father_person_id' => $father->id,
+    ])->assertSessionHasErrors('branch_father_person_id');
+
+    expect(Person::where('name', 'Ranting Terlarang')->exists())->toBeFalse();
+})->with(['user', 'contributor_main', 'contributor_member']);
+
+test('branch permission follows account marga with a staff exception', function (string $role) {
+    $marga = Marga::factory()->create();
+    $owner = User::factory()->create(['role' => $role, 'marga_id' => $marga->id]);
+    $ownFather = Person::factory()->create(['gender' => 'L', 'marga_id' => $marga->id]);
+    $otherFather = Person::factory()->create(['gender' => 'L']);
+
+    expect($owner->can('appendBranch', $ownFather))->toBeTrue()
+        ->and($owner->can('appendBranch', $otherFather))->toBe($owner->isStaff());
+
+    $this->actingAs($owner)->post(route('marga-branch-entries.store', $ownFather))->assertRedirect();
+    $rows = collect(app(TaromboTreeService::class)->rows(Person::query()->whereIn('id', [$ownFather->id, $otherFather->id])))->keyBy('id');
+    expect($rows[(string) $ownFather->id]['canAppendBranch'])->toBeTrue()
+        ->and($rows[(string) $otherFather->id]['canAppendBranch'])->toBe($owner->isStaff());
+})->with(['user', 'contributor_main', 'contributor_member', 'admin', 'subadmin']);

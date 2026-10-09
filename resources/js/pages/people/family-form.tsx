@@ -1897,26 +1897,6 @@ export default function FamilyForm({
         setData('ownChildren', next);
     };
 
-    const selectOwnChild = (index: number, suggestion: NameSuggestion) => {
-        const next = data.ownChildren.map((child, i) =>
-            i === index
-                ? {
-                      ...child,
-                      id: suggestion.id,
-                      linkedFromSuggestion: child.id !== suggestion.id,
-                      name: suggestion.name,
-                      alias: suggestion.alias ?? '',
-                      gender: suggestion.gender ?? '',
-                      spouse: suggestion.spouse ?? '',
-                      spouse_marga: suggestion.spouse_marga ?? '',
-                      marga_id: suggestion.marga_id ?? child.marga_id,
-                  }
-                : child,
-        );
-
-        setData('ownChildren', next);
-    };
-
     const setOwnChildMarga = (index: number, margaId: number | null) => {
         const next = data.ownChildren.map((child, i) =>
             i === index ? { ...child, marga_id: margaId } : child,
@@ -3771,36 +3751,23 @@ export default function FamilyForm({
                                                                         '—'}
                                                                 </div>
                                                             ) : (
-                                                                <NameCombobox
+                                                                <Input
                                                                     value={
                                                                         selectedChild.name
                                                                     }
                                                                     onChange={(
-                                                                        value,
+                                                                        event,
                                                                     ) =>
                                                                         setChild(
                                                                             selectedIndex,
                                                                             'name',
-                                                                            value,
+                                                                            event
+                                                                                .target
+                                                                                .value,
                                                                         )
-                                                                    }
-                                                                    onSelect={(
-                                                                        suggestion,
-                                                                    ) =>
-                                                                        selectChild(
-                                                                            selectedIndex,
-                                                                            suggestion,
-                                                                        )
-                                                                    }
-                                                                    suggestions={
-                                                                        canChooseExistingChild
-                                                                            ? nameSuggestions
-                                                                            : []
                                                                     }
                                                                     placeholder="Nama"
-                                                                    allowNa={
-                                                                        canChooseExistingChild
-                                                                    }
+                                                                    autoComplete="off"
                                                                 />
                                                             )}
                                                         </div>
@@ -4206,51 +4173,19 @@ export default function FamilyForm({
                                                     </div>
                                                     <div className="grid gap-1.5 lg:col-span-3">
                                                         <Label>Nama</Label>
-                                                        {canChooseExistingChild ? (
-                                                            <NameCombobox
-                                                                value={
-                                                                    child.name
-                                                                }
-                                                                onChange={(
-                                                                    value,
-                                                                ) =>
-                                                                    setOwnChild(
-                                                                        index,
-                                                                        'name',
-                                                                        value,
-                                                                    )
-                                                                }
-                                                                onSelect={(
-                                                                    suggestion,
-                                                                ) =>
-                                                                    selectOwnChild(
-                                                                        index,
-                                                                        suggestion,
-                                                                    )
-                                                                }
-                                                                suggestions={
-                                                                    nameSuggestions
-                                                                }
-                                                                placeholder="Nama anak"
-                                                                allowNa
-                                                                showSiblingPreview
-                                                            />
-                                                        ) : (
-                                                            <Input
-                                                                value={
-                                                                    child.name
-                                                                }
-                                                                onChange={(e) =>
-                                                                    setOwnChild(
-                                                                        index,
-                                                                        'name',
-                                                                        e.target
-                                                                            .value,
-                                                                    )
-                                                                }
-                                                                placeholder="Nama anak"
-                                                            />
-                                                        )}
+                                                        <Input
+                                                            autoComplete="off"
+                                                            value={child.name}
+                                                            onChange={(e) =>
+                                                                setOwnChild(
+                                                                    index,
+                                                                    'name',
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            placeholder="Nama anak"
+                                                        />
                                                     </div>
                                                     <div className="grid gap-1.5 lg:col-span-3">
                                                         <Label>

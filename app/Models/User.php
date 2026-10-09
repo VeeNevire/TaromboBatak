@@ -30,6 +30,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $regency_code
  * @property string|null $district_code
  * @property string|null $village_code
+ * @property Carbon|null $last_active_at
  * @property Carbon|null $news_feed_read_at
  * @property array<string, mixed>|null $tarombo_tree_settings
  * @property string|null $two_factor_secret
@@ -342,6 +343,7 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'last_active_at' => 'datetime',
             'is_active' => 'boolean',
             'news_feed_read_at' => 'datetime',
             'tarombo_tree_settings' => 'array',

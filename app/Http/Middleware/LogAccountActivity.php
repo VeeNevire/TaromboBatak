@@ -10,15 +10,19 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-class LogSubAdminActivity
+class LogAccountActivity
 {
     public function __construct(private AccountActivityLogger $logger) {}
 
     /**
-     * Record successful data-changing requests performed by sub-admins.
+     * Record successful data-changing requests performed by authenticated accounts.
      */
     public function handle(Request $request, Closure $next): Response
     {
+        if (! in_array($request->method(), ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
+            return $next($request);
+        }
+
         $personBeforeChange = $this->personFromRoute($request);
         $familyTreeBeforeChange = $this->familyTreeFor($request, $request->user(), $personBeforeChange);
         $response = $next($request);
@@ -26,11 +30,10 @@ class LogSubAdminActivity
         $routeName = $request->route()?->getName();
 
         if (! $actor instanceof User
-            || ! $actor->isSubAdmin()
-            || ! in_array($request->method(), ['POST', 'PUT', 'PATCH', 'DELETE'], true)
             || $response->getStatusCode() >= 400
             || $routeName === 'logout'
-            || $request->session()->has('errors')) {
+            || in_array('errors', $request->session()->get('_flash.new', []), true)
+            || $request->routeIs('accounts.*', 'sub-admins.*')) {
             return $response;
         }
 

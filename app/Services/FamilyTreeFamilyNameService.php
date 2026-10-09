@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\FamilyTree;
-use App\Models\FamilyTreeNode;
 
 class FamilyTreeFamilyNameService
 {
@@ -26,7 +25,8 @@ class FamilyTreeFamilyNameService
      */
     public function forPerson(FamilyTree $tree, int $personId): ?string
     {
-        $nodes = $tree->nodes()->get()->keyBy('id');
+        $nodes = $tree->nodes()->toBase()
+            ->get(['id', 'person_id', 'father_node_id', 'family_name'])->keyBy('id');
         $node = $nodes->firstWhere('person_id', $personId);
         $visited = [];
 

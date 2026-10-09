@@ -98,6 +98,8 @@ export default function TaromboSnapshots({
     canDownload: boolean;
 }) {
     const { auth } = usePage().props;
+    const canManageImages =
+        auth.user?.role === 'admin' || auth.user?.role === 'subadmin';
     const [searchInput, setSearchInput] = useState(search);
     const [selectedSnapshot, setSelectedSnapshot] = useState<Snapshot | null>(
         null,
@@ -242,63 +244,67 @@ export default function TaromboSnapshots({
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setSourcePickerOpen(true)}
-                            className="max-w-52 justify-start"
-                        >
-                            <Images className="size-4 shrink-0" />
-                            <span
-                                className="truncate"
-                                title={
-                                    sourceSnapshot
-                                        ? snapshotLabel(sourceSnapshot)
-                                        : undefined
-                                }
-                            >
-                                {sourceSnapshot
-                                    ? snapshotLabel(sourceSnapshot)
-                                    : 'Pilih Gambar'}
-                            </span>
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setCollageOpen(true)}
-                        >
-                            <LayoutGrid className="size-4" />
-                            Pilih Format Frame
-                        </Button>
-                        {sourceSnapshot ? (
-                            <Button
-                                asChild
-                                className="bg-tb-primary hover:bg-tb-primary-light"
-                            >
-                                <Link
-                                    href={tarombo.snapshots.compile(
-                                        sourceSnapshot.id,
-                                    )}
+                        {canManageImages && (
+                            <>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setSourcePickerOpen(true)}
+                                    className="max-w-52 justify-start"
                                 >
-                                    <Wand2 className="size-4" />
-                                    {sourceSnapshot.has_compile_draft
-                                        ? 'Lanjutkan Compile'
-                                        : 'Compile Gambar'}
-                                </Link>
-                            </Button>
-                        ) : (
-                            <Button
-                                asChild
-                                className="bg-tb-primary hover:bg-tb-primary-light"
-                            >
-                                <Link
-                                    href={tarombo.compile.blank()}
-                                    title="Mulai dari kanvas kosong; tambah ranting dan background di editor"
+                                    <Images className="size-4 shrink-0" />
+                                    <span
+                                        className="truncate"
+                                        title={
+                                            sourceSnapshot
+                                                ? snapshotLabel(sourceSnapshot)
+                                                : undefined
+                                        }
+                                    >
+                                        {sourceSnapshot
+                                            ? snapshotLabel(sourceSnapshot)
+                                            : 'Pilih Gambar'}
+                                    </span>
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setCollageOpen(true)}
                                 >
-                                    <Wand2 className="size-4" />
-                                    Compile Gambar
-                                </Link>
-                            </Button>
+                                    <LayoutGrid className="size-4" />
+                                    Pilih Format Frame
+                                </Button>
+                                {sourceSnapshot ? (
+                                    <Button
+                                        asChild
+                                        className="bg-tb-primary hover:bg-tb-primary-light"
+                                    >
+                                        <Link
+                                            href={tarombo.snapshots.compile(
+                                                sourceSnapshot.id,
+                                            )}
+                                        >
+                                            <Wand2 className="size-4" />
+                                            {sourceSnapshot.has_compile_draft
+                                                ? 'Lanjutkan Compile'
+                                                : 'Compile Gambar'}
+                                        </Link>
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        asChild
+                                        className="bg-tb-primary hover:bg-tb-primary-light"
+                                    >
+                                        <Link
+                                            href={tarombo.compile.blank()}
+                                            title="Mulai dari kanvas kosong; tambah ranting dan background di editor"
+                                        >
+                                            <Wand2 className="size-4" />
+                                            Compile Gambar
+                                        </Link>
+                                    </Button>
+                                )}
+                            </>
                         )}
                         <Button asChild variant="outline">
                             <Link href={tarombo.index()}>
@@ -428,9 +434,7 @@ export default function TaromboSnapshots({
                         <p>
                             Gambar dilayani melalui akses privat, tanpa tombol
                             download, serta tidak dapat diklik kanan atau
-                            ditarik dari galeri. Pilih gambar lalu tekan Compile
-                            Gambar untuk menempatkan Tarombo utuh di dalam
-                            frame.
+                            ditarik dari galeri.
                         </p>
                     )}
                 </div>
@@ -536,32 +540,34 @@ export default function TaromboSnapshots({
                                             >
                                                 {snapshotLabel(snapshot)}
                                             </button>
-                                            {snapshot.saved_compile && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                        openNameDialog(
-                                                            'rename',
-                                                            snapshot,
-                                                        )
-                                                    }
-                                                    aria-label="Ubah nama gambar"
-                                                    title="Ubah nama"
-                                                    className="-ml-1 rounded p-1 text-tb-on-surface-variant hover:bg-tb-surface-container hover:text-tb-on-surface"
-                                                >
-                                                    <Pencil className="size-3.5" />
-                                                </button>
-                                            )}
+                                            {canManageImages &&
+                                                snapshot.saved_compile && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            openNameDialog(
+                                                                'rename',
+                                                                snapshot,
+                                                            )
+                                                        }
+                                                        aria-label="Ubah nama gambar"
+                                                        title="Ubah nama"
+                                                        className="-ml-1 rounded p-1 text-tb-on-surface-variant hover:bg-tb-surface-container hover:text-tb-on-surface"
+                                                    >
+                                                        <Pencil className="size-3.5" />
+                                                    </button>
+                                                )}
                                             <Badge variant="outline">
                                                 {snapshot.view === 'tree'
                                                     ? 'Vertikal'
                                                     : 'Radial'}
                                             </Badge>
-                                            {snapshot.saved_compile && (
-                                                <Badge variant="outline">
-                                                    Tersimpan
-                                                </Badge>
-                                            )}
+                                            {canManageImages &&
+                                                snapshot.saved_compile && (
+                                                    <Badge variant="outline">
+                                                        Tersimpan
+                                                    </Badge>
+                                                )}
                                         </div>
                                         <p className="mt-1 text-xs text-tb-on-surface-variant">
                                             {snapshot.owner_name
@@ -577,14 +583,16 @@ export default function TaromboSnapshots({
                                                   )
                                                 : 'Waktu tidak tersedia'}
                                         </p>
-                                        {snapshot.saved_compile &&
+                                        {canManageImages &&
+                                            snapshot.saved_compile &&
                                             !snapshot.has_preview && (
                                                 <p className="mt-1 text-xs text-tb-on-surface-variant italic">
                                                     Buka & Simpan lagi untuk
                                                     memperbarui pratinjau.
                                                 </p>
                                             )}
-                                        {snapshot.saved_compile &&
+                                        {canManageImages &&
+                                            snapshot.saved_compile &&
                                             display === 'images' && (
                                                 <Button
                                                     type="button"
@@ -604,7 +612,8 @@ export default function TaromboSnapshots({
                                             )}
                                     </div>
                                     <div className="flex shrink-0 flex-wrap items-center gap-1">
-                                        {snapshot.saved_compile &&
+                                        {canManageImages &&
+                                            snapshot.saved_compile &&
                                             display === 'titles' && (
                                                 <Button
                                                     type="button"
@@ -636,7 +645,8 @@ export default function TaromboSnapshots({
                                                     Tempel QR Code
                                                 </Link>
                                             </Button>
-                                        ) : snapshot.editable_result ? (
+                                        ) : canManageImages &&
+                                          snapshot.editable_result ? (
                                             <Button
                                                 asChild
                                                 variant="outline"
@@ -653,6 +663,7 @@ export default function TaromboSnapshots({
                                                 </Link>
                                             </Button>
                                         ) : (
+                                            canManageImages &&
                                             snapshot.has_compile_draft && (
                                                 <Button
                                                     asChild

@@ -5,6 +5,7 @@ import {
     ArrowUp,
     ChevronsUpDown,
     ImagePlus,
+    List,
     MessageCircle,
     Bot,
     FileText,
@@ -477,6 +478,26 @@ export default function MargaIndex({
                                                 >
                                                     <ArrowDown className="size-4" />
                                                     <span>5</span>
+                                                </Button>
+                                                <Button
+                                                    asChild
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="size-8 text-tb-on-surface-variant hover:text-tb-primary"
+                                                >
+                                                    <Link
+                                                        href={marga.names(m.id)}
+                                                        onClick={(e) =>
+                                                            e.stopPropagation()
+                                                        }
+                                                        onKeyDown={(e) =>
+                                                            e.stopPropagation()
+                                                        }
+                                                        aria-label={`Daftar Nama ${m.name}`}
+                                                        title="Daftar Nama"
+                                                    >
+                                                        <List className="size-4" />
+                                                    </Link>
                                                 </Button>
                                                 {canManage && (
                                                     <>

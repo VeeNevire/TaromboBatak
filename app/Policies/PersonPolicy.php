@@ -52,6 +52,13 @@ class PersonPolicy
         }
     }
 
+    public function appendBranch(User $user, Person $person): bool
+    {
+        return $user->isStaff()
+            || ($user->marga_id !== null && $person->marga_id !== null
+                && (int) $user->marga_id === (int) $person->marga_id);
+    }
+
     public function create(User $user): bool
     {
         return $user->isStaff() || $user->accessibleMargaIds()->isNotEmpty();

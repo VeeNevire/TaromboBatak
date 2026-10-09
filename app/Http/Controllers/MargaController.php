@@ -74,6 +74,27 @@ class MargaController extends Controller
         ]);
     }
 
+    public function names(Request $request, Marga $marga): Response
+    {
+        $isStaff = $request->user()?->isStaff() ?? false;
+        abort_unless($marga->is_public || $isStaff, 404);
+        $validated = $request->validate(['search' => ['nullable', 'string', 'max:255']]);
+        $search = trim($validated['search'] ?? '');
+
+        $people = $marga->people()
+            ->when($request->user() === null, fn ($query) => $query->public())
+            ->when($search !== '', fn ($query) => $query->where('name', 'like', "%{$search}%"))
+            ->orderBy('name')->orderBy('id')
+            ->paginate(25, ['id', 'name', 'gender', 'birth_year'])
+            ->withQueryString();
+
+        return Inertia::render('marga/names', [
+            'marga' => $marga->only(['id', 'name']),
+            'people' => $people,
+            'filters' => ['search' => $search],
+        ]);
+    }
+
     /**
      * Show a public marga's upper or lower silsilah tree. Open to guests.
      */

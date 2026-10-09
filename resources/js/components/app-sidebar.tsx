@@ -115,11 +115,15 @@ export function AppSidebar() {
                     href: tarombo.snapshots.index(),
                     icon: Images,
                 },
-                {
-                    title: 'Log Pohon Besar',
-                    href: treeActivityLogs.index(),
-                    icon: ScrollText,
-                },
+                ...(isStaff || isContributor
+                    ? [
+                          {
+                              title: 'Log Pohon Besar',
+                              href: treeActivityLogs.index(),
+                              icon: ScrollText,
+                          },
+                      ]
+                    : []),
                 ...(!isAdmin
                     ? [
                           {

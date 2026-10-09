@@ -23,6 +23,12 @@ export type TreeSettings = {
     name_box_bg: string;
     name_box_border: string;
     initial_ring: string;
+    male_initial_ring?: string;
+    male_initial_width?: number;
+    male_initial_radius?: number;
+    female_initial_ring?: string;
+    female_initial_width?: number;
+    female_initial_radius?: number;
     font_color: string;
     font_size: number;
     font_family: TreeFontFamily;
@@ -37,6 +43,10 @@ export const DEFAULT_TREE_SETTINGS: TreeSettings = {
     name_box_bg: '#ffffff',
     name_box_border: '#e3dfd2',
     initial_ring: '#e3dfd2',
+    male_initial_width: 1,
+    male_initial_radius: 50,
+    female_initial_width: 1,
+    female_initial_radius: 50,
     font_color: '#24322b',
     font_size: 8,
     font_family: 'sans',
@@ -67,6 +77,13 @@ export function treeSettingsStyle(settings: TreeSettings): CSSProperties {
         '--tb-name-bg': settings.name_box_bg,
         '--tb-name-border': settings.name_box_border,
         '--tb-ring': settings.initial_ring,
+        '--tb-male-ring': settings.male_initial_ring ?? settings.initial_ring,
+        '--tb-male-ring-width': `${settings.male_initial_width ?? 1}px`,
+        '--tb-male-ring-radius': `${settings.male_initial_radius ?? 50}%`,
+        '--tb-female-ring':
+            settings.female_initial_ring ?? settings.initial_ring,
+        '--tb-female-ring-width': `${settings.female_initial_width ?? 1}px`,
+        '--tb-female-ring-radius': `${settings.female_initial_radius ?? 50}%`,
         '--tb-name-color': settings.font_color,
         '--tb-name-size': `${settings.font_size}px`,
         '--tb-name-font': FONT_FAMILIES[settings.font_family].css,
@@ -208,11 +225,74 @@ export function TreeSettingsDialog({
                     </Section>
 
                     <Section title="Lingkaran inisial">
-                        <ColorField
-                            label="Garis lingkaran"
-                            value={settings.initial_ring}
-                            onChange={(value) => set('initial_ring', value)}
-                        />
+                        {(['male', 'female'] as const).map((gender) => {
+                            const colorKey = `${gender}_initial_ring` as const;
+                            const widthKey = `${gender}_initial_width` as const;
+                            const radiusKey =
+                                `${gender}_initial_radius` as const;
+                            const color =
+                                settings[colorKey] ?? settings.initial_ring;
+                            const width = settings[widthKey] ?? 1;
+                            const radius = settings[radiusKey] ?? 50;
+
+                            return (
+                                <div
+                                    key={gender}
+                                    className="grid gap-3 border-t border-tb-outline-variant pt-3"
+                                >
+                                    <div className="flex items-center justify-between gap-3">
+                                        <p className="text-sm font-semibold text-tb-on-surface">
+                                            {gender === 'male'
+                                                ? 'Laki-laki'
+                                                : 'Perempuan'}
+                                        </p>
+                                        <span
+                                            aria-hidden
+                                            className="flex size-9 items-center justify-center bg-tb-surface-container text-xs font-bold text-tb-on-surface"
+                                            style={{
+                                                border: `${width}px solid ${color}`,
+                                                borderRadius: `${radius}%`,
+                                            }}
+                                        >
+                                            {gender === 'male' ? 'L' : 'P'}
+                                        </span>
+                                    </div>
+                                    <ColorField
+                                        label="Garis lingkaran"
+                                        value={color}
+                                        onChange={(value) =>
+                                            set(colorKey, value)
+                                        }
+                                    />
+                                    <SliderField
+                                        label="Ketebalan garis"
+                                        value={width}
+                                        min={0}
+                                        max={6}
+                                        step={0.5}
+                                        unit="px"
+                                        onChange={(value) =>
+                                            set(widthKey, value)
+                                        }
+                                    />
+                                    <SliderField
+                                        label="Bentuk inisial"
+                                        value={radius}
+                                        min={0}
+                                        max={50}
+                                        step={5}
+                                        unit="%"
+                                        onChange={(value) =>
+                                            set(radiusKey, value)
+                                        }
+                                    />
+                                    <p className="text-xs text-tb-on-surface-variant">
+                                        0%: kotak · 25%: kotak membulat · 50%:
+                                        lingkaran penuh
+                                    </p>
+                                </div>
+                            );
+                        })}
                     </Section>
 
                     <Section title="Font nama">

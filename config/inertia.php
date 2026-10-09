@@ -2,6 +2,12 @@
 
 return [
 
+    // Recording every nested prop is expensive on large family forms.
+    // Enable the recorder explicitly when diagnosing a development request.
+    'devtools' => [
+        'enabled' => (bool) env('INERTIA_DEVTOOLS_ENABLED', false),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Server Side Rendering

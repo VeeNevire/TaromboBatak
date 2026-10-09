@@ -37,6 +37,7 @@ type Account = {
     marga: string | null;
     managed_margas: string[];
     created_at: string | null;
+    last_active_at: string | null;
 };
 
 type Page = {
@@ -49,7 +50,7 @@ type Page = {
 };
 
 type ActivityLog = {
-    id: number;
+    id: number | string;
     action: string;
     description: string;
     actor: string;
@@ -71,7 +72,13 @@ const roleLabels: Record<string, string> = {
 };
 
 type SortColumn =
-    'name' | 'email' | 'role' | 'current_person' | 'marga' | 'created_at';
+    | 'name'
+    | 'email'
+    | 'role'
+    | 'current_person'
+    | 'marga'
+    | 'created_at'
+    | 'last_active_at';
 
 type Filters = {
     search: string;
@@ -87,6 +94,7 @@ const sortableColumns: { key: SortColumn; label: string }[] = [
     { key: 'current_person', label: 'Saya adalah' },
     { key: 'marga', label: 'Marga' },
     { key: 'created_at', label: 'Dibuat' },
+    { key: 'last_active_at', label: 'Last Activity' },
 ];
 
 function SortableHeader({
@@ -146,6 +154,7 @@ export default function AccountsIndex({
         null,
     );
     const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+    const [activityError, setActivityError] = useState<string | null>(null);
     const [activityLoading, setActivityLoading] = useState(false);
     const deactivateForm = useForm({});
 
@@ -192,6 +201,7 @@ export default function AccountsIndex({
     const openActivityLog = async (account: Account) => {
         setActivityAccount(account);
         setActivityLogs([]);
+        setActivityError(null);
         setActivityLoading(true);
 
         try {
@@ -206,7 +216,7 @@ export default function AccountsIndex({
             const payload = (await response.json()) as { logs: ActivityLog[] };
             setActivityLogs(payload.logs ?? []);
         } catch {
-            setActivityLogs([]);
+            setActivityError('Gagal memuat log aktivitas. Silakan coba lagi.');
         } finally {
             setActivityLoading(false);
         }
@@ -324,7 +334,7 @@ export default function AccountsIndex({
                                                     account.role}
                                             </span>
                                             {!account.is_active && (
-                                                <span className="ml-1 inline-flex rounded-full bg-tb-error-container px-2 py-1 text-xs font-medium text-tb-on-error-container">
+                                                <span className="bg-tb-error-container text-tb-on-error-container ml-1 inline-flex rounded-full px-2 py-1 text-xs font-medium">
                                                     Non Aktif
                                                 </span>
                                             )}
@@ -346,6 +356,10 @@ export default function AccountsIndex({
                                         </td>
                                         <td className="px-3 py-3 text-tb-on-surface-variant">
                                             {account.created_at ?? '-'}
+                                        </td>
+                                        <td className="px-3 py-3 whitespace-nowrap text-tb-on-surface-variant">
+                                            {account.last_active_at ??
+                                                'Belum tercatat'}
                                         </td>
                                         <td className="px-3 py-3">
                                             <Button
@@ -386,8 +400,10 @@ export default function AccountsIndex({
                                                             ? 'Non Aktif'
                                                             : 'Akun sudah nonaktif'
                                                     }
-                                                    disabled={!account.is_active}
-                                                    className="gap-1.5 text-tb-error hover:bg-tb-error-container"
+                                                    disabled={
+                                                        !account.is_active
+                                                    }
+                                                    className="text-tb-error hover:bg-tb-error-container gap-1.5"
                                                     onClick={() =>
                                                         setToDeactivate(account)
                                                     }
@@ -402,7 +418,7 @@ export default function AccountsIndex({
                                 {page.data.length === 0 && (
                                     <tr>
                                         <td
-                                            colSpan={8}
+                                            colSpan={9}
                                             className="px-3 py-10 text-center text-tb-on-surface-variant"
                                         >
                                             Belum ada akun yang sesuai.
@@ -496,6 +512,22 @@ export default function AccountsIndex({
                         <p className="py-8 text-center text-sm text-tb-on-surface-variant">
                             Memuat log aktivitas...
                         </p>
+                    ) : activityError ? (
+                        <div
+                            role="alert"
+                            className="grid justify-items-center gap-3 py-8 text-sm text-destructive"
+                        >
+                            <p>{activityError}</p>
+                            <Button
+                                variant="outline"
+                                onClick={() =>
+                                    activityAccount &&
+                                    openActivityLog(activityAccount)
+                                }
+                            >
+                                Coba lagi
+                            </Button>
+                        </div>
                     ) : activityLogs.length === 0 ? (
                         <p className="py-8 text-center text-sm text-tb-on-surface-variant">
                             Belum ada aktivitas tercatat.
@@ -523,25 +555,33 @@ export default function AccountsIndex({
                                             <div className="mt-1 grid gap-0.5 border-l-2 border-tb-primary/35 pl-2 text-xs text-tb-on-surface-variant">
                                                 {log.context.is_legacy ? (
                                                     <span>
-                                                        Anggota dan ayah belum tercatat pada log lama.
+                                                        Anggota dan ayah belum
+                                                        tercatat pada log lama.
                                                     </span>
                                                 ) : (
                                                     <>
                                                         <span>
                                                             Anggota:{' '}
-                                                            {log.context.person_name ?? '-'}
+                                                            {log.context
+                                                                .person_name ??
+                                                                '-'}
                                                         </span>
                                                         <span>
                                                             Ayah:{' '}
-                                                            {log.context.father_name ??
+                                                            {log.context
+                                                                .father_name ??
                                                                 'Belum dicatat'}
                                                         </span>
                                                     </>
                                                 )}
-                                                {log.context.family_tree_name && (
+                                                {log.context
+                                                    .family_tree_name && (
                                                     <span>
                                                         Nama Keluarga:{' '}
-                                                        {log.context.family_tree_name}
+                                                        {
+                                                            log.context
+                                                                .family_tree_name
+                                                        }
                                                     </span>
                                                 )}
                                             </div>

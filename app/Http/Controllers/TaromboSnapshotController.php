@@ -70,7 +70,7 @@ class TaromboSnapshotController extends Controller
                     'download_url' => $canDownload
                         ? route('tarombo.snapshots.download', $snapshot)
                         : null,
-                    'can_delete' => $snapshot->user_id === $user->id,
+                    'can_delete' => true,
                     'size_bytes' => Storage::disk('local')->exists($snapshot->path)
                         ? Storage::disk('local')->size($snapshot->path)
                         : null,
@@ -126,7 +126,7 @@ class TaromboSnapshotController extends Controller
         if ($source !== null) {
             Gate::authorize('view', $source);
             // Only the owner may replace the result; others produce a new image.
-            $target = $request->user()->can('delete', $taromboSnapshot) ? $taromboSnapshot : null;
+            $target = $taromboSnapshot->user_id === $request->user()->id ? $taromboSnapshot : null;
             $taromboSnapshot = $source;
         }
 
@@ -284,7 +284,7 @@ class TaromboSnapshotController extends Controller
         if ($request->filled('target_snapshot_id')) {
             $target = TaromboSnapshot::query()->findOrFail($request->integer('target_snapshot_id'));
 
-            Gate::authorize('delete', $target);
+            abort_unless($target->user_id === $request->user()->id, 403);
             abort_unless($snapshot !== null && $target->source_snapshot_id === $snapshot->id, 422, 'Gambar hasil tidak berasal dari gambar ini.');
         }
 
