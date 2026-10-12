@@ -107,6 +107,52 @@ class FamilyEntryService
     }
 
     /**
+     * Persist the spouse rows typed in a member's own form. A man's rows are
+     * his wives; a woman's rows are her husbands, and the first one is also
+     * kept as spouse text so her father's family form shows the same spouse.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function syncSpouses(Person $focus, array $data, ?int $createdBy = null): void
+    {
+        if ($focus->gender !== 'P') {
+            $this->syncWives($focus, $data, $createdBy, 'wives');
+
+            return;
+        }
+
+        $husbands = [];
+
+        foreach ($this->motherEntries($data, 'wives') as $entry) {
+            $husband = $this->resolveParent(
+                $entry['id'] ?? null,
+                $entry,
+                $this->resolveMargaId($entry['marga_id'] ?? null, $entry['new_marga'] ?? null),
+                null,
+                $createdBy,
+                'L',
+                [$focus->id],
+            );
+
+            if ($husband !== null && ! isset($husbands[$husband->id])) {
+                $husbands[$husband->id] = $husband;
+            }
+        }
+
+        $focus->husbands()->sync(
+            collect(array_keys($husbands))
+                ->mapWithKeys(fn (int $id, int $index) => [$id => ['position' => $index + 1]])
+                ->all(),
+        );
+
+        $first = reset($husbands) ?: null;
+        $focus->update([
+            'spouse' => $first?->name,
+            'spouse_marga' => $first?->marga()->value('name'),
+        ]);
+    }
+
+    /**
      * Persist a whole family entry (father, mother, and all sibling rows)
      * inside a single transaction, then recompute the chain numbers for the
      * affected patrilineal lineage.
@@ -270,7 +316,7 @@ class FamilyEntryService
             $focus = $this->resolveFocus($children, $data);
 
             if ($focus !== null && array_key_exists('wives', $data)) {
-                $this->syncWives($focus, $data, $createdBy, 'wives');
+                $this->syncSpouses($focus, $data, $createdBy);
             }
 
             $ownChildren = $this->upsertChildren(

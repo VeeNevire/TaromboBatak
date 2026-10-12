@@ -81,7 +81,9 @@ test('a dashboard lower marga tree shows descendants deeper than the public dept
 
     expect(collect($people)->pluck('id'))->toContain((string) $deepest->id);
     expect(collect($people)->firstWhere('id', (string) $identity->id)['isMargaIdentity'])->toBeTrue();
+    expect(collect($people)->firstWhere('id', (string) $identity->id)['identityMargaName'])->toBe($marga->name);
     expect(collect($people)->firstWhere('id', (string) $deepest->id)['isMargaIdentity'])->toBeFalse();
+    expect(collect($people)->firstWhere('id', (string) $deepest->id)['identityMargaName'])->toBeNull();
 });
 
 test('marga tree without an identity falls back to every marga member for staff', function () {

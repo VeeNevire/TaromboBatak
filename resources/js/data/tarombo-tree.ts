@@ -11,6 +11,7 @@ export type TaromboPersonRow = {
     hasMarga?: boolean;
     isMargaIdentity?: boolean;
     identityMargaColor?: string | null;
+    identityMargaName?: string | null;
     margaColor?: string | null;
     parentId: string | null;
     birthYear?: string;
@@ -68,6 +69,7 @@ export type TaromboPerson = {
     hasMarga?: boolean;
     isMargaIdentity?: boolean;
     identityMargaColor?: string | null;
+    identityMargaName?: string | null;
     margaColor?: string | null;
     generation: number;
     parentId?: string | null;

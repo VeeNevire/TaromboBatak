@@ -206,7 +206,7 @@ class FamilyTreeStructureService
         }
 
         if (array_key_exists('wives', $data)) {
-            app(FamilyEntryService::class)->syncWives($focus, $data, $createdBy, 'wives');
+            app(FamilyEntryService::class)->syncSpouses($focus, $data, $createdBy);
         }
 
         foreach (['children', 'ownChildren'] as $group) {
