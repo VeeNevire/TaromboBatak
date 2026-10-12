@@ -66,7 +66,7 @@ export const features: {
     {
         title: 'Relasi Keluarga',
         description:
-            'menemukan hubungan keluarga dan menguatkan harmonisasi dalam adat istiadat',
+            'Temukan hubungan keluarga dan menguatkan harmonisasi dalam adat istiadat',
         icon: UsersRound,
         iconClass: 'bg-emerald-100 text-emerald-700',
     },
@@ -77,9 +77,9 @@ export const features: {
         iconClass: 'bg-red-100 text-red-700',
     },
     {
-        title: 'Aman & Terbackup',
+        title: 'Jaringan Profesional',
         description:
-            'Data tersimpan aman di cloud dan dapat diunduh kapan saja.',
+            'Tingkatkan sinergi hubungan keluarga menjadi peluang sinergi profesionalisme',
         icon: CloudUpload,
         iconClass: 'bg-indigo-100 text-indigo-700',
     },
