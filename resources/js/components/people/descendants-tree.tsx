@@ -134,7 +134,54 @@ async function loadAlternativeTreePeople(
     return loaded;
 }
 
-function toNode(person: TaromboPerson, displayNumber?: number): TreeNode {
+const descendantCountCache = new WeakMap<
+    Map<string, TaromboPerson[]>,
+    Map<string, number>
+>();
+
+/**
+ * Every generation below a person in the drawn tree ("jumlah ranting"),
+ * cached per children map so each count is walked only once.
+ */
+function descendantCount(
+    childrenOf: Map<string, TaromboPerson[]>,
+    id: string,
+): number {
+    let counts = descendantCountCache.get(childrenOf);
+
+    if (!counts) {
+        counts = new Map();
+        descendantCountCache.set(childrenOf, counts);
+    }
+
+    const cached = counts.get(id);
+
+    if (cached !== undefined) {
+        return cached;
+    }
+
+    const seen = new Set<string>([id]);
+    const queue = [id];
+
+    while (queue.length > 0) {
+        for (const child of childrenOf.get(queue.pop()!) ?? []) {
+            if (!seen.has(child.id)) {
+                seen.add(child.id);
+                queue.push(child.id);
+            }
+        }
+    }
+
+    counts.set(id, seen.size - 1);
+
+    return seen.size - 1;
+}
+
+function toNode(
+    person: TaromboPerson,
+    displayNumber?: number,
+    branchCount?: number,
+): TreeNode {
     // A daughter's husband is kept only as spouse text, not as a linked
     // person, so fall back to that text when no spouse is linked.
     const linkedSpouses = person.spouses ?? [];
@@ -149,6 +196,7 @@ function toNode(person: TaromboPerson, displayNumber?: number): TreeNode {
         birthYear: person.birthYear,
         birthOrder: person.parentId ? person.birthOrder : undefined,
         displayNumber,
+        branchCount,
         image: person.image,
         pending: person.pending,
         isMargaIdentity: person.isMargaIdentity,
@@ -437,7 +485,11 @@ function TreeBranch({
     );
     const card = (
         <NodeCard
-            node={toNode(person, numberById.get(person.id))}
+            node={toNode(
+                person,
+                numberById.get(person.id),
+                descendantCount(childrenOf, person.id),
+            )}
             compact={useCompactCard}
             narrow={isTerminalBranch}
             highlighted={isCenter || isHighlighted}
