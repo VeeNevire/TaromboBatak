@@ -1621,11 +1621,7 @@ class PersonController extends Controller
             'mothers' => $mothers
                 ->map(fn (Person $wife) => $this->parentRow($wife))
                 ->all(),
-            'wives' => $person->wives()
-                ->with(['marga', 'father.marga'])
-                ->get()
-                ->map(fn (Person $wife) => $this->parentRow($wife))
-                ->all(),
+            'wives' => $this->spouseRows($person),
             'lineage' => $lineage
                 ->map(fn (Person $row) => [
                     'id' => $row->id,
@@ -1693,6 +1689,49 @@ class PersonController extends Controller
      *
      * @return array<string, mixed>
      */
+    /**
+     * The spouse rows shown in the member's own form. A woman's husbands are
+     * linked the other way round, and older entries only kept the husband as
+     * spouse text, so fall back to that text when no husband is linked.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function spouseRows(Person $person): array
+    {
+        if ($person->gender !== 'P') {
+            return $person->wives()
+                ->with(['marga', 'father.marga'])
+                ->get()
+                ->map(fn (Person $wife) => $this->parentRow($wife))
+                ->all();
+        }
+
+        $husbands = $person->husbands()
+            ->with(['marga', 'father.marga'])
+            ->get()
+            ->map(fn (Person $husband) => $this->parentRow($husband))
+            ->all();
+
+        if ($husbands !== [] || blank($person->spouse)) {
+            return $husbands;
+        }
+
+        return [[
+            'id' => null,
+            'name' => $person->spouse,
+            'alias' => null,
+            'marga_id' => filled($person->spouse_marga)
+                ? Marga::query()->where('name', $person->spouse_marga)->value('id')
+                : null,
+            'marga' => $person->spouse_marga,
+            'birth_year' => null,
+            'death_year' => null,
+            'father_name' => null,
+            'father_marga_id' => null,
+            'father_marga' => null,
+        ]];
+    }
+
     protected function parentRow(Person $wife): array
     {
         return [

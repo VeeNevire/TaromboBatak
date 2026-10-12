@@ -135,6 +135,11 @@ async function loadAlternativeTreePeople(
 }
 
 function toNode(person: TaromboPerson, displayNumber?: number): TreeNode {
+    // A daughter's husband is kept only as spouse text, not as a linked
+    // person, so fall back to that text when no spouse is linked.
+    const linkedSpouses = person.spouses ?? [];
+    const hasLinkedSpouses = linkedSpouses.length > 0;
+
     return {
         id: person.id,
         name: person.name,
@@ -148,12 +153,21 @@ function toNode(person: TaromboPerson, displayNumber?: number): TreeNode {
         pending: person.pending,
         isMargaIdentity: person.isMargaIdentity,
         identityMargaColor: person.identityMargaColor,
+        identityMargaName: person.identityMargaName,
         margaColor: person.margaColor,
         claimed: (person.claimedAccounts?.length ?? 0) > 0,
-        spouses: person.spouses?.map((spouse) => spouse.name),
-        spouseMargas: person.spouses
-            ?.map((spouse) => spouse.marga ?? spouse.fatherMarga)
-            .filter((marga): marga is string => Boolean(marga)),
+        spouses: hasLinkedSpouses
+            ? linkedSpouses.map((spouse) => spouse.name)
+            : person.spouse
+              ? [person.spouse]
+              : [],
+        spouseMargas: hasLinkedSpouses
+            ? linkedSpouses
+                  .map((spouse) => spouse.marga ?? spouse.fatherMarga)
+                  .filter((marga): marga is string => Boolean(marga))
+            : person.spouseMarga
+              ? [person.spouseMarga]
+              : [],
     };
 }
 
@@ -814,7 +828,7 @@ export function DescendantsTree({
         return numbers;
     }, [childrenOf, root]);
 
-    const [storedCollapsed, setCollapsed] = useState<Set<string>>(() => {
+    const defaultCollapsedIds = () => {
         const initial = new Set<string>();
         const visited = new Set<string>();
 
@@ -844,7 +858,36 @@ export function DescendantsTree({
         }
 
         return initial;
-    });
+    };
+
+    const [storedCollapsed, setCollapsed] =
+        useState<Set<string>>(defaultCollapsedIds);
+    const seenIds = useRef(new Set(people.map((person) => person.id)));
+
+    // People can join the tree without a remount (for example when the
+    // female lineage is switched on). Fold only those newcomers by the usual
+    // depth rule and keep every branch the user already opened or closed.
+    useEffect(() => {
+        const defaults = defaultCollapsedIds();
+        const newlyFolded = [...defaults].filter(
+            (id) => !seenIds.current.has(id),
+        );
+
+        for (const id of childrenOf.keys()) {
+            seenIds.current.add(id);
+        }
+
+        for (const children of childrenOf.values()) {
+            for (const child of children) {
+                seenIds.current.add(child.id);
+            }
+        }
+
+        if (newlyFolded.length > 0) {
+            setCollapsed((prev) => new Set([...prev, ...newlyFolded]));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [childrenOf, root]);
 
     const collapsed =
         collapsedIds ?? (expandAll ? EMPTY_COLLAPSED_IDS : storedCollapsed);

@@ -119,6 +119,11 @@ export default function SharedTreePersonForm({
     const isFatherLocked =
         initialFatherNodeId !== null || initialBranchFather !== null;
 
+    // A woman's spouse is not an "istri", so use the neutral word unless the
+    // member is marked male.
+    const spouseLabel = data.gender === 'L' ? 'Istri' : 'Pasangan';
+    const spouseWord = spouseLabel.toLowerCase();
+
     const setWife = (index: number, field: 'name' | 'marga', value: string) => {
         setData(
             'wives',
@@ -575,7 +580,7 @@ export default function SharedTreePersonForm({
                                     </div>
                                     <div className="grid gap-3">
                                         <Label className="text-tb-on-surface">
-                                            Data Istri
+                                            Data {spouseLabel}
                                         </Label>
                                         {data.wives.map((wife, index) => (
                                             <div
@@ -585,11 +590,11 @@ export default function SharedTreePersonForm({
                                                 <div className="grid gap-1.5">
                                                     <Input
                                                         aria-label={
-                                                            'Nama istri ' +
+                                                            `Nama ${spouseWord} ` +
                                                             (index + 1)
                                                         }
                                                         placeholder={
-                                                            'Nama istri ' +
+                                                            `Nama ${spouseWord} ` +
                                                             (index + 1)
                                                         }
                                                         value={wife.name}
@@ -620,10 +625,10 @@ export default function SharedTreePersonForm({
                                                 </div>
                                                 <SpouseMargaSelect
                                                     ariaLabel={
-                                                        'Marga istri ' +
+                                                        `Marga ${spouseWord} ` +
                                                         (index + 1)
                                                     }
-                                                    placeholder="Pilih marga istri"
+                                                    placeholder={`Pilih marga ${spouseWord}`}
                                                     value={wife.marga}
                                                     margas={margas}
                                                     onChange={(next) =>
@@ -639,7 +644,7 @@ export default function SharedTreePersonForm({
                                                     variant="ghost"
                                                     size="icon"
                                                     aria-label={
-                                                        'Hapus istri ' +
+                                                        `Hapus ${spouseWord} ` +
                                                         (index + 1)
                                                     }
                                                     disabled={
@@ -675,8 +680,8 @@ export default function SharedTreePersonForm({
                                                 ])
                                             }
                                         >
-                                            <Plus className="size-4" /> Tambah
-                                            Istri
+                                            <Plus className="size-4" /> Tambah{' '}
+                                            {spouseLabel}
                                         </Button>
                                     </div>
                                     <div className="grid gap-1.5">

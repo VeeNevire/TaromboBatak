@@ -403,6 +403,59 @@ test('a family store records the focus person own wives separately from the fath
             ->where('person.wives.1.id', $secondWife->id));
 });
 
+test('a woman spouse rows are stored as her husbands and shown in her form', function () {
+    $marga = Marga::factory()->create(['name' => 'Silaban']);
+    $husbandMarga = Marga::factory()->create(['name' => 'Simamora']);
+
+    $this->actingAs($this->admin)->post(route('people.store'), [
+        'name' => 'Boru B',
+        'gender' => 'P',
+        'marga_id' => $marga->id,
+        'birth_order' => 1,
+        'sibling_count' => 1,
+        'father' => ['name' => 'Kranius'],
+        'wives' => [['name' => 'Lamgondo', 'marga_id' => $husbandMarga->id]],
+        'children' => [['name' => 'Boru B', 'gender' => 'P']],
+    ])->assertRedirect(route('people.index'));
+
+    $focus = Person::where('name', 'Boru B')->firstOrFail();
+    $husband = Person::where('name', 'Lamgondo')->firstOrFail();
+
+    expect($focus->husbands()->pluck('people.id')->all())->toBe([$husband->id])
+        ->and($focus->wives()->exists())->toBeFalse()
+        ->and($husband->gender)->toBe('L')
+        ->and($husband->marga_id)->toBe($husbandMarga->id)
+        ->and($focus->spouse)->toBe('Lamgondo')
+        ->and($focus->spouse_marga)->toBe('Simamora');
+
+    $this->actingAs($this->admin)
+        ->get(route('people.edit', $focus))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('person.wives', 1)
+            ->where('person.wives.0.id', $husband->id)
+            ->where('person.wives.0.marga_id', $husbandMarga->id));
+});
+
+test('a woman spouse kept only as text is shown in her form', function () {
+    $husbandMarga = Marga::factory()->create(['name' => 'Simamora']);
+    $focus = Person::factory()->create([
+        'name' => 'Boru B',
+        'gender' => 'P',
+        'spouse' => 'Lamgondo',
+        'spouse_marga' => 'Simamora',
+    ]);
+
+    $this->actingAs($this->admin)
+        ->get(route('people.edit', $focus))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('person.wives', 1)
+            ->where('person.wives.0.id', null)
+            ->where('person.wives.0.name', 'Lamgondo')
+            ->where('person.wives.0.marga_id', $husbandMarga->id));
+});
+
 test('a signed person code links an existing wife shared by another contributor', function () {
     $familyMarga = Marga::factory()->create(['name' => 'Sitorus']);
     $wifeMarga = Marga::factory()->create(['name' => 'Panjaitan']);
