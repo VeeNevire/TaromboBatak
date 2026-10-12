@@ -203,3 +203,53 @@ test('father suggestions retain parent context and chains without hydrating rela
         ->and($row['chain'])->toBe('1-2')
         ->and(array_column($suggestions, 'id'))->not->toContain($otherCandidate->id, $female->id);
 });
+
+test('editing a member excludes unrelated trees and unrelated members from history payloads', function () {
+    $admin = User::factory()->asAdmin()->create();
+    $focus = Person::factory()->create(['gender' => 'L']);
+    $child = Person::factory()->create(['gender' => 'L', 'father_id' => $focus->id]);
+    $unrelated = Person::factory()->create(['gender' => 'L']);
+    $tree = FamilyTree::create(['user_id' => $admin->id, 'root_person_id' => $focus->id, 'name' => 'Keluarga Fokus']);
+    $rootNode = FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $focus->id]);
+    FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $child->id, 'father_node_id' => $rootNode->id]);
+    FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $unrelated->id]);
+    $otherTree = FamilyTree::create(['user_id' => $admin->id, 'root_person_id' => $unrelated->id, 'name' => 'Keluarga Lain']);
+    FamilyTreeNode::create(['family_tree_id' => $otherTree->id, 'person_id' => $unrelated->id]);
+
+    $this->actingAs($admin)->get(route('people.edit', ['person' => $focus, 'version_tree' => $tree->id]))
+        ->assertSuccessful()->assertInertia(fn (AssertableInertia $page) => $page
+        ->has('familyTrees', 1)->has('versionTrees', 1)
+        ->where('familyTrees.0.id', $tree->id)
+        ->where('familyTrees.0.member_person_ids', fn ($ids) => collect($ids)->contains($focus->id)
+            && collect($ids)->contains($child->id) && ! collect($ids)->contains($unrelated->id))
+        ->where('person.ownChildren.0.id', $child->id));
+});
+
+test('large tree history is read in bounded batches without losing members', function () {
+    $admin = User::factory()->asAdmin()->create();
+    $marga = Marga::factory()->create();
+    $root = Person::factory()->create(['marga_id' => $marga->id]);
+    $tree = FamilyTree::create(['user_id' => $admin->id, 'root_person_id' => $root->id, 'name' => 'Pohon Besar']);
+    $people = Person::factory()->count(2100)->make(['marga_id' => $marga->id, 'father_id' => null]);
+    foreach ($people->chunk(250) as $chunk) {
+        DB::table((new Person)->getTable())->insert($chunk->map(fn (Person $person) => $person->only(['name', 'gender', 'marga_id', 'father_id']))->all());
+    }
+    $personIds = Person::query()->pluck('id');
+    foreach ($personIds->chunk(250) as $chunk) {
+        DB::table((new FamilyTreeNode)->getTable())->insert($chunk->map(fn ($id) => ['family_tree_id' => $tree->id, 'person_id' => $id])->all());
+    }
+    $trees = FamilyTree::query()->with('rootPerson')->whereKey($tree->id)->get();
+    DB::enableQueryLog();
+    DB::flushQueryLog();
+    try {
+        $summaries = (new ReflectionMethod(PersonController::class, 'familyTreeSummaries'))->invoke(new PersonController, $trees);
+        $queries = collect(DB::getQueryLog())->filter(fn ($query) => str_contains($query['query'], 'family_tree_nodes'))->values();
+    } finally {
+        DB::disableQueryLog();
+    }
+
+    expect($summaries[$tree->id]['member_person_ids'])->toHaveCount(2101)
+        ->and($summaries[$tree->id]['root_name'])->toBe($root->name)
+        ->and($queries)->toHaveCount(2)
+        ->and($queries->every(fn ($query) => str_contains(strtolower($query['query']), 'limit 2000')))->toBeTrue();
+});

@@ -81,26 +81,28 @@ export default function TelegramMessages({
     const { auth } = usePage<{ auth: { user: { id: number } } }>().props;
     const [query, setQuery] = useState(search);
     const bottomRef = useRef<HTMLDivElement>(null);
+    const selectedDialogId = selectedDialog?.id;
+    const selectedDialogUnread = selectedDialog?.unread_count ?? 0;
     const ordered = useMemo(
         () => [...messages.data].reverse(),
         [messages.data],
     );
 
     useEffect(() => {
-        if (!selectedDialog) {
+        if (selectedDialogId == null) {
             return;
         }
 
-        if (selectedDialog.unread_count > 0) {
+        if (selectedDialogUnread > 0) {
             router.post(
-                telegramMessages.read(selectedDialog.id).url,
+                telegramMessages.read(selectedDialogId).url,
                 {},
                 { preserveScroll: true, preserveState: true },
             );
         }
 
         bottomRef.current?.scrollIntoView({ behavior: 'instant' });
-    }, [selectedDialog?.id]);
+    }, [selectedDialogId, selectedDialogUnread]);
 
     useEcho<{ dialog_id: number }>(
         `users.${auth.user.id}`,
@@ -113,7 +115,7 @@ export default function TelegramMessages({
     );
 
     useEffect(() => {
-        if (!selectedDialog) {
+        if (selectedDialogId == null) {
             return;
         }
 
@@ -126,7 +128,7 @@ export default function TelegramMessages({
         );
 
         return () => window.clearInterval(timer);
-    }, [selectedDialog?.id]);
+    }, [selectedDialogId]);
 
     const url = (id?: number) =>
         telegramMessages.index({
