@@ -3,9 +3,9 @@ import {
     CloudUpload,
     Network,
     Search,
-    ShieldCheck,
     TreePine,
     Users,
+    UsersRound,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { dashboard } from '@/routes';
@@ -64,10 +64,10 @@ export const features: {
         iconClass: 'bg-blue-100 text-blue-700',
     },
     {
-        title: 'Privasi Terjaga',
+        title: 'Relasi Keluarga',
         description:
-            'Data keluarga aman dengan kontrol privasi yang fleksibel.',
-        icon: ShieldCheck,
+            'menemukan hubungan keluarga dan menguatkan harmonisasi dalam adat istiadat',
+        icon: UsersRound,
         iconClass: 'bg-emerald-100 text-emerald-700',
     },
     {

@@ -15,15 +15,17 @@ type DocumentItem = {
     size_bytes: number;
     uploaded_by: string;
     created_at: string | null;
-    download_url: string;
+    download_url: string | null;
 };
 
 export default function MargaDocuments({
     marga,
     documents,
+    canDownload,
 }: {
     marga: { id: number; name: string; color: string | null };
     documents: DocumentItem[];
+    canDownload: boolean;
 }) {
     const form = useForm({ title: '', document: null as File | null });
     const submit = (event: FormEvent) => {
@@ -46,10 +48,10 @@ export default function MargaDocuments({
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <Link
-                            href={margaRoutes.index()}
+                            href={margaRoutes.documents.select()}
                             className="text-sm text-tb-primary"
                         >
-                            ← Kelola Marga
+                            ← Dokumen Marga
                         </Link>
                         <h1 className="mt-2 font-display text-2xl font-bold">
                             Dokumen {marga.name}
@@ -132,30 +134,66 @@ export default function MargaDocuments({
                                         key={document.id}
                                         className="flex flex-wrap items-center justify-between gap-3 py-3"
                                     >
-                                        <div className="flex min-w-0 items-center gap-3">
-                                            <FileText className="size-5 shrink-0 text-tb-primary" />
-                                            <div className="min-w-0">
-                                                <p className="truncate font-medium">
+                                        <div className="flex min-w-0 flex-1 items-start gap-3">
+                                            <FileText
+                                                className="mt-1 size-5 shrink-0"
+                                                style={{
+                                                    color:
+                                                        marga.color ??
+                                                        'var(--color-tb-primary)',
+                                                }}
+                                            />
+                                            <div className="min-w-0 space-y-1">
+                                                <a
+                                                    href={
+                                                        margaRoutes.documents.view(
+                                                            {
+                                                                marga: marga.id,
+                                                                document:
+                                                                    document.id,
+                                                            },
+                                                        ).url
+                                                    }
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="block font-semibold break-words text-tb-primary underline-offset-4 hover:underline focus-visible:underline"
+                                                >
                                                     {document.title}
-                                                </p>
-                                                <p className="truncate text-xs text-tb-on-surface-variant">
+                                                </a>
+                                                <p className="text-xs break-words text-tb-on-surface-variant">
                                                     {document.original_name} ·{' '}
-                                                    {size(document.size_bytes)}{' '}
-                                                    · {document.uploaded_by}
+                                                    {size(document.size_bytes)}
+                                                </p>
+                                                <p className="text-xs text-tb-on-surface-variant">
+                                                    Diunggah oleh{' '}
+                                                    <span className="font-medium">
+                                                        {document.uploaded_by}
+                                                    </span>
+                                                </p>
+                                                <p className="text-xs text-tb-on-surface-variant">
+                                                    {document.created_at ??
+                                                        'Waktu unggah tidak tersedia'}
                                                 </p>
                                             </div>
                                         </div>
-                                        <div className="flex gap-2">
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                asChild
-                                            >
-                                                <a href={document.download_url}>
-                                                    <Download className="mr-1 size-4" />{' '}
-                                                    Unduh
-                                                </a>
-                                            </Button>
+                                        <div className="flex shrink-0 items-center gap-2">
+                                            {canDownload &&
+                                                document.download_url && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        asChild
+                                                    >
+                                                        <a
+                                                            href={
+                                                                document.download_url
+                                                            }
+                                                        >
+                                                            <Download className="mr-1 size-4" />{' '}
+                                                            Unduh
+                                                        </a>
+                                                    </Button>
+                                                )}
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
