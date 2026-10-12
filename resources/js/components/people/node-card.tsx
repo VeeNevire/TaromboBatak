@@ -12,6 +12,8 @@ export type TreeNode = {
     birthYear?: string | null;
     birthOrder?: number | null;
     displayNumber?: number;
+    /** Every generation below this person in the drawn tree. */
+    branchCount?: number;
     image?: string | null;
     pending?: boolean;
     claimed?: boolean;
@@ -92,6 +94,14 @@ export function NodeCard({
     showSpouseMargas?: boolean;
 }) {
     const clickTimer = useRef<number | null>(null);
+    const branchInfo =
+        node.branchCount != null ? `Jumlah ranting: ${node.branchCount}` : null;
+    // Marga identity figures name their marga (and its size) on hover.
+    const identityInfo = node.isMargaIdentity
+        ? [node.identityMargaName ?? 'Tokoh identitas marga', branchInfo]
+              .filter(Boolean)
+              .join(' · ')
+        : null;
     const showMargaColors = useContext(MargaColorContext);
     // Identity cards take the colour of the marga they found; everyone else
     // takes the colour of their own marga from Daftar Marga.
@@ -158,11 +168,16 @@ export function NodeCard({
                             : undefined
                     }
                     title={
-                        onAvatarClick
-                            ? onAvatarDoubleClick
-                                ? 'Klik: tampilkan jalur silsilah · Klik 2x: jadikan paling atas'
-                                : 'Tampilkan jalur silsilah'
-                            : undefined
+                        [
+                            identityInfo,
+                            onAvatarClick
+                                ? onAvatarDoubleClick
+                                    ? 'Klik: tampilkan jalur silsilah · Klik 2x: jadikan paling atas'
+                                    : 'Tampilkan jalur silsilah'
+                                : null,
+                        ]
+                            .filter(Boolean)
+                            .join('\n') || undefined
                     }
                     data-node-fill
                     onClick={handleAvatarClick}
@@ -219,11 +234,14 @@ export function NodeCard({
                     onNameClick ? `Lihat ringkasan ${node.name}` : undefined
                 }
                 title={
-                    node.isMargaIdentity
-                        ? (node.identityMargaName ?? 'Tokoh identitas marga')
-                        : onNameClick
-                          ? 'Lihat ringkasan anggota'
-                          : undefined
+                    identityInfo ??
+                    ([
+                        branchInfo,
+                        onNameClick ? 'Lihat ringkasan anggota' : null,
+                    ]
+                        .filter(Boolean)
+                        .join(' · ') ||
+                        undefined)
                 }
                 data-node-fill
                 onClick={onNameClick}
