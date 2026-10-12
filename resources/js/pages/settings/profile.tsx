@@ -36,6 +36,7 @@ type RegionOption = {
 
 type Props = {
     margas: MargaOption[];
+    managedMargas: (MargaOption & { color: string | null })[];
     regions: RegionOption[];
     telegramConnection: {
         username: string | null;
@@ -49,11 +50,15 @@ const EMPTY_VALUE = 'none';
 
 export default function Profile({
     margas,
+    managedMargas,
     regions,
     telegramConnection: telegramAccount,
     telegramBotConfigured,
 }: Props) {
     const { auth } = usePage<PageProps>().props;
+    const isContributor =
+        auth.user.role === 'contributor_main' ||
+        auth.user.role === 'contributor_member';
     const [nameDraft, setNameDraft] = useState<{
         source: string;
         value: string;
@@ -204,7 +209,6 @@ export default function Profile({
                     title="Profil"
                     description="Ubah informasi akun, marga keluarga, dan domisili Anda."
                 />
-
                 <Form
                     {...ProfileController.update.form()}
                     options={{
@@ -522,6 +526,61 @@ export default function Profile({
                         </>
                     )}
                 </Form>
+
+                  {isContributor && (
+                    <Card>
+                        <CardHeader className="gap-2">
+                            <CardTitle className="flex items-center gap-2">
+                                <Shapes className="size-5 text-tb-primary" />
+                                Kelola Marga
+                            </CardTitle>
+                            <p className="text-sm text-muted-foreground">
+                                Marga yang ditetapkan oleh Admin untuk Anda
+                                kelola.
+                            </p>
+                        </CardHeader>
+                        <CardContent>
+                            {managedMargas.length > 0 ? (
+                                <ul className="grid gap-3 sm:grid-cols-2">
+                                    {managedMargas.map((marga) => (
+                                        <li
+                                            key={marga.id}
+                                            className="flex min-w-0 items-center gap-3 rounded-xl border border-l-4 border-border bg-muted/30 p-3"
+                                            style={{
+                                                borderLeftColor:
+                                                    marga.color ??
+                                                    'var(--color-tb-primary)',
+                                            }}
+                                        >
+                                            <span
+                                                className="flex size-10 shrink-0 items-center justify-center rounded-lg"
+                                                style={{
+                                                    color:
+                                                        marga.color ??
+                                                        'var(--color-tb-primary)',
+                                                    backgroundColor: `color-mix(in srgb, ${marga.color ?? 'var(--color-tb-primary)'} 12%, transparent)`,
+                                                }}
+                                            >
+                                                <Shapes className="size-5" />
+                                            </span>
+                                            <span className="min-w-0 text-sm font-semibold break-words">
+                                                {marga.name}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p className="text-sm text-muted-foreground">
+                                    Belum ada marga yang ditetapkan oleh Admin.
+                                </p>
+                            )}
+                            <p className="mt-4 text-xs text-muted-foreground">
+                                Hubungi Admin untuk perubahan penugasan marga.
+                            </p>
+                        </CardContent>
+                    </Card>
+                )}
+
 
                 <Card className="border-tb-outline-variant bg-tb-surface-bright">
                     <CardHeader>

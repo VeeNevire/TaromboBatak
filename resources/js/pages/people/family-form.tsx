@@ -2037,6 +2037,10 @@ export default function FamilyForm({
         );
     };
 
+    // A woman's spouse is not an "istri", so use the neutral word unless the
+    // member is marked male.
+    const spouseLabel = data.gender === 'L' ? 'Istri' : 'Pasangan';
+
     const addWife = () => {
         setData('wives', [...data.wives, emptyParent()]);
     };
@@ -3179,7 +3183,7 @@ export default function FamilyForm({
 
                                             <div className="grid gap-3">
                                                 <Label className="text-tb-on-surface">
-                                                    Istri
+                                                    {spouseLabel}
                                                 </Label>
                                                 {data.wives.map(
                                                     (wife, index) => (
@@ -3197,15 +3201,15 @@ export default function FamilyForm({
                                                                         index,
                                                                     )
                                                                 }
-                                                                aria-label={`Hapus Istri ${index + 1}`}
-                                                                title={`Hapus Istri ${index + 1}`}
+                                                                aria-label={`Hapus ${spouseLabel} ${index + 1}`}
+                                                                title={`Hapus ${spouseLabel} ${index + 1}`}
                                                                 className="absolute top-2 right-2 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full text-tb-on-surface-variant transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
                                                             >
                                                                 <X className="size-3.5" />
                                                             </button>
                                                             {renderParentBlock(
                                                                 index,
-                                                                `Istri ${index + 1}`,
+                                                                `${spouseLabel} ${index + 1}`,
                                                                 '1955',
                                                                 '2025',
                                                                 true,
@@ -3222,7 +3226,7 @@ export default function FamilyForm({
                                                     className="w-full border-dashed border-tb-outline-variant text-tb-primary hover:bg-tb-primary/5"
                                                 >
                                                     <Plus className="size-4" />{' '}
-                                                    Tambah Istri
+                                                    Tambah {spouseLabel}
                                                 </Button>
                                             </div>
 

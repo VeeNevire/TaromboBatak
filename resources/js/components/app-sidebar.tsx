@@ -115,6 +115,15 @@ export function AppSidebar() {
                     href: tarombo.snapshots.index(),
                     icon: Images,
                 },
+                ...(isContributor
+                    ? [
+                          {
+                              title: 'Dokumen Marga',
+                              href: marga.documents.select(),
+                              icon: FileText,
+                          },
+                      ]
+                    : []),
                 ...(isStaff || isContributor
                     ? [
                           {

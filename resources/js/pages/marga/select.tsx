@@ -110,7 +110,9 @@ export default function SelectMarga({
                         )}
                         {filteredMargas.length === 0 && (
                             <p className="col-span-full rounded-2xl border border-tb-outline-variant bg-tb-surface-bright p-8 text-center text-sm text-tb-on-surface-variant">
-                                Marga tidak ditemukan. Coba nama lain.
+                                {margas.length === 0 && !isAi
+                                    ? 'Belum ada marga yang tersedia untuk dikelola. Hubungi Admin untuk penugasan marga.'
+                                    : 'Marga tidak ditemukan. Coba nama lain.'}
                             </p>
                         )}
                     </div>

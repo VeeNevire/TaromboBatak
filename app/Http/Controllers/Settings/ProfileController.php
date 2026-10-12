@@ -25,6 +25,9 @@ class ProfileController extends Controller
             'mustVerifyEmail' => $request->user() instanceof MustVerifyEmail,
             'status' => $request->session()->get('status'),
             'margas' => Marga::query()->orderBy('name')->get(['id', 'name']),
+            'managedMargas' => $request->user()->isContributor()
+                ? $request->user()->managedMargas()->orderBy('name')->get(['margas.id', 'margas.name', 'margas.color'])
+                : [],
             'regions' => IndonesiaRegions::all(),
             'telegramConnection' => $request->user()->telegramAccount()
                 ->first(['username', 'display_name', 'linked_at']),

@@ -17,6 +17,7 @@ export type TreeNode = {
     claimed?: boolean;
     isMargaIdentity?: boolean;
     identityMargaColor?: string | null;
+    identityMargaName?: string | null;
     spouses?: string[];
     spouseMargas?: string[];
 };
@@ -219,7 +220,7 @@ export function NodeCard({
                 }
                 title={
                     node.isMargaIdentity
-                        ? 'Tokoh identitas marga'
+                        ? (node.identityMargaName ?? 'Tokoh identitas marga')
                         : onNameClick
                           ? 'Lihat ringkasan anggota'
                           : undefined

@@ -1655,8 +1655,12 @@ export function TaromboExplorer({
         const requestId = ++previewRequest.current;
 
         try {
+            // Saving reuses the preview the user just saw; a new preview must
+            // always be cloned from the freshly rendered tree.
             const savedPreview =
-                !quick && fullscreenView === 'tree' ? snapshotPreview : null;
+                !quick && !previewOnly && fullscreenView === 'tree'
+                    ? snapshotPreview
+                    : null;
 
             if (previewOnly && fullscreenView === 'tree') {
                 setPreviewSourceWidth(
@@ -2189,7 +2193,7 @@ export function TaromboExplorer({
     ) => (
         <MargaColorContext.Provider value={showMargaColors}>
             <DescendantsTree
-                key={`${renderedTreeCenterId}-${margaTree?.direction ?? ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
+                key={`${renderedTreeCenterId}-${margaTree?.direction ?? ancestorFocusId ?? 'branch'}`}
                 people={displayPeople}
                 centerId={renderedTreeCenterId}
                 onSelect={margaTree ? undefined : handlePersonSelect}
@@ -2786,7 +2790,7 @@ export function TaromboExplorer({
                                                 value={showMargaColors}
                                             >
                                                 <DescendantsTree
-                                                    key={`${renderedTreeCenterId}-${margaTree?.direction ?? ancestorFocusId ?? 'branch'}-${showFemaleLineage ? 'with-female' : 'male-only'}`}
+                                                    key={`${renderedTreeCenterId}-${margaTree?.direction ?? ancestorFocusId ?? 'branch'}`}
                                                     people={displayPeople}
                                                     centerId={
                                                         renderedTreeCenterId

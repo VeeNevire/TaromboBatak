@@ -159,6 +159,8 @@ Route::middleware(['auth'])->group(function () {
         ->name('marga.documents.store');
     Route::get('dashboard/marga/{marga}/dokumen/{document}/download', [MargaDocumentController::class, 'download'])
         ->name('marga.documents.download');
+    Route::get('dashboard/marga/{marga}/dokumen/{document}/view', [MargaDocumentController::class, 'view'])
+        ->name('marga.documents.view');
     Route::delete('dashboard/marga/{marga}/dokumen/{document}', [MargaDocumentController::class, 'destroy'])
         ->name('marga.documents.destroy');
     Route::get('dashboard/marga/{marga}/tanya-tarombo', [TaromboAiController::class, 'show'])
