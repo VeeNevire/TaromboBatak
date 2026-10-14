@@ -26,6 +26,7 @@ use Illuminate\Support\Carbon;
  * @property int $review_version
  * @property int|null $reviewed_by
  * @property Carbon|null $reviewed_at
+ * @property Carbon|null $push_notified_at
  * @property string|null $rejection_reason
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -122,6 +123,7 @@ class Story extends Model
         return [
             'published' => 'boolean',
             'reviewed_at' => 'datetime',
+            'push_notified_at' => 'datetime',
         ];
     }
 }

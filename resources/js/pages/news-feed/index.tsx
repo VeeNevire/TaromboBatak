@@ -4,8 +4,10 @@ import { useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AppAvatar } from '@/components/app-avatar';
 import InputError from '@/components/input-error';
+import { InstallAppButton } from '@/components/install-app-button';
 import { FeedCard } from '@/components/news-feed/feed-card';
 import type { FeedItem } from '@/components/news-feed/feed-card';
+import { PushNotificationToggle } from '@/components/push-notification-toggle';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -208,6 +210,10 @@ export default function NewsFeed({
                         <span className="text-xs text-tb-on-surface-variant">
                             Kabar keluarga
                         </span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <PushNotificationToggle />
+                        <InstallAppButton />
                     </div>
                 </div>
 

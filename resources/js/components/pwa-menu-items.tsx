@@ -70,7 +70,7 @@ export function PwaMenuItems() {
                         }
                     >
                         <Smartphone className="mr-2" />
-                        Notifikasi Berita (iPhone)
+                        Notifikasi (iPhone)
                     </DropdownMenuItem>
                 )}
                 {status === 'denied' && (
@@ -94,8 +94,8 @@ export function PwaMenuItems() {
                             <Bell className="mr-2" />
                         )}
                         {subscribed
-                            ? 'Matikan Notifikasi Berita'
-                            : 'Aktifkan Notifikasi Berita'}
+                            ? 'Matikan Notifikasi'
+                            : 'Aktifkan Notifikasi'}
                     </DropdownMenuItem>
                 )}
             </DropdownMenuGroup>
