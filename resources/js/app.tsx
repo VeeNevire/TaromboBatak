@@ -26,7 +26,8 @@ if (!import.meta.env.SSR) {
     initializePwa();
 }
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+// Matches config('seo.site_name'); titles must agree with the server-rendered <title>.
+const siteName = 'Tarombo Connection';
 
 type LayoutProps = {
     children: ReactNode;
@@ -71,7 +72,12 @@ function baseLayout(
 }
 
 createInertiaApp({
-    title: (title) => (title ? `${title} - ${appName}` : appName),
+    title: (title) =>
+        !title
+            ? siteName
+            : title.includes(siteName)
+              ? title
+              : `${title} | ${siteName}`,
     // Return stable component references so Inertia can preserve page state.
     layout: baseLayout,
     strictMode: true,

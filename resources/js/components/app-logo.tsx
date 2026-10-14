@@ -14,7 +14,7 @@ export default function AppLogo() {
             </div>
             <div className="ml-2 grid min-w-0 flex-1 text-left text-sm">
                 <span className="mb-0.5 truncate font-display text-base leading-tight font-bold text-sidebar-foreground">
-                    Tarombo Batak
+                    Tarombo Connection
                 </span>
                 <span className="truncate text-xs text-sidebar-foreground/70">
                     Silsilah • Budaya • Identitas

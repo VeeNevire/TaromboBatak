@@ -7,6 +7,7 @@ use App\Http\Middleware\EnsureUserIsStaff;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\LogAccountActivity;
+use App\Http\Middleware\NoIndex;
 use App\Http\Middleware\TrackAccountAccess;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Application;
@@ -35,6 +36,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role.admin' => EnsureUserIsAdmin::class,
             'role.contributor' => EnsureUserCanReviewContributions::class,
             'role.staff' => EnsureUserIsStaff::class,
+            'noindex' => NoIndex::class,
         ]);
 
         $middleware->web(append: [

@@ -9,7 +9,9 @@ type TrafficMonitorPublicProps = {
     reportUrl: string | null;
 };
 
-export default function PublicTrafficMonitor({ reportUrl }: TrafficMonitorPublicProps) {
+export default function PublicTrafficMonitor({
+    reportUrl,
+}: TrafficMonitorPublicProps) {
     return (
         <>
             <Head title="Monitor Traffic" />
@@ -19,11 +21,19 @@ export default function PublicTrafficMonitor({ reportUrl }: TrafficMonitorPublic
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex gap-3">
                             <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                                <BarChart3 className="size-5" aria-hidden="true" />
+                                <BarChart3
+                                    className="size-5"
+                                    aria-hidden="true"
+                                />
                             </div>
                             <div>
-                                <h1 className="text-2xl font-semibold tracking-tight">Monitor Traffic</h1>
-                                <p className="mt-1 text-sm text-muted-foreground">Statistik kunjungan website Tarombo Batak.</p>
+                                <h1 className="text-2xl font-semibold tracking-tight">
+                                    Monitor Traffic
+                                </h1>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    Statistik kunjungan website Tarombo
+                                    Connection.
+                                </p>
                             </div>
                         </div>
                         <Button variant="outline" asChild>
@@ -36,14 +46,21 @@ export default function PublicTrafficMonitor({ reportUrl }: TrafficMonitorPublic
                             <CardContent className="p-0">
                                 <div className="flex items-center justify-end border-b px-4 py-3">
                                     <Button variant="ghost" size="sm" asChild>
-                                        <a href={reportUrl} target="_blank" rel="noreferrer">
+                                        <a
+                                            href={reportUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                        >
                                             Buka laporan
-                                            <ExternalLink className="size-4" aria-hidden="true" />
+                                            <ExternalLink
+                                                className="size-4"
+                                                aria-hidden="true"
+                                            />
                                         </a>
                                     </Button>
                                 </div>
                                 <iframe
-                                    title="Laporan traffic Tarombo Batak"
+                                    title="Laporan traffic Tarombo Connection"
                                     src={reportUrl}
                                     className="h-[calc(100vh-13rem)] min-h-[600px] w-full border-0"
                                     allowFullScreen
@@ -53,7 +70,9 @@ export default function PublicTrafficMonitor({ reportUrl }: TrafficMonitorPublic
                         </Card>
                     ) : (
                         <Card>
-                            <CardContent className="py-12 text-center text-sm text-muted-foreground">Laporan traffic belum dikonfigurasi.</CardContent>
+                            <CardContent className="py-12 text-center text-sm text-muted-foreground">
+                                Laporan traffic belum dikonfigurasi.
+                            </CardContent>
                         </Card>
                     )}
                 </div>

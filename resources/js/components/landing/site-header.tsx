@@ -103,9 +103,9 @@ export function SiteHeader() {
                             <BrandLogo className="size-7" />
                         </div>
                         <div>
-                            <h1 className="font-display text-xl leading-tight font-bold">
-                                Tarombo Batak
-                            </h1>
+                            <p className="font-display text-xl leading-tight font-bold">
+                                Tarombo Connection
+                            </p>
                             <p className="text-xs text-tb-on-surface-variant">
                                 Silsilah • Budaya • Identitas
                             </p>

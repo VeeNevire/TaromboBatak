@@ -343,6 +343,8 @@ export function FeedCard({ item }: { item: FeedItem }) {
                 )}
                 {item.image && (
                     <img
+                        loading="lazy"
+                        decoding="async"
                         src={item.image}
                         alt={item.title ?? 'Gambar cerita'}
                         className="max-h-[560px] w-full rounded-lg border border-tb-outline-variant object-cover"
@@ -360,6 +362,7 @@ export function FeedCard({ item }: { item: FeedItem }) {
                     >
                         {item.images.map((src) => (
                             <img
+                                decoding="async"
                                 key={src}
                                 src={src}
                                 alt="Lampiran status"

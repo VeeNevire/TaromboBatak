@@ -118,7 +118,7 @@ class TelegramUpdateProcessor
             ]);
             $token->update(['used_at' => now()]);
 
-            return 'Telegram berhasil terhubung dengan akun Tarombo Batak.';
+            return 'Telegram berhasil terhubung dengan akun Tarombo Connection.';
         });
 
         $this->telegram->sendMessage($chat['id'], $message);
@@ -190,6 +190,6 @@ class TelegramUpdateProcessor
             $locked->update(['used_at' => now()]);
         });
 
-        $this->telegram->sendMessage($chat['id'], 'Grup berhasil terhubung dengan Tarombo Batak.');
+        $this->telegram->sendMessage($chat['id'], 'Grup berhasil terhubung dengan Tarombo Connection.');
     }
 }

@@ -1,22 +1,29 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" @class(['dark' => ($appearance ?? 'system') == 'dark'])>
+<html lang="id" @class(['dark' => ($appearance ?? 'system') == 'dark'])>
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        @php($preview = app(\App\Services\SharePreviewService::class)->forPage($page))
-        <meta name="description" content="{{ $preview['description'] }}">
-        <meta property="og:site_name" content="Tarombo Batak">
+        @php($seo = app(\App\Services\SeoService::class)->forPage($page))
+        <meta name="description" content="{{ $seo['description'] }}">
+        <meta name="robots" content="{{ $seo['robots'] }}">
+        @if ($seo['canonical'])
+            <link rel="canonical" href="{{ $seo['canonical'] }}">
+        @endif
+        <meta property="og:site_name" content="{{ config('seo.site_name') }}">
         <meta property="og:locale" content="id_ID">
-        <meta property="og:type" content="article">
-        <meta property="og:title" content="{{ $preview['title'] }}">
-        <meta property="og:description" content="{{ $preview['description'] }}">
-        <meta property="og:image" content="{{ $preview['image'] }}">
-        <meta property="og:image:alt" content="{{ $preview['title'] }}">
-        <meta property="og:url" content="{{ $preview['url'] }}">
+        <meta property="og:type" content="{{ $seo['og_type'] }}">
+        <meta property="og:title" content="{{ $seo['og_title'] }}">
+        <meta property="og:description" content="{{ $seo['description'] }}">
+        <meta property="og:image" content="{{ $seo['image'] }}">
+        <meta property="og:image:alt" content="{{ $seo['og_title'] }}">
+        <meta property="og:url" content="{{ $seo['og_url'] }}">
         <meta name="twitter:card" content="summary_large_image">
-        <meta name="twitter:title" content="{{ $preview['title'] }}">
-        <meta name="twitter:description" content="{{ $preview['description'] }}">
-        <meta name="twitter:image" content="{{ $preview['image'] }}">
+        <meta name="twitter:title" content="{{ $seo['og_title'] }}">
+        <meta name="twitter:description" content="{{ $seo['description'] }}">
+        <meta name="twitter:image" content="{{ $seo['image'] }}">
+        @foreach ($seo['json_ld'] as $schema)
+            <script type="application/ld+json">{!! json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) !!}</script>
+        @endforeach
 
         {{-- Inline script to detect system dark mode preference and apply it immediately --}}
         <script>
@@ -72,7 +79,7 @@
         @viteReactRefresh
         @vite(['resources/css/app.css', 'resources/js/app.tsx', "resources/js/pages/{$page['component']}.tsx"])
         <x-inertia::head>
-            <title>{{ config('app.name', 'Laravel') }}</title>
+            <title>{{ $seo['title'] }}</title>
         </x-inertia::head>
     </head>
     <body class="font-sans antialiased">

@@ -66,7 +66,7 @@ export default function MargaNewsIndex({
 
     return (
         <>
-            <Head title="Berita Marga-Marga" />
+            <Head title="Berita Marga Batak Terbaru" />
             <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 p-4 md:p-6">
                 <div>
                     <h1 className="flex items-center gap-2 font-display text-2xl font-bold text-tb-on-surface md:text-3xl">
@@ -157,6 +157,7 @@ export default function MargaNewsIndex({
                                 <CardContent className="flex flex-col gap-2 p-4">
                                     {item.image_url && (
                                         <img
+                                            decoding="async"
                                             src={item.image_url}
                                             alt={`Gambar berita: ${item.title}`}
                                             loading="lazy"

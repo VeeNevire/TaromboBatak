@@ -1,2 +1,5 @@
 User-agent: *
-Disallow:
+Allow: /
+Disallow: /regions/
+
+Sitemap: https://taromboconnection.com/sitemap.xml

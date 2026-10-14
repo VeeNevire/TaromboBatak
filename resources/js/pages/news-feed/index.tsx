@@ -196,7 +196,7 @@ export default function NewsFeed({
 
     return (
         <>
-            <Head title="News Feed" />
+            <Head title="Tarombo Connection – Silsilah & Tarombo Marga Batak" />
 
             <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-5 p-4 md:p-8">
                 <div className="border-b border-tb-outline-variant pb-4">

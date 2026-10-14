@@ -181,7 +181,7 @@ class MargaController extends Controller
                 'id' => $item->id,
                 'title' => $tab === 'statuses' ? null : $item->title,
                 'body' => $tab === 'statuses' ? $item->body : $item->description,
-                'author' => $tab === 'statuses' ? $item->author->name : ($item->creator?->name ?? 'Tim Tarombo Batak'),
+                'author' => $tab === 'statuses' ? $item->author->name : ($item->creator?->name ?? 'Tim Tarombo Connection'),
                 'date' => $tab === 'events' ? $item->date->format('d M Y') : $item->created_at?->format('d M Y H:i'),
                 'location' => $tab === 'events' ? $item->location : null,
             ]);

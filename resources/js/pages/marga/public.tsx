@@ -53,7 +53,7 @@ const daltol = [
 export default function MargaPublic({ margas, stats }: Props) {
     return (
         <div className="scroll-smooth bg-tb-surface font-body text-tb-on-surface antialiased">
-            <Head title="Marga" />
+            <Head title="Daftar Marga Batak & Tarombo" />
             <SiteHeader />
 
             <main>
@@ -207,6 +207,8 @@ export default function MargaPublic({ margas, stats }: Props) {
                                         >
                                             {item.image_url ? (
                                                 <img
+                                                    loading="lazy"
+                                                    decoding="async"
                                                     src={item.image_url}
                                                     alt={item.name}
                                                     className="absolute inset-0 h-full w-full object-cover"

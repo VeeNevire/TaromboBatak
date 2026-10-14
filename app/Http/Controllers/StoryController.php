@@ -114,6 +114,8 @@ class StoryController extends Controller
                 'classification' => $story->classification,
                 'marga' => $story->marga?->name,
                 'created_at' => $story->created_at?->format('d M Y'),
+                'published_at' => $story->created_at?->toIso8601String(),
+                'updated_at' => $story->updated_at?->toIso8601String(),
             ],
         ]);
     }

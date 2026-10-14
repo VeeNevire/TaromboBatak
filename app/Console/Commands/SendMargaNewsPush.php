@@ -41,7 +41,7 @@ class SendMargaNewsPush extends Command
         $message = $news->count() === 1
             ? [
                 'title' => Str::limit($news->first()->title, 120),
-                'body' => Str::limit($news->first()->excerpt ?: 'Berita baru dari '.($news->first()->publisher ?: 'Tarombo Batak'), 160),
+                'body' => Str::limit($news->first()->excerpt ?: 'Berita baru dari '.($news->first()->publisher ?: 'Tarombo Connection'), 160),
                 'url' => route('marga-news.show', $news->first(), false),
                 'tag' => 'marga-news-'.$news->first()->id,
             ]

@@ -14,7 +14,7 @@ export default function QrResult({
                     <header className="flex flex-wrap items-center justify-between gap-3">
                         <div>
                             <p className="text-xs font-semibold text-tb-primary">
-                                Tarombo Batak
+                                Tarombo Connection
                             </p>
                             <h1 className="mt-1 font-display text-xl font-bold md:text-2xl">
                                 {snapshot.title}

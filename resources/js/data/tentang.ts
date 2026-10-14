@@ -83,10 +83,10 @@ export const impactStats: {
 ];
 
 export const tentangStory = {
-    title: 'Mengapa Tarombo Batak Ada?',
+    title: 'Mengapa Tarombo Connection Ada?',
     paragraphs: [
         'Di era digital ini, banyak generasi muda Batak yang mulai kehilangan koneksi dengan akar budaya mereka. Silsilah keluarga yang dulunya dijaga dengan cermat mulai terlupakan, cerita leluhur tidak lagi diturunkan, dan tradisi perlahan memudar.',
-        'Tarombo Batak hadir untuk menjembatani kesenjangan ini. Kami percaya bahwa dengan teknologi, kita dapat melestarikan warisan leluhur sambil membuatnya relevan dan mudah diakses oleh generasi masa kini.',
+        'Tarombo Connection hadir untuk menjembatani kesenjangan ini. Kami percaya bahwa dengan teknologi, kita dapat melestarikan warisan leluhur sambil membuatnya relevan dan mudah diakses oleh generasi masa kini.',
         'Platform ini bukan sekadar pohon keluarga digital. Ini adalah ruang di mana cerita hidup, di mana tradisi dijaga, dan di mana keluarga dapat terhubung kembali dengan akar mereka—tidak peduli di mana pun mereka berada.',
     ],
 };

@@ -189,9 +189,8 @@ export default function ContactsIndex({
     const [selectedIncomingRequest, setSelectedIncomingRequest] = useState<
         Props['incomingContactRequests'][number] | null
     >(null);
-    const [reviewingIncomingRequest, setReviewingIncomingRequest] = useState<
-        boolean
-    >(false);
+    const [reviewingIncomingRequest, setReviewingIncomingRequest] =
+        useState<boolean>(false);
     const [telegramInviteCopied, setTelegramInviteCopied] = useState(false);
     const [contactSearch, setContactSearch] = useState('');
     const [requestingContactId, setRequestingContactId] = useState<
@@ -810,7 +809,7 @@ export default function ContactsIndex({
             window.location.origin,
         ).toString();
 
-    const telegramInviteText = `Horas! ${auth.user.name} mengundang Anda bergabung di Tarombo Batak agar kita dapat terhubung dan berkomunikasi.`;
+    const telegramInviteText = `Horas! ${auth.user.name} mengundang Anda bergabung di Tarombo Connection agar kita dapat terhubung dan berkomunikasi.`;
 
     const shareTelegramInvite = () => {
         const shareUrl = new URL('https://t.me/share/url');
@@ -874,10 +873,16 @@ export default function ContactsIndex({
         }
 
         try {
-            await navigator.clipboard.writeText(selectedIncomingRequest.share_code);
-            toast.success('Kode orang berhasil disalin. Kirimkan kode ini lewat pesan.');
+            await navigator.clipboard.writeText(
+                selectedIncomingRequest.share_code,
+            );
+            toast.success(
+                'Kode orang berhasil disalin. Kirimkan kode ini lewat pesan.',
+            );
         } catch {
-            toast.error('Kode tidak dapat disalin. Periksa izin clipboard browser.');
+            toast.error(
+                'Kode tidak dapat disalin. Periksa izin clipboard browser.',
+            );
         }
     };
 
@@ -924,21 +929,26 @@ export default function ContactsIndex({
                 {incomingContactRequests.length > 0 && (
                     <section
                         aria-labelledby="incoming-contact-requests-heading"
-                        className="mx-auto flex w-full max-w-7xl flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-sm dark:border-amber-800 dark:bg-amber-950/30 sm:flex-row sm:items-center sm:justify-between"
+                        className="mx-auto flex w-full max-w-7xl flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between dark:border-amber-800 dark:bg-amber-950/30"
                     >
                         <div className="flex items-start gap-3">
                             <div className="grid size-9 shrink-0 place-items-center rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300">
-                                <AlertCircle className="size-5" aria-hidden="true" />
+                                <AlertCircle
+                                    className="size-5"
+                                    aria-hidden="true"
+                                />
                             </div>
                             <div>
                                 <h2
                                     id="incoming-contact-requests-heading"
                                     className="text-sm font-semibold text-tb-on-surface"
                                 >
-                                    {incomingContactRequests.length} permintaan kontak masuk
+                                    {incomingContactRequests.length} permintaan
+                                    kontak masuk
                                 </h2>
                                 <p className="mt-0.5 text-xs text-tb-on-surface-variant">
-                                    Setujui agar Anda dapat mulai berkirim pesan.
+                                    Setujui agar Anda dapat mulai berkirim
+                                    pesan.
                                 </p>
                             </div>
                         </div>
@@ -950,19 +960,25 @@ export default function ContactsIndex({
                                 >
                                     <button
                                         type="button"
-                                        onClick={() => setSelectedIncomingRequest(request)}
+                                        onClick={() =>
+                                            setSelectedIncomingRequest(request)
+                                        }
                                         className="max-w-36 truncate text-left text-sm font-medium text-tb-on-surface hover:text-tb-primary"
                                     >
                                         {request.name}
                                         <span className="ml-1 font-normal text-tb-on-surface-variant">
-                                            · {request.marga ?? 'Marga belum dicatat'}
+                                            ·{' '}
+                                            {request.marga ??
+                                                'Marga belum dicatat'}
                                         </span>
                                     </button>
                                     <Button
                                         type="button"
                                         size="icon"
                                         variant="outline"
-                                        onClick={() => setSelectedIncomingRequest(request)}
+                                        onClick={() =>
+                                            setSelectedIncomingRequest(request)
+                                        }
                                         aria-label={`Lihat informasi ${request.name}`}
                                         title="Lihat informasi pemohon"
                                         className="size-8"
@@ -972,7 +988,9 @@ export default function ContactsIndex({
                                     <Button
                                         type="button"
                                         size="sm"
-                                        onClick={() => setSelectedIncomingRequest(request)}
+                                        onClick={() =>
+                                            setSelectedIncomingRequest(request)
+                                        }
                                     >
                                         Terima
                                     </Button>
@@ -982,7 +1000,9 @@ export default function ContactsIndex({
                                         variant="outline"
                                         onClick={() =>
                                             router.patch(
-                                                contactRequests.update(request.id).url,
+                                                contactRequests.update(
+                                                    request.id,
+                                                ).url,
                                                 { status: 'rejected' },
                                                 { preserveScroll: true },
                                             )
@@ -1562,7 +1582,9 @@ export default function ContactsIndex({
                                 <div className="flex items-center gap-3 rounded-xl border border-tb-outline-variant bg-tb-surface-container/50 p-4">
                                     <AppAvatar
                                         name={selectedIncomingRequest.name}
-                                        image={selectedIncomingRequest.person_image}
+                                        image={
+                                            selectedIncomingRequest.person_image
+                                        }
                                         color={selectedIncomingRequest.color}
                                         className="size-12"
                                     />
@@ -1582,28 +1604,39 @@ export default function ContactsIndex({
                                     </h3>
                                     <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
                                         <div>
-                                            <dt className="text-tb-on-surface-variant">Identitas Tarombo</dt>
+                                            <dt className="text-tb-on-surface-variant">
+                                                Identitas Tarombo
+                                            </dt>
                                             <dd className="mt-1 font-medium text-tb-on-surface">
-                                                {selectedIncomingRequest.person_name ?? 'Belum diklaim'}
+                                                {selectedIncomingRequest.person_name ??
+                                                    'Belum diklaim'}
                                                 {selectedIncomingRequest.person_alias
                                                     ? ` (${selectedIncomingRequest.person_alias})`
                                                     : ''}
                                             </dd>
                                         </div>
                                         <div>
-                                            <dt className="text-tb-on-surface-variant">Tahun lahir</dt>
+                                            <dt className="text-tb-on-surface-variant">
+                                                Tahun lahir
+                                            </dt>
                                             <dd className="mt-1 font-medium text-tb-on-surface">
-                                                {selectedIncomingRequest.birth_year ?? 'Belum dicatat'}
+                                                {selectedIncomingRequest.birth_year ??
+                                                    'Belum dicatat'}
                                             </dd>
                                         </div>
                                         <div>
-                                            <dt className="text-tb-on-surface-variant">Marga</dt>
+                                            <dt className="text-tb-on-surface-variant">
+                                                Marga
+                                            </dt>
                                             <dd className="mt-1 font-medium text-tb-on-surface">
-                                                {selectedIncomingRequest.marga ?? 'Belum dicatat'}
+                                                {selectedIncomingRequest.marga ??
+                                                    'Belum dicatat'}
                                             </dd>
                                         </div>
                                         <div>
-                                            <dt className="text-tb-on-surface-variant">Telegram</dt>
+                                            <dt className="text-tb-on-surface-variant">
+                                                Telegram
+                                            </dt>
                                             <dd className="mt-1 font-medium text-tb-on-surface">
                                                 {selectedIncomingRequest.telegram_linked
                                                     ? 'Terhubung'
@@ -1616,44 +1649,64 @@ export default function ContactsIndex({
                                 <section className="rounded-xl border border-tb-outline-variant bg-tb-surface-container/50 p-4">
                                     <div className="flex flex-wrap items-center justify-between gap-3">
                                         <div>
-                                            <h3 className="font-semibold text-tb-on-surface">Terhubung</h3>
+                                            <h3 className="font-semibold text-tb-on-surface">
+                                                Terhubung
+                                            </h3>
                                             <p className="mt-1 text-sm text-tb-on-surface-variant">
-                                                Not Connected — permintaan masih menunggu persetujuan Anda.
+                                                Not Connected — permintaan masih
+                                                menunggu persetujuan Anda.
                                             </p>
                                         </div>
                                         <Button
                                             type="button"
                                             size="sm"
                                             disabled={reviewingIncomingRequest}
-                                            onClick={() => reviewIncomingRequest('approved')}
+                                            onClick={() =>
+                                                reviewIncomingRequest(
+                                                    'approved',
+                                                )
+                                            }
                                         >
-                                            <UserPlus className="size-4" /> Connect
+                                            <UserPlus className="size-4" />{' '}
+                                            Connect
                                         </Button>
                                     </div>
                                 </section>
 
                                 <section className="rounded-xl border border-tb-outline-variant p-4">
                                     <h3 className="flex items-center gap-2 font-semibold text-tb-on-surface">
-                                        <GitBranch className="size-4 text-tb-primary" /> Hubungan Keluarga
+                                        <GitBranch className="size-4 text-tb-primary" />{' '}
+                                        Hubungan Keluarga
                                     </h3>
                                     <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
                                         <div>
-                                            <dt className="text-tb-on-surface-variant">Ayah</dt>
+                                            <dt className="text-tb-on-surface-variant">
+                                                Ayah
+                                            </dt>
                                             <dd className="mt-1 font-medium text-tb-on-surface">
-                                                {selectedIncomingRequest.father_name ?? 'Belum dicatat'}
+                                                {selectedIncomingRequest.father_name ??
+                                                    'Belum dicatat'}
                                             </dd>
                                         </div>
                                         <div>
-                                            <dt className="text-tb-on-surface-variant">Pasangan</dt>
+                                            <dt className="text-tb-on-surface-variant">
+                                                Pasangan
+                                            </dt>
                                             <dd className="mt-1 font-medium text-tb-on-surface">
-                                                {selectedIncomingRequest.spouse ?? 'Belum dicatat'}
+                                                {selectedIncomingRequest.spouse ??
+                                                    'Belum dicatat'}
                                             </dd>
                                         </div>
                                         <div>
-                                            <dt className="text-tb-on-surface-variant">Anak</dt>
+                                            <dt className="text-tb-on-surface-variant">
+                                                Anak
+                                            </dt>
                                             <dd className="mt-1 font-medium text-tb-on-surface">
-                                                {selectedIncomingRequest.children.length > 0
-                                                    ? selectedIncomingRequest.children.join(', ')
+                                                {selectedIncomingRequest
+                                                    .children.length > 0
+                                                    ? selectedIncomingRequest.children.join(
+                                                          ', ',
+                                                      )
                                                     : 'Belum dicatat'}
                                             </dd>
                                         </div>
@@ -1662,7 +1715,9 @@ export default function ContactsIndex({
 
                                 {selectedIncomingRequest.bio && (
                                     <section className="rounded-xl border border-tb-outline-variant bg-tb-surface-container/50 p-4">
-                                        <h3 className="font-semibold text-tb-on-surface">Biografi</h3>
+                                        <h3 className="font-semibold text-tb-on-surface">
+                                            Biografi
+                                        </h3>
                                         <p className="mt-2 text-sm leading-relaxed whitespace-pre-line text-tb-on-surface-variant">
                                             {selectedIncomingRequest.bio}
                                         </p>
@@ -1673,31 +1728,39 @@ export default function ContactsIndex({
                                     <h3 className="font-semibold text-tb-on-surface">
                                         Sejarah/Cerita Terkait
                                     </h3>
-                                    {selectedIncomingRequest.related_stories.length > 0 ? (
+                                    {selectedIncomingRequest.related_stories
+                                        .length > 0 ? (
                                         <ul className="mt-3 grid gap-2 text-sm">
-                                            {selectedIncomingRequest.related_stories.map((story, index) => (
-                                                <li key={`${story.url ?? story.title ?? 'cerita'}-${index}`}>
-                                                    {story.url ? (
-                                                        <a
-                                                            href={story.url}
-                                                            target="_blank"
-                                                            rel="noreferrer"
-                                                            className="font-medium text-tb-primary underline underline-offset-4"
-                                                        >
-                                                            {story.title || story.url}
-                                                        </a>
-                                                    ) : (
-                                                        <span className="font-medium text-tb-on-surface">
-                                                            {story.title ?? 'Cerita terkait'}
-                                                        </span>
-                                                    )}
-                                                    {story.url && (
-                                                        <p className="mt-0.5 text-xs text-tb-on-surface-variant">
-                                                            Sumber: Link ke website lain
-                                                        </p>
-                                                    )}
-                                                </li>
-                                            ))}
+                                            {selectedIncomingRequest.related_stories.map(
+                                                (story, index) => (
+                                                    <li
+                                                        key={`${story.url ?? story.title ?? 'cerita'}-${index}`}
+                                                    >
+                                                        {story.url ? (
+                                                            <a
+                                                                href={story.url}
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                                className="font-medium text-tb-primary underline underline-offset-4"
+                                                            >
+                                                                {story.title ||
+                                                                    story.url}
+                                                            </a>
+                                                        ) : (
+                                                            <span className="font-medium text-tb-on-surface">
+                                                                {story.title ??
+                                                                    'Cerita terkait'}
+                                                            </span>
+                                                        )}
+                                                        {story.url && (
+                                                            <p className="mt-0.5 text-xs text-tb-on-surface-variant">
+                                                                Sumber: Link ke
+                                                                website lain
+                                                            </p>
+                                                        )}
+                                                    </li>
+                                                ),
+                                            )}
                                         </ul>
                                     ) : (
                                         <p className="mt-2 text-sm text-tb-on-surface-variant">
@@ -1707,9 +1770,12 @@ export default function ContactsIndex({
                                 </section>
 
                                 <section className="rounded-xl border border-tb-outline-variant bg-tb-surface-container/50 p-4 text-sm">
-                                    <span className="text-tb-on-surface-variant">Kontributor</span>
+                                    <span className="text-tb-on-surface-variant">
+                                        Kontributor
+                                    </span>
                                     <p className="mt-1 font-medium text-tb-on-surface">
-                                        {selectedIncomingRequest.contributor ?? 'Belum dicatat'}
+                                        {selectedIncomingRequest.contributor ??
+                                            'Belum dicatat'}
                                     </p>
                                 </section>
 
@@ -1720,15 +1786,25 @@ export default function ContactsIndex({
                                             variant="outline"
                                             onClick={copyPersonCode}
                                         >
-                                            <Copy className="size-4" /> Kopi Kode
+                                            <Copy className="size-4" /> Kopi
+                                            Kode
                                         </Button>
                                     ) : (
-                                        <Button type="button" variant="outline" onClick={copyPersonCode}>
-                                            <Copy className="size-4" /> Kopi Kode
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={copyPersonCode}
+                                        >
+                                            <Copy className="size-4" /> Kopi
+                                            Kode
                                         </Button>
                                     )}
                                     {selectedIncomingRequest.person_id ? (
-                                        <Button asChild type="button" variant="outline">
+                                        <Button
+                                            asChild
+                                            type="button"
+                                            variant="outline"
+                                        >
                                             <Link
                                                 href={peopleRoutes.show({
                                                     person: selectedIncomingRequest.person_id,
@@ -1741,7 +1817,9 @@ export default function ContactsIndex({
                                         <Button
                                             type="button"
                                             variant="outline"
-                                            onClick={showPersonDetailUnavailable}
+                                            onClick={
+                                                showPersonDetailUnavailable
+                                            }
                                         >
                                             Lihat Detail
                                         </Button>
@@ -1754,7 +1832,8 @@ export default function ContactsIndex({
                                                     person: selectedIncomingRequest.person_id,
                                                 })}
                                             >
-                                                <Pencil className="size-4" /> Edit
+                                                <Pencil className="size-4" />{' '}
+                                                Edit
                                             </Link>
                                         </Button>
                                     ) : (
@@ -1770,16 +1849,21 @@ export default function ContactsIndex({
                                     type="button"
                                     variant="outline"
                                     disabled={reviewingIncomingRequest}
-                                    onClick={() => reviewIncomingRequest('rejected')}
+                                    onClick={() =>
+                                        reviewIncomingRequest('rejected')
+                                    }
                                 >
                                     <X className="size-4" /> Tolak
                                 </Button>
                                 <Button
                                     type="button"
                                     disabled={reviewingIncomingRequest}
-                                    onClick={() => reviewIncomingRequest('approved')}
+                                    onClick={() =>
+                                        reviewIncomingRequest('approved')
+                                    }
                                 >
-                                    <Check className="size-4" /> Setujui & Hubungkan
+                                    <Check className="size-4" /> Setujui &
+                                    Hubungkan
                                 </Button>
                             </DialogFooter>
                         </>
@@ -2012,16 +2096,19 @@ function upsertMessage(
 
     for (const candidate of [...existing, item]) {
         if (candidate.id !== null) {
-            const key = candidate.telegram_message_id != null
-                ? `t${candidate.telegram_message_id}`
-                : `m${candidate.id}`;
-            const fingerprint = candidate.telegram_message_id != null && candidate.created_at
-                ? `${candidate.body.trim()}|${candidate.created_at.slice(0, 19)}`
-                : null;
+            const key =
+                candidate.telegram_message_id != null
+                    ? `t${candidate.telegram_message_id}`
+                    : `m${candidate.id}`;
+            const fingerprint =
+                candidate.telegram_message_id != null && candidate.created_at
+                    ? `${candidate.body.trim()}|${candidate.created_at.slice(0, 19)}`
+                    : null;
 
             if (
                 seenPersisted.has(key) ||
-                (fingerprint !== null && seenTelegramFingerprints.has(fingerprint))
+                (fingerprint !== null &&
+                    seenTelegramFingerprints.has(fingerprint))
             ) {
                 continue;
             }

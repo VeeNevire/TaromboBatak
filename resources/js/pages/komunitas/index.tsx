@@ -16,7 +16,7 @@ export default function KomunitasIndex() {
     return (
         <MotionConfig reducedMotion="user">
             <div className="scroll-smooth bg-tb-surface font-body text-tb-on-surface antialiased">
-                <Head title="Komunitas Batak" />
+                <Head title="Komunitas & Organisasi Marga Batak" />
                 <SiteHeader />
 
                 <main>
@@ -248,7 +248,7 @@ export default function KomunitasIndex() {
                                     baru.
                                 </p>
                                 <div className="mt-8 flex flex-wrap justify-center gap-4">
-                                   <a
+                                    <a
                                         href="https://wa.me/62889501863652?text=Halo%2C%20saya%20ingin%20menghubungi%20Tim%20Tarombo%20Connection."
                                         target="_blank"
                                         rel="noopener noreferrer"

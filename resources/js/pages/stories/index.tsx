@@ -303,8 +303,8 @@ export default function StoriesIndex({
                                 {selectedStory?.title}
                             </DialogTitle>
                             <DialogDescription>
-                                {selectedStory?.creator ?? 'Tarombo Batak'} ·{' '}
-                                {selectedStory?.created_at}
+                                {selectedStory?.creator ?? 'Tarombo Connection'}{' '}
+                                · {selectedStory?.created_at}
                             </DialogDescription>
                         </DialogHeader>
                         {selectedStory?.image && (
