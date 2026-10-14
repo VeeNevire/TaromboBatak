@@ -61,7 +61,7 @@ export function PushNotificationToggle() {
             ) : (
                 <Bell className="size-4" />
             )}
-            {subscribed ? 'Matikan Notifikasi' : 'Aktifkan Notifikasi Berita'}
+            {subscribed ? 'Matikan Notifikasi' : 'Aktifkan Notifikasi'}
         </Button>
     );
 }

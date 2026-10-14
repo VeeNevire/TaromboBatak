@@ -18,3 +18,8 @@ Schedule::command('news:push')
     ->everyMinute()
     ->name('marga-news-push')
     ->withoutOverlapping(10);
+
+Schedule::command('feed:push')
+    ->everyMinute()
+    ->name('news-feed-push')
+    ->withoutOverlapping(10);
