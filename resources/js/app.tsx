@@ -2,6 +2,7 @@ import { createInertiaApp, router } from '@inertiajs/react';
 import { configureEcho } from '@laravel/echo-react';
 import { MotionConfig } from 'framer-motion';
 import type { ComponentType, ReactNode } from 'react';
+import { InstallAppBanner } from '@/components/install-app-banner';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
@@ -79,6 +80,7 @@ createInertiaApp({
             <TooltipProvider delayDuration={0}>
                 <MotionConfig reducedMotion="user">{app}</MotionConfig>
                 <Toaster />
+                <InstallAppBanner />
             </TooltipProvider>
         );
     },
