@@ -33,6 +33,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $submitted_by
  * @property int|null $reviewed_by
  * @property Carbon|null $reviewed_at
+ * @property Carbon|null $push_notified_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read MargaNewsTopic|null $topic
@@ -55,6 +56,7 @@ use Illuminate\Support\Carbon;
     'submitted_by',
     'reviewed_by',
     'reviewed_at',
+    'push_notified_at',
 ])]
 class MargaNews extends Model
 {
@@ -140,6 +142,7 @@ class MargaNews extends Model
         return [
             'published_at' => 'datetime',
             'reviewed_at' => 'datetime',
+            'push_notified_at' => 'datetime',
         ];
     }
 }

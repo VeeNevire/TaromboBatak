@@ -10,6 +10,7 @@ import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import { trackGoogleAnalyticsPageView } from '@/lib/google-analytics';
+import { initializePwa } from '@/lib/pwa';
 
 if (!import.meta.env.SSR) {
     configureEcho({
@@ -21,6 +22,7 @@ if (!import.meta.env.SSR) {
     });
 
     trackGoogleAnalyticsPageView(window.location.href);
+    initializePwa();
 }
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';

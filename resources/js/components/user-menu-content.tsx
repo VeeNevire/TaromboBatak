@@ -1,5 +1,6 @@
 import { Link, router } from '@inertiajs/react';
 import { LogOut, Settings } from 'lucide-react';
+import { PwaMenuItems } from '@/components/pwa-menu-items';
 import {
     DropdownMenuGroup,
     DropdownMenuItem,
@@ -45,6 +46,7 @@ export function UserMenuContent({ user }: Props) {
                     </Link>
                 </DropdownMenuItem>
             </DropdownMenuGroup>
+            <PwaMenuItems />
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
                 <Link

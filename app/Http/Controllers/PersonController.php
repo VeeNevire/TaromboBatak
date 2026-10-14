@@ -522,12 +522,10 @@ class PersonController extends Controller
         $familyNameTreeId = $selectedVersionId
             ?? data_get(collect($versionTrees)->firstWhere('is_primary'), 'id')
             ?? data_get($versionTrees, '0.id');
-        $selectedFamilyName = $familyNameTreeId !== null
-            ? app(FamilyTreeFamilyNameService::class)->forPerson(
-                FamilyTree::query()->findOrFail($familyNameTreeId),
-                $person->id,
-            )
+        $familyNameTree = $familyNameTreeId !== null
+            ? FamilyTree::query()->findOrFail($familyNameTreeId)
             : null;
+        $familyNames = app(FamilyTreeFamilyNameService::class);
         $appendNode = $appendTree !== null && $person->gender === 'L'
             ? FamilyTreeNode::query()
                 ->where('family_tree_id', $appendTree['id'])
@@ -554,7 +552,12 @@ class PersonController extends Controller
             'margaAccessStatus' => $this->margaAccessStatus($user, $user->marga_id),
             'versionTrees' => $versionTrees,
             'selectedVersionName' => $selectedVersionName,
-            'selectedFamilyName' => $selectedFamilyName,
+            'manualFamilyName' => $familyNameTree !== null
+                ? $familyNames->manualForPerson($familyNameTree, $person->id)
+                : null,
+            'automaticFamilyName' => $familyNameTree !== null
+                ? $familyNames->automaticForPerson($familyNameTree, $person->id)
+                : null,
             'selectedVersionId' => $selectedVersionId,
             ...$this->familyTreeSharingPayload($user),
             'canPublish' => $user->isStaff(),
@@ -634,12 +637,10 @@ class PersonController extends Controller
         $familyPayload = $selectedVersionId !== null
             ? $this->familyPayloadForVersion($person, $selectedVersionId, $personMargaScope)
             : $this->familyPayload($person, $personMargaScope);
-        $selectedFamilyName = $structureTreeId !== null
-            ? app(FamilyTreeFamilyNameService::class)->forPerson(
-                FamilyTree::query()->findOrFail($structureTreeId),
-                $person->id,
-            )
+        $familyNameTree = $structureTreeId !== null
+            ? FamilyTree::query()->findOrFail($structureTreeId)
             : null;
+        $familyNames = app(FamilyTreeFamilyNameService::class);
         $spouseMargas = $this->margaOptions();
 
         return Inertia::render('people/form', [
@@ -662,7 +663,12 @@ class PersonController extends Controller
             'margaAccessStatus' => $this->margaAccessStatus($user, $user->marga_id),
             'versionTrees' => $versionTrees,
             'selectedVersionName' => $selectedVersionName,
-            'selectedFamilyName' => $selectedFamilyName,
+            'manualFamilyName' => $familyNameTree !== null
+                ? $familyNames->manualForPerson($familyNameTree, $person->id)
+                : null,
+            'automaticFamilyName' => $familyNameTree !== null
+                ? $familyNames->automaticForPerson($familyNameTree, $person->id)
+                : null,
             'selectedVersionId' => $selectedVersionId,
             ...$this->familyTreeSharingPayload($user),
             'canPublish' => $isStaff,

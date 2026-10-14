@@ -25,10 +25,31 @@ class FamilyTreeFamilyNameService
      */
     public function forPerson(FamilyTree $tree, int $personId): ?string
     {
+        return $this->manualForPerson($tree, $personId)
+            ?? $this->automaticForPerson($tree, $personId);
+    }
+
+    /**
+     * The name typed for this person's own branch, without inheritance.
+     */
+    public function manualForPerson(FamilyTree $tree, int $personId): ?string
+    {
+        $name = $tree->nodes()->where('person_id', $personId)->value('family_name');
+
+        return filled($name) ? $name : null;
+    }
+
+    /**
+     * The name the system supplies when no manual name is set: the closest
+     * named ancestor branch, else the tree's own name.
+     */
+    public function automaticForPerson(FamilyTree $tree, int $personId): ?string
+    {
         $nodes = $tree->nodes()->toBase()
             ->get(['id', 'person_id', 'father_node_id', 'family_name'])->keyBy('id');
-        $node = $nodes->firstWhere('person_id', $personId);
-        $visited = [];
+        $self = $nodes->firstWhere('person_id', $personId);
+        $node = $self?->father_node_id === null ? null : $nodes->get($self->father_node_id);
+        $visited = $self === null ? [] : [$self->id => true];
 
         while ($node !== null && ! isset($visited[$node->id])) {
             $visited[$node->id] = true;
