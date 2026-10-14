@@ -3,7 +3,10 @@
 namespace App\Services;
 
 use App\Models\PushSubscription;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Minishlink\WebPush\Subscription;
 use Minishlink\WebPush\WebPush;
 
@@ -17,16 +20,30 @@ class WebPushSender
     }
 
     /**
-     * Send one notification to every subscribed browser and forget the ones
-     * the push service reports as gone.
+     * Send one notification to every subscribed browser.
      *
      * @param  array{title: string, body: string, url: string, tag?: string}  $message
      * @return int Number of subscriptions the notification was sent to.
      */
     public function sendToAll(array $message): int
     {
+        return $this->sendTo(PushSubscription::query(), $message)['sent'];
+    }
+
+    /**
+     * Send one notification to the given subscriptions and forget the ones
+     * the push service reports as gone.
+     *
+     * @param  Builder<PushSubscription>  $subscriptions
+     * @param  array{title: string, body: string, url: string, tag?: string}  $message
+     * @return array{sent: int, expired: int, failed: array<string, string>}
+     */
+    public function sendTo(Builder $subscriptions, array $message): array
+    {
+        $result = ['sent' => 0, 'expired' => 0, 'failed' => []];
+
         if (! $this->isConfigured()) {
-            return 0;
+            return $result;
         }
 
         $payload = json_encode([
@@ -34,10 +51,9 @@ class WebPushSender
             'badge' => '/icons/badge-72.png',
             ...$message,
         ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $sent = 0;
 
-        PushSubscription::query()->chunkById(500, function (Collection $subscriptions) use ($payload, &$sent): void {
-            $expired = $this->deliver($subscriptions, $payload);
+        $subscriptions->chunkById(500, function (Collection $chunk) use ($payload, &$result): void {
+            ['expired' => $expired, 'failed' => $failed] = $this->deliver($chunk, $payload);
 
             if ($expired !== []) {
                 PushSubscription::query()
@@ -45,15 +61,17 @@ class WebPushSender
                     ->delete();
             }
 
-            $sent += $subscriptions->count() - count($expired);
+            $result['sent'] += $chunk->count() - count($expired) - count($failed);
+            $result['expired'] += count($expired);
+            $result['failed'] += $failed;
         });
 
-        return $sent;
+        return $result;
     }
 
     /**
      * @param  Collection<int, PushSubscription>  $subscriptions
-     * @return array<int, string> Endpoints that no longer accept notifications.
+     * @return array{expired: array<int, string>, failed: array<string, string>} Gone endpoints, and other failures keyed by endpoint with their reason.
      */
     protected function deliver(Collection $subscriptions, string $payload): array
     {
@@ -77,13 +95,26 @@ class WebPushSender
         }
 
         $expired = [];
+        $failed = [];
 
         foreach ($webPush->flush() as $report) {
+            if ($report->isSuccess()) {
+                continue;
+            }
+
             if ($report->isSubscriptionExpired()) {
                 $expired[] = $report->getEndpoint();
+
+                continue;
             }
+
+            $failed[$report->getEndpoint()] = $report->getReason();
+            Log::warning('Web push gagal dikirim.', [
+                'endpoint' => Str::limit($report->getEndpoint(), 60),
+                'reason' => $report->getReason(),
+            ]);
         }
 
-        return $expired;
+        return ['expired' => $expired, 'failed' => $failed];
     }
 }

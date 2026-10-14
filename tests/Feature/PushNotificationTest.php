@@ -118,10 +118,72 @@ test('expired subscriptions are removed after sending', function () {
 
         protected function deliver(Collection $subscriptions, string $payload): array
         {
-            return [$this->expiredEndpoint];
+            return ['expired' => [$this->expiredEndpoint], 'failed' => []];
         }
     };
 
     expect($sender->sendToAll(['title' => 'Uji', 'body' => 'Isi', 'url' => '/']))->toBe(1)
         ->and(PushSubscription::query()->pluck('id')->all())->toBe([$alive->id]);
+});
+
+test('failed deliveries are reported but the subscription is kept', function () {
+    $subscription = PushSubscription::factory()->create();
+
+    $sender = new class extends WebPushSender
+    {
+        public function isConfigured(): bool
+        {
+            return true;
+        }
+
+        protected function deliver(Collection $subscriptions, string $payload): array
+        {
+            return ['expired' => [], 'failed' => [$subscriptions->first()->endpoint => '403 Forbidden']];
+        }
+    };
+
+    expect($sender->sendTo(PushSubscription::query(), ['title' => 'Uji', 'body' => 'Isi', 'url' => '/']))
+        ->toBe(['sent' => 0, 'expired' => 0, 'failed' => [$subscription->endpoint => '403 Forbidden']])
+        ->and(PushSubscription::query()->exists())->toBeTrue();
+});
+
+test('webpush:test sends only to the latest subscription by default', function () {
+    PushSubscription::factory()->create();
+    $latest = PushSubscription::factory()->create();
+
+    $this->mock(WebPushSender::class, function ($mock) use ($latest) {
+        $mock->shouldReceive('isConfigured')->andReturnTrue();
+        $mock->shouldReceive('sendTo')->once()->withArgs(fn ($query, array $message) => $query->pluck('id')->all() === [$latest->id]
+            && $message['title'] === 'Tes notifikasi Tarombo')
+            ->andReturn(['sent' => 1, 'expired' => 0, 'failed' => []]);
+    });
+
+    $this->artisan('webpush:test')
+        ->expectsOutputToContain('Terkirim: 1 dari 1 perangkat.')
+        ->assertSuccessful();
+});
+
+test('webpush:test can target every device of one account', function () {
+    $user = User::factory()->create(['email' => 'ompung@example.com']);
+    $phones = PushSubscription::factory()->count(2)->create(['user_id' => $user->id]);
+    PushSubscription::factory()->create();
+
+    $this->mock(WebPushSender::class, function ($mock) use ($phones) {
+        $mock->shouldReceive('isConfigured')->andReturnTrue();
+        $mock->shouldReceive('sendTo')->once()->withArgs(fn ($query) => $query->pluck('id')->sort()->values()->all() === $phones->pluck('id')->sort()->values()->all())
+            ->andReturn(['sent' => 2, 'expired' => 0, 'failed' => []]);
+    });
+
+    $this->artisan('webpush:test', ['--user' => 'ompung@example.com'])->assertSuccessful();
+});
+
+test('webpush:test explains when no device has subscribed', function () {
+    $this->mock(WebPushSender::class, function ($mock) {
+        $mock->shouldReceive('isConfigured')->andReturnTrue();
+        $mock->shouldNotReceive('sendTo');
+    });
+
+    $this->artisan('webpush:test')
+        ->expectsOutputToContain('Tidak ada perangkat yang cocok')
+        ->assertFailed();
 });
