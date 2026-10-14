@@ -47,7 +47,7 @@ export default function TrafficMonitor({ reportUrl }: Props) {
                     <Card className="min-h-[calc(100dvh-13rem)] overflow-hidden border-tb-outline-variant bg-tb-surface-bright">
                         <CardContent className="h-[calc(100dvh-13rem)] min-h-160 p-0">
                             <iframe
-                                title="Dashboard traffic Tarombo Batak"
+                                title="Dashboard traffic Tarombo Connection"
                                 src={reportUrl}
                                 className="size-full border-0"
                                 allowFullScreen

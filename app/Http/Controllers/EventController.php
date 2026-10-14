@@ -106,6 +106,7 @@ class EventController extends Controller
                 'location' => $event->location,
                 'registration_url' => $event->registration_url,
                 'date' => $event->date->format('d M Y'),
+                'start_date' => $event->date->toDateString(),
                 'month' => $event->date->format('M'),
                 'day' => $event->date->format('d'),
                 'is_past' => $event->date->isPast(),

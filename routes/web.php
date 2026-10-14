@@ -41,6 +41,7 @@ use App\Http\Controllers\PersonMargaController;
 use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\QrisPaymentController;
 use App\Http\Controllers\SharedFamilyTreePersonController;
+use App\Http\Controllers\SitemapController;
 use App\Http\Controllers\StatusController;
 use App\Http\Controllers\StoryController;
 use App\Http\Controllers\SubAdminController;
@@ -60,6 +61,8 @@ use App\Http\Controllers\TreeActivityLogController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [NewsFeedController::class, 'index'])->name('home');
+
+Route::get('sitemap.xml', SitemapController::class)->name('sitemap');
 
 Route::middleware('guest')->group(function (): void {
     Route::get('auth/google/redirect', [GoogleAuthController::class, 'redirect'])->name('auth.google.redirect');
@@ -128,16 +131,16 @@ Route::get('tentang', [TentangController::class, 'index'])->name('tentang.view')
 
 Route::get('regions/districts/{regencyCode}', [IndonesiaRegionController::class, 'districts'])
     ->where('regencyCode', '\\d{2}\\.\\d{2}')
-    ->middleware('throttle:120,1')
+    ->middleware(['throttle:120,1', 'noindex'])
     ->name('regions.districts');
 Route::get('regions/villages/{districtCode}', [IndonesiaRegionController::class, 'villages'])
     ->where('districtCode', '\\d{2}\\.\\d{2}\\.\\d{2}')
-    ->middleware('throttle:120,1')
+    ->middleware(['throttle:120,1', 'noindex'])
     ->name('regions.villages');
 
 Route::get('tarombo/view/{token}', [TaromboQrController::class, 'show'])->whereUuid('token')->name('tarombo.qr.show');
-Route::get('tarombo/view/{token}/image', [TaromboQrController::class, 'image'])->whereUuid('token')->name('tarombo.qr.image');
-Route::get('tarombo/view/{token}/download', [TaromboQrController::class, 'download'])->whereUuid('token')->middleware('throttle:30,1')->name('tarombo.qr.download');
+Route::get('tarombo/view/{token}/image', [TaromboQrController::class, 'image'])->whereUuid('token')->middleware('noindex')->name('tarombo.qr.image');
+Route::get('tarombo/view/{token}/download', [TaromboQrController::class, 'download'])->whereUuid('token')->middleware(['throttle:30,1', 'noindex'])->name('tarombo.qr.download');
 
 Route::middleware(['auth'])->group(function () {
     Route::get('dashboard/qris-payment', [QrisPaymentController::class, 'index'])->name('qris.index');

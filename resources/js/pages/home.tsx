@@ -50,7 +50,7 @@ export default function Home({
     return (
         <MotionConfig reducedMotion="user">
             <div className="bg-tb-surface font-body text-tb-on-surface antialiased">
-                <Head title="Tarombo Batak" />
+                <Head title="Tarombo Connection" />
                 <main>
                     <Hero people={taromboPeople} margas={taromboMargas} />
                     <FeaturesSection />

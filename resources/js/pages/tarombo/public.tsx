@@ -120,7 +120,7 @@ export default function TaromboPublic({
 
     return (
         <div className="scroll-smooth bg-tb-surface font-body text-tb-on-surface antialiased">
-            <Head title="Tarombo" />
+            <Head title="Cari Tarombo & Silsilah Marga Batak" />
             <SiteHeader />
 
             <main>

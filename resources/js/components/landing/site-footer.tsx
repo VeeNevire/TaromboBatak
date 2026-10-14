@@ -28,7 +28,7 @@ export function SiteFooter() {
                         </div>
                         <div>
                             <h2 className="font-display text-lg leading-none font-bold">
-                                Tarombo Batak
+                                Tarombo Connection
                             </h2>
                             <p className="text-[10px] text-tb-on-surface-variant">
                                 Silsilah • Budaya • Identitas
@@ -74,8 +74,12 @@ export function SiteFooter() {
                             <li key={item.label}>
                                 <a
                                     href={item.href}
-                                    target={item.href ? "_blank" : undefined}
-                                    rel={item.href ? "noopener noreferrer" : undefined}
+                                    target={item.href ? '_blank' : undefined}
+                                    rel={
+                                        item.href
+                                            ? 'noopener noreferrer'
+                                            : undefined
+                                    }
                                     className="transition-colors hover:text-tb-primary"
                                 >
                                     {item.label}
@@ -122,7 +126,7 @@ export function SiteFooter() {
                 </div>
             </div>
             <div className="mx-auto max-w-7xl border-t border-tb-outline-variant pt-6 text-center text-xs text-tb-outline">
-                © 2026 Tarombo Batak. All rights reserved.
+                © 2026 Tarombo Connection. All rights reserved.
             </div>
         </footer>
     );

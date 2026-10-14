@@ -46,8 +46,9 @@ export function Hero({
     const defaultCenterPersonId =
         findPerson(people, DEFAULT_PERSON_ID)?.id ?? rootPerson?.id ?? '';
     const [selected, setSelected] = useState<TaromboPerson | null>(null);
-    const [centerPersonId, setCenterPersonId] =
-        useState<string>(defaultCenterPersonId);
+    const [centerPersonId, setCenterPersonId] = useState<string>(
+        defaultCenterPersonId,
+    );
     const [history, setHistory] = useState<string[]>([]);
     const children = useMemo(
         () => (selected ? findPersonChildren(people, selected.id) : []),
@@ -126,7 +127,7 @@ export function Hero({
                     variants={item}
                     className="text-lg leading-relaxed text-tb-on-surface-variant"
                 >
-                    Tarombo Batak adalah platform digital untuk menelusuri
+                    Tarombo Connection adalah platform digital untuk menelusuri
                     silsilah keluarga, menjaga warisan leluhur, dan
                     menghubungkan generasi masa kini dengan akar budaya Batak.
                 </motion.p>

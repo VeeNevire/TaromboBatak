@@ -51,7 +51,7 @@ export default function KegiatanIndex({ events: page, filters }: Props) {
     return (
         <MotionConfig reducedMotion="user">
             <div className="scroll-smooth bg-tb-surface font-body text-tb-on-surface antialiased">
-                <Head title="Event & Kegiatan Komunitas" />
+                <Head title="Event & Kegiatan Komunitas Batak" />
                 <SiteHeader />
 
                 <main>

@@ -50,7 +50,7 @@ export default function CeritaIndex({ stories: page, filters }: Props) {
     return (
         <MotionConfig reducedMotion="user">
             <div className="scroll-smooth bg-tb-surface font-body text-tb-on-surface antialiased">
-                <Head title="Cerita Leluhur & Budaya" />
+                <Head title="Cerita Leluhur & Budaya Batak" />
                 <SiteHeader />
 
                 <main>
@@ -114,6 +114,8 @@ export default function CeritaIndex({ stories: page, filters }: Props) {
                                         {story.image ? (
                                             <div className="aspect-video w-full overflow-hidden bg-tb-surface-container">
                                                 <img
+                                                    loading="lazy"
+                                                    decoding="async"
                                                     src={story.image}
                                                     alt={story.title}
                                                     className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"

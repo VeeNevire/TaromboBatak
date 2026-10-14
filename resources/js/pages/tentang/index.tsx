@@ -17,7 +17,7 @@ export default function TentangIndex() {
     return (
         <MotionConfig reducedMotion="user">
             <div className="scroll-smooth bg-tb-surface font-body text-tb-on-surface antialiased">
-                <Head title="Tentang Kami" />
+                <Head title="Tentang Tarombo Connection" />
                 <SiteHeader />
 
                 <main>
@@ -40,7 +40,7 @@ export default function TentangIndex() {
                                     Setiap keluarga Batak memiliki cerita yang
                                     patut diceritakan, silsilah yang patut
                                     dijaga, dan tradisi yang patut dilestarikan.
-                                    Tarombo Batak adalah rumah digital bagi
+                                    Tarombo Connection adalah rumah digital bagi
                                     warisan itu.
                                 </p>
                             </Reveal>

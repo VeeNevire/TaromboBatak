@@ -22,11 +22,15 @@ export default defineConfig({
                     weights: [400, 700],
                 }),
                 // Extra choices for text layers in Compile Gambar.
+                // Only Compile Gambar uses these; load them on demand instead
+                // of preloading them on every page.
                 bunny('Cinzel', {
                     weights: [400, 700],
+                    preload: false,
                 }),
                 bunny('Great Vibes', {
                     weights: [400],
+                    preload: false,
                 }),
             ],
         }),

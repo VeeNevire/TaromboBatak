@@ -80,7 +80,7 @@ export default function Login({
                         <h1 className="font-display text-3xl font-bold text-tb-on-surface">
                             {mode === 'login'
                                 ? 'Selamat Datang Kembali'
-                                : 'Bergabung dengan Tarombo Batak'}
+                                : 'Bergabung dengan Tarombo Connection'}
                         </h1>
                         <p className="mt-2 text-tb-on-surface-variant">
                             {mode === 'login'
@@ -419,7 +419,9 @@ function RegisterForm({
                 }
             })
             .catch((error: unknown) => {
-                if (!(error instanceof DOMException && error.name === 'AbortError')) {
+                if (!(
+                    error instanceof DOMException && error.name === 'AbortError'
+                )) {
                     setDistricts([]);
                 }
             })
@@ -456,7 +458,9 @@ function RegisterForm({
                 }
             })
             .catch((error: unknown) => {
-                if (!(error instanceof DOMException && error.name === 'AbortError')) {
+                if (!(
+                    error instanceof DOMException && error.name === 'AbortError'
+                )) {
                     setVillages([]);
                 }
             })
@@ -875,10 +879,22 @@ function GoogleAuthButton() {
             className="flex h-11 w-full items-center justify-center gap-3 rounded-full border border-tb-outline-variant bg-white px-4 text-sm font-medium text-tb-on-surface transition-colors hover:bg-tb-surface dark:bg-tb-surface-bright dark:hover:bg-tb-surface"
         >
             <svg aria-hidden="true" className="size-5" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M21.35 12.27c0-.72-.06-1.42-.18-2.09H12v3.96h5.24a4.48 4.48 0 0 1-1.94 2.94v2.45h3.14c1.84-1.7 2.91-4.2 2.91-7.26Z" />
-                <path fill="#34A853" d="M12 21.72c2.63 0 4.84-.87 6.45-2.36l-3.14-2.45c-.87.58-1.98.93-3.31.93-2.55 0-4.71-1.72-5.49-4.03H3.27v2.53A9.74 9.74 0 0 0 12 21.72Z" />
-                <path fill="#FBBC05" d="M6.51 13.81A5.85 5.85 0 0 1 6.2 12c0-.63.11-1.25.31-1.81V7.66H3.27A9.73 9.73 0 0 0 2.25 12c0 1.57.38 3.05 1.02 4.34l3.24-2.53Z" />
-                <path fill="#EA4335" d="M12 6.16c1.43 0 2.71.49 3.72 1.45l2.79-2.79C16.84 3.25 14.63 2.28 12 2.28a9.74 9.74 0 0 0-8.73 5.38l3.24 2.53C7.29 7.88 9.45 6.16 12 6.16Z" />
+                <path
+                    fill="#4285F4"
+                    d="M21.35 12.27c0-.72-.06-1.42-.18-2.09H12v3.96h5.24a4.48 4.48 0 0 1-1.94 2.94v2.45h3.14c1.84-1.7 2.91-4.2 2.91-7.26Z"
+                />
+                <path
+                    fill="#34A853"
+                    d="M12 21.72c2.63 0 4.84-.87 6.45-2.36l-3.14-2.45c-.87.58-1.98.93-3.31.93-2.55 0-4.71-1.72-5.49-4.03H3.27v2.53A9.74 9.74 0 0 0 12 21.72Z"
+                />
+                <path
+                    fill="#FBBC05"
+                    d="M6.51 13.81A5.85 5.85 0 0 1 6.2 12c0-.63.11-1.25.31-1.81V7.66H3.27A9.73 9.73 0 0 0 2.25 12c0 1.57.38 3.05 1.02 4.34l3.24-2.53Z"
+                />
+                <path
+                    fill="#EA4335"
+                    d="M12 6.16c1.43 0 2.71.49 3.72 1.45l2.79-2.79C16.84 3.25 14.63 2.28 12 2.28a9.74 9.74 0 0 0-8.73 5.38l3.24 2.53C7.29 7.88 9.45 6.16 12 6.16Z"
+                />
             </svg>
             Lanjutkan dengan Google
         </a>

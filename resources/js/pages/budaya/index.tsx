@@ -18,7 +18,7 @@ export default function BudayaIndex() {
     return (
         <MotionConfig reducedMotion="user">
             <div className="scroll-smooth bg-tb-surface font-body text-tb-on-surface antialiased">
-                <Head title="Budaya Batak" />
+                <Head title="Budaya Batak: Filosofi & Adat" />
                 <SiteHeader />
 
                 <main>

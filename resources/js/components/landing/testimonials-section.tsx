@@ -16,6 +16,8 @@ export function TestimonialsSection() {
                     </p>
                     <div className="flex items-center gap-3">
                         <img
+                            loading="lazy"
+                            decoding="async"
                             alt={testimonial.name}
                             className="h-10 w-10 rounded-full"
                             src={testimonial.image}

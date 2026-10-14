@@ -38,6 +38,8 @@ export function StoriesSection({ stories }: { stories: StoryItem[] }) {
                         >
                             {story.image ? (
                                 <img
+                                    loading="lazy"
+                                    decoding="async"
                                     alt="Thumbnail"
                                     className="h-20 w-20 rounded-lg object-cover"
                                     src={story.image}
