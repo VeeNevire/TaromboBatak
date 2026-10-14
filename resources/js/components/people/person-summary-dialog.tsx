@@ -37,14 +37,16 @@ import peopleRoutes from '@/routes/people';
 function SpouseInformation({
     person,
     showParents = false,
+    label = 'Pasangan',
 }: {
     person: TaromboPerson;
     showParents?: boolean;
+    label?: string;
 }) {
     return (
         <dl className="grid gap-3 text-sm">
             <div className="grid gap-2">
-                <dt className="text-tb-on-surface-variant">Pasangan</dt>
+                <dt className="text-tb-on-surface-variant">{label}</dt>
                 <dd className="grid gap-2 font-medium text-tb-on-surface">
                     {(person.spouses ?? []).length > 0 ? (
                         person.spouses?.map((spouse) => (
@@ -120,7 +122,9 @@ function SpouseInformation({
                 </dd>
             </div>
             <div className="flex items-start justify-between gap-4">
-                <dt className="text-tb-on-surface-variant">Marga pasangan</dt>
+                <dt className="text-tb-on-surface-variant">
+                    Marga {label.charAt(0).toLowerCase() + label.slice(1)}
+                </dt>
                 <dd className="grid gap-1 text-right font-medium text-tb-on-surface">
                     {(person.spouses ?? []).length > 0
                         ? person.spouses?.map((spouse) => (
@@ -188,6 +192,17 @@ export function PersonSummaryDialog({
         : [];
     const fatherName = father?.name ?? person?.fatherName ?? null;
     const fatherMarga = father?.marga ?? person?.fatherMarga ?? null;
+    // The father's wives (the "Ibu" entries of the family form) come with the
+    // row itself, so they show even when the father is outside this tree.
+    const fatherSpouses: TaromboPerson | undefined =
+        person && (person.mothers?.length ?? 0) > 0
+            ? {
+                  ...person,
+                  spouses: person.mothers,
+                  spouse: null,
+                  spouseMarga: null,
+              }
+            : father;
     const connectableAccounts = (person?.claimedAccounts ?? []).filter(
         (account) =>
             account.id !== currentUserId &&
@@ -488,10 +503,22 @@ export function PersonSummaryDialog({
                                     </dd>
                                 </div>
                                 <div>
-                                    <SpouseInformation
-                                        person={person}
-                                        showParents
-                                    />
+                                    {fatherSpouses ? (
+                                        <SpouseInformation
+                                            person={fatherSpouses}
+                                            label="Pasangan Ayah"
+                                            showParents
+                                        />
+                                    ) : (
+                                        <div className="flex items-start justify-between gap-4">
+                                            <dt className="text-tb-on-surface-variant">
+                                                Pasangan Ayah
+                                            </dt>
+                                            <dd className="text-right font-medium text-tb-on-surface">
+                                                Belum dicatat
+                                            </dd>
+                                        </div>
+                                    )}
                                 </div>
                             </dl>
                         </section>

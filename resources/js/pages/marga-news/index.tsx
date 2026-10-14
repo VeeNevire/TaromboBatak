@@ -2,6 +2,7 @@ import { Head, Link, router } from '@inertiajs/react';
 import { Globe, Search } from 'lucide-react';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
+import { InstallAppButton } from '@/components/install-app-button';
 import {
     MargaChips,
     Pager,
@@ -11,6 +12,7 @@ import type {
     MargaNewsItem,
     Paginated,
 } from '@/components/marga-news/news-parts';
+import { PushNotificationToggle } from '@/components/push-notification-toggle';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -76,6 +78,10 @@ export default function MargaNewsIndex({
                         dari berbagai portal berita. Klik judul untuk membaca
                         detail berita dan berkomentar.
                     </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <PushNotificationToggle />
+                        <InstallAppButton />
+                    </div>
                 </div>
 
                 <div className="flex flex-col gap-3">

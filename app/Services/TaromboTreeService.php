@@ -81,6 +81,9 @@ class TaromboTreeService
                 'husbands.marga:id,name',
                 'husbands.father.marga',
                 'husbands.mother.marga',
+                'mother.marga:id,name',
+                'mother.father.marga',
+                'mother.mother.marga',
                 'creator:id,name,role',
                 'lastEditor:id,name',
                 'claimingUsers:id,name,role,current_person_id',
@@ -101,7 +104,18 @@ class TaromboTreeService
             ->keyBy('id');
         $shareCodes = app(PersonShareCode::class);
 
-        return $nodes->map(function (array $node) use ($people, $includedPersonIds, $children, $fatherPersons, $shareCodes): array {
+        // The modal lists the father's wives as the person's mothers, so load
+        // them once for every father instead of per row.
+        $fatherWives = Person::query()
+            ->whereIn('id', $nodes->pluck('father_person_id')
+                ->merge($people->pluck('father_id'))
+                ->filter()
+                ->unique())
+            ->with(['wives.marga:id,name', 'wives.father.marga', 'wives.mother.marga'])
+            ->get(['id'])
+            ->mapWithKeys(fn (Person $father) => [$father->id => $father->wives]);
+
+        return $nodes->map(function (array $node) use ($people, $includedPersonIds, $children, $fatherPersons, $fatherWives, $shareCodes): array {
             $person = $people->get($node['person_id']);
             $nodeFatherId = $node['pending_father'] ? null : $node['father_person_id'];
             $hasFather = $nodeFatherId !== null || $person->father_id !== null;
@@ -144,6 +158,7 @@ class TaromboTreeService
                 'spouse' => $person->spouse,
                 'spouseMarga' => $person->spouse_marga,
                 'spouses' => $this->spousesFor($person),
+                'mothers' => $this->mothersFor($fatherWives->get($fatherPerson?->id, collect()), $person->mother),
                 'image' => $person->image,
                 'bio' => $person->bio,
                 'createdBy' => $person->creator?->name,
@@ -194,6 +209,12 @@ class TaromboTreeService
                 'husbands.marga:id,name',
                 'husbands.father.marga',
                 'husbands.mother.marga',
+                'father.wives.marga:id,name',
+                'father.wives.father.marga',
+                'father.wives.mother.marga',
+                'mother.marga:id,name',
+                'mother.father.marga',
+                'mother.mother.marga',
                 'creator:id,name,role',
                 'lastEditor:id,name',
                 'claimingUsers:id,name,role,current_person_id',
@@ -232,6 +253,7 @@ class TaromboTreeService
                     'spouse' => $person->spouse,
                     'spouseMarga' => $person->spouse_marga,
                     'spouses' => $this->spousesFor($person),
+                    'mothers' => $this->mothersFor($person->father?->wives ?? collect(), $person->mother),
                     'image' => $person->image,
                     'bio' => $person->bio,
                     'createdBy' => $person->creator?->name,
@@ -268,17 +290,43 @@ class TaromboTreeService
         $spouses = $person->wives->isNotEmpty() ? $person->wives : $person->husbands;
 
         return $spouses
-            ->map(fn (Person $spouse): array => [
-                'id' => (string) $spouse->id,
-                'name' => $spouse->name,
-                'birthOrder' => $spouse->birth_order,
-                'marga' => $spouse->marga?->name,
-                'fatherName' => $spouse->father?->name,
-                'fatherMarga' => $spouse->father?->marga?->name,
-                'motherName' => $spouse->mother?->name,
-                'motherMarga' => $spouse->mother?->marga?->name,
-            ])
+            ->map(fn (Person $spouse): array => $this->spouseRow($spouse))
+            ->values()
             ->all();
+    }
+
+    /**
+     * The father's wives plus the person's own recorded mother, matching the
+     * "Ibu" entries of the family form.
+     *
+     * @param  Collection<int, Person>  $fatherWives
+     * @return array<int, array{id: string, name: string, marga: string|null, fatherName: string|null, fatherMarga: string|null, motherName: string|null, motherMarga: string|null, birthOrder: int|null}>
+     */
+    protected function mothersFor(Collection $fatherWives, ?Person $mother): array
+    {
+        return collect($fatherWives)
+            ->when($mother !== null, fn (Collection $mothers) => $mothers->push($mother))
+            ->unique('id')
+            ->map(fn (Person $wife): array => $this->spouseRow($wife))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array{id: string, name: string, marga: string|null, fatherName: string|null, fatherMarga: string|null, motherName: string|null, motherMarga: string|null, birthOrder: int|null}
+     */
+    private function spouseRow(Person $spouse): array
+    {
+        return [
+            'id' => (string) $spouse->id,
+            'name' => $spouse->name,
+            'birthOrder' => $spouse->birth_order,
+            'marga' => $spouse->marga?->name,
+            'fatherName' => $spouse->father?->name,
+            'fatherMarga' => $spouse->father?->marga?->name,
+            'motherName' => $spouse->mother?->name,
+            'motherMarga' => $spouse->mother?->marga?->name,
+        ];
     }
 
     /**

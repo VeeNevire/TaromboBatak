@@ -199,7 +199,8 @@ type Props = {
     margaAccessStatus?: 'pending' | 'approved' | 'rejected' | null;
     versionTrees?: FamilyTreeHistoryEntry[];
     selectedVersionName?: string | null;
-    selectedFamilyName?: string | null;
+    manualFamilyName?: string | null;
+    automaticFamilyName?: string | null;
     selectedVersionId?: number | null;
     shareableAccounts?: ShareableAccount[];
     pendingTreeShares?: PendingTreeShare[];
@@ -1184,7 +1185,8 @@ export default function FamilyForm({
     margaAccessStatus = null,
     versionTrees = [],
     selectedVersionName = null,
-    selectedFamilyName = null,
+    manualFamilyName = null,
+    automaticFamilyName = null,
     selectedVersionId = null,
     shareableAccounts = [],
     pendingTreeShares = [],
@@ -1218,13 +1220,16 @@ export default function FamilyForm({
 
         return index >= 0 ? index : soleMotherIndex(initialMothers);
     };
-    const initialFamilyName =
+    // Only the manually typed name is editable; the automatic one (inherited
+    // from an ancestor branch or the tree itself) is shown read-only.
+    const initialFamilyName = person === null ? '' : (manualFamilyName ?? '');
+    const displayedAutomaticFamilyName =
         person === null
-            ? ''
-            : (selectedFamilyName ??
+            ? null
+            : (automaticFamilyName ??
               familyTrees.find((tree) => tree.is_primary)?.name ??
               familyTrees[0]?.name ??
-              '');
+              null);
 
     const {
         data,
@@ -2811,7 +2816,7 @@ export default function FamilyForm({
                                                     htmlFor="family_tree_name"
                                                     className="text-tb-on-surface"
                                                 >
-                                                    Nama Keluarga
+                                                    Nama Keluarga Manual
                                                 </Label>
                                                 <Input
                                                     id="family_tree_name"
@@ -2832,12 +2837,46 @@ export default function FamilyForm({
                                                     Berlaku untuk cabang ini dan
                                                     seluruh keturunannya. Cabang
                                                     lain tidak berubah.
+                                                    Kosongkan untuk memakai nama
+                                                    otomatis.
                                                 </p>
                                                 <InputError
                                                     message={
                                                         errors.family_tree_name
                                                     }
                                                 />
+                                            </div>
+
+                                            <div className="grid gap-1.5">
+                                                <Label
+                                                    htmlFor="automatic_family_name"
+                                                    className="flex items-center gap-2 text-tb-on-surface"
+                                                >
+                                                    Nama Keluarga Otomatis
+                                                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                                        Otomatis
+                                                    </span>
+                                                </Label>
+                                                <Input
+                                                    id="automatic_family_name"
+                                                    value={
+                                                        displayedAutomaticFamilyName ??
+                                                        ''
+                                                    }
+                                                    placeholder={
+                                                        person === null
+                                                            ? 'Dibuat otomatis oleh sistem setelah disimpan'
+                                                            : 'Belum ada'
+                                                    }
+                                                    readOnly
+                                                    disabled
+                                                    className="border-tb-outline-variant bg-tb-surface-container"
+                                                />
+                                                <p className="text-xs text-tb-on-surface-variant">
+                                                    Dibuat oleh sistem dari
+                                                    cabang ayah atau silsilah,
+                                                    tidak dapat diubah.
+                                                </p>
                                             </div>
 
                                             <div className="grid gap-1.5">

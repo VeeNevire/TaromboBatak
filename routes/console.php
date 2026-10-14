@@ -13,3 +13,8 @@ Schedule::call(fn () => app(MargaNewsAutomationRunner::class)->runIfDue())
     ->everyMinute()
     ->name('marga-news-hermes-automation')
     ->withoutOverlapping(15);
+
+Schedule::command('news:push')
+    ->everyMinute()
+    ->name('marga-news-push')
+    ->withoutOverlapping(10);

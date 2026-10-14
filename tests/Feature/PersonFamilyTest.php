@@ -226,7 +226,14 @@ test('a descendant inherits the closest family branch name', function () {
         ->get(route('people.edit', $grandchild))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('selectedFamilyName', 'Keluarga Anak Pertama'));
+            ->where('manualFamilyName', null)
+            ->where('automaticFamilyName', 'Keluarga Anak Pertama'));
+
+    $this->get(route('people.edit', $branchHead))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('manualFamilyName', 'Keluarga Anak Pertama')
+            ->where('automaticFamilyName', 'Keluarga Lama'));
 });
 
 test('editing a branch name does not rename the whole tree', function () {
@@ -266,7 +273,43 @@ test('editing a branch name does not rename the whole tree', function () {
     $this->get(route('people.edit', $grandchild).'?version_tree='.$tree->id)
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('selectedFamilyName', 'Keluarga Anak Pertama'));
+            ->where('automaticFamilyName', 'Keluarga Anak Pertama'));
+});
+
+test('clearing the manual family name falls back to the automatic name', function () {
+    $root = Person::factory()->create(['name' => 'Ompung']);
+    $branchHead = Person::factory()->create(['name' => 'Anak Pertama', 'father_id' => $root->id]);
+    $tree = FamilyTree::create([
+        'user_id' => $this->admin->id,
+        'root_person_id' => $root->id,
+        'name' => 'Pohon Silaban',
+    ]);
+    $rootNode = FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $root->id]);
+    $branchNode = FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $branchHead->id,
+        'father_node_id' => $rootNode->id,
+        'family_name' => 'Keluarga Anak Pertama',
+    ]);
+
+    $this->actingAs($this->admin)
+        ->put(route('people.update', $branchHead).'?version_tree='.$tree->id, [
+            'name' => $branchHead->name,
+            'family_tree_name' => '',
+            'gender' => 'L',
+            'birth_order' => 1,
+            'sibling_count' => 1,
+            'father' => ['id' => $root->id, 'name' => $root->name],
+        ])
+        ->assertRedirect();
+
+    expect($branchNode->fresh()->family_name)->toBeNull();
+
+    $this->get(route('people.edit', $branchHead).'?version_tree='.$tree->id)
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('manualFamilyName', null)
+            ->where('automaticFamilyName', 'Pohon Silaban'));
 });
 
 test('related story links are stored and exposed on the person form', function () {

@@ -20,6 +20,7 @@ export type TaromboPersonRow = {
     spouse?: string | null;
     spouseMarga?: string | null;
     spouses?: TaromboSpouse[];
+    mothers?: TaromboSpouse[];
     image?: string | null;
     bio?: string;
     createdBy?: string | null;
@@ -79,6 +80,7 @@ export type TaromboPerson = {
     spouse?: string | null;
     spouseMarga?: string | null;
     spouses?: TaromboSpouse[];
+    mothers?: TaromboSpouse[];
     image?: string | null;
     bio?: string;
     createdBy?: string | null;

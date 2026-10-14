@@ -38,6 +38,7 @@ use App\Http\Controllers\MessageLogController;
 use App\Http\Controllers\NewsFeedController;
 use App\Http\Controllers\PersonController;
 use App\Http\Controllers\PersonMargaController;
+use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\QrisPaymentController;
 use App\Http\Controllers\SharedFamilyTreePersonController;
 use App\Http\Controllers\StatusController;
@@ -78,6 +79,11 @@ Route::post('berita-marga/{margaNews}/comments', [MargaNewsController::class, 'c
 
 Route::get('berita-marga', [MargaNewsController::class, 'index'])
     ->name('marga-news.index');
+
+Route::post('push-subscriptions', [PushSubscriptionController::class, 'store'])
+    ->middleware('throttle:20,1')->name('push-subscriptions.store');
+Route::delete('push-subscriptions', [PushSubscriptionController::class, 'destroy'])
+    ->middleware('throttle:20,1')->name('push-subscriptions.destroy');
 
 Route::get('status/{feedPost}', [StatusController::class, 'show'])
     ->name('news-feed.statuses.show');
