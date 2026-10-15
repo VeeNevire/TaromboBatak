@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Event;
 use App\Models\Marga;
 use App\Models\Story;
+use App\Services\TaromboStatisticsService;
 use App\Services\TaromboTreeService;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -47,17 +48,20 @@ class DashboardController extends Controller
                 'is_past' => $event->date->isPast(),
             ]);
 
-        $margas = Marga::query()
-            ->withCount(['people' => fn ($query) => $query->public()])
-            ->orderByDesc('people_count')
-            ->orderBy('name')
-            ->limit(5)
-            ->get()
+        $margas = Marga::query()->get(['id', 'name', 'color', 'identity_person_id']);
+        $descendantCounts = app(TaromboStatisticsService::class)->descendantCounts(
+            $margas->pluck('identity_person_id')->filter()->all(),
+        );
+
+        $margas = $margas
             ->map(fn (Marga $marga) => [
                 'name' => $marga->name,
                 'color' => $marga->color,
-                'count' => $marga->people_count,
-            ]);
+                'count' => $descendantCounts[$marga->identity_person_id] ?? 0,
+            ])
+            ->sortBy([['count', 'desc'], ['name', 'asc']])
+            ->take(5)
+            ->values();
 
         return Inertia::render('dashboard', [
             'stories' => $stories,

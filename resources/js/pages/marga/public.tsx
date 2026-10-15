@@ -222,7 +222,7 @@ export default function MargaPublic({ margas, stats }: Props) {
                                                     {item.name}
                                                 </h3>
                                                 <p className="text-xs text-white/90">
-                                                    {item.count} orang
+                                                    {item.count} ranting
                                                 </p>
                                             </div>
                                         </div>

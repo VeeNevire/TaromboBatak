@@ -201,16 +201,20 @@ class MargaController extends Controller
     {
         $margas = Marga::query()
             ->where('is_public', true)
-            ->withCount('people')
-            ->orderByDesc('people_count')
-            ->orderBy('name')
-            ->get()
+            ->get();
+        $descendantCounts = app(TaromboStatisticsService::class)->descendantCounts(
+            $margas->pluck('identity_person_id')->filter()->all(),
+        );
+
+        $margas = $margas
             ->map(fn (Marga $marga) => [
                 'name' => $marga->name,
                 'color' => $marga->color,
                 'image_url' => $this->imageUrl($marga->image),
-                'count' => $marga->people_count,
-            ]);
+                'count' => $descendantCounts[$marga->identity_person_id] ?? 0,
+            ])
+            ->sortBy([['count', 'desc'], ['name', 'asc']])
+            ->values();
 
         return Inertia::render('marga/public', [
             'margas' => $margas,

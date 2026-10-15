@@ -41,7 +41,7 @@ export function MargaDirectory({ margas }: { margas: MargaItem[] }) {
                                     {margaItem.name}
                                 </h3>
                                 <p className="text-xs text-white/90">
-                                    {margaItem.count} orang
+                                    {margaItem.count} ranting
                                 </p>
                             </div>
                         </a>
