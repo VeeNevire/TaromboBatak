@@ -114,6 +114,25 @@ test('marga directory counts all descendant generations across margas without co
             ->where('margas.1.descendants_count', 0));
 });
 
+test('marga cards show descendant counts sorted by the most branches', function () {
+    $members = Marga::factory()->public()->create(['name' => 'Anggota']);
+    Person::factory()->count(3)->create(['marga_id' => $members->id, 'father_id' => null]);
+    $branched = Marga::factory()->public()->create(['name' => 'Ranting']);
+    $identity = Person::factory()->create(['marga_id' => $branched->id, 'father_id' => null]);
+    $branched->update(['identity_person_id' => $identity->id]);
+    $child = Person::factory()->create(['marga_id' => $branched->id, 'father_id' => $identity->id]);
+    Person::factory()->create(['marga_id' => $branched->id, 'father_id' => $child->id]);
+
+    foreach (['marga.view', 'dashboard'] as $routeName) {
+        $this->get(route($routeName))->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('margas.0.name', 'Ranting')
+                ->where('margas.0.count', 2)
+                ->where('margas.1.name', 'Anggota')
+                ->where('margas.1.count', 0));
+    }
+});
+
 test('lower five tree includes five descendant generations and excludes deeper or detached members', function (bool $staff) {
     $marga = Marga::factory()->public()->create();
     $identity = Person::factory()->create(['marga_id' => $marga->id, 'father_id' => null, 'gender' => 'L']);
