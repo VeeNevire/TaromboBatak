@@ -41,7 +41,7 @@ class FamilyEntryService
      * @param  array<string, mixed>  $data
      * @return array<int, Person|null>
      */
-    public function syncWives(Person $father, array $data, ?int $createdBy = null, string $key = 'mothers'): array
+    public function syncWives(Person $father, array $data, ?int $createdBy = null, string $key = 'mothers', bool $keepMothersOfChildren = false): array
     {
         $mothers = [];
 
@@ -101,16 +101,46 @@ class FamilyEntryService
                 $wifeLinks[$mother->id] = ['position' => count($wifeLinks) + 1];
             }
         }
+        $previousWifeIds = $father->wives()->pluck('people.id');
         $father->wives()->sync($wifeLinks);
-        $this->keepMothersOfChildren($father);
+
+        // Only a list the form actually sent may remove a wife on purpose.
+        $listSent = array_key_exists($key, $data)
+            || ($key === 'mothers' && array_key_exists('mother', $data));
+
+        if ($keepMothersOfChildren || ! $listSent) {
+            $this->keepMothersOfChildren($father);
+        } else {
+            $this->forgetRemovedMothers($father, $previousWifeIds->diff(array_keys($wifeLinks)));
+        }
 
         return $mothers;
     }
 
     /**
-     * Keep every mother of the husband's children among his wives. A form
-     * that lists fewer wives must not detach one still recorded as a mother,
-     * or his own spouse list and his children's "Pasangan Ayah" would differ.
+     * A wife removed on purpose is no longer the mother of her husband's
+     * children either; otherwise she would come back as "Pasangan Ayah" in
+     * their modal and as his wife on the next save.
+     *
+     * @param  Collection<int, int>  $removedWifeIds
+     */
+    private function forgetRemovedMothers(Person $husband, Collection $removedWifeIds): void
+    {
+        if ($removedWifeIds->isEmpty()) {
+            return;
+        }
+
+        Person::query()
+            ->where('father_id', $husband->id)
+            ->whereIn('mother_id', $removedWifeIds)
+            ->get()
+            ->each(fn (Person $child) => $child->update(['mother_id' => null]));
+    }
+
+    /**
+     * Keep every mother of the husband's children among his wives. Used when
+     * a form only shows part of his wives (a child row with one spouse
+     * field), so a wife it cannot show is not detached by accident.
      */
     private function keepMothersOfChildren(Person $husband): void
     {
@@ -315,6 +345,7 @@ class FamilyEntryService
                     }
                 }
 
+                $removedWifeIds = $father->wives()->pluck('people.id')->diff(array_keys($wifeLinks));
                 $father->wives()->sync($wifeLinks);
             }
 
@@ -340,10 +371,15 @@ class FamilyEntryService
                 $pending,
             );
 
-            // Checked after the children are saved, so a mother replaced on
-            // every child row in this form is detached as intended.
+            // Checked after the children are saved, so their rows decide their
+            // mother first. A wife removed from the "Ibu" list is removed on
+            // purpose; a form that sent no "Ibu" list keeps every mother.
             if ($father !== null) {
-                $this->keepMothersOfChildren($father);
+                if (array_key_exists('mothers', $data) || array_key_exists('mother', $data)) {
+                    $this->forgetRemovedMothers($father, $removedWifeIds);
+                } else {
+                    $this->keepMothersOfChildren($father);
+                }
             }
 
             // Upsert own children of the focus person
@@ -1338,7 +1374,7 @@ class FamilyEntryService
             return;
         }
 
-        $this->syncWives($child, ['wives' => $entries], $createdBy, 'wives');
+        $this->syncWives($child, ['wives' => $entries], $createdBy, 'wives', keepMothersOfChildren: true);
     }
 
     /**

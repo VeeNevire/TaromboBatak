@@ -370,6 +370,7 @@ class TaromboController extends Controller
                         'isAuto' => true,
                         'margaName' => $marga->name,
                     ]))
+                ->concat($this->manualFamilyNameOptions($accountFamilyTrees))
                 ->values()
                 ->all(),
             $selectedFamilyTreeId,
@@ -378,6 +379,37 @@ class TaromboController extends Controller
             $accountTreePersonIds,
             $selectedRoot,
         ];
+    }
+
+    /**
+     * Every "Nama Keluarga Manual" typed on a branch of the account's trees,
+     * offered as a silsilah that opens its tree centred on that branch.
+     *
+     * @param  Collection<int, FamilyTree>  $accountFamilyTrees
+     * @return SupportCollection<int, array<string, mixed>>
+     */
+    private function manualFamilyNameOptions(Collection $accountFamilyTrees): SupportCollection
+    {
+        $treesById = $accountFamilyTrees->keyBy('id');
+
+        return FamilyTreeNode::query()
+            ->whereIn('family_tree_id', $treesById->keys())
+            ->whereNotNull('family_name')
+            ->where('family_name', '!=', '')
+            ->where('is_removed', false)
+            ->with('person:id,name')
+            ->orderBy('family_name')
+            ->get(['id', 'family_tree_id', 'person_id', 'family_name'])
+            ->map(fn (FamilyTreeNode $node) => [
+                'id' => $node->family_tree_id,
+                'value' => 'family:'.$node->id,
+                'name' => $node->family_name,
+                'rootName' => $node->person?->name ?? 'Silsilah',
+                'rootPersonId' => $node->person_id,
+                'group' => 'family',
+                'isAuto' => false,
+                'margaName' => $treesById->get($node->family_tree_id)?->rootPerson?->marga?->name,
+            ]);
     }
 
     /**

@@ -56,6 +56,33 @@ export function treeReturnFor(personId: number | string): string | null {
     }
 }
 
+const FEMALE_LINEAGE_KEY = 'tarombo:female-lineage';
+
+/**
+ * Remember the "Silsilah Perempuan Ditampilkan" choice for this tab, so the
+ * tree looks the same (with its blue lineage line) when the user comes back
+ * from an edit page.
+ */
+export function rememberFemaleLineage(shown: boolean): void {
+    try {
+        window.sessionStorage.setItem(FEMALE_LINEAGE_KEY, shown ? '1' : '0');
+    } catch {
+        // Ignore unavailable storage.
+    }
+}
+
+export function rememberedFemaleLineage(): boolean {
+    if (typeof window === 'undefined') {
+        return false;
+    }
+
+    try {
+        return window.sessionStorage.getItem(FEMALE_LINEAGE_KEY) === '1';
+    } catch {
+        return false;
+    }
+}
+
 export function clearTreeReturn(): void {
     try {
         window.sessionStorage.removeItem(STORAGE_KEY);

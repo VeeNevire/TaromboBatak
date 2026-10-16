@@ -59,6 +59,10 @@ import type {
     TaromboPersonRow,
 } from '@/data/tarombo-tree';
 import { useMediaQuery } from '@/hooks/use-media-query';
+import {
+    rememberedFemaleLineage,
+    rememberFemaleLineage,
+} from '@/lib/tree-return';
 import { cn } from '@/lib/utils';
 import type { TaromboFamilyTreeOption } from '@/pages/tarombo';
 import identityRequests from '@/routes/identity-requests';
@@ -732,7 +736,21 @@ export function TaromboExplorer({
     const selectedAccountTree = familyTreeOptions.find(
         (tree) => tree.id === selectedFamilyTreeId && tree.group === 'account',
     );
-    const [showFemaleLineage, setShowFemaleLineage] = useState(false);
+    // A person opened from the URL (e.g. back from their edit page) keeps the
+    // female lineage choice made before leaving the tree. A woman, or someone
+    // descending through one, always needs it to appear with her blue line.
+    const [showFemaleLineage, setShowFemaleLineage] = useState(() =>
+        initialPersonId
+            ? rememberedFemaleLineage() ||
+              ancestorPath(people, initialPersonId).some(
+                  (person) => person.gender === 'P',
+              )
+            : false,
+    );
+
+    useEffect(() => {
+        rememberFemaleLineage(showFemaleLineage);
+    }, [showFemaleLineage]);
     const margaIdentity = margaTree
         ? people.find((person) => person.id === margaTree.identityPersonId)
         : undefined;
@@ -1995,6 +2013,7 @@ export function TaromboExplorer({
     const familyTreeGroups = [
         { group: 'root', title: 'Pohon Utama' },
         { group: 'account', title: 'Silsilah Milik Akun' },
+        { group: 'family', title: 'Nama Keluarga Manual' },
         { group: 'marga', title: 'Daftar Silsilah Marga' },
     ]
         .map(({ group, title }) => ({
@@ -2010,12 +2029,17 @@ export function TaromboExplorer({
                       person: centerPersonId,
                       family_tree: selectedOption.id,
                   }
-                : selectedOption.group === 'root'
-                  ? { root: selectedOption.value.replace(/^root:/, '') }
-                  : {
-                        marga_id: selectedOption.id,
-                        marga_direction: 'lower' as const,
-                    };
+                : selectedOption.group === 'family'
+                  ? {
+                        person: selectedOption.rootPersonId ?? undefined,
+                        family_tree: selectedOption.id,
+                    }
+                  : selectedOption.group === 'root'
+                    ? { root: selectedOption.value.replace(/^root:/, '') }
+                    : {
+                          marga_id: selectedOption.id,
+                          marga_direction: 'lower' as const,
+                      };
         const destination = fullscreen
             ? tarombo.fullscreen({ view: fullscreenView }, { query })
             : tarombo.index({ query });
