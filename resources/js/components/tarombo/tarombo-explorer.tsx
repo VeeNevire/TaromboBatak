@@ -1995,6 +1995,7 @@ export function TaromboExplorer({
     const familyTreeGroups = [
         { group: 'root', title: 'Pohon Utama' },
         { group: 'account', title: 'Silsilah Milik Akun' },
+        { group: 'family', title: 'Nama Keluarga Manual' },
         { group: 'marga', title: 'Daftar Silsilah Marga' },
     ]
         .map(({ group, title }) => ({
@@ -2010,12 +2011,17 @@ export function TaromboExplorer({
                       person: centerPersonId,
                       family_tree: selectedOption.id,
                   }
-                : selectedOption.group === 'root'
-                  ? { root: selectedOption.value.replace(/^root:/, '') }
-                  : {
-                        marga_id: selectedOption.id,
-                        marga_direction: 'lower' as const,
-                    };
+                : selectedOption.group === 'family'
+                  ? {
+                        person: selectedOption.rootPersonId ?? undefined,
+                        family_tree: selectedOption.id,
+                    }
+                  : selectedOption.group === 'root'
+                    ? { root: selectedOption.value.replace(/^root:/, '') }
+                    : {
+                          marga_id: selectedOption.id,
+                          marga_direction: 'lower' as const,
+                      };
         const destination = fullscreen
             ? tarombo.fullscreen({ view: fullscreenView }, { query })
             : tarombo.index({ query });

@@ -35,7 +35,7 @@ export type TaromboFamilyTreeOption = {
     name: string;
     rootName: string;
     rootPersonId?: number | null;
-    group: 'root' | 'account' | 'marga';
+    group: 'root' | 'account' | 'family' | 'marga';
     canManage?: boolean;
     isAuto?: boolean;
     margaName?: string | null;

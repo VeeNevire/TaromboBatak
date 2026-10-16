@@ -618,6 +618,41 @@ test('vertical tarombo lists account and approved marga sources separately', fun
             ->where('people.1.parentId', (string) $root->id));
 });
 
+test('vertical tarombo lists manually entered family names as silsilah options', function () {
+    $owner = User::factory()->create();
+    $root = Person::factory()->create(['name' => 'Akar Manual']);
+    $child = Person::factory()->create(['name' => 'Anak Bernama']);
+    $tree = FamilyTree::create([
+        'user_id' => $owner->id,
+        'root_person_id' => $root->id,
+        'name' => 'Silsilah Otomatis',
+    ]);
+    $rootNode = FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $root->id,
+        'chain' => '1',
+    ]);
+    $childNode = FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $child->id,
+        'father_node_id' => $rootNode->id,
+        'chain' => '1-1',
+        'family_name' => 'Keluarga Contoh Manual',
+    ]);
+
+    $this->actingAs($owner)
+        ->get(route('tarombo.index', ['family_tree' => $tree->id]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('familyTreeOptions', fn ($options) => collect($options)->contains(
+                fn (array $option) => $option['value'] === 'family:'.$childNode->id
+                    && $option['group'] === 'family'
+                    && $option['id'] === $tree->id
+                    && $option['name'] === 'Keluarga Contoh Manual'
+                    && $option['rootPersonId'] === $child->id,
+            ) && collect($options)->where('group', 'family')->count() === 1));
+});
+
 test('vertical tarombo lists every tree shown in the admin account list', function () {
     $admin = User::factory()->asAdmin()->create();
     $root = Person::factory()->create(['name' => 'Si Raja Batak']);
