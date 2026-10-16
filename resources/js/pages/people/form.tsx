@@ -14,6 +14,7 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import type { NameSuggestion } from '@/components/ui/name-combobox';
+import { clearTreeReturn, treeReturnFor } from '@/lib/tree-return';
 import FamilyForm from '@/pages/people/family-form';
 import type {
     FamilyData,
@@ -78,6 +79,8 @@ export default function PersonForm({
         lockedMarga?.name ??
         margas.find((marga) => marga.id === person?.marga_id)?.name ??
         null;
+    // Edits opened from the tarombo tree link back to that same tree.
+    const treeReturn = person?.id ? treeReturnFor(person.id) : null;
 
     return (
         <>
@@ -91,10 +94,17 @@ export default function PersonForm({
                         size="sm"
                         className="w-fit text-tb-on-surface-variant"
                     >
-                        <Link href={people.index()}>
-                            <ArrowLeft className="size-4" /> Kembali ke Data
-                            Anggota
-                        </Link>
+                        {treeReturn ? (
+                            <Link href={treeReturn} onClick={clearTreeReturn}>
+                                <ArrowLeft className="size-4" /> Kembali ke
+                                Pohon
+                            </Link>
+                        ) : (
+                            <Link href={people.index()}>
+                                <ArrowLeft className="size-4" /> Kembali ke
+                                Data Anggota
+                            </Link>
+                        )}
                     </Button>
 
                     <div>

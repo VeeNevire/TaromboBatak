@@ -102,8 +102,36 @@ class FamilyEntryService
             }
         }
         $father->wives()->sync($wifeLinks);
+        $this->keepMothersOfChildren($father);
 
         return $mothers;
+    }
+
+    /**
+     * Keep every mother of the husband's children among his wives. A form
+     * that lists fewer wives must not detach one still recorded as a mother,
+     * or his own spouse list and his children's "Pasangan Ayah" would differ.
+     */
+    private function keepMothersOfChildren(Person $husband): void
+    {
+        $wifeIds = $husband->wives()->pluck('people.id');
+        $position = $wifeIds->count();
+        $missingMotherIds = Person::query()
+            ->where('father_id', $husband->id)
+            ->whereNotNull('mother_id')
+            ->where('mother_id', '!=', $husband->id)
+            ->whereNotIn('mother_id', $wifeIds)
+            ->distinct()
+            ->orderBy('mother_id')
+            ->pluck('mother_id');
+
+        if ($missingMotherIds->isEmpty()) {
+            return;
+        }
+
+        $husband->wives()->attach($missingMotherIds
+            ->mapWithKeys(fn (int $motherId) => [$motherId => ['position' => ++$position]])
+            ->all());
     }
 
     /**
@@ -311,6 +339,12 @@ class FamilyEntryService
                 $createdBy,
                 $pending,
             );
+
+            // Checked after the children are saved, so a mother replaced on
+            // every child row in this form is detached as intended.
+            if ($father !== null) {
+                $this->keepMothersOfChildren($father);
+            }
 
             // Upsert own children of the focus person
             $focus = $this->resolveFocus($children, $data);
@@ -572,6 +606,7 @@ class FamilyEntryService
                 'user_id' => $createdBy,
                 'root_person_id' => $focus->id,
                 'name' => $name,
+                'is_auto_generated' => blank($familyTreeName),
             ]);
 
         $memberIds = $children
@@ -595,7 +630,7 @@ class FamilyEntryService
         }
 
         if ($tree->name === null) {
-            $tree->update(['name' => $name]);
+            $tree->update(['name' => $name, 'is_auto_generated' => blank($familyTreeName)]);
         }
 
         $tree->people()->syncWithoutDetaching(array_values(array_unique($memberIds)));

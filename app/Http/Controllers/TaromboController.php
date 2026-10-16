@@ -26,6 +26,8 @@ use Inertia\Response;
 
 class TaromboController extends Controller
 {
+    private const RAJA_BATAK_ROOT = 'si-raja-batak';
+
     /**
      * Show the tarombo tree for authenticated users (scoped to their marga).
      */
@@ -50,7 +52,7 @@ class TaromboController extends Controller
             ]);
         }
 
-        [$people, $margas, $alternativeTrees, $identity, $familyTreeOptions, $selectedFamilyTreeId, $selectedMargaId, $margaTree, $accountTreePersonIds] = $this->treeData($request);
+        [$people, $margas, $alternativeTrees, $identity, $familyTreeOptions, $selectedFamilyTreeId, $selectedMargaId, $margaTree, $accountTreePersonIds, $selectedRoot] = $this->treeData($request);
 
         return Inertia::render('tarombo/index', [
             'people' => $people,
@@ -60,6 +62,7 @@ class TaromboController extends Controller
             'familyTreeOptions' => $familyTreeOptions,
             'selectedFamilyTreeId' => $selectedFamilyTreeId,
             'selectedMargaId' => $selectedMargaId,
+            'selectedRoot' => $selectedRoot,
             'margaTree' => $margaTree,
             'accountTreePersonIds' => $accountTreePersonIds,
             'familyName' => $this->familyName($selectedFamilyTreeId, $margaTree),
@@ -71,7 +74,7 @@ class TaromboController extends Controller
      */
     public function fullscreen(Request $request, string $view): Response
     {
-        [$people, $margas, $alternativeTrees, $identity, $familyTreeOptions, $selectedFamilyTreeId, $selectedMargaId, $margaTree, $accountTreePersonIds] = $this->treeData($request);
+        [$people, $margas, $alternativeTrees, $identity, $familyTreeOptions, $selectedFamilyTreeId, $selectedMargaId, $margaTree, $accountTreePersonIds, $selectedRoot] = $this->treeData($request);
 
         return Inertia::render('tarombo/fullscreen', [
             'people' => $people,
@@ -83,6 +86,7 @@ class TaromboController extends Controller
             'familyTreeOptions' => $familyTreeOptions,
             'selectedFamilyTreeId' => $selectedFamilyTreeId,
             'selectedMargaId' => $selectedMargaId,
+            'selectedRoot' => $selectedRoot,
             'margaTree' => $margaTree,
             'accountTreePersonIds' => $accountTreePersonIds,
             'familyName' => $this->familyName($selectedFamilyTreeId, $margaTree),
@@ -180,7 +184,7 @@ class TaromboController extends Controller
     /**
      * Build the scoped tarombo rows and marga legend for the current user.
      *
-     * @return array{0: array<int, array<string, mixed>>, 1: array<int, array<string, mixed>>, 2: array<int, array{id: int, name: string, rootPersonId: string}>, 3: array<string, mixed>, 4: array<int, array<string, mixed>>, 5: int|null, 6: int|null, 7: array<string, mixed>|null, 8: array<int, string>}
+     * @return array{0: array<int, array<string, mixed>>, 1: array<int, array<string, mixed>>, 2: array<int, array{id: int, name: string, rootPersonId: string}>, 3: array<string, mixed>, 4: array<int, array<string, mixed>>, 5: int|null, 6: int|null, 7: array<string, mixed>|null, 8: array<int, string>, 9: string|null}
      */
     private function treeData(Request $request): array
     {
@@ -195,12 +199,22 @@ class TaromboController extends Controller
         $requestedMargaId = $request->filled('marga_id')
             ? $request->integer('marga_id')
             : null;
+        $rajaBatak = $this->rajaBatak();
+        $requestedRoot = $request->filled('root')
+            ? $request->string('root')->toString()
+            : null;
 
         abort_if(
-            $requestedFamilyTreeId !== null && $requestedMargaId !== null,
+            collect([$requestedFamilyTreeId, $requestedMargaId, $requestedRoot])->filter(fn ($value) => $value !== null)->count() > 1,
             422,
             'Pilih satu sumber silsilah.',
         );
+        abort_if(
+            $requestedRoot !== null && ($requestedRoot !== self::RAJA_BATAK_ROOT || $rajaBatak === null),
+            404,
+        );
+
+        $selectedRoot = $requestedRoot;
 
         $selectedFamilyTree = $requestedFamilyTreeId !== null
             ? $accountFamilyTrees->firstWhere('id', $requestedFamilyTreeId)
@@ -220,7 +234,7 @@ class TaromboController extends Controller
             'Marga ini tidak tersedia di Daftar Silsilah Marga.',
         );
 
-        if ($requestedFamilyTreeId === null && $requestedMargaId === null) {
+        if ($requestedFamilyTreeId === null && $requestedMargaId === null && $requestedRoot === null) {
             $selectedFamilyTree = $accountFamilyTrees
                 ->sortBy([
                     ['is_primary', 'desc'],
@@ -231,6 +245,10 @@ class TaromboController extends Controller
 
             if ($selectedFamilyTree === null) {
                 $selectedMarga = $approvedMargas->first();
+            }
+
+            if ($selectedFamilyTree === null && $selectedMarga === null && $rajaBatak !== null) {
+                $selectedRoot = self::RAJA_BATAK_ROOT;
             }
         }
 
@@ -252,6 +270,12 @@ class TaromboController extends Controller
                 maxDepth: (int) config('tarombo.dashboard_max_depth'),
                 maxNodes: (int) config('tarombo.dashboard_max_nodes'),
                 descendantGenerations: $descendantGenerations,
+            ),
+            $selectedRoot === self::RAJA_BATAK_ROOT => $service->rowsForPerson(
+                $rajaBatak,
+                maxDepth: (int) config('tarombo.dashboard_max_depth'),
+                maxNodes: (int) config('tarombo.dashboard_max_nodes'),
+                publicOnly: ! $user->isStaff(),
             ),
             default => [],
         }, $user);
@@ -313,8 +337,17 @@ class TaromboController extends Controller
                     'reason' => $identityRequest->rejection_reason,
                 ] : null,
             ],
-            $accountFamilyTrees
-                ->map(fn (FamilyTree $tree) => [
+            collect($rajaBatak === null ? [] : [[
+                'id' => $rajaBatak->id,
+                'value' => 'root:'.self::RAJA_BATAK_ROOT,
+                'name' => $rajaBatak->name,
+                'rootName' => $rajaBatak->name,
+                'rootPersonId' => $rajaBatak->id,
+                'group' => 'root',
+                'isAuto' => false,
+                'margaName' => null,
+            ]])
+                ->concat($accountFamilyTrees->map(fn (FamilyTree $tree) => [
                     'id' => $tree->id,
                     'value' => 'account:'.$tree->id,
                     'name' => $tree->name ?? $tree->rootPerson?->name ?? 'Silsilah',
@@ -322,7 +355,9 @@ class TaromboController extends Controller
                     'rootPersonId' => $tree->root_person_id,
                     'group' => 'account',
                     'canManage' => $user->isStaff() || $tree->user_id === $user->id,
-                ])
+                    'isAuto' => $tree->is_auto_generated,
+                    'margaName' => $tree->rootPerson?->marga?->name,
+                ]))
                 ->concat($approvedMargas
                     ->filter(fn (Marga $marga) => $marga->identity_person_id !== null)
                     ->map(fn (Marga $marga) => [
@@ -332,6 +367,8 @@ class TaromboController extends Controller
                         'rootName' => $marga->identityPerson?->name ?? $marga->name,
                         'rootPersonId' => $marga->identity_person_id,
                         'group' => 'marga',
+                        'isAuto' => true,
+                        'margaName' => $marga->name,
                     ]))
                 ->values()
                 ->all(),
@@ -339,7 +376,20 @@ class TaromboController extends Controller
             $selectedMargaId,
             $margaTree,
             $accountTreePersonIds,
+            $selectedRoot,
         ];
+    }
+
+    /**
+     * Si Raja Batak, the root of the main tree, offered as its own silsilah.
+     */
+    private function rajaBatak(): ?Person
+    {
+        return Person::query()
+            ->where('name', 'Si Raja Batak')
+            ->whereNull('father_id')
+            ->orderBy('id')
+            ->first(['id', 'name']);
     }
 
     /**
@@ -428,9 +478,9 @@ class TaromboController extends Controller
     private function accountFamilyTrees(User $user): Collection
     {
         return $this->accountFamilyTreesQuery($user)
-            ->with(['rootPerson:id,name'])
+            ->with(['rootPerson:id,name,marga_id', 'rootPerson.marga:id,name'])
             ->latest('updated_at')
-            ->get(['id', 'user_id', 'root_person_id', 'based_on_id', 'name', 'is_primary', 'updated_at'])
+            ->get(['id', 'user_id', 'root_person_id', 'based_on_id', 'name', 'is_primary', 'is_auto_generated', 'updated_at'])
             ->filter(fn (FamilyTree $tree) => $tree->rootPerson !== null)
             ->values();
     }

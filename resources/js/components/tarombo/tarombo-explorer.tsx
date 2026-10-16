@@ -94,6 +94,7 @@ type Props = {
     familyTreeOptions: TaromboFamilyTreeOption[];
     selectedFamilyTreeId: number | null;
     selectedMargaId: number | null;
+    selectedRoot?: string | null;
     accountTreePersonIds?: string[];
     familyName?: string | null;
     treeSettings?: TreeSettings | null;
@@ -715,6 +716,7 @@ export function TaromboExplorer({
     familyTreeOptions,
     selectedFamilyTreeId,
     selectedMargaId,
+    selectedRoot = null,
     accountTreePersonIds = [],
     familyName = null,
     treeSettings = null,
@@ -934,6 +936,8 @@ export function TaromboExplorer({
     // Person double-clicked to sit at the top of the vertical tree.
     const [treeTopId, setTreeTopId] = useState<string | null>(null);
     const [familyTreeSearch, setFamilyTreeSearch] = useState('');
+    const [debouncedFamilyTreeSearch, setDebouncedFamilyTreeSearch] =
+        useState('');
     const [familyTreeSelectorOpen, setFamilyTreeSelectorOpen] = useState(false);
     const familyTreeBlurTimer = useRef<number | null>(null);
     const [savingSnapshot, setSavingSnapshot] = useState(false);
@@ -1932,6 +1936,7 @@ export function TaromboExplorer({
                                 person: centerPersonId,
                                 family_tree: selectedFamilyTreeId ?? undefined,
                                 marga_id: selectedMargaId ?? undefined,
+                                root: selectedRoot ?? undefined,
                                 marga_direction:
                                     selectedMargaId === null
                                         ? undefined
@@ -1951,28 +1956,52 @@ export function TaromboExplorer({
         </button>
     );
 
-    const accountFamilyTrees = familyTreeOptions.filter(
-        (tree) => tree.group === 'account',
-    );
-    const approvedMargaTrees = familyTreeOptions.filter(
-        (tree) => tree.group === 'marga',
-    );
     const selectedOptionValue =
         selectedMargaId !== null
             ? `marga:${selectedMargaId}`
             : selectedFamilyTreeId !== null
               ? `account:${selectedFamilyTreeId}`
-              : undefined;
+              : selectedRoot !== null
+                ? `root:${selectedRoot}`
+                : undefined;
     const selectedFamilyTree = familyTreeOptions.find(
         (tree) => tree.value === selectedOptionValue,
     );
-    const normalizedFamilyTreeSearch = familyTreeSearch.trim().toLowerCase();
-    const visibleAccountFamilyTrees = accountFamilyTrees.filter((tree) =>
-        tree.name.toLowerCase().includes(normalizedFamilyTreeSearch),
-    );
-    const visibleMargaFamilyTrees = approvedMargaTrees.filter((tree) =>
-        tree.name.toLowerCase().includes(normalizedFamilyTreeSearch),
-    );
+    // The list stays empty until a silsilah or marga name is typed, and
+    // only follows the typing once it pauses, so a mistyped letter does not
+    // flash unrelated silsilah.
+    useEffect(() => {
+        const timer = window.setTimeout(
+            () => setDebouncedFamilyTreeSearch(familyTreeSearch),
+            familyTreeSearch.trim() === '' ? 0 : 300,
+        );
+
+        return () => window.clearTimeout(timer);
+    }, [familyTreeSearch]);
+
+    const normalizedFamilyTreeSearch = debouncedFamilyTreeSearch
+        .trim()
+        .toLowerCase();
+    const familyTreeSearchPending =
+        familyTreeSearch.trim().toLowerCase() !== normalizedFamilyTreeSearch;
+    const visibleFamilyTrees =
+        normalizedFamilyTreeSearch === ''
+            ? []
+            : familyTreeOptions.filter((tree) =>
+                  [tree.name, tree.margaName].some((name) =>
+                      name?.toLowerCase().includes(normalizedFamilyTreeSearch),
+                  ),
+              );
+    const familyTreeGroups = [
+        { group: 'root', title: 'Pohon Utama' },
+        { group: 'account', title: 'Silsilah Milik Akun' },
+        { group: 'marga', title: 'Daftar Silsilah Marga' },
+    ]
+        .map(({ group, title }) => ({
+            title,
+            trees: visibleFamilyTrees.filter((tree) => tree.group === group),
+        }))
+        .filter(({ trees }) => trees.length > 0);
 
     const selectFamilyTree = (selectedOption: TaromboFamilyTreeOption) => {
         const query =
@@ -1981,10 +2010,12 @@ export function TaromboExplorer({
                       person: centerPersonId,
                       family_tree: selectedOption.id,
                   }
-                : {
-                      marga_id: selectedOption.id,
-                      marga_direction: 'lower' as const,
-                  };
+                : selectedOption.group === 'root'
+                  ? { root: selectedOption.value.replace(/^root:/, '') }
+                  : {
+                        marga_id: selectedOption.id,
+                        marga_direction: 'lower' as const,
+                    };
         const destination = fullscreen
             ? tarombo.fullscreen({ view: fullscreenView }, { query })
             : tarombo.index({ query });
@@ -2053,12 +2084,12 @@ export function TaromboExplorer({
                 </button>
                 {familyTreeSelectorOpen && (
                     <div className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-md border border-tb-outline-variant bg-tb-surface-bright p-1 shadow-lg">
-                        {visibleAccountFamilyTrees.length > 0 && (
-                            <div>
+                        {familyTreeGroups.map(({ title, trees }) => (
+                            <div key={title}>
                                 <p className="px-2 py-1 text-[10px] font-semibold tracking-wide text-tb-on-surface-variant uppercase">
-                                    Silsilah Milik Akun
+                                    {title}
                                 </p>
-                                {visibleAccountFamilyTrees.map((tree) => (
+                                {trees.map((tree) => (
                                     <button
                                         key={tree.value}
                                         type="button"
@@ -2080,41 +2111,17 @@ export function TaromboExplorer({
                                     </button>
                                 ))}
                             </div>
+                        ))}
+                        {(familyTreeSearchPending ||
+                            familyTreeGroups.length === 0) && (
+                            <p className="px-2 py-2 text-center text-[11px] text-tb-on-surface-variant">
+                                {familyTreeSearchPending
+                                    ? 'Mencari...'
+                                    : normalizedFamilyTreeSearch === ''
+                                      ? 'Ketik nama marga atau silsilah.'
+                                      : 'Silsilah tidak ditemukan.'}
+                            </p>
                         )}
-                        {visibleMargaFamilyTrees.length > 0 && (
-                            <div>
-                                <p className="px-2 py-1 text-[10px] font-semibold tracking-wide text-tb-on-surface-variant uppercase">
-                                    Daftar Silsilah Marga
-                                </p>
-                                {visibleMargaFamilyTrees.map((tree) => (
-                                    <button
-                                        key={tree.value}
-                                        type="button"
-                                        onMouseDown={(event) => {
-                                            event.preventDefault();
-                                            selectFamilyTree(tree);
-                                        }}
-                                        className={cn(
-                                            'flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs text-tb-on-surface transition-colors hover:bg-tb-surface-container',
-                                            tree.value ===
-                                                selectedOptionValue &&
-                                                'bg-emerald-50 text-emerald-800',
-                                        )}
-                                    >
-                                        {tree.name}
-                                        {tree.value === selectedOptionValue && (
-                                            <Check className="size-3.5 shrink-0" />
-                                        )}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                        {visibleAccountFamilyTrees.length === 0 &&
-                            visibleMargaFamilyTrees.length === 0 && (
-                                <p className="px-2 py-3 text-center text-xs text-tb-on-surface-variant">
-                                    Silsilah tidak ditemukan.
-                                </p>
-                            )}
                     </div>
                 )}
             </div>

@@ -24,6 +24,7 @@ type Props = {
     familyTreeOptions: TaromboFamilyTreeOption[];
     selectedFamilyTreeId: number | null;
     selectedMargaId: number | null;
+    selectedRoot?: string | null;
     accountTreePersonIds: string[];
     familyName: string | null;
     treeSettings: TreeSettings | null;
@@ -47,6 +48,7 @@ export default function TaromboFullscreen({
     familyTreeOptions,
     selectedFamilyTreeId,
     selectedMargaId,
+    selectedRoot = null,
     accountTreePersonIds,
     familyName,
     treeSettings,
@@ -57,7 +59,9 @@ export default function TaromboFullscreen({
             ? `account-${selectedFamilyTreeId}`
             : selectedMargaId !== null
               ? `marga-${selectedMargaId}`
-              : 'default';
+              : selectedRoot !== null
+                ? `root-${selectedRoot}`
+                : 'default';
 
     return (
         <div className="flex h-dvh flex-col">
@@ -87,6 +91,7 @@ export default function TaromboFullscreen({
                     familyTreeOptions={familyTreeOptions}
                     selectedFamilyTreeId={selectedFamilyTreeId}
                     selectedMargaId={selectedMargaId}
+                    selectedRoot={selectedRoot}
                     accountTreePersonIds={accountTreePersonIds}
                     familyName={familyName}
                     treeSettings={treeSettings}
