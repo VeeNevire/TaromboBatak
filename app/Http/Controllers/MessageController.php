@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Events\MessageSent;
 use App\Http\Requests\StoreMessageRequest;
+use App\Jobs\SendChatPushNotification;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\MessageAttachment;
@@ -67,6 +68,8 @@ class MessageController extends Controller
 
             throw $exception;
         }
+
+        dispatch(SendChatPushNotification::forMessage($message));
 
         try {
             MessageSent::dispatch($message);

@@ -333,6 +333,7 @@ function LoginForm({
                             <Checkbox
                                 id="remember"
                                 name="remember"
+                                defaultChecked
                                 tabIndex={3}
                                 className="rounded border-tb-outline-variant text-tb-primary focus:ring-tb-primary"
                             />

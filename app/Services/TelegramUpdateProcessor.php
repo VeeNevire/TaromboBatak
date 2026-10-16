@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Contracts\TelegramBot;
 use App\Events\GroupMessageSent;
+use App\Jobs\SendChatPushNotification;
 use App\Models\ChatGroup;
 use App\Models\GroupMessage;
 use App\Models\TelegramAccount;
@@ -76,6 +77,7 @@ class TelegramUpdateProcessor
         if ($groupMessage->wasRecentlyCreated) {
             $chatGroup->touch();
             GroupMessageSent::dispatch($groupMessage);
+            dispatch(SendChatPushNotification::forGroupMessage($groupMessage));
         }
     }
 

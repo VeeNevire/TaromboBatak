@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Events\MessageSent;
 use App\Http\Requests\StoreMargaMessageRequest;
+use App\Jobs\SendChatPushNotification;
 use App\Models\Conversation;
 use App\Models\Marga;
 use App\Models\MargaChatConversation;
@@ -115,6 +116,7 @@ class MargaChatController extends Controller
             ]);
 
             MessageSent::dispatch($message);
+            dispatch(SendChatPushNotification::forMessage($message));
         });
 
         return back();

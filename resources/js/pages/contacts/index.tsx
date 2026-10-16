@@ -39,6 +39,7 @@ import {
 } from '@/components/chat/message-attachment-card';
 import type { ChatAttachment } from '@/components/chat/message-attachment-card';
 import InputError from '@/components/input-error';
+import { PushNotificationToggle } from '@/components/push-notification-toggle';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -1067,6 +1068,7 @@ export default function ContactsIndex({
                                     Kirim Pengumuman Telegram
                                 </Link>
                             </Button>
+                            <PushNotificationToggle className="mt-3 w-full" />
                         </header>
 
                         <div className="min-h-0 flex-1 overflow-y-auto">

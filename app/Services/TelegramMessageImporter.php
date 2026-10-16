@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Events\MessageSent;
 use App\Events\TelegramMessageReceived;
+use App\Jobs\SendChatPushNotification;
 use App\Models\Conversation;
 use App\Models\Message as WebMessage;
 use App\Models\TelegramAccount;
@@ -171,6 +172,7 @@ class TelegramMessageImporter
 
         if ($created) {
             MessageSent::dispatch($webMessage->load('conversation', 'attachments'));
+            dispatch(SendChatPushNotification::forMessage($webMessage));
         }
     }
 

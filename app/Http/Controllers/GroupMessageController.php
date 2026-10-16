@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Events\GroupMessageSent;
 use App\Http\Requests\StoreGroupMessageRequest;
+use App\Jobs\SendChatPushNotification;
 use App\Jobs\SendGroupMessageToTelegram;
 use App\Models\ChatGroup;
 use App\Models\GroupMessage;
@@ -24,6 +25,7 @@ class GroupMessageController extends Controller
         ]);
         $chatGroup->touch();
         GroupMessageSent::dispatch($message);
+        dispatch(SendChatPushNotification::forGroupMessage($message));
 
         if ($chatGroup->telegram_chat_id !== null) {
             SendGroupMessageToTelegram::dispatch($message->id)->afterCommit();
