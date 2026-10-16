@@ -4,6 +4,27 @@ import { Button } from '@/components/ui/button';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { cn } from '@/lib/utils';
 
+// Says why turning notifications on failed, so the cause can be fixed
+// instead of retried blindly.
+function pushErrorMessage(error: unknown): string {
+    const name = error instanceof Error ? error.name : '';
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (name === 'NotAllowedError') {
+        return 'Notifikasi diblokir browser. Izinkan notifikasi untuk situs ini lalu coba lagi.';
+    }
+
+    if (name === 'AbortError' || /push service/i.test(message)) {
+        return 'Layanan notifikasi browser tidak bisa dihubungi. Pastikan internet aktif; di Brave, nyalakan "Use Google services for push messaging".';
+    }
+
+    if (/request failed: 419/.test(message)) {
+        return 'Sesi kedaluwarsa. Muat ulang halaman lalu coba lagi.';
+    }
+
+    return `Notifikasi gagal diatur: ${message}`;
+}
+
 export function PushNotificationToggle({ className }: { className?: string }) {
     const { status, busy, subscribe, unsubscribe } = usePushNotifications();
 
@@ -47,18 +68,17 @@ export function PushNotificationToggle({ className }: { className?: string }) {
             disabled={busy}
             onClick={() =>
                 (subscribed ? unsubscribe() : subscribe())
-                    .then(() => {
-                        if (!subscribed) {
+                    .then((activated) => {
+                        if (activated) {
                             toast.success(
                                 'Notifikasi pesan dan berita aktif di perangkat ini.',
                             );
                         }
                     })
-                    .catch(() =>
-                        toast.error(
-                            'Notifikasi gagal diatur. Coba lagi sebentar.',
-                        ),
-                    )
+                    .catch((error: unknown) => {
+                        console.error('Push notification setup failed', error);
+                        toast.error(pushErrorMessage(error));
+                    })
             }
         >
             {busy ? (

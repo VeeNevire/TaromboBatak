@@ -17,6 +17,14 @@ return [
 
     'private_key' => env('VAPID_PRIVATE_KEY'),
 
-    'subject' => env('VAPID_SUBJECT', env('APP_URL')),
+    // Push services only accept a URL or a mailto: address; a bare email
+    // address is turned into mailto: so sending does not fail.
+    'subject' => (function (): ?string {
+        $subject = env('VAPID_SUBJECT', env('APP_URL'));
+
+        return is_string($subject) && filter_var($subject, FILTER_VALIDATE_EMAIL)
+            ? 'mailto:'.$subject
+            : $subject;
+    })(),
 
 ];

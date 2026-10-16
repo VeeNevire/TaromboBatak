@@ -61,6 +61,22 @@ async function send(
     }
 }
 
+function sameKey(
+    current: ArrayBuffer | null,
+    expected: Uint8Array<ArrayBuffer>,
+): boolean {
+    if (!current) {
+        return true;
+    }
+
+    const bytes = new Uint8Array(current);
+
+    return (
+        bytes.length === expected.length &&
+        bytes.every((byte, index) => byte === expected[index])
+    );
+}
+
 function subscriptionPayload(subscription: PushSubscription) {
     const json = subscription.toJSON();
 
@@ -123,9 +139,10 @@ export function usePushNotifications() {
         };
     }, [vapidPublicKey]);
 
-    const subscribe = useCallback(async () => {
+    /** Resolves true once this device is subscribed and saved. */
+    const subscribe = useCallback(async (): Promise<boolean> => {
         if (!vapidPublicKey) {
-            return;
+            return false;
         }
 
         setBusy(true);
@@ -136,16 +153,41 @@ export function usePushNotifications() {
             if (permission !== 'granted') {
                 setStatus(permission === 'denied' ? 'denied' : 'idle');
 
-                return;
+                return false;
             }
 
             const registration = await navigator.serviceWorker.ready;
-            const subscription =
-                (await registration.pushManager.getSubscription()) ??
-                (await registration.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-                }));
+            const options = {
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+            };
+            let subscription = await registration.pushManager.getSubscription();
+
+            // A subscription made with an earlier VAPID key can never receive
+            // pushes signed with the current one, so it is replaced.
+            if (
+                subscription &&
+                !sameKey(
+                    subscription.options.applicationServerKey,
+                    options.applicationServerKey,
+                )
+            ) {
+                await subscription.unsubscribe();
+                subscription = null;
+            }
+
+            try {
+                subscription ??=
+                    await registration.pushManager.subscribe(options);
+            } catch {
+                // A subscription left from an earlier key or a broken
+                // registration blocks a new one; drop it and try once more.
+                await (
+                    await registration.pushManager.getSubscription()
+                )?.unsubscribe();
+                subscription =
+                    await registration.pushManager.subscribe(options);
+            }
 
             await send(
                 'POST',
@@ -153,6 +195,8 @@ export function usePushNotifications() {
                 subscriptionPayload(subscription),
             );
             setStatus('subscribed');
+
+            return true;
         } finally {
             setBusy(false);
         }
