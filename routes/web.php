@@ -38,7 +38,6 @@ use App\Http\Controllers\MessageLogController;
 use App\Http\Controllers\NewsFeedController;
 use App\Http\Controllers\PersonController;
 use App\Http\Controllers\PersonMargaController;
-use App\Http\Controllers\PushReadController;
 use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\QrisPaymentController;
 use App\Http\Controllers\SharedFamilyTreePersonController;
@@ -59,7 +58,6 @@ use App\Http\Controllers\TelegramMessagesController;
 use App\Http\Controllers\TentangController;
 use App\Http\Controllers\TrafficMonitorController;
 use App\Http\Controllers\TreeActivityLogController;
-use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [NewsFeedController::class, 'index'])->name('home');
@@ -89,14 +87,6 @@ Route::post('push-subscriptions', [PushSubscriptionController::class, 'store'])
     ->middleware('throttle:20,1')->name('push-subscriptions.store');
 Route::delete('push-subscriptions', [PushSubscriptionController::class, 'destroy'])
     ->middleware('throttle:20,1')->name('push-subscriptions.destroy');
-Route::middleware(['signed', 'throttle:30,1'])
-    ->withoutMiddleware(ValidateCsrfToken::class)
-    ->group(function () {
-        Route::post('push/conversations/{conversation}/read/{reader}', [PushReadController::class, 'conversation'])
-            ->name('push.conversations.read');
-        Route::post('push/groups/{chatGroup}/read/{reader}', [PushReadController::class, 'group'])
-            ->name('push.groups.read');
-    });
 
 Route::get('status/{feedPost}', [StatusController::class, 'show'])
     ->name('news-feed.statuses.show');

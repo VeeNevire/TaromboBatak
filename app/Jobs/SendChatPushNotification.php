@@ -8,7 +8,6 @@ use App\Models\PushSubscription;
 use App\Services\WebPushSender;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 
 /**
@@ -49,33 +48,18 @@ class SendChatPushNotification implements ShouldQueue
             ? $this->groupNotification()
             : $this->messageNotification();
 
-        if ($notification === null) {
+        if ($notification === null || $notification['recipients'] === []) {
             return;
         }
 
-        // Every recipient gets their own signed "Tandai dibaca" link, so the
-        // button only ever marks the chat read for that reader.
-        foreach ($notification['recipients'] as $recipientId) {
-            $sender->sendTo(
-                PushSubscription::query()->where('user_id', $recipientId),
-                [
-                    ...$notification['message'],
-                    'readUrl' => URL::temporarySignedRoute(
-                        $notification['readRoute'],
-                        now()->addDays(7),
-                        [...$notification['readParameters'], 'reader' => $recipientId],
-                    ),
-                    'actions' => [
-                        ['action' => 'reply', 'title' => 'Balas'],
-                        ['action' => 'read', 'title' => 'Tandai dibaca'],
-                    ],
-                ],
-            );
-        }
+        $sender->sendTo(
+            PushSubscription::query()->whereIn('user_id', $notification['recipients']),
+            $notification['message'],
+        );
     }
 
     /**
-     * @return array{recipients: array<int, int>, message: array{title: string, body: string, url: string, tag: string}, readRoute: string, readParameters: array<string, int>}|null
+     * @return array{recipients: array<int, int>, message: array{title: string, body: string, url: string, tag: string}}|null
      */
     private function messageNotification(): ?array
     {
@@ -96,13 +80,11 @@ class SendChatPushNotification implements ShouldQueue
                 'url' => route('contacts.show', $message->sender_id, absolute: false),
                 'tag' => 'chat-'.$message->conversation_id,
             ],
-            'readRoute' => 'push.conversations.read',
-            'readParameters' => ['conversation' => $message->conversation_id],
         ];
     }
 
     /**
-     * @return array{recipients: array<int, int>, message: array{title: string, body: string, url: string, tag: string}, readRoute: string, readParameters: array<string, int>}|null
+     * @return array{recipients: array<int, int>, message: array{title: string, body: string, url: string, tag: string}}|null
      */
     private function groupNotification(): ?array
     {
@@ -127,8 +109,6 @@ class SendChatPushNotification implements ShouldQueue
                 'url' => route('groups.show', $message->chat_group_id, absolute: false),
                 'tag' => 'group-'.$message->chat_group_id,
             ],
-            'readRoute' => 'push.groups.read',
-            'readParameters' => ['chatGroup' => $message->chat_group_id],
         ];
     }
 
