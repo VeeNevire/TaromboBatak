@@ -1,7 +1,13 @@
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useEcho } from '@laravel/echo-react';
-import { ArrowLeft, Megaphone, Send, Trash2, Users } from 'lucide-react';
-import type { FormEvent } from 'react';
+import {
+    ArrowLeft,
+    Megaphone,
+    Send,
+    Trash2,
+    Users,
+} from 'lucide-react';
+import type { FormEvent} from 'react';
 import { useEffect, useRef, useState } from 'react';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
@@ -47,16 +53,7 @@ export default function GroupShow({
     const { auth } = usePage().props;
     const [messages, setMessages] = useState(initialMessages);
     const endRef = useRef<HTMLDivElement>(null);
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
     const messageForm = useForm({ body: '' });
-
-    // Opened from the "Balas" button of a chat notification: put the cursor
-    // in the message box so the reply can be typed right away.
-    useEffect(() => {
-        if (new URLSearchParams(window.location.search).has('reply')) {
-            textareaRef.current?.focus();
-        }
-    }, [group.id]);
     const memberForm = useForm({
         member_ids: group.members
             .filter((member) => member.id !== group.owner_id)
@@ -192,7 +189,6 @@ export default function GroupShow({
                             >
                                 <div className="flex-1">
                                     <textarea
-                                        ref={textareaRef}
                                         value={messageForm.data.body}
                                         onChange={(event) =>
                                             messageForm.setData(
@@ -297,10 +293,10 @@ export default function GroupShow({
                                             'Hapus grup beserta seluruh pesan?',
                                         )
                                     ) {
-                                        router.delete(
+router.delete(
                                             groups.destroy(group.id).url,
                                         );
-                                    }
+}
                                 }}
                             >
                                 <Trash2 className="size-4" />

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\MessageRead;
 use App\Models\ContactDisconnect;
 use App\Models\ContactRequest;
 use App\Models\Conversation;
@@ -54,7 +55,7 @@ class ContactController extends Controller
             return response()->json(['messages' => [], 'has_more' => false]);
         }
 
-        $conversation->markReadBy($user);
+        $this->markConversationRead($conversation, $user);
 
         $afterId = (int) $request->query('after_id', 0);
         $beforeId = (int) $request->query('before_id', 0);
@@ -96,6 +97,37 @@ class ContactController extends Controller
         ]);
     }
 
+    /**
+     * Mark the counterpart's messages as read and notify their author in
+     * real time so the sender sees the read receipt immediately.
+     *
+     * @return array<int, int> Affected message ids.
+     */
+    private function markConversationRead(Conversation $conversation, User $reader): array
+    {
+        $affected = $conversation->messages()
+            ->where('sender_id', '!=', $reader->id)
+            ->whereNull('read_at')
+            ->pluck('id');
+
+        if ($affected->isEmpty()) {
+            return [];
+        }
+
+        $now = now();
+        Message::query()->whereIn('id', $affected)->update(['read_at' => $now]);
+
+        MessageRead::dispatch(
+            $conversation->otherParticipantId($reader->id),
+            $conversation->id,
+            $reader->id,
+            $affected->all(),
+            $now->toISOString(),
+        );
+
+        return $affected->all();
+    }
+
     private function render(Request $request, ?User $selectedContact = null): Response
     {
         /** @var User $user */
@@ -109,7 +141,7 @@ class ContactController extends Controller
         $selectedContact?->loadMissing('marga', 'telegramAccount');
 
         if ($conversation) {
-            $conversation->markReadBy($user);
+            $this->markConversationRead($conversation, $user);
         }
 
         $conversations = $this->conversationsFor($user);
