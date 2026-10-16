@@ -61,12 +61,29 @@ async function send(
     }
 }
 
+function subscriptionPayload(subscription: PushSubscription) {
+    const json = subscription.toJSON();
+
+    return {
+        endpoint: json.endpoint,
+        keys: json.keys,
+        content_encoding: (
+            PushManager as unknown as {
+                supportedContentEncodings?: string[];
+            }
+        ).supportedContentEncodings?.includes('aes128gcm')
+            ? 'aes128gcm'
+            : 'aesgcm',
+    };
+}
+
 /**
- * Subscribe this browser to Tarombo news notifications through the service
- * worker registered in app.tsx.
+ * Subscribe this browser to Tarombo news and chat notifications through the
+ * service worker registered in app.tsx.
  */
 export function usePushNotifications() {
-    const { vapidPublicKey } = usePage().props;
+    const { vapidPublicKey, auth, pushLinked } = usePage().props;
+    const userId = auth.user?.id;
     const [status, setStatus] = useState<PushStatus>('loading');
     const [busy, setBusy] = useState(false);
 
@@ -129,24 +146,38 @@ export function usePushNotifications() {
                     userVisibleOnly: true,
                     applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
                 }));
-            const json = subscription.toJSON();
 
-            await send('POST', pushSubscriptions.store().url, {
-                endpoint: json.endpoint,
-                keys: json.keys,
-                content_encoding: (
-                    PushManager as unknown as {
-                        supportedContentEncodings?: string[];
-                    }
-                ).supportedContentEncodings?.includes('aes128gcm')
-                    ? 'aes128gcm'
-                    : 'aesgcm',
-            });
+            await send(
+                'POST',
+                pushSubscriptions.store().url,
+                subscriptionPayload(subscription),
+            );
             setStatus('subscribed');
         } finally {
             setBusy(false);
         }
     }, [vapidPublicKey]);
+
+    // A device may have subscribed before signing in, or under another
+    // account; link it to whoever is signed in now so chat messages arrive.
+    useEffect(() => {
+        if (status !== 'subscribed' || !userId || pushLinked) {
+            return;
+        }
+
+        navigator.serviceWorker.ready
+            .then((registration) => registration.pushManager.getSubscription())
+            .then((subscription) =>
+                subscription
+                    ? send(
+                          'POST',
+                          pushSubscriptions.store().url,
+                          subscriptionPayload(subscription),
+                      )
+                    : undefined,
+            )
+            .catch(() => undefined);
+    }, [status, userId, pushLinked]);
 
     const unsubscribe = useCallback(async () => {
         setBusy(true);

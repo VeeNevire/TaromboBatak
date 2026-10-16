@@ -8,6 +8,7 @@ use App\Models\Marga;
 use App\Models\MargaAccessRequest;
 use App\Models\Person;
 use App\Models\User;
+use App\Services\FamilyEntryService;
 use App\Services\TaromboTreeService;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -654,6 +655,7 @@ test('vertical tarombo lists every tree shown in the admin account list', functi
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->where('familyTreeOptions', fn ($options) => collect($options)
+                ->where('group', 'account')
                 ->pluck('id')
                 ->sort()
                 ->values()
@@ -677,4 +679,73 @@ test('vertical tarombo rejects a family tree outside the signed in accounts list
     $this->actingAs($viewer)
         ->get(route('tarombo.index', ['family_tree' => $tree->id]))
         ->assertForbidden();
+});
+
+test('silsilah options mark system made trees and carry their marga name', function () {
+    $admin = User::factory()->asAdmin()->create();
+    $marga = Marga::factory()->create(['name' => 'Sihombing']);
+    $autoRoot = Person::factory()->create(['name' => 'Op. Dingin', 'marga_id' => $marga->id]);
+    $manualRoot = Person::factory()->create(['name' => 'Op. Saut']);
+    $autoTree = FamilyTree::create([
+        'user_id' => $admin->id,
+        'root_person_id' => $autoRoot->id,
+        'name' => 'Keluarga Op. Dingin',
+        'is_auto_generated' => true,
+    ]);
+    $manualTree = FamilyTree::create([
+        'user_id' => $admin->id,
+        'root_person_id' => $manualRoot->id,
+        'name' => 'Silsilah Saut',
+    ]);
+    $marga->update(['identity_person_id' => $autoRoot->id]);
+
+    $this->actingAs($admin)
+        ->get(route('tarombo.index', ['family_tree' => $manualTree->id]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('familyTreeOptions', function ($options) use ($autoTree, $manualTree, $marga) {
+                $options = collect($options)->keyBy('value');
+
+                return $options['account:'.$autoTree->id]['isAuto'] === true
+                    && $options['account:'.$autoTree->id]['margaName'] === 'Sihombing'
+                    && $options['account:'.$manualTree->id]['isAuto'] === false
+                    && $options['marga:'.$marga->id]['isAuto'] === true
+                    && $options['marga:'.$marga->id]['margaName'] === 'Sihombing';
+            }));
+});
+
+test('family entry marks a tree as system made only when no silsilah name is typed', function () {
+    $user = User::factory()->asAdmin()->create();
+    $root = Person::factory()->create(['name' => 'Op. Dingin']);
+    $named = Person::factory()->create(['name' => 'Op. Saut']);
+
+    $service = app(FamilyEntryService::class);
+    $sync = fn (Person $focus, ?string $name) => (fn () => $this->syncFamilyTrees(
+        $user->id, null, [], collect(), collect(), $focus, $name, $name !== null,
+    ))->call($service);
+
+    expect($sync($root, null)->first()->is_auto_generated)->toBeTrue()
+        ->and($sync($named, 'Silsilah Saut')->first()->is_auto_generated)->toBeFalse();
+});
+
+test('si raja batak is offered as its own silsilah and opens its descendants', function () {
+    $admin = User::factory()->asAdmin()->create();
+    $rajaBatak = Person::factory()->create(['name' => 'Si Raja Batak', 'father_id' => null]);
+    $child = Person::factory()->create(['name' => 'Guru Tatea Bulan', 'father_id' => $rajaBatak->id]);
+
+    $this->actingAs($admin)
+        ->get(route('tarombo.index', ['root' => 'si-raja-batak']))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('selectedRoot', 'si-raja-batak')
+            ->where('selectedFamilyTreeId', null)
+            ->where('familyTreeOptions.0.value', 'root:si-raja-batak')
+            ->where('familyTreeOptions.0.group', 'root')
+            ->where('familyTreeOptions.0.isAuto', false)
+            ->where('people', fn ($people) => collect($people)->pluck('id')->sort()->values()->all()
+                === collect([(string) $rajaBatak->id, (string) $child->id])->sort()->values()->all()));
+
+    $this->actingAs($admin)
+        ->get(route('tarombo.index', ['root' => 'lainnya']))
+        ->assertNotFound();
 });

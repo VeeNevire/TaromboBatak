@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Http\Controllers\PushSubscriptionController;
 use App\Models\ChatGroupMember;
 use App\Models\ContactRequest;
 use App\Models\GroupMessage;
@@ -49,6 +50,10 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'name' => config('app.name'),
             'vapidPublicKey' => config('webpush.public_key'),
+            // Whether this session already linked its push subscription to
+            // the signed in account; a new login links it again.
+            'pushLinked' => $request->hasSession()
+                && $request->session()->has(PushSubscriptionController::SESSION_KEY),
             'auth' => [
                 'user' => $request->user(),
             ],

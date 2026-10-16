@@ -21,6 +21,7 @@ use Illuminate\Validation\ValidationException;
  * @property string|null $source_url
  * @property int|null $based_on_id
  * @property bool $is_primary
+ * @property bool $is_auto_generated
  * @property bool $deletion_pending
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -33,7 +34,7 @@ use Illuminate\Validation\ValidationException;
  * @property-read Collection<int, FamilyTreeAppendRequest> $appendRequests
  * @property-read Collection<int, FamilyTreeShare> $shares
  */
-#[Fillable(['user_id', 'root_person_id', 'name', 'description', 'source_name', 'source_url', 'based_on_id', 'is_primary'])]
+#[Fillable(['user_id', 'root_person_id', 'name', 'description', 'source_name', 'source_url', 'based_on_id', 'is_primary', 'is_auto_generated'])]
 class FamilyTree extends Model
 {
     public function structureIsLocked(): bool
@@ -118,6 +119,6 @@ class FamilyTree extends Model
 
     protected function casts(): array
     {
-        return ['is_primary' => 'boolean'];
+        return ['is_primary' => 'boolean', 'is_auto_generated' => 'boolean'];
     }
 }

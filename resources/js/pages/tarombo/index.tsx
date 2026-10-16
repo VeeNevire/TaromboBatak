@@ -17,6 +17,7 @@ type Props = {
     familyTreeOptions: TaromboFamilyTreeOption[];
     selectedFamilyTreeId: number | null;
     selectedMargaId: number | null;
+    selectedRoot?: string | null;
     accountTreePersonIds: string[];
     familyName: string | null;
     margaTree: {
@@ -34,8 +35,10 @@ export type TaromboFamilyTreeOption = {
     name: string;
     rootName: string;
     rootPersonId?: number | null;
-    group: 'account' | 'marga';
+    group: 'root' | 'account' | 'marga';
     canManage?: boolean;
+    isAuto?: boolean;
+    margaName?: string | null;
 };
 
 export default function TaromboIndex({
@@ -46,6 +49,7 @@ export default function TaromboIndex({
     familyTreeOptions,
     selectedFamilyTreeId,
     selectedMargaId,
+    selectedRoot = null,
     accountTreePersonIds,
     familyName,
     margaTree,
@@ -55,7 +59,9 @@ export default function TaromboIndex({
             ? `account-${selectedFamilyTreeId}`
             : selectedMargaId !== null
               ? `marga-${selectedMargaId}`
-              : 'default';
+              : selectedRoot !== null
+                ? `root-${selectedRoot}`
+                : 'default';
 
     return (
         <>
@@ -69,6 +75,7 @@ export default function TaromboIndex({
                 familyTreeOptions={familyTreeOptions}
                 selectedFamilyTreeId={selectedFamilyTreeId}
                 selectedMargaId={selectedMargaId}
+                selectedRoot={selectedRoot}
                 accountTreePersonIds={accountTreePersonIds}
                 familyName={familyName}
                 margaTree={margaTree}

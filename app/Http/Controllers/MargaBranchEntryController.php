@@ -41,6 +41,7 @@ class MargaBranchEntryController extends Controller
                 'user_id' => $request->user()->id,
                 'root_person_id' => $father->id,
                 'name' => 'Keluarga '.$father->name,
+                'is_auto_generated' => true,
             ]);
             $familyTree->people()->attach($father->id);
             FamilyTreeNode::create([

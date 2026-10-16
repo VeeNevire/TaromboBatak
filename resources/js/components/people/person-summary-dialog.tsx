@@ -29,6 +29,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import type { TaromboPerson } from '@/data/tarombo-tree';
+import { rememberTreeReturn } from '@/lib/tree-return';
 import contactRequests from '@/routes/contact-requests';
 import contacts from '@/routes/contacts';
 import margaBranchEntries from '@/routes/marga-branch-entries';
@@ -721,6 +722,9 @@ export function PersonSummaryDialog({
                                                     : {},
                                             },
                                         )}
+                                        onClick={() =>
+                                            rememberTreeReturn(person.id)
+                                        }
                                     >
                                         <Pencil className="size-4" />
                                         Edit

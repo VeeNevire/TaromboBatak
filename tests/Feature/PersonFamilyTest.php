@@ -8,6 +8,7 @@ use App\Models\MargaAccessRequest;
 use App\Models\Person;
 use App\Models\User;
 use App\Services\ChainNumberingService;
+use App\Services\FamilyEntryService;
 use App\Support\PersonShareCode;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
@@ -2575,4 +2576,36 @@ test('saving the edit form keeps the unlinked global father without erroring', f
         ->assertSessionHasNoErrors();
 
     expect(FamilyTreeNode::query()->where('person_id', $focus->id)->value('father_node_id'))->toBeNull();
+});
+
+test('a child row with one spouse keeps the wife who is still a mother of his children', function () {
+    $husband = Person::factory()->create(['name' => 'Anggiat', 'gender' => 'L']);
+    $firstWife = Person::factory()->create(['name' => 'O Br', 'gender' => 'P']);
+    $secondWife = Person::factory()->create(['name' => 'S Br', 'gender' => 'P']);
+    $husband->wives()->attach([
+        $firstWife->id => ['position' => 1],
+        $secondWife->id => ['position' => 2],
+    ]);
+    Person::factory()->create(['father_id' => $husband->id, 'mother_id' => $firstWife->id]);
+    Person::factory()->create(['father_id' => $husband->id, 'mother_id' => $secondWife->id]);
+
+    app(FamilyEntryService::class)->syncChildSpouses($husband, [
+        'gender' => 'L',
+        'spouse' => 'O Br',
+    ]);
+
+    expect($husband->wives()->pluck('people.id')->sort()->values()->all())
+        ->toBe(collect([$firstWife->id, $secondWife->id])->sort()->values()->all());
+});
+
+test('the backfill migration attaches mothers missing from their husbands wives', function () {
+    $husband = Person::factory()->create(['gender' => 'L']);
+    $listedWife = Person::factory()->create(['gender' => 'P']);
+    $missingWife = Person::factory()->create(['gender' => 'P']);
+    $husband->wives()->attach($listedWife->id, ['position' => 1]);
+    Person::factory()->create(['father_id' => $husband->id, 'mother_id' => $missingWife->id]);
+
+    (require database_path('migrations/2026_10_16_000002_backfill_person_wife_from_children_mothers.php'))->up();
+
+    expect($husband->wives()->pluck('people.id')->all())->toBe([$listedWife->id, $missingWife->id]);
 });

@@ -2,6 +2,7 @@ import { Head, Link, useForm } from '@inertiajs/react';
 import { MessageCircle, Plus, Send, Users } from 'lucide-react';
 import type { FormEvent } from 'react';
 import InputError from '@/components/input-error';
+import { PushNotificationToggle } from '@/components/push-notification-toggle';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -60,55 +61,58 @@ export default function GroupsIndex({
                             Chat bersama anggota satu marga.
                         </p>
                     </div>
-                    <Button asChild variant="outline">
-                        <Link href={announcements.index()}>
-                            <Send className="size-4" />
-                            Kirim Pengumuman
-                        </Link>
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <PushNotificationToggle />
+                        <Button asChild variant="outline">
+                            <Link href={announcements.index()}>
+                                <Send className="size-4" />
+                                Kirim Pengumuman
+                            </Link>
+                        </Button>
+                    </div>
                 </div>
 
                 <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
                     <div className="space-y-6">
                         <div className="grid content-start gap-3 sm:grid-cols-2">
                             {items.map((group) => (
-                            <Link
-                                key={group.id}
-                                href={groups.show(group.id)}
-                                className="block"
-                            >
-                                <Card className="h-full border-tb-outline-variant bg-tb-surface-bright transition hover:border-tb-primary/50 hover:shadow-md">
-                                    <CardContent className="space-y-3">
-                                        <div className="flex items-start justify-between gap-3">
-                                            <div className="flex min-w-0 items-center gap-3">
-                                                <div className="grid size-10 shrink-0 place-items-center rounded-full bg-tb-primary/10 text-tb-primary">
-                                                    <Users className="size-5" />
+                                <Link
+                                    key={group.id}
+                                    href={groups.show(group.id)}
+                                    className="block"
+                                >
+                                    <Card className="h-full border-tb-outline-variant bg-tb-surface-bright transition hover:border-tb-primary/50 hover:shadow-md">
+                                        <CardContent className="space-y-3">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="flex min-w-0 items-center gap-3">
+                                                    <div className="grid size-10 shrink-0 place-items-center rounded-full bg-tb-primary/10 text-tb-primary">
+                                                        <Users className="size-5" />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <h2 className="truncate font-semibold">
+                                                            {group.name}
+                                                        </h2>
+                                                        <p className="text-xs text-tb-on-surface-variant">
+                                                            Pemilik:{' '}
+                                                            {group.owner_name}
+                                                        </p>
+                                                    </div>
                                                 </div>
-                                                <div className="min-w-0">
-                                                    <h2 className="truncate font-semibold">
-                                                        {group.name}
-                                                    </h2>
-                                                    <p className="text-xs text-tb-on-surface-variant">
-                                                        Pemilik:{' '}
-                                                        {group.owner_name}
-                                                    </p>
-                                                </div>
+                                                {group.telegram_linked && (
+                                                    <Badge>Telegram</Badge>
+                                                )}
                                             </div>
-                                            {group.telegram_linked && (
-                                                <Badge>Telegram</Badge>
-                                            )}
-                                        </div>
-                                        <p className="line-clamp-2 min-h-10 text-sm text-tb-on-surface-variant">
-                                            {group.latest_message ??
-                                                'Belum ada pesan.'}
-                                        </p>
-                                        <div className="flex items-center gap-1 text-xs text-tb-outline">
-                                            <MessageCircle className="size-3.5" />
-                                            {group.members_count} anggota
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            </Link>
+                                            <p className="line-clamp-2 min-h-10 text-sm text-tb-on-surface-variant">
+                                                {group.latest_message ??
+                                                    'Belum ada pesan.'}
+                                            </p>
+                                            <div className="flex items-center gap-1 text-xs text-tb-outline">
+                                                <MessageCircle className="size-3.5" />
+                                                {group.members_count} anggota
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                </Link>
                             ))}
                             {items.length === 0 && (
                                 <Card className="sm:col-span-2">

@@ -10,13 +10,24 @@ use Illuminate\Support\Str;
 
 class PushSubscriptionController extends Controller
 {
-    /** Remember a browser that agreed to receive news notifications. */
+    /** Session key holding this device's endpoint, detached again on logout. */
+    public const SESSION_KEY = 'push_endpoint_hash';
+
+    /**
+     * Remember a browser that agreed to receive notifications, linked to the
+     * signed in account so its chat messages reach this device.
+     */
     public function store(StorePushSubscriptionRequest $request): JsonResponse
     {
         $endpoint = $request->validated('endpoint');
+        $endpointHash = PushSubscription::hashEndpoint($endpoint);
+
+        if ($request->user() !== null) {
+            $request->session()->put(self::SESSION_KEY, $endpointHash);
+        }
 
         PushSubscription::query()->updateOrCreate(
-            ['endpoint_hash' => PushSubscription::hashEndpoint($endpoint)],
+            ['endpoint_hash' => $endpointHash],
             [
                 'endpoint' => $endpoint,
                 'public_key' => $request->validated('keys.p256dh'),

@@ -426,6 +426,7 @@ class TaromboTreeService
         Person $person,
         ?int $maxDepth = null,
         ?int $maxNodes = null,
+        bool $publicOnly = false,
     ): array {
         $maxDepth = max(1, $maxDepth ?? (int) config('tarombo.person_max_depth'));
         $maxNodes = max(1, $maxNodes ?? (int) config('tarombo.person_max_nodes'));
@@ -434,6 +435,7 @@ class TaromboTreeService
 
         for ($depth = 2; $depth <= $maxDepth && $frontier->isNotEmpty() && $ids->count() < $maxNodes; $depth++) {
             $children = Person::query()
+                ->when($publicOnly, fn (Builder $query) => $query->public())
                 ->whereIn('father_id', $frontier)
                 ->orderBy('birth_order')
                 ->orderBy('id')

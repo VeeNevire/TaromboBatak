@@ -22,6 +22,7 @@ declare module '@inertiajs/core' {
             unreadMargaMessageCount: number;
             pendingMargaNewsCount: number;
             vapidPublicKey: string | null;
+            pushLinked: boolean;
             [key: string]: unknown;
         };
     }
