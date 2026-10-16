@@ -1,6 +1,7 @@
 <?php
 
 use App\Events\GroupMessageSent;
+use App\Events\MessageRead;
 use App\Events\MessageSent;
 use App\Http\Controllers\PushSubscriptionController;
 use App\Jobs\SendChatPushNotification;
@@ -13,6 +14,7 @@ use App\Services\WebPushSender;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\URL;
 
 test('a private message queues a push for the recipient', function () {
     Queue::fake();
@@ -46,7 +48,9 @@ test('the private message push reaches only the recipients devices and opens the
             && $message['title'] === 'Rehan'
             && $message['body'] === 'Apakah bisa dapat notifikasi di HP?'
             && $message['url'] === route('contacts.show', $sender, absolute: false)
-            && str_starts_with($message['tag'], 'chat-'));
+            && str_starts_with($message['tag'], 'chat-')
+            && collect($message['actions'])->pluck('action')->all() === ['reply', 'read']
+            && str_contains($message['readUrl'], 'signature='));
     });
 
     SendChatPushNotification::forMessage(Message::query()->sole())->handle(app(WebPushSender::class));
@@ -97,4 +101,42 @@ test('logging out stops chat pushes to that device but keeps it subscribed', fun
     $this->post(route('logout'));
 
     expect(PushSubscription::query()->sole()->user_id)->toBeNull();
+});
+
+test('the read button marks the conversation read only with a valid signed link', function () {
+    $marga = Marga::factory()->create();
+    $sender = User::factory()->withMarga($marga->id)->create();
+    $reader = User::factory()->withMarga($marga->id)->create();
+    $outsider = User::factory()->withMarga($marga->id)->create();
+    Event::fake([MessageSent::class, MessageRead::class]);
+    Queue::fake();
+    $this->actingAs($sender)->post(route('contacts.messages.store', $reader), ['body' => 'Horas']);
+    auth()->logout();
+    $message = Message::query()->sole();
+
+    $this->postJson(route('push.conversations.read', [$message->conversation_id, $reader->id]))
+        ->assertForbidden();
+    $this->postJson(URL::temporarySignedRoute('push.conversations.read', now()->addDay(), [$message->conversation_id, $outsider->id]))
+        ->assertForbidden();
+    expect($message->fresh()->read_at)->toBeNull();
+
+    $this->postJson(URL::temporarySignedRoute('push.conversations.read', now()->addDay(), [$message->conversation_id, $reader->id]))
+        ->assertOk();
+
+    expect($message->fresh()->read_at)->not->toBeNull();
+    Event::assertDispatched(MessageRead::class);
+});
+
+test('the read button marks a group read for that member', function () {
+    $marga = Marga::factory()->create();
+    $owner = User::factory()->withMarga($marga->id)->create();
+    $member = User::factory()->withMarga($marga->id)->create();
+    $group = ChatGroup::query()->create(['owner_id' => $owner->id, 'marga_id' => $marga->id, 'name' => 'Grup']);
+    $group->members()->attach([$owner->id => ['role' => 'owner'], $member->id => ['role' => 'member']]);
+
+    $this->postJson(URL::temporarySignedRoute('push.groups.read', now()->addDay(), [$group->id, $member->id]))
+        ->assertOk();
+
+    expect($group->memberships()->where('user_id', $member->id)->value('last_read_at'))->not->toBeNull()
+        ->and($group->memberships()->where('user_id', $owner->id)->value('last_read_at'))->toBeNull();
 });

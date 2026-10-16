@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Events\MessageRead;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -101,5 +102,36 @@ class Conversation extends Model
             min($firstUser->id, $secondUser->id),
             max($firstUser->id, $secondUser->id),
         ];
+    }
+
+    /**
+     * Mark the counterpart's messages as read and notify their author in
+     * real time so the sender sees the read receipt immediately.
+     *
+     * @return array<int, int> Affected message ids.
+     */
+    public function markReadBy(User $reader): array
+    {
+        $affected = $this->messages()
+            ->where('sender_id', '!=', $reader->id)
+            ->whereNull('read_at')
+            ->pluck('id');
+
+        if ($affected->isEmpty()) {
+            return [];
+        }
+
+        $now = now();
+        Message::query()->whereIn('id', $affected)->update(['read_at' => $now]);
+
+        MessageRead::dispatch(
+            $this->otherParticipantId($reader->id),
+            $this->id,
+            $reader->id,
+            $affected->all(),
+            $now->toISOString(),
+        );
+
+        return $affected->all();
     }
 }

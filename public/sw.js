@@ -1,5 +1,5 @@
 /* Tarombo Batak service worker: installable app shell + news and chat push. */
-const CACHE = 'tarombo-offline-v2';
+const CACHE = 'tarombo-offline-v3';
 const OFFLINE_URL = '/offline.html';
 
 self.addEventListener('install', (event) => {
@@ -88,7 +88,12 @@ self.addEventListener('push', (event) => {
                         silent,
                         vibrate:
                             isChat && !silent ? [200, 100, 200] : undefined,
-                        data: { url },
+                        // Android and desktop show these as buttons; iPhone
+                        // ignores them and simply opens the chat on tap.
+                        actions: Array.isArray(data.actions)
+                            ? data.actions
+                            : [],
+                        data: { url, readUrl: data.readUrl },
                     },
                 );
             }),
@@ -97,10 +102,31 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
     event.notification.close();
-    const target = new URL(
-        event.notification.data?.url || '/',
-        self.location.origin,
-    ).href;
+    const { url, readUrl } = event.notification.data || {};
+
+    // "Tandai dibaca" marks the chat read without opening Tarombo. The link
+    // is signed for this reader, so no session or CSRF token is needed.
+    if (event.action === 'read') {
+        if (readUrl) {
+            event.waitUntil(
+                fetch(readUrl, {
+                    method: 'POST',
+                    headers: { Accept: 'application/json' },
+                }).catch(() => undefined),
+            );
+        }
+
+        return;
+    }
+
+    const targetUrl = new URL(url || '/', self.location.origin);
+
+    // "Balas" opens the chat with the message box focused.
+    if (event.action === 'reply') {
+        targetUrl.searchParams.set('reply', '1');
+    }
+
+    const target = targetUrl.href;
 
     event.waitUntil(
         self.clients

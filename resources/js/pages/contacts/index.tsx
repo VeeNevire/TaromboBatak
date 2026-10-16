@@ -235,6 +235,17 @@ export default function ContactsIndex({
         selectedContactIdRef.current = selectedContact?.id ?? null;
     }, [selectedContact?.id]);
 
+    // Opened from the "Balas" button of a chat notification: put the cursor
+    // in the message box so the reply can be typed right away.
+    useEffect(() => {
+        if (
+            selectedContact?.id &&
+            new URLSearchParams(window.location.search).has('reply')
+        ) {
+            textareaRef.current?.focus();
+        }
+    }, [selectedContact?.id]);
+
     /**
      * Satu pintu masuk untuk SEMUA pesan baru. Idempoten: aman dipanggil
      * berulang dengan data yang sama dari jalur berbeda.
