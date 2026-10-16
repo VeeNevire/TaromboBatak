@@ -2609,3 +2609,34 @@ test('the backfill migration attaches mothers missing from their husbands wives'
 
     expect($husband->wives()->pluck('people.id')->all())->toBe([$listedWife->id, $missingWife->id]);
 });
+
+test('removing a wife in the member form removes her even when she is a mother of his children', function () {
+    $husband = Person::factory()->create(['name' => 'Anggiat', 'gender' => 'L']);
+    $firstWife = Person::factory()->create(['name' => 'O Br', 'gender' => 'P']);
+    $secondWife = Person::factory()->create(['name' => 'S Br', 'gender' => 'P']);
+    $husband->wives()->attach([
+        $firstWife->id => ['position' => 1],
+        $secondWife->id => ['position' => 2],
+    ]);
+    $firstChild = Person::factory()->create(['father_id' => $husband->id, 'mother_id' => $firstWife->id]);
+    $secondChild = Person::factory()->create(['name' => 'Shelvia', 'father_id' => $husband->id, 'mother_id' => $secondWife->id]);
+
+    app(FamilyEntryService::class)->syncSpouses($husband, [
+        'wives' => [['id' => $firstWife->id, 'name' => 'O Br']],
+    ]);
+
+    expect($husband->wives()->pluck('people.id')->all())->toBe([$firstWife->id])
+        ->and($secondChild->fresh()->mother_id)->toBeNull()
+        ->and($firstChild->fresh()->mother_id)->toBe($firstWife->id);
+});
+
+test('a family form without an Ibu list keeps the wives who are mothers', function () {
+    $husband = Person::factory()->create(['gender' => 'L']);
+    $wife = Person::factory()->create(['gender' => 'P']);
+    $husband->wives()->attach($wife->id, ['position' => 1]);
+    Person::factory()->create(['father_id' => $husband->id, 'mother_id' => $wife->id]);
+
+    app(FamilyEntryService::class)->syncWives($husband, []);
+
+    expect($husband->wives()->pluck('people.id')->all())->toBe([$wife->id]);
+});
