@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\SyncFamilyTreeDescendants;
 use App\Models\ContributionRequest;
 use App\Models\FamilyTree;
 use App\Models\Person;
@@ -11,15 +12,12 @@ use Illuminate\Validation\ValidationException;
 
 class FatherConnectionService
 {
-    public function __construct(
-        private readonly FamilyTreeDescendantSyncService $sync,
-    ) {}
-
     /**
      * Connect $subject to $father as a global relationship.
      *
-     * Written immediately (and propagated to every tree) when $createdBy owns a
-     * tree containing $father; otherwise a pending ContributionRequest is
+     * Written immediately when $createdBy owns a tree containing $father; every
+     * tree holding $father is then synced on the queue after commit, since a
+     * high ancestor may sit in many large trees. otherwise a pending ContributionRequest is
      * created and $subject's global father is left untouched until approval.
      *
      * @return ContributionRequest|null the pending request, or null when connected immediately
@@ -85,17 +83,15 @@ class FatherConnectionService
 
     private function syncTreesContaining(Person $father, ?FamilyTree $contextTree): void
     {
-        $trees = FamilyTree::query()
+        FamilyTree::query()
             ->where(fn ($query) => $query
                 ->where('root_person_id', $father->id)
                 ->orWhereHas('people', fn ($people) => $people->whereKey($father))
                 ->orWhereHas('nodes', fn ($nodes) => $nodes->where('person_id', $father->id)))
-            ->get();
-
-        if ($contextTree !== null) {
-            $trees->push($contextTree);
-        }
-
-        $trees->unique('id')->each(fn (FamilyTree $tree) => $this->sync->syncTreeAndDescendantVersions($tree));
+            ->pluck('id')
+            ->push($contextTree?->id)
+            ->filter()
+            ->unique()
+            ->each(fn ($treeId) => SyncFamilyTreeDescendants::dispatch((int) $treeId)->afterCommit());
     }
 }

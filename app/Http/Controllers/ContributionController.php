@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\ReviewContributionRequest;
 use App\Http\Requests\StoreContributorRequest;
+use App\Jobs\SyncFamilyTreeDescendants;
 use App\Models\ContributionRequest;
 use App\Models\Event;
 use App\Models\FamilyTree;
@@ -20,7 +21,6 @@ use App\Notifications\FatherMatchSubmitted;
 use App\Notifications\MargaAccessRequested;
 use App\Notifications\StorySubmitted;
 use App\Services\ChainNumberingService;
-use App\Services\FamilyTreeDescendantSyncService;
 use App\Services\TreeActivityLogger;
 use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
@@ -397,8 +397,7 @@ class ContributionController extends Controller
                 }
 
                 $contribution->familyTree->people()->syncWithoutDetaching($ancestorIds);
-                app(FamilyTreeDescendantSyncService::class)
-                    ->syncTreeAndDescendantVersions($contribution->familyTree);
+                SyncFamilyTreeDescendants::dispatch($contribution->familyTree->id)->afterCommit();
             }
 
             app(ChainNumberingService::class)->recomputeFromAncestor($contribution->matchedFather);
