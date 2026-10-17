@@ -88,6 +88,7 @@ DB_PASSWORD=...
 
 BROADCAST_CONNECTION=reverb
 QUEUE_CONNECTION=database
+DB_QUEUE_RETRY_AFTER=660
 CACHE_STORE=database
 SESSION_DRIVER=database
 ```
@@ -136,7 +137,7 @@ File contoh berisi tiga program:
 | Program | Command | `numprocs` |
 | --- | --- | --- |
 | `tarombobatak-mtproto` | `php artisan telegram:mtproto-listen --all` | 1 |
-| `tarombobatak-queue` | `php artisan queue:work database --sleep=3 --tries=3 --timeout=120 --max-time=3600` | 2 |
+| `tarombobatak-queue` | `php artisan queue:work database --sleep=3 --tries=3 --timeout=600 --max-time=3600` | 2 |
 | `tarombobatak-reverb` | `php artisan reverb:start` | 1 |
 
 > Program Reverb bernama `tarombobatak-reverb` (bukan `tarombo-reverb`).

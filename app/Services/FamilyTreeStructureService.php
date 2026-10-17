@@ -189,6 +189,9 @@ class FamilyTreeStructureService
             }
         }
 
+        $fatherChanged = $fatherNode !== null
+            && (int) $focusNode->father_node_id !== $fatherNode->id;
+
         $entries[$focusNode->id] = [
             'id' => $focusNode->id,
             'father_node_id' => $fatherNode?->id,
@@ -198,10 +201,13 @@ class FamilyTreeStructureService
         ];
 
         if ($fatherNode !== null) {
+            // A newly chosen father keeps his recorded wives: the form only
+            // listed the mothers known under the previous father.
             app(FamilyEntryService::class)->syncWives(
                 $fatherNode->person()->firstOrFail(),
                 $data,
                 $createdBy,
+                additive: $fatherChanged,
             );
         }
 

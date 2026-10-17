@@ -289,6 +289,6 @@ class FamilyTreeDescendantSyncService
             }
 
             return $addedNodes->count();
-        });
+        }, attempts: 3); // Retry a deadlock against another tree being synced.
     }
 }

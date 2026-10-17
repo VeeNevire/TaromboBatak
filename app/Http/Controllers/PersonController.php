@@ -6,6 +6,7 @@ use App\Http\Requests\StorePersonRequest;
 use App\Http\Requests\UpdateFamilyTreeNameRequest;
 use App\Http\Requests\UpdateFamilyTreeStructureRequest;
 use App\Http\Requests\UpdatePersonRequest;
+use App\Jobs\SyncFamilyTreeDescendants;
 use App\Models\ContributionRequest;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeAppendRequest;
@@ -468,8 +469,7 @@ class PersonController extends Controller
         }
 
         $result['familyTrees']->each(
-            fn (FamilyTree $tree) => app(FamilyTreeDescendantSyncService::class)
-                ->syncTreeAndDescendantVersions($tree),
+            fn (FamilyTree $tree) => SyncFamilyTreeDescendants::dispatch($tree->id)->afterCommit(),
         );
 
         collect([$result['focus'] ?? null])
@@ -1223,7 +1223,7 @@ class PersonController extends Controller
                 $person->name,
             );
 
-            Inertia::flash('toast', ['type' => 'success', 'message' => __('Versi silsilah berhasil diperbarui.')]);
+            Inertia::flash('toast', ['type' => 'success', 'message' => __('Versi silsilah berhasil diperbarui. Silsilah lain yang terkait disinkronkan di latar belakang.')]);
 
             return to_route('people.edit', ['person' => $person, 'version_tree' => $familyTree->id]);
         }
@@ -1271,8 +1271,7 @@ class PersonController extends Controller
         $person->forceFill(['updated_by' => $user->id])->saveQuietly();
 
         $result['familyTrees']->each(
-            fn (FamilyTree $tree) => app(FamilyTreeDescendantSyncService::class)
-                ->syncTreeAndDescendantVersions($tree),
+            fn (FamilyTree $tree) => SyncFamilyTreeDescendants::dispatch($tree->id)->afterCommit(),
         );
 
         collect([$result['focus'] ?? null])

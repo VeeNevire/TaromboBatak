@@ -37,11 +37,13 @@ class FamilyEntryService
     /**
      * Resolve wife rows from the family form and persist their links to a
      * father. Version-only edits use this without changing global child links.
+     * $additive only adds the form's wives and keeps every recorded one: the
+     * form of a child just moved under this father never listed his wives.
      *
      * @param  array<string, mixed>  $data
      * @return array<int, Person|null>
      */
-    public function syncWives(Person $father, array $data, ?int $createdBy = null, string $key = 'mothers', bool $keepMothersOfChildren = false): array
+    public function syncWives(Person $father, array $data, ?int $createdBy = null, string $key = 'mothers', bool $keepMothersOfChildren = false, bool $additive = false): array
     {
         $mothers = [];
 
@@ -102,6 +104,22 @@ class FamilyEntryService
             }
         }
         $previousWifeIds = $father->wives()->pluck('people.id');
+
+        if ($additive) {
+            $newLinks = [];
+            $position = $previousWifeIds->count();
+
+            foreach (array_keys($wifeLinks) as $wifeId) {
+                if (! $previousWifeIds->contains($wifeId)) {
+                    $newLinks[$wifeId] = ['position' => ++$position];
+                }
+            }
+
+            $father->wives()->syncWithoutDetaching($newLinks);
+
+            return $mothers;
+        }
+
         $father->wives()->sync($wifeLinks);
 
         // Only a list the form actually sent may remove a wife on purpose.
