@@ -7,6 +7,7 @@ use App\Models\Marga;
 use App\Models\Person;
 use App\Models\User;
 use App\Services\FamilyTreeDescendantSyncService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 
 /**
@@ -132,4 +133,29 @@ test('sync jobs for different trees share one lock so workers never sync in para
 
     expect($first->key)->toBe($second->key)
         ->and((new SyncFamilyTreeDescendants(1))->retryUntil())->toBeGreaterThan(now()->addMinutes(30));
+});
+
+test('attaching a person survives a concurrent sync inserting the same node first', function () {
+    $owner = User::factory()->create();
+    $father = Person::factory()->create(['gender' => 'L']);
+    $child = Person::factory()->create(['gender' => 'L', 'father_id' => $father->id, 'birth_order' => 1]);
+    $tree = FamilyTree::create(['user_id' => $owner->id, 'root_person_id' => $father->id]);
+    $fatherNode = FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $father->id, 'chain' => '1']);
+
+    // Mimic the queue worker inserting the child right after the missing-node check.
+    $raced = false;
+    DB::listen(function ($query) use (&$raced, $tree, $child, $fatherNode): void {
+        if (! $raced && str_contains($query->sql, 'family_tree_nodes') && str_contains($query->sql, 'not in')) {
+            $raced = true;
+            DB::table('family_tree_nodes')->insert([
+                'family_tree_id' => $tree->id, 'person_id' => $child->id, 'father_node_id' => $fatherNode->id,
+                'is_removed' => false, 'pending_father' => false, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+    });
+
+    app(FamilyTreeDescendantSyncService::class)->attachToTreesHoldingFather($child);
+
+    expect($raced)->toBeTrue()
+        ->and($tree->nodes()->where('person_id', $child->id)->count())->toBe(1);
 });
