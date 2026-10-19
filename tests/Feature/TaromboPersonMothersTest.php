@@ -77,3 +77,32 @@ test('rowsForFamilyTree lists the father wives as mothers on the child node', fu
     expect(collect($rows[(string) $son->id]['mothers'])->pluck('id')->all())->toBe([(string) $mother->id])
         ->and($rows[(string) $father->id]['mothers'])->toBe([]);
 });
+
+test('father spouses include a child recorded mother missing from his wives', function () {
+    $viewer = User::factory()->create(['role' => 'user']);
+    $father = Person::factory()->create(['gender' => 'L']);
+    $firstWife = Person::factory()->create(['gender' => 'P']);
+    $secondWife = Person::factory()->create(['gender' => 'P']);
+    $father->wives()->attach($firstWife->id, ['position' => 1]);
+    $daughter = Person::factory()->create([
+        'gender' => 'P',
+        'father_id' => $father->id,
+        'mother_id' => $secondWife->id,
+    ]);
+    Person::factory()->create([
+        'gender' => 'L',
+        'father_id' => $father->id,
+        'mother_id' => $firstWife->id,
+    ]);
+
+    $this->actingAs($viewer);
+
+    $rows = collect(app(TaromboTreeService::class)->rows(
+        Person::query()->whereKey([$father->id, $daughter->id]),
+    ))->keyBy('id');
+
+    $expected = [(string) $firstWife->id, (string) $secondWife->id];
+
+    expect(collect($rows[(string) $father->id]['spouses'])->pluck('id')->all())->toBe($expected)
+        ->and(collect($rows[(string) $daughter->id]['mothers'])->pluck('id')->all())->toBe($expected);
+});

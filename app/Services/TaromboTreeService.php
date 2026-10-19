@@ -114,8 +114,9 @@ class TaromboTreeService
             ->with(['wives.marga:id,name', 'wives.father.marga', 'wives.mother.marga'])
             ->get(['id'])
             ->mapWithKeys(fn (Person $father) => [$father->id => $father->wives]);
+        $childMothers = $this->childMothersByFather($people->keys());
 
-        return $nodes->map(function (array $node) use ($people, $includedPersonIds, $children, $fatherPersons, $fatherWives, $shareCodes): array {
+        return $nodes->map(function (array $node) use ($people, $includedPersonIds, $children, $fatherPersons, $fatherWives, $childMothers, $shareCodes): array {
             $person = $people->get($node['person_id']);
             $nodeFatherId = $node['pending_father'] ? null : $node['father_person_id'];
             $hasFather = $nodeFatherId !== null || $person->father_id !== null;
@@ -157,7 +158,7 @@ class TaromboTreeService
                 'gender' => $person->gender,
                 'spouse' => $person->spouse,
                 'spouseMarga' => $person->spouse_marga,
-                'spouses' => $this->spousesFor($person),
+                'spouses' => $this->spousesFor($person, $childMothers->get($person->id)),
                 'mothers' => $this->mothersFor($fatherWives->get($fatherPerson?->id, collect()), $person->mother),
                 'image' => $person->image,
                 'bio' => $person->bio,
@@ -196,7 +197,7 @@ class TaromboTreeService
     {
         $shareCodes = app(PersonShareCode::class);
 
-        return $query
+        $people = $query
             ->withExists('identityMargas')
             ->with('identityMargas:id,name,color,identity_person_id')
             ->with([
@@ -225,8 +226,11 @@ class TaromboTreeService
                     ->when($familyTreeId !== null, fn ($query) => $query
                         ->whereHas('familyTrees', fn ($query) => $query->whereKey($familyTreeId))),
             ])
-            ->get()
-            ->map(function (Person $person) use ($shareCodes): array {
+            ->get();
+        $childMothers = $this->childMothersByFather(collect($people->modelKeys()));
+
+        return $people
+            ->map(function (Person $person) use ($shareCodes, $childMothers): array {
                 $hasFather = $person->father_id !== null;
                 $children = $person->children->isNotEmpty() ? $person->children : $person->childrenAsMother;
                 $sortedChildren = $children->sortBy('birth_year');
@@ -252,7 +256,7 @@ class TaromboTreeService
                     'gender' => $person->gender,
                     'spouse' => $person->spouse,
                     'spouseMarga' => $person->spouse_marga,
-                    'spouses' => $this->spousesFor($person),
+                    'spouses' => $this->spousesFor($person, $childMothers->get($person->id)),
                     'mothers' => $this->mothersFor($person->father?->wives ?? collect(), $person->mother),
                     'image' => $person->image,
                     'bio' => $person->bio,
@@ -285,14 +289,57 @@ class TaromboTreeService
     /**
      * @return array<int, array{id: string, name: string, marga: string|null, fatherName: string|null, fatherMarga: string|null, motherName: string|null, motherMarga: string|null, birthOrder: int|null}>
      */
-    protected function spousesFor(Person $person): array
+    protected function spousesFor(Person $person, ?Collection $childMothers = null): array
     {
-        $spouses = $person->wives->isNotEmpty() ? $person->wives : $person->husbands;
+        // A child's recorded mother is listed as the father's wife in the
+        // child's modal, so list her here too even without a pivot row.
+        $wives = $person->wives->concat($childMothers ?? [])->unique('id');
+        $spouses = $wives->isNotEmpty() ? $wives : $person->husbands;
 
         return $spouses
             ->map(fn (Person $spouse): array => $this->spouseRow($spouse))
             ->values()
             ->all();
+    }
+
+    /**
+     * Mothers recorded on the children of each given father, keyed by father
+     * id, loaded in two queries for the whole payload.
+     *
+     * @param  Collection<int, int>  $fatherIds
+     * @return Collection<int, Collection<int, Person>>
+     */
+    private function childMothersByFather(Collection $fatherIds): Collection
+    {
+        if ($fatherIds->isEmpty()) {
+            return collect();
+        }
+
+        $pairs = Person::query()
+            ->whereIn('father_id', $fatherIds)
+            ->whereNotNull('mother_id')
+            ->orderBy('birth_order')
+            ->orderBy('id')
+            ->get(['father_id', 'mother_id']);
+
+        if ($pairs->isEmpty()) {
+            return collect();
+        }
+
+        $mothers = Person::query()
+            ->whereIn('id', $pairs->pluck('mother_id')->unique())
+            ->with(['marga:id,name', 'father.marga', 'mother.marga'])
+            ->get()
+            ->keyBy('id');
+
+        return $pairs
+            ->groupBy('father_id')
+            ->map(fn (Collection $rows) => $rows
+                ->pluck('mother_id')
+                ->unique()
+                ->map(fn ($motherId) => $mothers->get($motherId))
+                ->filter()
+                ->values());
     }
 
     /**
