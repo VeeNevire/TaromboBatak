@@ -30,6 +30,12 @@ class TrackAccountAccess
     {
         $accessedAt = now();
 
+        // Writing the account row on every request waits behind any long
+        // transaction that references it; a minute's precision is enough.
+        if ($user->last_active_at?->gt($accessedAt->copy()->subMinute())) {
+            return;
+        }
+
         try {
             // Access tracking must not alter the account's last profile edit timestamp.
             $user->newModelQuery()->whereKey($user->id)->toBase()->update(['last_active_at' => $accessedAt]);

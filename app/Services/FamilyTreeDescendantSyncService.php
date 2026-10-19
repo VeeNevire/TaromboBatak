@@ -116,10 +116,13 @@ class FamilyTreeDescendantSyncService
             return 0;
         }
 
+        // A queued sync of the same tree may insert this person between the
+        // check above and this insert; the unique (tree, person) key then
+        // keeps the first node instead of failing the request.
         DB::transaction(function () use ($nodes, $pivot): void {
-            FamilyTreeNode::query()->insert($nodes);
+            FamilyTreeNode::query()->insertOrIgnore($nodes);
             DB::table('family_tree_person')->insertOrIgnore($pivot);
-        });
+        }, attempts: 3);
 
         return count($nodes);
     }
