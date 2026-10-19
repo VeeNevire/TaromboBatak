@@ -276,7 +276,7 @@ export default function PeopleIndex({
                                     onChange={(e) => {
                                         setSearch(e.target.value);
                                     }}
-                                    placeholder="Cari nama, alias, atau marga..."
+                                    placeholder="Cari nama, alias, marga, atau kode silsilah..."
                                     className="border-tb-outline-variant bg-tb-surface-bright pl-10 focus:border-tb-primary focus:ring-tb-primary/20"
                                 />
                             </div>
