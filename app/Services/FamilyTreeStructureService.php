@@ -89,7 +89,7 @@ class FamilyTreeStructureService
                     $person->forceFill(['updated_by' => auth()->id()])->saveQuietly();
                     $labels = ['father_node_id' => 'Ayah (node ID)', 'birth_order' => 'Urutan lahir', 'pending_father' => 'Status ayah'];
                     $details = collect($editedFields)->map(fn ($value, $field) => $labels[$field].': '.($value === null ? 'kosong' : (string) $value))->join('; ');
-                    app(FamilyTreeActivityLogger::class)->log($tree, auth()->user(), 'updated', 'Mengedit struktur '.$person->name.'. '.$details, $person->name);
+                    app(FamilyTreeActivityLogger::class)->log($tree, auth()->user(), 'updated', 'Mengedit struktur '.$person->name.'. '.$details, $person);
                 }
             }
 

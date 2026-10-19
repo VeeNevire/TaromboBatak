@@ -47,6 +47,12 @@ type Props = {
     scrollToLineageEnd?: boolean;
     suppressAutoScroll?: boolean;
     /**
+     * Person to bring into view once the tree is drawn, e.g. the one whose
+     * edit page the user just came back from.
+     */
+    initialScrollId?: string | null;
+    onInitialScroll?: () => void;
+    /**
      * A searched person drawn as the lowest one of the lineage: their own
      * children start folded, to be opened with the branch toggle.
      */
@@ -788,6 +794,8 @@ export function DescendantsTree({
     packCollapsed = false,
     scrollToLineageEnd = false,
     suppressAutoScroll = false,
+    initialScrollId = null,
+    onInitialScroll,
     foldedId = null,
     connectionPaths = EMPTY_CONNECTION_PATHS,
 }: Props) {
@@ -1078,6 +1086,43 @@ export function DescendantsTree({
 
         return () => window.cancelAnimationFrame(frame);
     }, [focusTargetId, nodeIdPrefix, suppressAutoScroll]);
+
+    // Retried for a few frames because the node may not be laid out yet, and
+    // skipped while hidden (the other breakpoint's copy of the tree).
+    useEffect(() => {
+        if (suppressAutoScroll || focusTargetId || !initialScrollId) {
+            return;
+        }
+
+        let attempts = 0;
+        let frame = 0;
+        const scrollToNode = () => {
+            const node = document.getElementById(
+                `${nodeIdPrefix}-${initialScrollId}`,
+            );
+
+            if (node && node.offsetParent !== null) {
+                node.scrollIntoView({ block: 'center', inline: 'center' });
+                onInitialScroll?.();
+
+                return;
+            }
+
+            if (++attempts < 30) {
+                frame = window.requestAnimationFrame(scrollToNode);
+            }
+        };
+
+        frame = window.requestAnimationFrame(scrollToNode);
+
+        return () => window.cancelAnimationFrame(frame);
+    }, [
+        focusTargetId,
+        initialScrollId,
+        nodeIdPrefix,
+        onInitialScroll,
+        suppressAutoScroll,
+    ]);
 
     if (!center) {
         return null;

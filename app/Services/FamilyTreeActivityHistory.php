@@ -2,9 +2,9 @@
 
 namespace App\Services;
 
-use App\Models\FamilyTree;
 use App\Models\FamilyTreeActivity;
 use App\Models\FamilyTreeShare;
+use App\Models\Person;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -45,11 +45,11 @@ class FamilyTreeActivityHistory
     public function paginate(User $user, array $filters): LengthAwarePaginator
     {
         $treeLogs = $this->visibleActivities($user)
-            ->select(['id', 'actor_id', 'family_tree_id', 'tree_name', 'member_name', 'action', 'description', 'created_at'])
+            ->select(['id', 'actor_id', 'family_tree_id', 'tree_name', 'member_name', 'father_name', 'action', 'description', 'created_at'])
             ->selectRaw('? as source', ['tree']);
         $accounts = User::query()
             ->when(! $user->isStaff(), fn ($query) => $query->whereKey($user->id));
-        $accounts->select(['id'])->selectRaw('id as actor_id, NULL as family_tree_id, NULL as tree_name, NULL as member_name, ? as action, ? as description, created_at, ? as source', [
+        $accounts->select(['id'])->selectRaw('id as actor_id, NULL as family_tree_id, NULL as tree_name, NULL as member_name, NULL as father_name, ? as action, ? as description, created_at, ? as source', [
             'account_created', 'Akun dibuat.', 'account',
         ]);
 
@@ -62,6 +62,7 @@ class FamilyTreeActivityHistory
             $query->where(fn ($matches) => $matches
                 ->where('tree_name', 'like', $pattern)
                 ->orWhere('member_name', 'like', $pattern)
+                ->orWhere('father_name', 'like', $pattern)
                 ->orWhere('description', 'like', $pattern)
                 ->orWhere('action', 'like', $pattern)
                 ->orWhereIn('actor_id', User::query()->select('id')->where('name', 'like', $pattern)));
@@ -78,13 +79,13 @@ class FamilyTreeActivityHistory
             ->paginate(25)->withQueryString();
         $rows = collect($page->items());
         $actors = User::query()->whereIn('id', $rows->pluck('actor_id')->filter())->pluck('name', 'id');
-        $trees = FamilyTree::query()->whereIn('id', $rows->pluck('family_tree_id')->filter())
-            ->with('rootPerson:id,name')->get()->keyBy('id');
+        $legacyFathers = $this->legacyFatherNames($rows);
 
         return $page->through(fn ($activity) => [
             'id' => $activity->source.'-'.$activity->id,
             'tree_name' => $activity->tree_name,
-            'father_name' => $trees->get($activity->family_tree_id)?->rootPerson?->name,
+            'father_name' => $activity->father_name
+                ?? $legacyFathers->get($activity->family_tree_id.'|'.$activity->member_name),
             'member_name' => $activity->member_name,
             'action' => $activity->action,
             'description' => $activity->description,
@@ -93,5 +94,33 @@ class FamilyTreeActivityHistory
                 ? CarbonImmutable::parse($activity->created_at, 'UTC')->setTimezone('Asia/Jakarta')->translatedFormat('d M Y, H:i').' WIB'
                 : null,
         ]);
+    }
+
+    /**
+     * Logs written before father_name existed only know the member's name.
+     * Recover the father from the member with that name in the same tree,
+     * skipping names that are ambiguous inside the tree.
+     *
+     * @param  Collection<int, object>  $rows
+     * @return Collection<string, string>
+     */
+    private function legacyFatherNames(Collection $rows): Collection
+    {
+        $missing = $rows->filter(fn ($row) => $row->father_name === null && $row->family_tree_id && $row->member_name);
+
+        if ($missing->isEmpty()) {
+            return collect();
+        }
+
+        return Person::query()
+            ->join('family_tree_person', 'family_tree_person.person_id', '=', 'people.id')
+            ->whereIn('family_tree_person.family_tree_id', $missing->pluck('family_tree_id')->unique())
+            ->whereIn('people.name', $missing->pluck('member_name')->unique())
+            ->with('father:id,name')
+            ->get(['people.id', 'people.name', 'people.father_id', 'people.pending_father', 'family_tree_person.family_tree_id'])
+            ->groupBy(fn (Person $person) => $person->family_tree_id.'|'.$person->name)
+            ->filter(fn (Collection $matches) => $matches->count() === 1)
+            ->map(fn (Collection $matches) => $matches->first()->pending_father ? null : $matches->first()->father?->name)
+            ->filter();
     }
 }

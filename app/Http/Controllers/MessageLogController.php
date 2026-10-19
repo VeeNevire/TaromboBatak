@@ -34,7 +34,7 @@ class MessageLogController extends Controller
                     'counterpart' => $counterpart->name,
                     'body' => $message->body,
                     'direction' => $message->sender_id === $user->id ? 'sent' : 'received',
-                    'created_at' => $message->created_at?->format('d M Y H:i'),
+                    'created_at' => $message->created_at?->copy()->setTimezone('Asia/Jakarta')->format('d M Y H:i').' WIB',
                 ];
             });
 

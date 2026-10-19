@@ -6,6 +6,8 @@
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 
 @custom-variant dark (&:is(.dark *));
+/* Phone turned sideways: too short to fit page chrome and the tree together. */
+@custom-variant landscape-phone (@media (orientation: landscape) and (max-height: 500px));
 
 @theme {
     --font-sans:

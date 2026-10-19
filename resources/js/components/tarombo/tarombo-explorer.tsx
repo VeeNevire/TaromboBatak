@@ -17,7 +17,7 @@ import {
     UserSearch,
     X,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { TaromboDiagram } from '@/components/landing/tarombo-diagram';
 import { DescendantsTree } from '@/components/people/descendants-tree';
@@ -923,6 +923,12 @@ export function TaromboExplorer({
         useState<TaromboPerson | null>(null);
     const [submittingIdentity, setSubmittingIdentity] = useState(false);
     const [selectedId, setSelectedId] = useState<string | null>(initialFocusId);
+    // The person opened from the URL (back from their edit page) is scrolled
+    // into view once, so the tree returns to where the user left it.
+    const [returnScrollId, setReturnScrollId] = useState<string | null>(
+        initialRequestedPersonId ?? null,
+    );
+    const clearReturnScroll = useCallback(() => setReturnScrollId(null), []);
     const [search, setSearch] = useState('');
     const [searchedId, setSearchedId] = useState<string | null>(null);
     const [searchOpen, setSearchOpen] = useState(false);
@@ -2160,7 +2166,7 @@ export function TaromboExplorer({
                 snapshotMode && snapshotTransparent
                     ? 'bg-transparent'
                     : 'bg-tb-surface-bright',
-                fullscreen && 'flex min-h-0 flex-col',
+                fullscreen && 'flex min-h-0 flex-col landscape-phone:h-full',
             )}
         >
             {!fullscreen && expandButton('diagram', isExpanded)}
@@ -2244,6 +2250,8 @@ export function TaromboExplorer({
                     capture ? undefined : setSnapshotTreeCollapsedIds
                 }
                 suppressAutoScroll={capture}
+                initialScrollId={returnScrollId}
+                onInitialScroll={clearReturnScroll}
                 scrollToLineageEnd={
                     !capture && !snapshotMode && searchedId !== null
                 }
@@ -2278,7 +2286,7 @@ export function TaromboExplorer({
                 snapshotMode && snapshotTransparent
                     ? 'bg-transparent'
                     : 'bg-tb-surface-bright',
-                fullscreen && 'flex min-h-0 flex-col',
+                fullscreen && 'flex min-h-0 flex-col landscape-phone:h-full',
             )}
         >
             {!fullscreen && expandButton('tree', isExpanded)}
@@ -2733,7 +2741,9 @@ export function TaromboExplorer({
                 </div>
 
                 {fullscreen ? (
-                    <div className="min-h-0 flex-1">
+                    // Landscape phone: the page scrolls and the tree card
+                    // takes the whole screen height.
+                    <div className="min-h-0 flex-1 landscape-phone:h-dvh landscape-phone:flex-none">
                         {fullscreenView === 'diagram'
                             ? renderDiagramCard(false)
                             : renderTreeCard(false)}
@@ -2901,6 +2911,12 @@ export function TaromboExplorer({
                                                         searchedId !== null
                                                     }
                                                     foldedId={searchedId}
+                                                    initialScrollId={
+                                                        returnScrollId
+                                                    }
+                                                    onInitialScroll={
+                                                        clearReturnScroll
+                                                    }
                                                     nodeIdPrefix="tarombo-mobile-tree-node"
                                                     currentUserId={
                                                         identity?.currentUserId

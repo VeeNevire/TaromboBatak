@@ -62,7 +62,7 @@ function SpouseInformation({
                                 <dl className="mt-3 grid gap-2 text-sm">
                                     <div>
                                         <dt className="text-tb-on-surface-variant">
-                                            Anak ke
+                                            Anak ke ({spouse.name})
                                         </dt>
                                         <dd>
                                             {spouse.birthOrder &&
@@ -73,7 +73,7 @@ function SpouseInformation({
                                     </div>
                                     <div>
                                         <dt className="text-tb-on-surface-variant">
-                                            Ayah
+                                            Ayah dari {spouse.name}
                                         </dt>
                                         <dd>
                                             {spouse.fatherName ||
@@ -85,7 +85,7 @@ function SpouseInformation({
                                     </div>
                                     <div>
                                         <dt className="text-tb-on-surface-variant">
-                                            Ibu
+                                            Ibu dari {spouse.name}
                                         </dt>
                                         <dd>
                                             {spouse.motherName ||
@@ -108,13 +108,13 @@ function SpouseInformation({
                                 {person.spouse}
                             </summary>
                             <p className="mt-2 text-tb-on-surface-variant">
-                                Anak ke: Belum dicatat
+                                Anak ke ({person.spouse}): Belum dicatat
                             </p>
                             <p className="mt-2 text-tb-on-surface-variant">
-                                Ayah: Belum dicatat
+                                Ayah dari {person.spouse}: Belum dicatat
                             </p>
                             <p className="mt-1 text-tb-on-surface-variant">
-                                Ibu: Belum dicatat
+                                Ibu dari {person.spouse}: Belum dicatat
                             </p>
                         </details>
                     ) : (

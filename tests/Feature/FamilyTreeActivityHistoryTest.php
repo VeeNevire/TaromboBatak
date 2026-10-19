@@ -1,7 +1,10 @@
 <?php
 
+use App\Models\FamilyTree;
 use App\Models\FamilyTreeActivity;
+use App\Models\Person;
 use App\Models\User;
+use App\Services\FamilyTreeActivityLogger;
 use Carbon\CarbonImmutable;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -99,7 +102,7 @@ test('activity search matches member family description and actor while keeping 
     $admin = User::factory()->asAdmin()->create();
     $actor = User::factory()->create(['name' => 'Petugas Marbun', 'created_at' => '2025-01-01']);
     $match = historicalActivity($actor, '2026-01-02 05:00:00');
-    $match->update(['tree_name' => 'Keluarga Sihombing', 'member_name' => 'Tuan Samosir', 'description' => 'Memperbarui tahun kelahiran.']);
+    $match->update(['tree_name' => 'Keluarga Sihombing', 'member_name' => 'Tuan Samosir', 'father_name' => 'Raja Lontung', 'description' => 'Memperbarui tahun kelahiran.']);
     historicalActivity($admin, '2026-01-02 05:00:00');
     historicalActivity($actor, '2026-01-03 05:00:00');
 
@@ -110,7 +113,7 @@ test('activity search matches member family description and actor while keeping 
         ->where('pagination.total', 1)
         ->has('activities', 1)
         ->where('activities.0.id', 'tree-'.$match->id));
-})->with(['member' => 'Samosir', 'family' => 'Sihombing', 'description' => 'kelahiran', 'actor' => 'Marbun', 'trimmed search' => '  Samosir  ']);
+})->with(['member' => 'Samosir', 'father' => 'Lontung', 'family' => 'Sihombing', 'description' => 'kelahiran', 'actor' => 'Marbun', 'trimmed search' => '  Samosir  ']);
 
 test('search cannot expose private activity and finds account creation by actor name', function () {
     $viewer = User::factory()->create(['name' => 'Viewer Search']);
@@ -122,4 +125,37 @@ test('search cannot expose private activity and finds account creation by actor 
     $this->get(route('family-tree-activities.index', ['search' => 'Viewer Search']))
         ->assertOk()->assertInertia(fn (Assert $page) => $page
         ->has('activities', 1)->where('activities.0.action', 'account_created'));
+});
+
+test('activity log records and shows the father name of the member', function () {
+    $admin = User::factory()->asAdmin()->create();
+    $father = Person::factory()->create(['name' => 'Raja Ayah']);
+    $member = Person::factory()->create(['name' => 'Anak Uji', 'father_id' => $father->id, 'pending_father' => false]);
+    $tree = FamilyTree::create(['name' => 'Keluarga Uji', 'user_id' => $admin->id, 'root_person_id' => $member->id]);
+
+    app(FamilyTreeActivityLogger::class)->log($tree, $admin, 'updated', 'Memperbarui anggota.', $member);
+
+    $this->actingAs($admin)->get(route('family-tree-activities.index', ['search' => 'Anak']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('activities', 1)
+            ->where('activities.0.member_name', 'Anak Uji')
+            ->where('activities.0.father_name', 'Raja Ayah'));
+});
+
+test('older activity logs without a stored father name fall back to the member in that tree', function () {
+    $admin = User::factory()->asAdmin()->create();
+    $father = Person::factory()->create(['name' => 'Raja Lama']);
+    $member = Person::factory()->create(['name' => 'Anak Lama', 'father_id' => $father->id, 'pending_father' => false]);
+    $tree = FamilyTree::create(['name' => 'Keluarga Uji', 'user_id' => $admin->id, 'root_person_id' => $father->id]);
+    $tree->people()->attach([$father->id, $member->id]);
+    FamilyTreeActivity::create([
+        'family_tree_id' => $tree->id, 'owner_id' => $admin->id, 'actor_id' => $admin->id,
+        'tree_name' => 'Keluarga Lama', 'member_name' => 'Anak Lama', 'action' => 'updated', 'description' => 'Mengedit Anak Lama.',
+    ]);
+
+    $this->actingAs($admin)->get(route('family-tree-activities.index', ['search' => 'Anak']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('activities', 1)
+            ->where('activities.0.member_name', 'Anak Lama')
+            ->where('activities.0.father_name', 'Raja Lama'));
 });

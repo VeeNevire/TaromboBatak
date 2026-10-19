@@ -24,3 +24,18 @@ test('a user can view only their own message log', function () {
             ->where('messages.data.0.body', 'Pesan untuk kontributor')
             ->where('messages.data.0.direction', 'sent'));
 });
+
+test('the message log shows message times in WIB', function () {
+    $this->travelTo(now()->setTimezone('UTC')->setDate(2026, 10, 19)->setTime(17, 30));
+
+    $user = User::factory()->create();
+    $contact = User::factory()->create();
+    $conversation = Conversation::create(Conversation::participantAttributes($user, $contact));
+    $conversation->messages()->create(['sender_id' => $user->id, 'body' => 'Halo']);
+
+    // 17:30 UTC is 00:30 WIB on the next day, the same time the chat shows.
+    $this->actingAs($user)
+        ->get(route('message-logs.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('messages.data.0.created_at', '20 Oct 2026 00:30 WIB'));
+});

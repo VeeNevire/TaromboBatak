@@ -42,7 +42,7 @@ class FamilyTreeDeletionController extends Controller
                     $user,
                     'deleted',
                     'Menghapus silsilah.',
-                    $tree->rootPerson()->value('name'),
+                    $tree->rootPerson,
                 );
                 $tree->delete();
 
@@ -139,7 +139,7 @@ class FamilyTreeDeletionController extends Controller
                 $request->user(),
                 'deleted',
                 'Menyetujui penghapusan silsilah.',
-                $tree->rootPerson()->value('name'),
+                $tree->rootPerson,
             );
             $tree->delete();
             $this->markNotificationsRead($deletion);
