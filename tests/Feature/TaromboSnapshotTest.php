@@ -71,6 +71,32 @@ test('the gallery only lists snapshots owned by the signed in account', function
             ->where('snapshots.data.0.image_url', route('tarombo.snapshots.image', $ownSnapshot)));
 });
 
+test('staff can narrow the gallery to one admin or sub-admin creator', function () {
+    $admin = User::factory()->create(['role' => 'admin']);
+    $subAdmin = User::factory()->create(['role' => 'subadmin']);
+    TaromboSnapshot::factory()->for($admin)->create();
+    $subSnapshot = TaromboSnapshot::factory()->for($subAdmin)->create();
+
+    $this->actingAs($admin)
+        ->get(route('tarombo.snapshots.index', ['owner' => $subAdmin->id]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('owner', $subAdmin->id)
+            ->has('staffOwners', 2)
+            ->has('snapshots.data', 1)
+            ->where('snapshots.data.0.id', $subSnapshot->id));
+
+    // A regular account cannot use the filter to see someone else's images.
+    $member = User::factory()->create();
+
+    $this->actingAs($member)
+        ->get(route('tarombo.snapshots.index', ['owner' => $subAdmin->id]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('owner', null)
+            ->has('staffOwners', 0)
+            ->has('snapshots.data', 0));
+});
+
 test('the free original filter hides originals with a saved compile and compile results', function () {
     $user = User::factory()->create();
     $free = TaromboSnapshot::factory()->for($user)->create(['tarombo_frame_id' => null]);

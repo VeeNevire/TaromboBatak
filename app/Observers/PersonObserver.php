@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Models\FamilyTreeActivity;
 use App\Models\Person;
+use App\Services\FamilyTreeActivityLogger;
 
 class PersonObserver
 {
@@ -44,7 +45,7 @@ class PersonObserver
                 'owner_id' => $tree?->user_id ?? $person->created_by,
                 'actor_id' => auth()->id(),
                 'tree_name' => $tree?->name ?? 'Data anggota keluarga',
-                'member_name' => $person->name,
+                ...FamilyTreeActivityLogger::memberAttributes($person),
                 'action' => 'updated',
                 'description' => 'Mengedit '.$person->name.'. '.$details,
             ]);

@@ -28,6 +28,13 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ZoomableImage } from '@/components/zoomable-image';
 import { cn } from '@/lib/utils';
@@ -83,6 +90,8 @@ export default function TaromboSnapshots({
     filter,
     search,
     display,
+    owner,
+    staffOwners,
     snapshotOptions,
     frames,
     accountName,
@@ -92,6 +101,8 @@ export default function TaromboSnapshots({
     filter: SnapshotFilter;
     search: string;
     display: 'images' | 'titles';
+    owner: number | null;
+    staffOwners: { id: number; name: string; role: string }[];
     snapshotOptions: Snapshot[];
     frames: FrameOption[];
     accountName: string;
@@ -205,13 +216,17 @@ export default function TaromboSnapshots({
         filter?: string;
         q?: string;
         display?: 'images' | 'titles';
+        owner?: number | null;
     }) => {
+        const nextOwner = next.owner === undefined ? owner : next.owner;
+
         router.get(
             tarombo.snapshots.index.url({
                 query: {
                     filter: next.filter ?? filter,
                     q: next.q ?? search,
                     display: next.display ?? display,
+                    ...(nextOwner ? { owner: nextOwner } : {}),
                 },
             }),
             {},
@@ -337,6 +352,51 @@ export default function TaromboSnapshots({
                             </TabsTrigger>
                         </TabsList>
                     </Tabs>
+                    {staffOwners.length > 0 && (
+                        <div className="flex items-center gap-2">
+                            <label
+                                htmlFor="snapshot-owner"
+                                className="text-sm font-medium whitespace-nowrap text-tb-on-surface"
+                            >
+                                Admin/Sub :
+                            </label>
+                            <Select
+                                value={owner ? String(owner) : 'all'}
+                                onValueChange={(value) =>
+                                    visitGallery({
+                                        owner:
+                                            value === 'all'
+                                                ? null
+                                                : Number(value),
+                                    })
+                                }
+                            >
+                                <SelectTrigger
+                                    id="snapshot-owner"
+                                    className="w-full min-w-48 border-tb-outline-variant bg-tb-surface-bright sm:w-56"
+                                >
+                                    <SelectValue placeholder="Semua Admin/Sub" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">
+                                        Semua Admin/Sub
+                                    </SelectItem>
+                                    {staffOwners.map((staff) => (
+                                        <SelectItem
+                                            key={staff.id}
+                                            value={String(staff.id)}
+                                        >
+                                            {staff.name} (
+                                            {staff.role === 'admin'
+                                                ? 'Admin'
+                                                : 'Sub Admin'}
+                                            )
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
                     <div className="flex flex-wrap items-center gap-2">
                         <div
                             className="flex gap-1"

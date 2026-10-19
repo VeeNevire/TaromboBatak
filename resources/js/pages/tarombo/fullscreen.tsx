@@ -64,7 +64,7 @@ export default function TaromboFullscreen({
                 : 'default';
 
     return (
-        <div className="flex h-dvh flex-col">
+        <div className="flex h-dvh flex-col landscape-phone:h-auto">
             <Head title="Pohon Tarombo" />
             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-tb-outline-variant/70 bg-tb-surface-bright/60 px-4 py-2 backdrop-blur-xl md:px-6">
                 <Breadcrumbs

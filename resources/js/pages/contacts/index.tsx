@@ -782,9 +782,34 @@ export default function ContactsIndex({
         }
     }, [selectedContact?.id, conversation.length]);
 
-    const filteredContacts = contactItems.filter((contact) =>
-        contact.name.toLocaleLowerCase().includes(deferredSearch),
-    );
+    // Latest chat time per contact: the server snapshot or a newer message
+    // that arrived live in this session.
+    const lastChatAt = (contact: Contact): string | null => {
+        const messages = store[contact.id];
+        const live = messages?.[messages.length - 1]?.created_at ?? null;
+
+        if (!live || !contact.latest_message_at) {
+            return live ?? contact.latest_message_at;
+        }
+
+        return Date.parse(live) > Date.parse(contact.latest_message_at)
+            ? live
+            : contact.latest_message_at;
+    };
+    const filteredContacts = contactItems
+        .filter((contact) =>
+            contact.name.toLocaleLowerCase().includes(deferredSearch),
+        )
+        .map((contact) => ({
+            ...contact,
+            latest_message_at: lastChatAt(contact),
+        }))
+        // Most recently chatted first; contacts without chats keep name order.
+        .sort(
+            (a, b) =>
+                (b.latest_message_at ? Date.parse(b.latest_message_at) : 0) -
+                (a.latest_message_at ? Date.parse(a.latest_message_at) : 0),
+        );
     const filteredAvailableUsers = availableUsers.filter((user) =>
         `${user.name} ${user.marga ?? ''}`
             .toLocaleLowerCase()
@@ -2215,20 +2240,28 @@ function ContactEmptyState({ hasSearch }: { hasSearch: boolean }) {
     );
 }
 
+// Chat times are always shown in WIB, matching Log Pesan.
+const WIB = 'Asia/Jakarta';
+
+function wibDay(date: Date): string {
+    return date.toLocaleDateString('en-CA', { timeZone: WIB });
+}
+
 function formatListTime(value: string): string {
     const date = new Date(value);
-    const today = new Date();
 
-    if (date.toDateString() === today.toDateString()) {
+    if (wibDay(date) === wibDay(new Date())) {
         return date.toLocaleTimeString('id-ID', {
             hour: '2-digit',
             minute: '2-digit',
+            timeZone: WIB,
         });
     }
 
     return date.toLocaleDateString('id-ID', {
         day: '2-digit',
         month: 'short',
+        timeZone: WIB,
     });
 }
 
@@ -2240,5 +2273,6 @@ function formatMessageTime(value: string | null): string {
     return new Date(value).toLocaleTimeString('id-ID', {
         hour: '2-digit',
         minute: '2-digit',
+        timeZone: WIB,
     });
 }

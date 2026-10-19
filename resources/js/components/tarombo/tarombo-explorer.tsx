@@ -2166,7 +2166,7 @@ export function TaromboExplorer({
                 snapshotMode && snapshotTransparent
                     ? 'bg-transparent'
                     : 'bg-tb-surface-bright',
-                fullscreen && 'flex min-h-0 flex-col',
+                fullscreen && 'flex min-h-0 flex-col landscape-phone:h-full',
             )}
         >
             {!fullscreen && expandButton('diagram', isExpanded)}
@@ -2286,7 +2286,7 @@ export function TaromboExplorer({
                 snapshotMode && snapshotTransparent
                     ? 'bg-transparent'
                     : 'bg-tb-surface-bright',
-                fullscreen && 'flex min-h-0 flex-col',
+                fullscreen && 'flex min-h-0 flex-col landscape-phone:h-full',
             )}
         >
             {!fullscreen && expandButton('tree', isExpanded)}
@@ -2741,7 +2741,9 @@ export function TaromboExplorer({
                 </div>
 
                 {fullscreen ? (
-                    <div className="min-h-0 flex-1">
+                    // Landscape phone: the page scrolls and the tree card
+                    // takes the whole screen height.
+                    <div className="min-h-0 flex-1 landscape-phone:h-dvh landscape-phone:flex-none">
                         {fullscreenView === 'diagram'
                             ? renderDiagramCard(false)
                             : renderTreeCard(false)}
