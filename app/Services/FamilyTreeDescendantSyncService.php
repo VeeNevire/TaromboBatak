@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\SyncFamilyTreeDescendants;
 use App\Models\ContributionRequest;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeNode;
@@ -16,16 +17,21 @@ class FamilyTreeDescendantSyncService
      * of the person's paternal ancestors, plus the tree they edited. Trees of
      * other owners only receive the new person (and their children) under the
      * father's node, which stays cheap however many trees share the lineage.
+     * The full syncs of the owner's trees run on the queue after commit: under
+     * a high ancestor they outlast the request.
      */
     public function syncTreesForNewDescendant(FamilyTree $sourceTree, Person $person): void
     {
-        $trees = $this->treesContainingAncestorsOf($person, $sourceTree->user_id);
-        $trees->push($sourceTree);
-        // Share traversal state: an alternative may also appear in $trees.
-        $processedTreeIds = [];
-        foreach ($trees->unique('id') as $tree) {
-            $this->syncVersions($tree, $processedTreeIds);
-        }
+        $trees = $this->treesContainingAncestorsOf($person, $sourceTree->user_id)
+            ->push($sourceTree)
+            ->unique('id');
+        $treeIds = $trees->pluck('id')->all();
+
+        // A version is synced by its source tree's job; queue it only when no
+        // tree it is built on is already queued.
+        $trees
+            ->reject(fn (FamilyTree $tree) => array_intersect($this->sourceTreeIds($tree), $treeIds) !== [])
+            ->each(fn (FamilyTree $tree) => SyncFamilyTreeDescendants::dispatch($tree->id)->afterCommit());
 
         $this->syncTreesForPerson($person);
     }
@@ -143,6 +149,24 @@ class FamilyTreeDescendantSyncService
                     ->orWhereHas('nodes', fn ($nodes) => $nodes->whereIn('person_id', $ancestorIds));
             })
             ->get();
+    }
+
+    /**
+     * Ids of the trees this version is built on, nearest first.
+     *
+     * @return array<int, int>
+     */
+    private function sourceTreeIds(FamilyTree $tree): array
+    {
+        $ids = [];
+        $sourceId = $tree->based_on_id;
+
+        while ($sourceId !== null && ! in_array((int) $sourceId, $ids, true)) {
+            $ids[] = (int) $sourceId;
+            $sourceId = FamilyTree::query()->whereKey($sourceId)->value('based_on_id');
+        }
+
+        return $ids;
     }
 
     /**

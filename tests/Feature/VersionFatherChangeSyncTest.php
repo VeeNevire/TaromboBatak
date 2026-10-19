@@ -99,3 +99,37 @@ test('choosing a new father on a version keeps the wives already recorded for hi
 
     expect($father->wives()->pluck('people.name')->all())->toBe(['Istri Tercatat', 'Istri Baru']);
 });
+
+test('adding a member to a family tree queues the owners tree syncs instead of running them in the request', function () {
+    Queue::fake([SyncFamilyTreeDescendants::class]);
+    $marga = Marga::factory()->create();
+    $owner = User::factory()->withMarga($marga->id)->create();
+    $root = Person::factory()->create(['name' => 'Tuan Sorbadijulu', 'gender' => 'L', 'marga_id' => $marga->id]);
+
+    $tree = FamilyTree::create(['user_id' => $owner->id, 'root_person_id' => $root->id, 'name' => 'Silsilah Dibagikan']);
+    $tree->people()->attach($root->id);
+    $rootNode = FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $root->id, 'chain' => '1']);
+
+    $otherTree = FamilyTree::create(['user_id' => $owner->id, 'root_person_id' => $root->id, 'name' => 'Silsilah Lain']);
+    FamilyTreeNode::create(['family_tree_id' => $otherTree->id, 'person_id' => $root->id, 'chain' => '1']);
+
+    $this->actingAs($owner)
+        ->post(route('family-trees.people.store', $tree), ['name' => 'Anggota Baru', 'father_node_id' => $rootNode->id])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    $newcomer = Person::query()->where('name', 'Anggota Baru')->firstOrFail();
+
+    expect($tree->nodes()->where('person_id', $newcomer->id)->value('father_node_id'))->toBe($rootNode->id);
+
+    Queue::assertPushed(SyncFamilyTreeDescendants::class, fn (SyncFamilyTreeDescendants $job) => $job->familyTreeId === $tree->id);
+    Queue::assertPushed(SyncFamilyTreeDescendants::class, fn (SyncFamilyTreeDescendants $job) => $job->familyTreeId === $otherTree->id);
+});
+
+test('sync jobs for different trees share one lock so workers never sync in parallel', function () {
+    $first = (new SyncFamilyTreeDescendants(1))->middleware()[0];
+    $second = (new SyncFamilyTreeDescendants(2))->middleware()[0];
+
+    expect($first->key)->toBe($second->key)
+        ->and((new SyncFamilyTreeDescendants(1))->retryUntil())->toBeGreaterThan(now()->addMinutes(30));
+});

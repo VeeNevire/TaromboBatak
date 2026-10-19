@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\FamilyTree;
 use App\Services\FamilyTreeDescendantSyncService;
+use DateTimeInterface;
 use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -21,8 +22,8 @@ class SyncFamilyTreeDescendants implements ShouldBeUniqueUntilProcessing, Should
 {
     use Queueable;
 
-    // A release while another worker syncs the tree also counts as a try.
-    public int $tries = 5;
+    // Waiting for the sync lock releases the job; only real failures count.
+    public int $maxExceptions = 3;
 
     /** @var array<int, int> */
     public array $backoff = [10, 30];
@@ -45,6 +46,11 @@ class SyncFamilyTreeDescendants implements ShouldBeUniqueUntilProcessing, Should
         $sync->syncTreeAndDescendantVersions($tree);
     }
 
+    public function retryUntil(): DateTimeInterface
+    {
+        return now()->addHour();
+    }
+
     public function uniqueId(): string
     {
         return (string) $this->familyTreeId;
@@ -53,10 +59,11 @@ class SyncFamilyTreeDescendants implements ShouldBeUniqueUntilProcessing, Should
     /** @return array<int, object> */
     public function middleware(): array
     {
-        // Two workers syncing the same tree lock the same rows and deadlock.
+        // One sync at a time across all trees: versions share nodes and people
+        // rows, so parallel workers syncing different trees still deadlock.
         return [
-            (new WithoutOverlapping("family-tree-sync:{$this->familyTreeId}"))
-                ->releaseAfter(30)
+            (new WithoutOverlapping('family-tree-sync'))
+                ->releaseAfter(5)
                 ->expireAfter(900),
         ];
     }
