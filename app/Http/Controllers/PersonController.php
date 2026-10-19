@@ -2273,11 +2273,21 @@ class PersonController extends Controller
         $memberIds = [];
         $currentNodes = [];
 
+        $columns = ['id', 'family_tree_id', 'person_id', 'father_node_id'];
         // Read bounded batches instead of retaining every node of every version.
-        foreach (FamilyTreeNode::query()->whereIn('family_tree_id', $trees->modelKeys())
-            ->when($memberFilter !== null, fn ($query) => $query->whereIn('person_id', $memberFilter))
-            ->toBase()->select(['id', 'family_tree_id', 'person_id', 'father_node_id'])
-            ->lazyById(2000) as $node) {
+        // A member filter bounds each tree's rows, so batch by tree there: paging
+        // by node id re-scanned every tree per page and took a minute for a
+        // person found in hundreds of trees.
+        $nodes = $memberFilter === null
+            ? FamilyTreeNode::query()->whereIn('family_tree_id', $trees->modelKeys())
+                ->toBase()->select($columns)->lazyById(2000)
+            : collect(array_chunk($trees->modelKeys(), 25))->lazy()->flatMap(
+                fn (array $treeIds) => FamilyTreeNode::query()->whereIn('family_tree_id', $treeIds)
+                    ->whereIn('person_id', $memberFilter)
+                    ->orderBy('id')->toBase()->get($columns),
+            );
+
+        foreach ($nodes as $node) {
             $memberIds[$node->family_tree_id][] = (int) $node->person_id;
             if ((int) $roots->get($node->family_tree_id) === (int) $node->person_id) {
                 $currentNodes[$node->family_tree_id] ??= $node;

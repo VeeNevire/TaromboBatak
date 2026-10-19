@@ -253,3 +253,35 @@ test('large tree history is read in bounded batches without losing members', fun
         ->and($queries)->toHaveCount(2)
         ->and($queries->every(fn ($query) => str_contains(strtolower($query['query']), 'limit 2000')))->toBeTrue();
 });
+
+test('filtered tree history reads nodes in tree batches instead of paging every tree by node id', function () {
+    $admin = User::factory()->asAdmin()->create();
+    $marga = Marga::factory()->create();
+    $root = Person::factory()->create(['marga_id' => $marga->id]);
+    $focus = Person::factory()->create(['marga_id' => $marga->id, 'father_id' => $root->id]);
+    $outsider = Person::factory()->create(['marga_id' => $marga->id]);
+
+    foreach (range(1, 30) as $index) {
+        $tree = FamilyTree::create(['user_id' => $admin->id, 'root_person_id' => $root->id, 'name' => "Pohon {$index}"]);
+        $rootNode = FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $root->id]);
+        FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $focus->id, 'father_node_id' => $rootNode->id]);
+        FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $outsider->id]);
+    }
+
+    $trees = FamilyTree::query()->with('rootPerson')->get();
+    DB::enableQueryLog();
+    DB::flushQueryLog();
+    try {
+        $summaries = (new ReflectionMethod(PersonController::class, 'familyTreeSummaries'))
+            ->invoke(new PersonController, $trees, [$root->id, $focus->id]);
+        $nodeQueries = collect(DB::getQueryLog())
+            ->filter(fn ($query) => str_contains($query['query'], 'family_tree_nodes') && str_contains($query['query'], 'person_id'))
+            ->values();
+    } finally {
+        DB::disableQueryLog();
+    }
+
+    expect($nodeQueries)->toHaveCount(2)
+        ->and(collect($summaries)->every(fn (array $summary) => $summary['member_person_ids'] === [$root->id, $focus->id]
+            && $summary['root_name'] === $root->name))->toBeTrue();
+});
