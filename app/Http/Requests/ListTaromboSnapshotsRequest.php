@@ -16,6 +16,7 @@ class ListTaromboSnapshotsRequest extends FormRequest
         return [
             'q' => ['nullable', 'string', 'max:255'],
             'display' => ['nullable', 'in:images,titles'],
+            'owner' => ['nullable', 'integer'],
         ];
     }
 }

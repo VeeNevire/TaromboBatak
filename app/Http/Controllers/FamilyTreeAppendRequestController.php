@@ -59,7 +59,7 @@ class FamilyTreeAppendRequestController extends Controller
             $request->user(),
             'added',
             "Menyetujui penambahan anggota $memberName.",
-            $memberName,
+            $person,
         );
 
         return back();

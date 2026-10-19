@@ -8,6 +8,7 @@ use App\Http\Requests\StoreTaromboSnapshotRequest;
 use App\Models\TaromboCompileDraft;
 use App\Models\TaromboFrame;
 use App\Models\TaromboSnapshot;
+use App\Models\User;
 use App\Services\FamilyTreeActivityLogger;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\RedirectResponse;
@@ -28,10 +29,11 @@ class TaromboSnapshotController extends Controller
 
         $user = $request->user();
         $canDownload = $user->isStaff();
-        $ownerScope = fn ($query) => $query->when(
-            ! $user->isStaff(),
-            fn ($scoped) => $scoped->whereBelongsTo($user),
-        );
+        // Staff may narrow the gallery to images made by one admin/sub-admin.
+        $ownerId = $user->isStaff() ? ($request->validated('owner') ?: null) : null;
+        $ownerScope = fn ($query) => $query
+            ->when(! $user->isStaff(), fn ($scoped) => $scoped->whereBelongsTo($user))
+            ->when($ownerId, fn ($scoped) => $scoped->where('user_id', $ownerId));
 
         // Snapshots with a saved Compile Gambar arrangement of this account.
         $draftSnapshotIds = TaromboCompileDraft::query()
@@ -97,6 +99,13 @@ class TaromboSnapshotController extends Controller
             'filter' => $filter,
             'search' => $search,
             'display' => $display,
+            'owner' => $ownerId === null ? null : (int) $ownerId,
+            'staffOwners' => $user->isStaff()
+                ? User::query()
+                    ->whereIn('role', ['admin', 'subadmin'])
+                    ->orderBy('name')
+                    ->get(['id', 'name', 'role'])
+                : [],
             'snapshotOptions' => $snapshotOptions,
             'frames' => TaromboFrame::query()
                 ->active()

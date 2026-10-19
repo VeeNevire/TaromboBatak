@@ -248,16 +248,24 @@ export default function FamilyTreeActivitiesIndex({
                                                     {activity.description}
                                                 </p>
                                                 <p className="mt-1 text-xs text-tb-on-surface-variant">
-                                                    {activity.tree_name && (
-                                                        <>
-                                                            Nama Keluarga:{' '}
-                                                            {activity.tree_name}{' '}
-                                                            · Nama Anggota:{' '}
-                                                            {activity.member_name ??
-                                                                '-'}{' '}
-                                                            ·{' '}
-                                                        </>
-                                                    )}
+                                                    {/* Downloads are not family data, so only the action and actor are shown. */}
+                                                    {activity.tree_name &&
+                                                        activity.action !==
+                                                            'downloaded' && (
+                                                            <>
+                                                                Nama Keluarga:{' '}
+                                                                {
+                                                                    activity.tree_name
+                                                                }{' '}
+                                                                · Nama Anggota:{' '}
+                                                                {activity.member_name ??
+                                                                    '-'}{' '}
+                                                                · Nama Ayah:{' '}
+                                                                {activity.father_name ??
+                                                                    '-'}{' '}
+                                                                ·{' '}
+                                                            </>
+                                                        )}
                                                     Aksi:{' '}
                                                     {actionLabel(
                                                         activity.action,

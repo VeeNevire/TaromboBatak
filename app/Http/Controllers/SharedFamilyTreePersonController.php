@@ -192,7 +192,7 @@ class SharedFamilyTreePersonController extends Controller
             $request->user(),
             'added',
             "Menambahkan anggota {$person->name}.",
-            $person->name,
+            $person,
         );
 
         return back();

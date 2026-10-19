@@ -483,7 +483,7 @@ class PersonController extends Controller
             $user,
             'added',
             'Menambahkan anggota keluarga ke silsilah.',
-            ($result['focus'] ?? $result['children']->first())?->name,
+            $result['focus'] ?? $result['children']->first(),
         ));
 
         $message = isset($result) && $result['matchedFather'] !== null
@@ -858,7 +858,7 @@ class PersonController extends Controller
             $request->user(),
             'created',
             'Membuat versi alternatif silsilah.',
-            $copy->rootPerson()->value('name'),
+            $copy->rootPerson,
         );
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Versi alternatif berhasil dibuat.')]);
@@ -1220,7 +1220,7 @@ class PersonController extends Controller
                 $user,
                 'updated',
                 'Memperbarui data dan struktur silsilah.',
-                $person->name,
+                $person,
             );
 
             Inertia::flash('toast', ['type' => 'success', 'message' => __('Versi silsilah berhasil diperbarui. Silsilah lain yang terkait disinkronkan di latar belakang.')]);
@@ -1285,7 +1285,7 @@ class PersonController extends Controller
             $user,
             'updated',
             'Memperbarui data anggota pada silsilah.',
-            $person->name,
+            $person,
         ));
 
         if (
