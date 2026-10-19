@@ -113,13 +113,20 @@ class PersonController extends Controller
                 fn ($query) => $query->whereIn('marga_id', $user->accessibleMargaIds()),
             )
             ->when($request->filled('search'), function ($query) use ($request) {
-                $search = $request->string('search')->toString();
+                $search = $request->string('search')->trim()->toString();
+                // A chain code (e.g. 1-2-1-1) finds that person and everyone
+                // below them, by their own chain or a family tree node's.
+                $chain = preg_match('/^\d+(-\d+)*-?$/', $search) === 1 ? rtrim($search, '-') : null;
 
-                $query->where(function ($personQuery) use ($search) {
+                $query->where(function ($personQuery) use ($search, $chain) {
                     $personQuery
                         ->where('name', 'like', "%{$search}%")
                         ->orWhere('alias', 'like', "%{$search}%")
-                        ->orWhereHas('marga', fn ($margaQuery) => $margaQuery->where('name', 'like', "%{$search}%"));
+                        ->orWhereHas('marga', fn ($margaQuery) => $margaQuery->where('name', 'like', "%{$search}%"))
+                        ->when($chain !== null, fn ($chainQuery) => $chainQuery
+                            ->orWhere(fn ($own) => $own->where('chain', $chain)->orWhere('chain', 'like', "{$chain}-%"))
+                            ->orWhereHas('familyTreeNodes', fn ($nodes) => $nodes
+                                ->where(fn ($node) => $node->where('chain', $chain)->orWhere('chain', 'like', "{$chain}-%"))));
                 });
             })
             ->when($request->filled('marga_id'), fn ($query) => $query->where('marga_id', $request->integer('marga_id')))

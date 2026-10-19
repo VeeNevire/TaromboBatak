@@ -367,6 +367,31 @@ test('people search matches aliases and marga names', function () {
             ->where('people.data.0.name', 'Budi'));
 });
 
+test('people search matches a chain code and the people below it', function () {
+    $admin = User::factory()->asAdmin()->create();
+    Person::factory()->create(['name' => 'Kode Pas', 'chain' => '1-2-1-1']);
+    Person::factory()->create(['name' => 'Kode Anak', 'chain' => '1-2-1-1-3']);
+    Person::factory()->create(['name' => 'Kode Lain', 'chain' => '1-2-1-10']);
+    $nodePerson = Person::factory()->create(['name' => 'Kode Node', 'chain' => '9-9']);
+    $tree = FamilyTree::create([
+        'user_id' => $admin->id,
+        'root_person_id' => $nodePerson->id,
+        'name' => 'Keluarga Kode',
+    ]);
+    FamilyTreeNode::create([
+        'family_tree_id' => $tree->id,
+        'person_id' => $nodePerson->id,
+        'chain' => '1-2-1-1-7',
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('people.index', ['search' => '1-2-1-1']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('people.data', fn ($people) => collect($people)->pluck('name')->sort()->values()->all()
+                === ['Kode Anak', 'Kode Node', 'Kode Pas']));
+});
+
 test('the tarombo page is publicly accessible', function () {
     $this->get(route('tarombo.view'))
         ->assertOk();
