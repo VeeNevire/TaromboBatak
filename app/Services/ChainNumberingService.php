@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Person;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class ChainNumberingService
 {
@@ -21,7 +22,7 @@ class ChainNumberingService
      */
     public function recomputeFromAncestor(Person $person): void
     {
-        Cache::lock('tarombo-chain-numbering', 10)->block(5, function () use ($person) {
+        Cache::lock('tarombo-chain-numbering', 120)->block(60, function () use ($person) {
             $root = $this->climbToRoot($person->fresh());
 
             if ($root === null) {
@@ -70,7 +71,7 @@ class ChainNumberingService
      */
     public function recomputeAll(): void
     {
-        Cache::lock('tarombo-chain-numbering', 10)->block(5, function () {
+        Cache::lock('tarombo-chain-numbering', 120)->block(60, function () {
             $roots = Person::query()
                 ->whereNull('father_id')
                 ->orderBy('id')
@@ -106,8 +107,10 @@ class ChainNumberingService
     }
 
     /**
-     * Depth-first pass assigning chains: parent first, then children ordered
-     * by birth order.
+     * Assign the subtree root's chain, then derive every descendant's chain in
+     * memory. A lineage under a high ancestor holds thousands of people, so
+     * descendants are loaded one generation per query and only changed
+     * chains are written, in batches.
      *
      * @param  array<int, true>  $visited
      */
@@ -121,13 +124,81 @@ class ChainNumberingService
 
         $this->assignChain($person);
 
-        $children = $person->children()
-            ->orderBy('birth_order')
-            ->orderBy('id')
-            ->get();
+        $chains = [$person->id => $person->chain];
+        $changed = [];
+        $frontier = [$person->id];
 
-        foreach ($children as $child) {
-            $this->recomputeSubtree($child, $visited);
+        while ($frontier !== []) {
+            $children = collect();
+
+            foreach (array_chunk($frontier, 1000) as $fatherIds) {
+                $children = $children->concat(Person::query()
+                    ->whereIn('father_id', $fatherIds)
+                    ->get(['id', 'father_id', 'birth_order', 'chain', 'pending_father']));
+            }
+
+            $frontier = [];
+
+            foreach ($children as $child) {
+                if (isset($visited[$child->id])) {
+                    continue;
+                }
+
+                $visited[$child->id] = true;
+                $chain = $this->descendantChain($child, $chains[$child->father_id] ?? null);
+                $chains[$child->id] = $chain;
+                $frontier[] = $child->id;
+
+                if ($chain !== $child->chain) {
+                    $changed[$child->id] = $chain;
+                }
+            }
+        }
+
+        $this->writeChains($changed);
+    }
+
+    /**
+     * The chain assignChain() gives a person who has a father, computed from
+     * the father's freshly derived chain instead of a query.
+     */
+    protected function descendantChain(Person $person, ?string $fatherChain): ?string
+    {
+        if ($person->pending_father || $fatherChain === null) {
+            return null;
+        }
+
+        $birthOrder = (int) $person->birth_order;
+
+        if ($birthOrder < 1) {
+            return $person->chain;
+        }
+
+        return $fatherChain.'-'.$birthOrder;
+    }
+
+    /** @param array<int, string|null> $chains */
+    protected function writeChains(array $chains): void
+    {
+        $now = now();
+
+        $table = (new Person)->getTable();
+
+        foreach (array_chunk($chains, 200, true) as $batch) {
+            $cases = [];
+            $bindings = [];
+
+            foreach ($batch as $id => $chain) {
+                $cases[] = 'WHEN ? THEN ?';
+                array_push($bindings, $id, $chain);
+            }
+
+            $placeholders = implode(', ', array_fill(0, count($batch), '?'));
+
+            DB::update(
+                "UPDATE {$table} SET chain = CASE id ".implode(' ', $cases)." END, updated_at = ? WHERE id IN ({$placeholders})",
+                [...$bindings, $now, ...array_keys($batch)],
+            );
         }
     }
 
