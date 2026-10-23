@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\RecomputeFamilyLineage;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeNode;
 use App\Models\Marga;
@@ -465,35 +466,33 @@ class FamilyEntryService
             ];
         });
 
-        $numbering = app(ChainNumberingService::class);
+        // Renumbering a lineage under a high ancestor outlasts the request, so
+        // it runs on the queue; new children already carry their own chain.
+        $branchIds = [];
+        $lineageIds = $oldFathers->pluck('id')->all();
 
         if ($result['fatherChanged'] && $result['focus'] !== null) {
-            $numbering->recomputeBranch($result['focus']);
-
-            foreach ($oldFathers as $oldFather) {
-                $numbering->recomputeFromAncestor($oldFather->fresh());
-            }
-        } else {
-            foreach ($oldFathers as $oldFather) {
-                $numbering->recomputeFromAncestor($oldFather->fresh());
-            }
-
-            if ($result['father'] !== null) {
-                $numbering->recomputeFromAncestor($result['father']->fresh());
-            } elseif ($result['pending']) {
-                // Keluarga yang belum tersambung tidak berchain; recompute tiap
-                // rumpun baru sekalian membersihkan chain lama bila pernah ada.
-                foreach ($result['children'] as $child) {
-                    $numbering->recomputeFromAncestor($child);
-                }
-            }
+            $branchIds[] = $result['focus']->id;
+        } elseif ($result['father'] !== null) {
+            // Root chains are stable, so only the father's branch can change.
+            $branchIds[] = $result['father']->id;
+        } elseif ($result['pending']) {
+            // Keluarga yang belum tersambung tidak berchain; recompute tiap
+            // rumpun baru sekalian membersihkan chain lama bila pernah ada.
+            array_push($lineageIds, ...$result['children']->pluck('id')->all());
         }
 
         if (! empty($data['removed_own_child_ids']) && $result['focus'] !== null) {
             // Setelah anak dihapus permanen, rekomputasi chain dari fokus agar
             // nomor keturunan yang tersisa tetap benar.
-            $numbering->recomputeBranch($result['focus']);
+            $branchIds[] = $result['focus']->id;
         }
+
+        RecomputeFamilyLineage::dispatch(
+            array_values(array_unique($branchIds)),
+            array_values(array_unique($lineageIds)),
+            $result['familyTrees']->pluck('id')->all(),
+        )->afterCommit();
 
         $result['familyTrees']->each->touch();
 
@@ -687,8 +686,11 @@ class FamilyEntryService
             $tree->update(['name' => $name, 'is_auto_generated' => blank($familyTreeName)]);
         }
 
-        $tree->people()->syncWithoutDetaching(array_values(array_unique($memberIds)));
-        $this->syncLegacyNodes($tree);
+        $memberIds = array_values(array_unique($memberIds));
+        $tree->people()->syncWithoutDetaching($memberIds);
+        // Only the people this form touched; RecomputeFamilyLineage runs the
+        // full pass in the background.
+        $this->syncLegacyNodes($tree, $memberIds);
         if ($hasFamilyTreeName) {
             app(FamilyTreeFamilyNameService::class)->setForPerson(
                 $tree,
@@ -705,36 +707,107 @@ class FamilyEntryService
      * relationships into the initial version so they can later be copied and
      * edited independently without changing shared Person records.
      */
-    protected function syncLegacyNodes(FamilyTree $tree): void
+    /**
+     * A tree under a high ancestor holds thousands of members, so rows are
+     * read without hydrating models, missing nodes are inserted in bulk and
+     * only differing nodes are written. $personIds limits the pass to the
+     * people a form touched; the queued job runs the full pass.
+     *
+     * @param  array<int, int>|null  $personIds
+     */
+    protected function syncLegacyNodes(FamilyTree $tree, ?array $personIds = null): void
     {
-        $people = $tree->people()->get();
-        $memberIds = $people->pluck('id')->flip();
+        $scoped = $personIds !== null;
+        $people = DB::table('people')
+            ->join('family_tree_person', 'family_tree_person.person_id', '=', 'people.id')
+            ->where('family_tree_person.family_tree_id', $tree->id)
+            ->when($scoped, fn ($query) => $query->whereIn('people.id', $personIds))
+            ->get([
+                'people.id', 'people.father_id', 'people.mother_id', 'people.birth_order',
+                'people.sibling_count', 'people.chain', 'people.pending_father',
+            ])
+            ->keyBy('id');
 
-        foreach ($people as $person) {
-            FamilyTreeNode::query()->updateOrCreate(
-                ['family_tree_id' => $tree->id, 'person_id' => $person->id],
-                [
-                    'birth_order' => $person->birth_order,
-                    'sibling_count' => $person->sibling_count,
-                    'chain' => $person->chain,
-                    'pending_father' => $person->pending_father,
-                ],
-            );
+        if ($people->isEmpty()) {
+            return;
         }
 
-        $nodes = $tree->nodes()->pluck('id', 'person_id');
+        $parentIds = $people->pluck('father_id')
+            ->merge($people->pluck('mother_id'))
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+        $memberIds = ($scoped
+            ? DB::table('family_tree_person')
+                ->where('family_tree_id', $tree->id)
+                ->whereIn('person_id', $parentIds)
+                ->pluck('person_id')
+                ->merge($people->keys())
+            : $people->keys())
+            ->map(fn ($id) => (int) $id)
+            ->flip();
+        $loadNodes = fn (?Collection $ids) => DB::table('family_tree_nodes')
+            ->where('family_tree_id', $tree->id)
+            ->when($ids !== null, fn ($query) => $query->whereIn('person_id', $ids))
+            ->get()
+            ->keyBy('person_id');
+        $nodes = $loadNodes($scoped ? $people->keys()->merge($parentIds)->unique()->values() : null);
+        $now = now();
+        $missing = $people->keys()
+            ->reject(fn ($id) => $nodes->has($id))
+            ->values();
 
-        foreach ($people as $person) {
-            FamilyTreeNode::query()
-                ->whereKey($nodes[$person->id])
-                ->update([
-                    'father_node_id' => $person->father_id !== null && $memberIds->has($person->father_id)
-                        ? $nodes[$person->father_id]
-                        : null,
-                    'mother_node_id' => $person->mother_id !== null && $memberIds->has($person->mother_id)
-                        ? $nodes[$person->mother_id]
-                        : null,
-                ]);
+        foreach ($missing->chunk(500) as $batch) {
+            FamilyTreeNode::query()->insertOrIgnore($batch->map(fn ($id) => [
+                'family_tree_id' => $tree->id,
+                'person_id' => $id,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ])->values()->all());
+        }
+
+        if ($missing->isNotEmpty()) {
+            $nodes = $nodes->union($loadNodes($missing));
+        }
+
+        $nullableInt = fn ($value) => $value === null ? null : (int) $value;
+        $nodeIdOf = fn ($personId) => $personId !== null
+            && $memberIds->has((int) $personId)
+            && $nodes->has($personId)
+                ? (int) $nodes[$personId]->id
+                : null;
+        $updates = [];
+
+        foreach ($people as $personId => $person) {
+            $node = $nodes[$personId];
+            $desired = [
+                'birth_order' => $nullableInt($person->birth_order),
+                'sibling_count' => $nullableInt($person->sibling_count),
+                'chain' => $person->chain,
+                'pending_father' => (bool) $person->pending_father,
+                'father_node_id' => $nodeIdOf($person->father_id),
+                'mother_node_id' => $nodeIdOf($person->mother_id),
+            ];
+            $current = [
+                'birth_order' => $nullableInt($node->birth_order),
+                'sibling_count' => $nullableInt($node->sibling_count),
+                'chain' => $node->chain,
+                'pending_father' => (bool) $node->pending_father,
+                'father_node_id' => $nullableInt($node->father_node_id),
+                'mother_node_id' => $nullableInt($node->mother_node_id),
+            ];
+
+            if ($desired !== $current) {
+                $updates[] = [...(array) $node, ...$desired, 'updated_at' => $now];
+            }
+        }
+
+        foreach (array_chunk($updates, 200) as $batch) {
+            FamilyTreeNode::query()->upsert($batch, ['id'], [
+                'birth_order', 'sibling_count', 'chain', 'pending_father',
+                'father_node_id', 'mother_node_id', 'updated_at',
+            ]);
         }
     }
 
@@ -1319,12 +1392,18 @@ class FamilyEntryService
                 if ($fatherId !== null) {
                     // Serialize new siblings under one father before checking
                     // names, including repeated submissions of an old form.
-                    Person::query()->whereKey($fatherId)->lockForUpdate()->firstOrFail();
+                    $lockedFather = Person::query()->whereKey($fatherId)->lockForUpdate()->firstOrFail();
                     app(DuplicateChildGuard::class)->assertCanCreate(
                         $fatherId,
                         $attributes['name'],
                         ($focusOrder === null ? 'ownChildren' : 'children').".$index.name",
                     );
+
+                    // The lineage renumbering runs on the queue; give a new
+                    // child its chain now so the saved family shows it.
+                    if (! $pending && $lockedFather->chain !== null && (int) $attributes['birth_order'] >= 1) {
+                        $attributes['chain'] = $lockedFather->chain.'-'.$attributes['birth_order'];
+                    }
                 }
 
                 $child = Person::create([...$attributes, 'created_by' => $createdBy]);

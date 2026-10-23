@@ -495,7 +495,7 @@ class PersonController extends Controller
 
         $message = isset($result) && $result['matchedFather'] !== null
             ? 'Keluarga disimpan. Pencocokan Ayah menunggu persetujuan kontributor.'
-            : __('Keluarga berhasil ditambahkan.');
+            : __('Keluarga berhasil ditambahkan. Nomor silsilah diperbarui di latar belakang.');
         Inertia::flash('toast', ['type' => 'success', 'message' => $message]);
         $this->logFamilyEntryChanges($result, $user, 'added');
 
@@ -1304,7 +1304,7 @@ class PersonController extends Controller
 
         $message = isset($result) && $result['matchedFather'] !== null
             ? 'Jejak keluarga disimpan. Pencocokan Ayah menunggu persetujuan kontributor.'
-            : __('Jejak keluarga berhasil diperbarui.');
+            : __('Jejak keluarga berhasil diperbarui. Nomor silsilah diperbarui di latar belakang.');
         Inertia::flash('toast', ['type' => 'success', 'message' => $message]);
         $this->logFamilyEntryChanges($result, $user, 'edited', $before);
 
