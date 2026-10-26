@@ -11,6 +11,8 @@ use App\Support\PersonShareCode;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class TaromboTreeService
 {
@@ -59,15 +61,28 @@ class TaromboTreeService
      * Build a diagram payload from relationships belonging to one tree version.
      * Person records provide identity data; nodes provide contextual genealogy.
      *
+     * With $personId, only that person's row is built, loading just them,
+     * their father and their children: the profile dialog's detail for a tree
+     * drawn from summaryRowsForFamilyTree().
+     *
      * @return array<int, array<string, mixed>>
      */
-    public function rowsForFamilyTree(FamilyTree $familyTree, int|Collection|null $margaId = null): array
+    public function rowsForFamilyTree(FamilyTree $familyTree, int|Collection|null $margaId = null, ?int $personId = null): array
     {
         $nodes = app(FamilyTreeInheritanceService::class)->nodesFor($familyTree);
+        $personIds = $personId === null
+            ? $nodes->pluck('person_id')
+            : $nodes
+                ->filter(fn (array $node) => (int) $node['person_id'] === $personId
+                    || (int) $node['father_person_id'] === $personId)
+                ->flatMap(fn (array $node) => [$node['person_id'], $node['father_person_id']])
+                ->filter()
+                ->unique()
+                ->values();
         $people = Person::query()
             ->withExists('identityMargas')
             ->with('identityMargas:id,name,color,identity_person_id')
-            ->whereIn('id', $nodes->pluck('person_id'))
+            ->whereIn('id', $personIds)
             ->when($margaId !== null, fn (Builder $query) => $margaId instanceof Collection
                 ? $query->whereIn('marga_id', $margaId)
                 : $query->where('marga_id', $margaId))
@@ -116,28 +131,173 @@ class TaromboTreeService
             ->mapWithKeys(fn (Person $father) => [$father->id => $father->wives]);
         $childMothers = $this->childMothersByFather($people->keys());
 
-        return $nodes->map(function (array $node) use ($people, $includedPersonIds, $children, $fatherPersons, $fatherWives, $childMothers, $shareCodes): array {
+        return $nodes
+            ->when($personId !== null, fn (Collection $nodes) => $nodes->filter(
+                fn (array $node) => (int) $node['person_id'] === $personId,
+            ))
+            ->map(function (array $node) use ($people, $includedPersonIds, $children, $fatherPersons, $fatherWives, $childMothers, $shareCodes): array {
+                $person = $people->get($node['person_id']);
+                $nodeFatherId = $node['pending_father'] ? null : $node['father_person_id'];
+                $hasFather = $nodeFatherId !== null || $person->father_id !== null;
+                $fatherPerson = $nodeFatherId !== null
+                    ? ($people->get($nodeFatherId) ?? $fatherPersons->get($nodeFatherId) ?? $person->father)
+                    : $person->father;
+                $childPersons = $children->get($person->id, collect())
+                    ->sortBy('birth_order')
+                    ->map(fn (array $child) => $people->get($child['person_id']))
+                    ->filter();
+
+                if ($childPersons->isEmpty()) {
+                    $childPersons = $person->childrenAsMother->sortBy('birth_year');
+                }
+
+                $childrenSplit = $this->splitChildrenByGender($childPersons);
+
+                return [
+                    'id' => (string) $person->id,
+                    'treeNodeId' => (int) $node['node_id'],
+                    'shareCode' => $shareCodes->for($person),
+                    'name' => $person->name,
+                    'alias' => $person->alias,
+                    'marga' => $person->marga->name ?? 'Batak',
+                    'margaColor' => $person->marga?->color,
+                    'hasMarga' => $person->marga_id !== null,
+                    'isMargaIdentity' => (bool) $person->identity_margas_exists,
+                    'identityMargaColor' => $person->identityMargas->first()?->color,
+                    'identityMargaName' => $person->identityMargas->pluck('name')->implode(', ') ?: null,
+                    'parentId' => $node['pending_father']
+                        || $node['father_person_id'] === null
+                        || ! $includedPersonIds->has($node['father_person_id'])
+                        ? null
+                        : (string) $node['father_person_id'],
+                    'birthYear' => $person->birth_year,
+                    'birthOrder' => $node['birth_order'],
+                    'chain' => $node['chain'],
+                    'pending' => $node['pending_father'],
+                    'gender' => $person->gender,
+                    'spouse' => $person->spouse,
+                    'spouseMarga' => $person->spouse_marga,
+                    'spouses' => $this->spousesFor($person, $childMothers->get($person->id)),
+                    'mothers' => $this->mothersFor($fatherWives->get($fatherPerson?->id, collect()), $person->mother),
+                    'image' => $person->image,
+                    'bio' => $person->bio,
+                    'createdBy' => $person->creator?->name,
+                    'lastEditedBy' => $person->lastEditor?->name,
+                    'lastEditedAt' => $person->updated_by ? $person->updated_at?->copy()->setTimezone('Asia/Jakarta')->translatedFormat('d M Y H:i') : null,
+                    'createdAt' => $person->created_at?->copy()->setTimezone('Asia/Jakarta')->translatedFormat('d M Y H:i WIB'),
+                    'canEdit' => $this->canEdit($person, $hasFather),
+                    'canAppendBranch' => Auth::user()?->can('appendBranch', $person) ?? false,
+                    'canCopyCode' => $this->canCopyCode($person),
+                    'fatherName' => $fatherPerson?->name,
+                    'fatherMarga' => $fatherPerson?->marga?->name,
+                    'claimedAccounts' => $this->claimedAccountsFor($person),
+                    'relatedStories' => $person->related_stories ?? [],
+                    'location' => $this->locationFor($person),
+                    'childrenNames' => $childPersons
+                        ->map(fn (?Person $child): ?string => $child?->birth_year
+                            ? $child->name.' ('.$child->birth_year.')'
+                            : $child?->name)
+                        ->filter()
+                        ->values()
+                        ->all(),
+                    'sonsNames' => $childrenSplit['sons'],
+                    'daughtersNames' => $childrenSplit['daughters'],
+                ];
+            })->values()->all();
+    }
+
+    /**
+     * summaryRowsForFamilyTree(), cached until the tree's data changes.
+     *
+     * The cached rows carry a fingerprint of the tables they are built from,
+     * so any edit (including bulk queries that skip model events) shows on
+     * the next visit. One entry per tree is overwritten, never accumulated.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function cachedSummaryRowsForFamilyTree(FamilyTree $familyTree): array
+    {
+        // canEdit is the only viewer-dependent field: true for staff, and the
+        // same creator/father rule for every other signed-in account.
+        $scope = Auth::user()?->isStaff() ? 'staff' : (Auth::check() ? 'member' : 'guest');
+        $key = 'tarombo:family-tree-summary:'.$familyTree->id.':'.$scope;
+        $fingerprint = $this->summaryFingerprint($familyTree);
+        $cached = Cache::get($key);
+
+        if (is_array($cached) && ($cached['fingerprint'] ?? null) === $fingerprint) {
+            return $cached['rows'];
+        }
+
+        $rows = $this->summaryRowsForFamilyTree($familyTree);
+        Cache::put($key, ['fingerprint' => $fingerprint, 'rows' => $rows], now()->addDay());
+
+        return $rows;
+    }
+
+    /**
+     * Row counts and latest updates of everything a summary row reads: the
+     * tree's own nodes and those of the trees it is based on, people, marga
+     * and the spouse pivot (which has no timestamps, so its ids are summed).
+     */
+    private function summaryFingerprint(FamilyTree $familyTree): string
+    {
+        $treeIds = [];
+
+        for ($treeId = $familyTree->id; $treeId !== null && ! in_array($treeId, $treeIds, true);) {
+            $treeIds[] = $treeId;
+            $treeId = FamilyTree::query()->whereKey($treeId)->value('based_on_id');
+        }
+
+        $stats = 'count(*) as total, max(id) as last_id, max(updated_at) as last_update';
+
+        return md5((string) json_encode([
+            $treeIds,
+            DB::table('family_tree_nodes')->whereIn('family_tree_id', $treeIds)->selectRaw($stats)->first(),
+            DB::table('people')->selectRaw($stats)->first(),
+            DB::table('margas')->selectRaw($stats)->first(),
+            DB::table('person_wife')->selectRaw('count(*) as total, sum(husband_id) as husbands, sum(wife_id) as wives')->first(),
+        ]));
+    }
+
+    /**
+     * The light rows an account tree draws: identity, placement and the few
+     * flags its nodes show. A tree can hold thousands of people, so the
+     * profile dialog loads everything else for one person at a time through
+     * rowsForFamilyTree($familyTree, personId: ...).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function summaryRowsForFamilyTree(FamilyTree $familyTree): array
+    {
+        $nodes = app(FamilyTreeInheritanceService::class)->nodesFor($familyTree);
+        $people = Person::query()
+            ->withExists(['identityMargas', 'claimingUsers', 'childrenAsMother'])
+            ->with([
+                'identityMargas:id,name,color,identity_person_id',
+                'marga:id,name,color',
+                'wives.marga:id,name',
+                'wives.father.marga:id,name',
+                'husbands.marga:id,name',
+                'husbands.father.marga:id,name',
+                'creator:id,role',
+            ])
+            ->whereIn('id', $nodes->pluck('person_id'))
+            ->get()
+            ->keyBy('id');
+        $nodes = $nodes->filter(fn (array $node) => $people->has($node['person_id']))->values();
+        $includedPersonIds = $nodes->pluck('person_id')->flip();
+        $childCounts = $nodes->countBy('father_person_id');
+        $childMothers = $this->childMothersByFather($people->keys());
+
+        return $nodes->map(function (array $node) use ($people, $includedPersonIds, $childCounts, $childMothers): array {
             $person = $people->get($node['person_id']);
-            $nodeFatherId = $node['pending_father'] ? null : $node['father_person_id'];
-            $hasFather = $nodeFatherId !== null || $person->father_id !== null;
-            $fatherPerson = $nodeFatherId !== null
-                ? ($people->get($nodeFatherId) ?? $fatherPersons->get($nodeFatherId) ?? $person->father)
-                : $person->father;
-            $childPersons = $children->get($person->id, collect())
-                ->sortBy('birth_order')
-                ->map(fn (array $child) => $people->get($child['person_id']))
-                ->filter();
-
-            if ($childPersons->isEmpty()) {
-                $childPersons = $person->childrenAsMother->sortBy('birth_year');
-            }
-
-            $childrenSplit = $this->splitChildrenByGender($childPersons);
+            $hasFather = ($node['pending_father'] ? null : $node['father_person_id']) !== null
+                || $person->father_id !== null;
 
             return [
                 'id' => (string) $person->id,
+                'summary' => true,
                 'treeNodeId' => (int) $node['node_id'],
-                'shareCode' => $shareCodes->for($person),
                 'name' => $person->name,
                 'alias' => $person->alias,
                 'marga' => $person->marga->name ?? 'Batak',
@@ -158,31 +318,20 @@ class TaromboTreeService
                 'gender' => $person->gender,
                 'spouse' => $person->spouse,
                 'spouseMarga' => $person->spouse_marga,
-                'spouses' => $this->spousesFor($person, $childMothers->get($person->id)),
-                'mothers' => $this->mothersFor($fatherWives->get($fatherPerson?->id, collect()), $person->mother),
-                'image' => $person->image,
-                'bio' => $person->bio,
-                'createdBy' => $person->creator?->name,
-                'lastEditedBy' => $person->lastEditor?->name,
-                'lastEditedAt' => $person->updated_by ? $person->updated_at?->copy()->setTimezone('Asia/Jakarta')->translatedFormat('d M Y H:i') : null,
-                'createdAt' => $person->created_at?->copy()->setTimezone('Asia/Jakarta')->translatedFormat('d M Y H:i WIB'),
-                'canEdit' => $this->canEdit($person, $hasFather),
-                'canAppendBranch' => Auth::user()?->can('appendBranch', $person) ?? false,
-                'canCopyCode' => $this->canCopyCode($person),
-                'fatherName' => $fatherPerson?->name,
-                'fatherMarga' => $fatherPerson?->marga?->name,
-                'claimedAccounts' => $this->claimedAccountsFor($person),
-                'relatedStories' => $person->related_stories ?? [],
-                'location' => $this->locationFor($person),
-                'childrenNames' => $childPersons
-                    ->map(fn (?Person $child): ?string => $child?->birth_year
-                        ? $child->name.' ('.$child->birth_year.')'
-                        : $child?->name)
-                    ->filter()
+                'spouses' => $this->spousePeople($person, $childMothers->get($person->id))
+                    ->map(fn (Person $spouse): array => [
+                        'id' => (string) $spouse->id,
+                        'name' => $spouse->name,
+                        'marga' => $spouse->marga?->name,
+                        'fatherMarga' => $spouse->father?->marga?->name,
+                    ])
                     ->values()
                     ->all(),
-                'sonsNames' => $childrenSplit['sons'],
-                'daughtersNames' => $childrenSplit['daughters'],
+                'image' => $person->image,
+                'canEdit' => $this->canEdit($person, $hasFather),
+                'isClaimed' => (bool) $person->claiming_users_exists,
+                'hasChildren' => $childCounts->get($person->id, 0) > 0
+                    || (bool) $person->children_as_mother_exists,
             ];
         })->all();
     }
@@ -291,15 +440,23 @@ class TaromboTreeService
      */
     protected function spousesFor(Person $person, ?Collection $childMothers = null): array
     {
-        // A child's recorded mother is listed as the father's wife in the
-        // child's modal, so list her here too even without a pivot row.
-        $wives = $person->wives->concat($childMothers ?? [])->unique('id');
-        $spouses = $wives->isNotEmpty() ? $wives : $person->husbands;
-
-        return $spouses
+        return $this->spousePeople($person, $childMothers)
             ->map(fn (Person $spouse): array => $this->spouseRow($spouse))
             ->values()
             ->all();
+    }
+
+    /**
+     * @param  Collection<int, Person>|null  $childMothers
+     * @return Collection<int, Person>
+     */
+    private function spousePeople(Person $person, ?Collection $childMothers = null): Collection
+    {
+        // A child's recorded mother is listed as the father's wife in the
+        // child's modal, so list her here too even without a pivot row.
+        $wives = $person->wives->concat($childMothers ?? [])->unique('id');
+
+        return $wives->isNotEmpty() ? $wives : $person->husbands;
     }
 
     /**
