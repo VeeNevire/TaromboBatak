@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\RecomputeFamilyLineage;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeNode;
 use App\Models\Person;
@@ -94,6 +95,10 @@ class SharedFamilyTreeAppendService
 
         $this->numbering->recompute($tree);
         $tree->touch();
+
+        // Like the family form, renumber the father's lineage on the queue;
+        // the new members already carry a chain derived from their father.
+        RecomputeFamilyLineage::dispatch([$fatherNode->person_id])->afterCommit();
 
         return $member;
     }
@@ -215,7 +220,12 @@ class SharedFamilyTreeAppendService
             'name',
         );
 
+        $fatherChain = $fatherNode->person->chain;
+
         $person = Person::create([
+            'chain' => $fatherChain !== null && $birthOrder >= 1
+                ? $fatherChain.'-'.$birthOrder
+                : null,
             'name' => $payload['name'],
             'alias' => $payload['alias'] ?? null,
             'gender' => $payload['gender'] ?? null,
