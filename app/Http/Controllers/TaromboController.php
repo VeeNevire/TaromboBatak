@@ -149,6 +149,30 @@ class TaromboController extends Controller
     }
 
     /**
+     * The full row of one person in an account tree, for the profile dialog
+     * of a tree drawn from its summary rows.
+     */
+    public function familyTreePerson(Request $request, FamilyTree $familyTree, Person $person): JsonResponse
+    {
+        $user = $request->user();
+
+        abort_unless(
+            $this->accountFamilyTreesQuery($user)->whereKey($familyTree->id)->exists(),
+            403,
+            'Silsilah ini tidak tersedia di Silsilah Milik Akun.',
+        );
+
+        $row = $this->withContactState(
+            app(TaromboTreeService::class)->rowsForFamilyTree($familyTree, personId: $person->id),
+            $user,
+        )[0] ?? null;
+
+        abort_if($row === null, 404);
+
+        return response()->json(['person' => $row]);
+    }
+
+    /**
      * The "Nama Keluarga" heading the tree: for an account tree, the name
      * entered on its root branch; for a marga's lower tree, the name of the
      * family tree rooted at the marga's identity person. Both fall back to the
@@ -263,7 +287,9 @@ class TaromboController extends Controller
         $selectedFamilyTreeId = $selectedFamilyTree?->id;
         $selectedMargaId = $selectedMarga?->id;
         $rows = $this->withContactState(match (true) {
-            $selectedFamilyTree instanceof FamilyTree => $service->rowsForFamilyTree($selectedFamilyTree),
+            // Account trees can hold thousands of people: send the light rows
+            // and let the profile dialog load a person's detail on demand.
+            $selectedFamilyTree instanceof FamilyTree => $service->cachedSummaryRowsForFamilyTree($selectedFamilyTree),
             $selectedMarga instanceof Marga => $service->rowsForMarga(
                 $selectedMarga,
                 $direction,

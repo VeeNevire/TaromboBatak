@@ -275,6 +275,8 @@ Route::middleware(['auth'])->group(function () {
         ->name('tarombo.fullscreen');
     Route::get('dashboard/tarombo/alternative-trees/{familyTree}', [TaromboController::class, 'alternativeTree'])
         ->name('tarombo.alternative-trees.show');
+    Route::get('dashboard/tarombo/family-trees/{familyTree}/people/{person}', [TaromboController::class, 'familyTreePerson'])
+        ->name('tarombo.family-trees.people.show');
     Route::get('dashboard/tarombo/snapshots', [TaromboSnapshotController::class, 'index'])
         ->name('tarombo.snapshots.index');
     Route::post('dashboard/tarombo/snapshots', [TaromboSnapshotController::class, 'store'])

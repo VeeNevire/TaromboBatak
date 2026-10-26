@@ -12,8 +12,9 @@ import {
     UserPlus,
     UserRound,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { familyTreePerson } from '@/actions/App/Http/Controllers/TaromboController';
 import { ChangeMargaDialog } from '@/components/people/change-marga-dialog';
 import { FamilyBranchDialog } from '@/components/people/family-branch-dialog';
 import { MargaSiblingOrderDialog } from '@/components/people/marga-sibling-order-dialog';
@@ -28,7 +29,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import type { TaromboPerson } from '@/data/tarombo-tree';
+import type { TaromboPerson, TaromboPersonRow } from '@/data/tarombo-tree';
 import { rememberTreeReturn } from '@/lib/tree-return';
 import contactRequests from '@/routes/contact-requests';
 import contacts from '@/routes/contacts';
@@ -143,6 +144,92 @@ function SpouseInformation({
     );
 }
 
+const personDetails = new Map<string, TaromboPersonRow>();
+let clearsDetailsOnNavigate = false;
+
+/**
+ * An account tree is drawn from light summary rows; load the person's full
+ * row (bio, mothers, children, accounts, ...) when their profile opens.
+ */
+function usePersonDetail(
+    person: TaromboPerson | null,
+    familyTreeId?: number | null,
+): { person: TaromboPerson | null; loading: boolean } {
+    const key =
+        person?.summary && familyTreeId != null
+            ? `${familyTreeId}:${person.id}`
+            : null;
+    const [, setLoadedKey] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (key === null || familyTreeId == null || person === null) {
+            return;
+        }
+
+        if (personDetails.has(key)) {
+            return;
+        }
+
+        const controller = new AbortController();
+
+        fetch(
+            familyTreePerson({
+                familyTree: familyTreeId,
+                person: Number(person.id),
+            }).url,
+            {
+                headers: { Accept: 'application/json' },
+                signal: controller.signal,
+                credentials: 'same-origin',
+            },
+        )
+            .then((response) =>
+                response.ok
+                    ? (response.json() as Promise<{
+                          person: TaromboPersonRow;
+                      }>)
+                    : Promise.reject(new Error('Detail tidak dapat dimuat')),
+            )
+            .then((data) => {
+                personDetails.set(key, data.person);
+
+                if (!clearsDetailsOnNavigate) {
+                    router.on('navigate', () => personDetails.clear());
+                    clearsDetailsOnNavigate = true;
+                }
+
+                setLoadedKey(key);
+            })
+            .catch(() => {
+                // Keep showing the summary row; the dialog still works.
+            });
+
+        return () => controller.abort();
+    }, [key, familyTreeId, person]);
+
+    if (person === null || key === null) {
+        return { person, loading: false };
+    }
+
+    const detail = personDetails.get(key);
+
+    if (!detail) {
+        return { person, loading: true };
+    }
+
+    return {
+        person: {
+            ...person,
+            ...detail,
+            // The tree's own placement wins over the single-person row.
+            parentId: person.parentId,
+            generation: person.generation,
+            summary: false,
+        },
+        loading: false,
+    };
+}
+
 function yearOnly(value?: string | null): string {
     if (!value) {
         return 'Belum dicatat';
@@ -152,7 +239,7 @@ function yearOnly(value?: string | null): string {
 }
 
 export function PersonSummaryDialog({
-    person,
+    person: rowPerson,
     people,
     onClose,
     currentUserId,
@@ -171,6 +258,10 @@ export function PersonSummaryDialog({
     canReorderSiblings?: boolean;
 }) {
     const { auth } = usePage().props;
+    const { person, loading: detailLoading } = usePersonDetail(
+        rowPerson,
+        versionTreeId,
+    );
     const signedInUserId = currentUserId ?? auth.user?.id;
     const [connectingAccountId, setConnectingAccountId] = useState<
         number | null
@@ -279,8 +370,13 @@ export function PersonSummaryDialog({
                             <DialogTitle className="font-display text-xl text-tb-on-surface">
                                 {person.name}
                             </DialogTitle>
-                            <DialogDescription className="mt-1 text-tb-on-surface-variant">
-                                Informasi anggota keluarga
+                            <DialogDescription className="mt-1 flex items-center justify-center gap-1.5 text-tb-on-surface-variant">
+                                {detailLoading && (
+                                    <LoaderCircle className="size-3.5 animate-spin" />
+                                )}
+                                {detailLoading
+                                    ? 'Memuat detail anggota keluarga...'
+                                    : 'Informasi anggota keluarga'}
                             </DialogDescription>
                         </div>
                     </DialogHeader>

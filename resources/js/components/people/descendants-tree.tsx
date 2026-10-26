@@ -88,6 +88,7 @@ function hasDescendants(
     return (
         (childrenOf.get(person.id)?.length ?? 0) > 0 ||
         (person.childrenNames?.length ?? 0) > 0 ||
+        person.hasChildren === true ||
         alternativeTrees.some((tree) => tree.rootId === person.id)
     );
 }
@@ -209,7 +210,7 @@ function toNode(
         identityMargaColor: person.identityMargaColor,
         identityMargaName: person.identityMargaName,
         margaColor: person.margaColor,
-        claimed: (person.claimedAccounts?.length ?? 0) > 0,
+        claimed: person.isClaimed ?? (person.claimedAccounts?.length ?? 0) > 0,
         spouses: hasLinkedSpouses
             ? linkedSpouses.map((spouse) => spouse.name)
             : person.spouse

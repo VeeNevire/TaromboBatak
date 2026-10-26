@@ -40,6 +40,10 @@ export type TaromboPersonRow = {
     sonsNames?: string[];
     daughtersNames?: string[];
     claimedAccounts?: ClaimedAccount[];
+    /** A light account-tree row; the profile dialog loads the full row. */
+    summary?: boolean;
+    isClaimed?: boolean;
+    hasChildren?: boolean;
 };
 
 export type ClaimedAccount = {
@@ -100,6 +104,10 @@ export type TaromboPerson = {
     sonsNames?: string[];
     daughtersNames?: string[];
     claimedAccounts?: ClaimedAccount[];
+    /** A light account-tree row; the profile dialog loads the full row. */
+    summary?: boolean;
+    isClaimed?: boolean;
+    hasChildren?: boolean;
 };
 
 export type RelatedStory = {

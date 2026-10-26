@@ -84,12 +84,20 @@ test('tarombo modal payload includes both parents and their margas for a linked 
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->where('people.0.spouses.0.name', $wife->name)
-            ->where('people.0.spouses.0.birthOrder', 2)
             ->where('people.0.spouses.0.marga', $fatherMarga->name)
-            ->where('people.0.spouses.0.fatherName', $wifeFather->name)
-            ->where('people.0.spouses.0.fatherMarga', $fatherMarga->name)
-            ->where('people.0.spouses.0.motherName', $wifeMother->name)
-            ->where('people.0.spouses.0.motherMarga', $motherMarga->name));
+            ->where('people.0.spouses.0.fatherMarga', $fatherMarga->name));
+
+    // The tree draws summary rows; the modal loads the full spouse detail.
+    $this->actingAs($owner)
+        ->getJson(route('tarombo.family-trees.people.show', [$tree, $root]))
+        ->assertOk()
+        ->assertJsonPath('person.spouses.0.name', $wife->name)
+        ->assertJsonPath('person.spouses.0.birthOrder', 2)
+        ->assertJsonPath('person.spouses.0.marga', $fatherMarga->name)
+        ->assertJsonPath('person.spouses.0.fatherName', $wifeFather->name)
+        ->assertJsonPath('person.spouses.0.fatherMarga', $fatherMarga->name)
+        ->assertJsonPath('person.spouses.0.motherName', $wifeMother->name)
+        ->assertJsonPath('person.spouses.0.motherMarga', $motherMarga->name);
 
     $row = app(TaromboTreeService::class)->rows(Person::query()->whereKey($root->id))[0];
     expect($row['spouses'][0]['motherName'])->toBe($wifeMother->name)
@@ -564,12 +572,16 @@ test('authenticated tarombo rows include related story links for the vertical tr
         ->get(route('tarombo.index'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('people', fn ($people) => collect($people)->contains(
-                fn (array $row) => $row['id'] === (string) $person->id
-                    && $row['relatedStories'] === [
-                        ['title' => 'Sejarah Sangkar Toba', 'url' => 'https://example.com/sejarah'],
-                    ],
-            )));
+            ->where('people.0.id', (string) $person->id)
+            ->where('people.0.summary', true)
+            ->missing('people.0.relatedStories'));
+
+    $this->actingAs($admin)
+        ->getJson(route('tarombo.family-trees.people.show', [$tree, $person]))
+        ->assertOk()
+        ->assertJsonPath('person.relatedStories', [
+            ['title' => 'Sejarah Sangkar Toba', 'url' => 'https://example.com/sejarah'],
+        ]);
 });
 
 test('vertical tarombo lists account and approved marga sources separately', function () {
