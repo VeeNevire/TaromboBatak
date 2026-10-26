@@ -16,7 +16,6 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { familyTreePerson } from '@/actions/App/Http/Controllers/TaromboController';
 import { ChangeMargaDialog } from '@/components/people/change-marga-dialog';
-import { FamilyBranchDialog } from '@/components/people/family-branch-dialog';
 import { MargaSiblingOrderDialog } from '@/components/people/marga-sibling-order-dialog';
 import { PersonImage } from '@/components/people/person-image';
 import { Button } from '@/components/ui/button';
@@ -33,6 +32,7 @@ import type { TaromboPerson, TaromboPersonRow } from '@/data/tarombo-tree';
 import { rememberTreeReturn } from '@/lib/tree-return';
 import contactRequests from '@/routes/contact-requests';
 import contacts from '@/routes/contacts';
+import familyTrees from '@/routes/family-trees';
 import margaBranchEntries from '@/routes/marga-branch-entries';
 import peopleRoutes from '@/routes/people';
 
@@ -159,7 +159,12 @@ function usePersonDetail(
         person?.summary && familyTreeId != null
             ? `${familyTreeId}:${person.id}`
             : null;
-    const [, setLoadedKey] = useState<string | null>(null);
+    // Keep the loaded row in state: the React Compiler memoizes render reads,
+    // so a value only written to the module cache would never show up.
+    const [loaded, setLoaded] = useState<{
+        key: string;
+        person: TaromboPersonRow | null;
+    } | null>(null);
 
     useEffect(() => {
         if (key === null || familyTreeId == null || person === null) {
@@ -198,10 +203,16 @@ function usePersonDetail(
                     clearsDetailsOnNavigate = true;
                 }
 
-                setLoadedKey(key);
+                setLoaded({ key, person: data.person });
             })
-            .catch(() => {
+            .catch((error: unknown) => {
+                if (controller.signal.aborted) {
+                    return;
+                }
+
                 // Keep showing the summary row; the dialog still works.
+                console.error(error);
+                setLoaded({ key, person: null });
             });
 
         return () => controller.abort();
@@ -211,10 +222,10 @@ function usePersonDetail(
         return { person, loading: false };
     }
 
-    const detail = personDetails.get(key);
+    const detail = loaded?.key === key ? loaded.person : personDetails.get(key);
 
     if (!detail) {
-        return { person, loading: true };
+        return { person, loading: loaded?.key !== key };
     }
 
     return {
@@ -267,7 +278,6 @@ export function PersonSummaryDialog({
         number | null
     >(null);
     const [changeMargaOpen, setChangeMargaOpen] = useState(false);
-    const [branchDialogOpen, setBranchDialogOpen] = useState(false);
     const [siblingOrderDialogOpen, setSiblingOrderDialogOpen] = useState(false);
     const father = person?.parentId
         ? people.find((candidate) => candidate.id === person.parentId)
@@ -737,7 +747,22 @@ export function PersonSummaryDialog({
                             {canAddBranch && (
                                 <Button
                                     type="button"
-                                    onClick={() => setBranchDialogOpen(true)}
+                                    onClick={() =>
+                                        router.visit(
+                                            familyTrees.people.create(
+                                                {
+                                                    familyTree:
+                                                        Number(versionTreeId),
+                                                },
+                                                {
+                                                    query: {
+                                                        father_person_id:
+                                                            Number(person.id),
+                                                    },
+                                                },
+                                            ).url,
+                                        )
+                                    }
                                 >
                                     <UserPlus className="size-4" /> Tambah
                                     Anggota Ranting
@@ -848,20 +873,6 @@ export function PersonSummaryDialog({
                     onSaved={() => {
                         setChangeMargaOpen(false);
                         onClose();
-                    }}
-                />
-            )}
-            {person && canAddBranch && (
-                <FamilyBranchDialog
-                    open={branchDialogOpen}
-                    onOpenChange={setBranchDialogOpen}
-                    familyTree={{
-                        id: Number(versionTreeId),
-                        requiresApproval: false,
-                    }}
-                    father={{
-                        nodeId: Number(person.treeNodeId),
-                        name: person.name,
                     }}
                 />
             )}
