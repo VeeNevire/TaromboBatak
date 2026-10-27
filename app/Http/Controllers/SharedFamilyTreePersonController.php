@@ -86,7 +86,7 @@ class SharedFamilyTreePersonController extends Controller
             'familyTree' => [
                 'id' => $familyTree->id,
                 'name' => $familyTree->name ?? $familyTree->rootPerson()->value('name') ?? 'Silsilah',
-                'requires_approval' => ! $request->user()->can('manage', $familyTree),
+                'requires_approval' => ! $request->user()->can('appendDirectly', $familyTree),
             ],
             'initialFatherNodeId' => $initialFatherNode?->id,
             'initialBranchFather' => $initialBranchFather,
@@ -120,7 +120,7 @@ class SharedFamilyTreePersonController extends Controller
         FamilyTreeDescendantSyncService $descendantSync,
     ): RedirectResponse {
         $validated = $request->validated();
-        if (! $request->user()->can('manage', $familyTree)) {
+        if (! $request->user()->can('appendDirectly', $familyTree)) {
             $appendRequest = DB::transaction(function () use ($validated, $request, $familyTree): ?FamilyTreeAppendRequest {
                 $tree = FamilyTree::query()->lockForUpdate()->findOrFail($familyTree->id);
                 $tree->ensureStructureIsEditable();
