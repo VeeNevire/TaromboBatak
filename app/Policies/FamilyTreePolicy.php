@@ -83,8 +83,26 @@ class FamilyTreePolicy
     public function append(User $user, FamilyTree $familyTree): bool
     {
         return $this->manage($user, $familyTree)
+            || $this->contributorManagesRoot($user, $familyTree)
             || $this->hasApprovedMargaAccess($user, $familyTree)
             || $this->hasAcceptedShare($user, $familyTree);
+    }
+
+    /**
+     * Whether new members are saved straight away instead of becoming an append request.
+     */
+    public function appendDirectly(User $user, FamilyTree $familyTree): bool
+    {
+        return $this->manage($user, $familyTree)
+            || $this->contributorManagesRoot($user, $familyTree);
+    }
+
+    protected function contributorManagesRoot(User $user, FamilyTree $familyTree): bool
+    {
+        return $user->isContributor()
+            && $familyTree->rootPerson()
+                ->whereIn('marga_id', $user->accessibleMargaIds())
+                ->exists();
     }
 
     protected function hasApprovedMargaAccess(User $user, FamilyTree $familyTree): bool

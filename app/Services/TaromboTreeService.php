@@ -17,12 +17,10 @@ use Illuminate\Support\Facades\DB;
 class TaromboTreeService
 {
     /**
-     * Marga ids a contributor manages, keyed by user id, so building many rows
-     * reads them once instead of once per person.
-     *
-     * @var array<int, Collection<int, int>>
+     * A contributor's marga-tree scope, shared by every row so building many
+     * rows walks the father chains once instead of once per person.
      */
-    private array $contributorMargaIds = [];
+    private ?ContributorPersonScope $contributorScope = null;
 
     /**
      * Find the highest available ancestor for a focus person in a tree payload.
@@ -130,6 +128,7 @@ class TaromboTreeService
             ->get(['id'])
             ->mapWithKeys(fn (Person $father) => [$father->id => $father->wives]);
         $childMothers = $this->childMothersByFather($people->keys());
+        $this->primeContributorScope($people);
 
         return $nodes
             ->when($personId !== null, fn (Collection $nodes) => $nodes->filter(
@@ -186,7 +185,7 @@ class TaromboTreeService
                     'lastEditedAt' => $person->updated_by ? $person->updated_at?->copy()->setTimezone('Asia/Jakarta')->translatedFormat('d M Y H:i') : null,
                     'createdAt' => $person->created_at?->copy()->setTimezone('Asia/Jakarta')->translatedFormat('d M Y H:i WIB'),
                     'canEdit' => $this->canEdit($person, $hasFather),
-                    'canAppendBranch' => Auth::user()?->can('appendBranch', $person) ?? false,
+                    'canAppendBranch' => $this->canAppendBranch($person),
                     'canCopyCode' => $this->canCopyCode($person),
                     'fatherName' => $fatherPerson?->name,
                     'fatherMarga' => $fatherPerson?->marga?->name,
@@ -217,9 +216,16 @@ class TaromboTreeService
      */
     public function cachedSummaryRowsForFamilyTree(FamilyTree $familyTree): array
     {
-        // canEdit is the only viewer-dependent field: true for staff, and the
-        // same creator/father rule for every other signed-in account.
-        $scope = Auth::user()?->isStaff() ? 'staff' : (Auth::check() ? 'member' : 'guest');
+        // canEdit is the only viewer-dependent field: true for staff and for a
+        // contributor's own marga trees, and the same creator/father rule for
+        // every other signed-in account.
+        $user = Auth::user();
+        $scope = match (true) {
+            $user === null => 'guest',
+            $user->isStaff() => 'staff',
+            $user->isContributor() => 'contributor-'.$user->id,
+            default => 'member',
+        };
         $key = 'tarombo:family-tree-summary:'.$familyTree->id.':'.$scope;
         $fingerprint = $this->summaryFingerprint($familyTree);
         $cached = Cache::get($key);
@@ -288,6 +294,7 @@ class TaromboTreeService
         $includedPersonIds = $nodes->pluck('person_id')->flip();
         $childCounts = $nodes->countBy('father_person_id');
         $childMothers = $this->childMothersByFather($people->keys());
+        $this->primeContributorScope($people);
 
         return $nodes->map(function (array $node) use ($people, $includedPersonIds, $childCounts, $childMothers): array {
             $person = $people->get($node['person_id']);
@@ -377,6 +384,7 @@ class TaromboTreeService
             ])
             ->get();
         $childMothers = $this->childMothersByFather(collect($people->modelKeys()));
+        $this->primeContributorScope($people);
 
         return $people
             ->map(function (Person $person) use ($shareCodes, $childMothers): array {
@@ -414,7 +422,7 @@ class TaromboTreeService
                     'lastEditedAt' => $person->updated_by ? $person->updated_at?->copy()->setTimezone('Asia/Jakarta')->translatedFormat('d M Y H:i') : null,
                     'createdAt' => $person->created_at?->copy()->setTimezone('Asia/Jakarta')->translatedFormat('d M Y H:i WIB'),
                     'canEdit' => $this->canEdit($person, $hasFather),
-                    'canAppendBranch' => Auth::user()?->can('appendBranch', $person) ?? false,
+                    'canAppendBranch' => $this->canAppendBranch($person),
                     'canCopyCode' => $this->canCopyCode($person),
                     'fatherName' => $person->father?->name,
                     'fatherMarga' => $person->father?->marga?->name,
@@ -841,6 +849,10 @@ class TaromboTreeService
             return true;
         }
 
+        if ($user->isContributor() && $this->contributorManages($user, $person)) {
+            return true;
+        }
+
         if ($hasFather && $person->creator?->role !== 'user') {
             return false;
         }
@@ -849,8 +861,57 @@ class TaromboTreeService
     }
 
     /**
+     * Resolve the contributor marga-tree scope for a whole row set at once, so
+     * the per-row checks below walk the father chain without extra queries.
+     *
+     * @param  iterable<int, Person>  $people
+     */
+    private function primeContributorScope(iterable $people): void
+    {
+        $user = Auth::user();
+
+        if ($user instanceof User && $user->isContributor()) {
+            $this->contributorManages($user, null, $people);
+        }
+    }
+
+    /**
+     * @param  iterable<int, Person>  $people
+     */
+    private function contributorManages(User $user, ?Person $person, iterable $people = []): bool
+    {
+        $this->contributorScope ??= new ContributorPersonScope;
+
+        if ($person === null) {
+            $this->contributorScope->managedIds($user, $people);
+
+            return false;
+        }
+
+        return $this->contributorScope->manages($user, $person);
+    }
+
+    /**
+     * Same rule as PersonPolicy::appendBranch(), reusing the primed scope for contributors.
+     */
+    private function canAppendBranch(Person $person): bool
+    {
+        $user = Auth::user();
+
+        if (! $user instanceof User) {
+            return false;
+        }
+
+        if ($user->isContributor()) {
+            return $this->contributorManages($user, $person);
+        }
+
+        return $user->can('appendBranch', $person);
+    }
+
+    /**
      * Whether the signed-in account may copy this person's share code. Only
-     * contributors who manage this person's marga may do so (staff exempt).
+     * contributors whose marga trees hold this person may do so (staff exempt).
      */
     private function canCopyCode(Person $person): bool
     {
@@ -864,10 +925,7 @@ class TaromboTreeService
             return true;
         }
 
-        // Same rule as User::isContributorOf(), with the managed margas cached.
-        return $person->marga_id !== null
-            && $user->isContributor()
-            && ($this->contributorMargaIds[$user->id] ??= $user->accessibleMargaIds())->contains($person->marga_id);
+        return $user->isContributor() && $this->contributorManages($user, $person);
     }
 
     /**

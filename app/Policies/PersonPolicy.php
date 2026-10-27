@@ -7,6 +7,7 @@ use App\Models\ContributionRequest;
 use App\Models\FamilyTreeShare;
 use App\Models\Person;
 use App\Models\User;
+use App\Services\ContributorPersonScope;
 use Illuminate\Database\Eloquent\Collection;
 
 class PersonPolicy
@@ -27,6 +28,7 @@ class PersonPolicy
             return;
         }
 
+        $contributorManaged = array_flip(app(ContributorPersonScope::class)->managedIds($user, $people));
         $accessible = $user->accessibleMargaIds()->merge($user->approvedMargaAccessIds());
         $contacts = ContactRequest::query()
             ->whereIn('status', [ContactRequest::STATUS_PENDING, ContactRequest::STATUS_APPROVED])
@@ -44,6 +46,12 @@ class PersonPolicy
         ]);
 
         foreach ($people as $person) {
+            if (isset($contributorManaged[$person->id])) {
+                $this->preparedUpdates[$person->id] = true;
+
+                continue;
+            }
+
             $visible = ($person->marga_id !== null && $accessible->contains($person->marga_id)) || $contacts->contains($person->id);
             $this->preparedUpdates[$person->id] = $visible
                 && ($person->editable_owned_tree || (int) $person->created_by === (int) $user->id
@@ -54,9 +62,16 @@ class PersonPolicy
 
     public function appendBranch(User $user, Person $person): bool
     {
-        return $user->isStaff()
-            || ($user->marga_id !== null && $person->marga_id !== null
-                && (int) $user->marga_id === (int) $person->marga_id);
+        if ($user->isStaff()) {
+            return true;
+        }
+
+        if ($user->isContributor()) {
+            return app(ContributorPersonScope::class)->manages($user, $person);
+        }
+
+        return $user->marga_id !== null && $person->marga_id !== null
+            && (int) $user->marga_id === (int) $person->marga_id;
     }
 
     public function create(User $user): bool
@@ -67,6 +82,7 @@ class PersonPolicy
     public function view(User $user, Person $person): bool
     {
         return $user->isStaff()
+            || app(ContributorPersonScope::class)->manages($user, $person)
             || ($person->marga_id !== null
                 && ($user->accessibleMargaIds()->contains($person->marga_id)
                     || $user->approvedMargaAccessIds()->contains($person->marga_id)))
@@ -81,6 +97,11 @@ class PersonPolicy
 
         if ($this->preparedUserId === $user->id && array_key_exists($person->id, $this->preparedUpdates)) {
             return $this->preparedUpdates[$person->id];
+        }
+
+        // Contributors curate every person in their marga trees.
+        if (app(ContributorPersonScope::class)->manages($user, $person)) {
+            return true;
         }
 
         $sharedTreeExists = $person->familyTrees()
