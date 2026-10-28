@@ -658,3 +658,51 @@ test('branch permission follows account marga with a staff exception', function 
     expect($rows[(string) $ownFather->id]['canAppendBranch'])->toBeTrue()
         ->and($rows[(string) $otherFather->id]['canAppendBranch'])->toBe($owner->isStaff());
 })->with(['user', 'contributor_main', 'contributor_member', 'admin', 'subadmin']);
+
+test('a contributor opens the member form directly on a managed marga tree rooted at its parent-marga identity person', function () {
+    $parentMarga = Marga::factory()->create();
+    $managedMarga = Marga::factory()->create();
+    $staff = User::factory()->create(['role' => 'admin']);
+    $identity = Person::factory()->create(['gender' => 'L', 'marga_id' => $parentMarga->id]);
+    $managedMarga->update(['identity_person_id' => $identity->id]);
+    $tree = FamilyTree::create(['user_id' => $staff->id, 'root_person_id' => $identity->id, 'name' => 'Keluarga Identitas']);
+    $tree->people()->attach($identity->id);
+    FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $identity->id]);
+
+    $contributor = User::factory()->create(['role' => 'contributor_main']);
+    $contributor->managedMargas()->attach($managedMarga->id);
+
+    expect($contributor->can('append', $tree))->toBeTrue()
+        ->and($contributor->can('appendDirectly', $tree))->toBeTrue();
+
+    $this->actingAs($contributor)
+        ->get(route('family-trees.people.create', $tree))
+        ->assertOk();
+});
+
+test('a contributor sees its managed marga tree rooted at a parent-marga identity person', function () {
+    $parentMarga = Marga::factory()->create();
+    $managedMarga = Marga::factory()->create();
+    $staff = User::factory()->create(['role' => 'admin']);
+    $ancestor = Person::factory()->create(['name' => 'Leluhur Induk', 'gender' => 'L', 'marga_id' => $parentMarga->id]);
+    $identity = Person::factory()->create(['name' => 'Raja Identitas', 'gender' => 'L', 'marga_id' => $parentMarga->id, 'father_id' => $ancestor->id]);
+    $sibling = Person::factory()->create(['name' => 'Saudara Lain', 'gender' => 'L', 'marga_id' => $parentMarga->id, 'father_id' => $ancestor->id]);
+    $child = Person::factory()->create(['name' => 'Anak Identitas', 'gender' => 'L', 'marga_id' => $parentMarga->id, 'father_id' => $identity->id]);
+    $managedMarga->update(['identity_person_id' => $identity->id]);
+    $tree = FamilyTree::create(['user_id' => $staff->id, 'root_person_id' => $identity->id, 'name' => 'Keluarga Identitas']);
+    $tree->people()->attach([$ancestor->id, $identity->id, $sibling->id, $child->id]);
+    $root = FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $ancestor->id]);
+    $identityNode = FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $identity->id, 'parent_node_id' => $root->id]);
+    FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $sibling->id, 'parent_node_id' => $root->id]);
+    FamilyTreeNode::create(['family_tree_id' => $tree->id, 'person_id' => $child->id, 'parent_node_id' => $identityNode->id]);
+
+    $contributor = User::factory()->create(['role' => 'contributor_main']);
+    $contributor->managedMargas()->attach($managedMarga->id);
+
+    $this->actingAs($contributor)
+        ->get(route('family-trees.show', $tree))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('centerPersonId', (string) $identity->id)
+            ->where('people', fn ($people) => collect($people)->pluck('name')->sort()->values()->all() === ['Anak Identitas', 'Raja Identitas']));
+});
