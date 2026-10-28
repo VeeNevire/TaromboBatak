@@ -20,6 +20,7 @@ use App\Models\User;
 use App\Notifications\FatherMatchSubmitted;
 use App\Policies\PersonPolicy;
 use App\Services\ChainNumberingService;
+use App\Services\ContributorPersonScope;
 use App\Services\FamilyEntryService;
 use App\Services\FamilyTreeActivityLogger;
 use App\Services\FamilyTreeDescendantSyncService;
@@ -774,15 +775,23 @@ class PersonController extends Controller
         );
 
         $service = app(TaromboTreeService::class);
-        $visibleMargaIds = $user->isStaff()
+        $visibleMargaIds = $user->isStaff() || $user->isContributor()
             ? null
-            : ($user->isContributor()
-                ? $user->accessibleMargaIds()
-                : $user->accessibleMargaIds()->merge($user->approvedMargaAccessIds())->unique()->values());
+            : $user->accessibleMargaIds()->merge($user->approvedMargaAccessIds())->unique()->values();
         $rows = $service->rowsForFamilyTree(
             $familyTree,
             $visibleMargaIds,
         );
+
+        // Contributors see the people in their marga trees, including a managed
+        // marga's identity person and descendants that carry the parent marga.
+        if ($user->isContributor()) {
+            $managedIds = array_flip(app(ContributorPersonScope::class)->managedIds(
+                $user,
+                Person::query()->whereIn('id', collect($rows)->pluck('id'))->get(['id', 'father_id', 'marga_id']),
+            ));
+            $rows = array_values(array_filter($rows, fn (array $row) => isset($managedIds[(int) $row['id']])));
+        }
         $displayRootId = $service->highestAncestorId($rows, $familyTree->root_person_id);
         $rootRow = collect($rows)->firstWhere('id', $displayRootId)
             ?? collect($rows)->firstWhere('parentId', null)

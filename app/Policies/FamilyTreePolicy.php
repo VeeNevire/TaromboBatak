@@ -5,6 +5,7 @@ namespace App\Policies;
 use App\Models\FamilyTree;
 use App\Models\FamilyTreeShare;
 use App\Models\User;
+use App\Services\ContributorPersonScope;
 
 class FamilyTreePolicy
 {
@@ -23,10 +24,7 @@ class FamilyTreePolicy
     {
         return $this->manage($user, $familyTree)
             || $this->hasApprovedMargaAccess($user, $familyTree)
-            || ($user->isContributor()
-                && $familyTree->rootPerson()
-                    ->whereIn('marga_id', $user->accessibleMargaIds())
-                    ->exists())
+            || $this->contributorManagesRoot($user, $familyTree)
             || $this->hasAcceptedShare($user, $familyTree);
     }
 
@@ -97,12 +95,20 @@ class FamilyTreePolicy
             || $this->contributorManagesRoot($user, $familyTree);
     }
 
+    /**
+     * Contributors curate a tree whose root sits in their marga trees, which
+     * includes a managed marga's identity person even when that person carries
+     * the parent marga.
+     */
     protected function contributorManagesRoot(User $user, FamilyTree $familyTree): bool
     {
-        return $user->isContributor()
-            && $familyTree->rootPerson()
-                ->whereIn('marga_id', $user->accessibleMargaIds())
-                ->exists();
+        if (! $user->isContributor()) {
+            return false;
+        }
+
+        $root = $familyTree->rootPerson;
+
+        return $root !== null && app(ContributorPersonScope::class)->manages($user, $root);
     }
 
     protected function hasApprovedMargaAccess(User $user, FamilyTree $familyTree): bool
